@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { ArrowUp, CalendarDays, Loader2, Sparkles, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ArrowUp, CalendarDays, Link2, Loader2, Sparkles, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -33,10 +33,58 @@ type AiCoachCommandShellProps = {
   starterChips?: StarterChip[];
 };
 
-/**
- * Claude / Perplexity style empty state: short greeting, one composer,
- * compact chips. Never dump onboarding bios into the hero.
- */
+type InputIntent = {
+  label: string;
+  helper: string;
+  platform: string | null;
+  icon: "idea" | "link" | "script";
+};
+
+function socialPlatform(value: string): string | null {
+  const text = value.toLowerCase();
+  if (text.includes("instagram.com") || text.includes("instagram reel")) return "Instagram Reels";
+  if (text.includes("tiktok.com") || text.includes("tiktok")) return "TikTok";
+  if (text.includes("youtube.com") || text.includes("youtu.be") || text.includes("youtube shorts")) {
+    return "YouTube Shorts";
+  }
+  return null;
+}
+
+function inferInputIntent(value: string): InputIntent | null {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const platform = socialPlatform(trimmed);
+  if (platform) {
+    return {
+      label: `${platform} link detected`,
+      helper: "I will understand the source, preserve the useful idea, and adapt it for your audience.",
+      platform,
+      icon: "link",
+    };
+  }
+
+  const lineCount = trimmed.split(/\n+/).filter(Boolean).length;
+  const wordCount = trimmed.split(/\s+/).filter(Boolean).length;
+  const looksLikeScript = lineCount >= 4 || wordCount >= 90;
+
+  if (looksLikeScript) {
+    return {
+      label: "Existing script detected",
+      helper: "Ask for a rewrite, shorter version, stronger hook, simpler language, or a new niche.",
+      platform: null,
+      icon: "script",
+    };
+  }
+
+  return {
+    label: "Reel idea detected",
+    helper: "I will use your profile, compare strong directions, and write the best version.",
+    platform: null,
+    icon: "idea",
+  };
+}
+
 export function AiCoachCommandShell({
   description,
   onDescriptionChange,
@@ -58,13 +106,12 @@ export function AiCoachCommandShell({
   const modePanelRef = useRef<HTMLDivElement>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [promptReady, setPromptReady] = useState(false);
+  const intent = useMemo(() => inferInputIntent(description), [description]);
 
   useAutoGrowTextarea(textareaRef, description);
 
   useEffect(() => {
-    return () => {
-      streamAbortRef.current?.abort();
-    };
+    return () => streamAbortRef.current?.abort();
   }, []);
 
   useEffect(() => {
@@ -77,14 +124,12 @@ export function AiCoachCommandShell({
 
   useEffect(() => {
     if (!activeCapability) return;
-
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as Node | null;
       if (!target || !modePanelRef.current) return;
       if (modePanelRef.current.contains(target)) return;
       onCapabilitySelect(null);
     };
-
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [activeCapability, onCapabilitySelect]);
@@ -113,38 +158,34 @@ export function AiCoachCommandShell({
   };
 
   const submitDisabled = !promptReady || isBusy || isStreaming;
-
-  const handleModeClick = (id: CoachCapabilityId) => {
-    onCapabilitySelect(activeCapability === id ? null : id);
-  };
-
   const secondaryCapabilities = COACH_CAPABILITIES.filter((cap) => cap.id !== "write_script");
+  const nicheLabel = nichePill?.trim() || heroSubhead?.split("·")[0]?.replace(/^Scripts for\s*/i, "").trim() || "your niche";
 
   return (
     <div className="flex min-h-[calc(80vh-4rem)] flex-1 items-center justify-center px-4 py-10 sm:px-6">
-      <div className="w-full max-w-xl">
+      <div className="w-full max-w-[760px]">
         <div className="mb-8 text-center sm:mb-10">
-          <div className="mb-5 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+          <div className="mb-5 inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-violet-500/20 bg-violet-500/10 text-violet-500">
             <Sparkles className="h-5 w-5" aria-hidden />
           </div>
-          <h1 className="text-[1.75rem] font-semibold tracking-tight text-foreground sm:text-3xl">
+          <h1 className="text-[1.9rem] font-semibold tracking-tight text-foreground sm:text-[2.35rem]">
             What do you want to create today?
           </h1>
-          <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground sm:text-[15px]">
-            {heroSubhead}
+          <p className="mx-auto mt-3 max-w-md text-sm text-muted-foreground sm:text-[15px]">
+            For <span className="font-medium text-foreground/80">{nicheLabel}</span> · Short-form video
           </p>
-          {nichePill ? (
-            <p className="mt-3 text-xs text-muted-foreground">{nichePill}</p>
-          ) : null}
+          <p className="mt-1.5 text-xs text-muted-foreground/70">
+            Instagram Reels · TikTok · YouTube Shorts
+          </p>
         </div>
 
         <div
           className={cn(
-            "rounded-3xl border bg-card/80 shadow-[0_0_0_1px_rgba(255,255,255,0.02)] transition-colors",
-            isStreaming ? "border-primary/50" : "border-border/80"
+            "overflow-hidden rounded-[26px] border bg-card/80 shadow-[0_18px_70px_rgba(0,0,0,0.12)] transition-colors",
+            isStreaming ? "border-violet-500/45" : "border-border/80"
           )}
         >
-          <div className="max-h-[calc(1.55rem*8+2rem)] overflow-y-auto">
+          <div className="max-h-[calc(1.6rem*9+2rem)] overflow-y-auto">
             <Textarea
               ref={textareaRef}
               value={description}
@@ -156,47 +197,46 @@ export function AiCoachCommandShell({
                 onSubmit();
               }}
               disabled={isStreaming}
-              name="spyreels-ai-coach-prompt"
+              name="spyreels-agent-prompt"
               autoComplete="off"
               autoCorrect="on"
               spellCheck
               data-1p-ignore="true"
               data-lpignore="true"
               data-form-type="other"
-              placeholder="Describe your Reel idea..."
-              className="min-h-[72px] resize-none border-0 bg-transparent px-5 py-4 text-[15px] leading-relaxed shadow-none placeholder:text-muted-foreground/80 focus-visible:ring-0"
+              placeholder="Describe an idea, paste a script, or paste an Instagram / TikTok / YouTube link..."
+              className="min-h-[118px] resize-none border-0 bg-transparent px-6 py-5 text-[16px] leading-relaxed shadow-none placeholder:text-muted-foreground/70 focus-visible:ring-0"
               autoFocus
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 px-3 pb-3 pt-0">
+          <div className="flex min-h-14 flex-wrap items-center gap-2 border-t border-border/60 px-4 py-3">
             {attachedContext?.planCardTitle ? (
-              <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">
+              <span className="inline-flex items-center gap-1 rounded-full bg-violet-500/10 px-2.5 py-1 text-xs text-violet-500">
                 <CalendarDays className="h-3 w-3" />
-                {attachedContext.planCardDay
-                  ? `Day ${attachedContext.planCardDay}`
-                  : "Spark"}
+                {attachedContext.planCardDay ? `Day ${attachedContext.planCardDay}` : "Plan idea"}
                 <button type="button" onClick={onClearPlanContext} aria-label="Remove plan context">
                   <X className="h-3 w-3" />
                 </button>
               </span>
-            ) : null}
+            ) : intent ? (
+              <span className="inline-flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+                {intent.icon === "link" ? <Link2 className="h-3.5 w-3.5 text-violet-500" /> : <span className="h-2 w-2 rounded-full bg-violet-500" />}
+                <span className="truncate">{intent.label}</span>
+              </span>
+            ) : (
+              <span className="text-xs text-muted-foreground/60">Agent adapts to what you give it.</span>
+            )}
 
-            <div className="ml-auto">
-              <Button
-                size="icon"
-                className="h-9 w-9 rounded-full"
-                onClick={onSubmit}
-                disabled={submitDisabled}
-                aria-label="Write script"
-              >
-                {isBusy ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <ArrowUp className="h-4 w-4" aria-hidden />
-                )}
-              </Button>
-            </div>
+            <Button
+              size="icon"
+              className="ml-auto h-10 w-10 rounded-full bg-violet-600 hover:bg-violet-700"
+              onClick={onSubmit}
+              disabled={submitDisabled}
+              aria-label="Create script"
+            >
+              {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" aria-hidden />}
+            </Button>
           </div>
         </div>
 
@@ -211,7 +251,7 @@ export function AiCoachCommandShell({
                   onDescriptionChange(chip.value);
                   textareaRef.current?.focus();
                 }}
-                className="max-w-full rounded-full border border-border/70 bg-background/50 px-3.5 py-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:border-primary/35 hover:bg-primary/5 hover:text-foreground disabled:opacity-50"
+                className="max-w-full rounded-full border border-border/70 bg-background/40 px-4 py-2 text-left text-xs font-medium text-muted-foreground transition-colors hover:border-violet-500/30 hover:bg-violet-500/5 hover:text-foreground disabled:opacity-50"
               >
                 <span className="line-clamp-1">{chip.label}</span>
               </button>
@@ -219,20 +259,27 @@ export function AiCoachCommandShell({
           </div>
         ) : null}
 
-        <div className="mt-10" ref={modePanelRef}>
+        {intent ? (
+          <div className="mx-auto mt-5 max-w-[680px] rounded-2xl border border-border/60 bg-card/40 px-4 py-3 text-sm text-muted-foreground">
+            <span className="font-medium text-foreground/85">
+              {intent.icon === "script" ? "Working from your existing script." : intent.icon === "link" ? `Repurposing for ${intent.platform}.` : "Creating a Reel from your idea."}
+            </span>{" "}
+            {intent.helper}
+          </div>
+        ) : null}
+
+        <div className="mt-9" ref={modePanelRef}>
           <p className="mb-3 text-center text-xs text-muted-foreground">More ways to create</p>
           <div className="flex flex-wrap justify-center gap-x-4 gap-y-2">
             {secondaryCapabilities.map((cap) => (
               <button
                 key={cap.id}
                 type="button"
-                onClick={() => handleModeClick(cap.id)}
+                onClick={() => onCapabilitySelect(activeCapability === cap.id ? null : cap.id)}
                 disabled={isStreaming}
                 className={cn(
                   "text-sm transition-colors",
-                  activeCapability === cap.id
-                    ? "text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
+                  activeCapability === cap.id ? "text-foreground" : "text-muted-foreground hover:text-foreground"
                 )}
                 title={cap.hint}
               >
@@ -242,11 +289,9 @@ export function AiCoachCommandShell({
           </div>
 
           {activeCapability ? (
-            <div className="mt-4 overflow-hidden rounded-2xl border border-border/70 bg-card">
+            <div className="mx-auto mt-4 max-w-xl overflow-hidden rounded-2xl border border-border/70 bg-card">
               <p className="border-b border-border/70 px-4 py-3 text-xs text-muted-foreground">
-                {activeCapability === "write_script"
-                  ? writeScriptHeader
-                  : COACH_MODE_PANEL_HEADERS[activeCapability]}
+                {activeCapability === "write_script" ? writeScriptHeader : COACH_MODE_PANEL_HEADERS[activeCapability]}
               </p>
               {modeActions.length === 0 ? (
                 <p className="px-4 py-6 text-center text-sm text-muted-foreground">
@@ -261,16 +306,14 @@ export function AiCoachCommandShell({
                     type="button"
                     disabled={isStreaming || isBusy}
                     onClick={() => void handleActionClick(action)}
-                    className="flex w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-primary/5 disabled:opacity-50"
+                    className="flex w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-violet-500/5 disabled:opacity-50"
                   >
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-sm text-primary">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-sm text-violet-500">
                       {action.icon}
                     </span>
                     <span className="min-w-0">
                       <span className="block text-sm font-semibold">{action.title}</span>
-                      <span className="mt-0.5 block text-xs text-muted-foreground">
-                        {action.subtitle}
-                      </span>
+                      <span className="mt-0.5 block text-xs text-muted-foreground">{action.subtitle}</span>
                     </span>
                   </button>
                 ))

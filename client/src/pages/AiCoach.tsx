@@ -208,8 +208,6 @@ export default function AiCoach() {
       appliedHookVariationRef.current = null;
       setAnalysis(null);
       setClarifications([]);
-      // Prefill the composer; keep the suggestion list closed until the user
-      // explicitly clicks Write new script / From 30-day plan / etc.
       setActiveCapability(null);
       posthog?.capture("ai_coach_prefill_loaded", {
         has_plan_card: Boolean(meta?.planCardId),
@@ -268,7 +266,6 @@ export default function AiCoach() {
     setEditMode(false);
   };
 
-  // Same 2s interval as remake/transcription polling while production notes generate.
   const productionPollEnabled =
     Boolean(result?.id) &&
     (result?.productionNotesStatus === "processing" ||
@@ -285,7 +282,6 @@ export default function AiCoach() {
     }
   );
 
-  /** Only apply when *server* production payload changes, not when local hook-option edits diverge. */
   useEffect(() => {
     const data = productionPollQuery.data;
     if (!data?.id) return;
@@ -307,7 +303,6 @@ export default function AiCoach() {
       status: data.productionNotesStatus ?? null,
     };
     applyScriptResult(data);
-    // Intentionally omit result.productionNotes: local hook applies must not re-enter this sync.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productionPollQuery.data]);
 
@@ -524,7 +519,6 @@ export default function AiCoach() {
       hookVisualBeat: variation.visualHook,
       hookOnScreenText: variation.onScreenText,
     }));
-    // Keep compare grid open so selection updates the hook above (mockup behavior).
   };
 
   const reset = () => {
@@ -656,8 +650,6 @@ export default function AiCoach() {
 
     switch (action.tool) {
       case "load_plan_card": {
-        // Never replace a Spark or plan prompt the user already filled and submitted.
-        // Old from_plan routing did that and looped without generating a script.
         if (trimmed.length >= 10 && isSparkOrPlanPrefill(trimmed)) {
           beginWriteFlow(trimmed);
           setIsRouting(false);
@@ -808,7 +800,6 @@ export default function AiCoach() {
       clearPlanContext();
     }
     setPendingScriptId(action.scriptId ?? null);
-    // Keep prompt filled; close the list until the user opens a mode again.
     setActiveCapability(null);
   };
 
@@ -818,8 +809,6 @@ export default function AiCoach() {
       toast.error("Add a bit more detail about your idea (at least 10 characters).");
       return;
     }
-    // Spark Deck or plan day already in the box: always write.
-    // from_plan alone is only for picking a day when the box is empty.
     const capability =
       attachedContext?.planCardId != null || isSparkOrPlanPrefill(trimmed)
         ? "write_script"
@@ -838,27 +827,44 @@ export default function AiCoach() {
   );
 
   const shellLayout = (content: ReactNode) => (
-    <div className={mobileCreate ? "flex min-h-[70vh]" : "-mx-2 flex min-h-[80vh] sm:-mx-4"}>
-      <aside className="hidden w-72 shrink-0 border-r lg:block">{historyPanel}</aside>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-end gap-2 border-b px-3 py-2 lg:hidden">
-          <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
-            <SheetTrigger asChild>
-              <Button variant="outline" size="sm" className="h-8 gap-1.5">
-                <History className="h-3.5 w-3.5" />
-                Recent scripts
-              </Button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-[min(100vw-2rem,20rem)] p-0">
-              <SheetHeader className="sr-only">
-                <SheetTitle>Recent scripts</SheetTitle>
-              </SheetHeader>
-              {historyPanel}
-            </SheetContent>
-          </Sheet>
+    <div className={mobileCreate ? "min-h-[70vh]" : "-mx-2 min-h-[80vh] sm:-mx-4"}>
+      <div className="flex min-h-12 items-center justify-between gap-3 border-b border-border/70 px-4 py-2">
+        <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="font-semibold text-foreground">Agent</span>
+          <span>/</span>
+          <span className="truncate">{result ? "Current Reel" : "New"}</span>
         </div>
-        {content}
+        <Sheet open={historyOpen} onOpenChange={setHistoryOpen}>
+          <SheetTrigger asChild>
+            <Button variant="ghost" size="sm" className="h-8 gap-1.5 text-muted-foreground hover:text-foreground">
+              <History className="h-3.5 w-3.5" />
+              Recent
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="right" className="w-[min(100vw-1rem,24rem)] p-0 sm:max-w-sm">
+            <SheetHeader className="sr-only">
+              <SheetTitle>Recent scripts</SheetTitle>
+            </SheetHeader>
+            <div className="flex h-full min-h-0 flex-col">
+              <div className="min-h-0 flex-1">{historyPanel}</div>
+              <div className="border-t border-border/70 p-3">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full justify-center text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => {
+                    setHistoryOpen(false);
+                    setLocation("/scripts");
+                  }}
+                >
+                  View all scripts
+                </Button>
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
+      <div className="min-w-0">{content}</div>
     </div>
   );
 
@@ -1045,15 +1051,15 @@ export default function AiCoach() {
           });
           setEditMode(false);
         }}
-          hookVariations={hookVariations}
-          onRequestHookVariations={() => {
-            if (hookVariations && hookVariations.length > 0) return;
-            if (hookVariationsMutation.isPending) return;
-            hookVariationsMutation.mutate({ id: result.id });
-          }}
-          hookVariationsPending={hookVariationsMutation.isPending}
-          onApplyHookVariation={applyHookVariation}
-          refinePending={refineMutation.isPending}
+        hookVariations={hookVariations}
+        onRequestHookVariations={() => {
+          if (hookVariations && hookVariations.length > 0) return;
+          if (hookVariationsMutation.isPending) return;
+          hookVariationsMutation.mutate({ id: result.id });
+        }}
+        hookVariationsPending={hookVariationsMutation.isPending}
+        onApplyHookVariation={applyHookVariation}
+        refinePending={refineMutation.isPending}
         savePending={updateMutation.isPending}
         scheduleSave={{
           coachScriptId: result.id,

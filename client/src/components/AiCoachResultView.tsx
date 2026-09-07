@@ -1,36 +1,36 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+} from "react";
 import { Textarea } from "@/components/ui/textarea";
 import {
   flattenCoachScriptForCopy,
   parseProductionNotes,
-  spokenWhatToSay,
   type CoachHookVariation,
   type CoachScriptSections,
 } from "@shared/coachScriptSections";
 import { hookOptionsArrivalPlan, hookOptionsSheetShowsLoader } from "@shared/coachHookOptionsUi";
 import { formatCoachHookTypeLabel } from "@shared/hookTypes";
 import { VIRAL_SCRIPT_SECTION_LABELS } from "@shared/studioCoachUi";
+import type { CoachScriptSchedulePanelProps } from "@/components/CoachScriptSchedulePanel";
 import {
-  Clapperboard,
-  Clock,
-  Copy,
-  MapPin,
   Check,
-  Music2,
   ChevronDown,
+  Copy,
+  Download,
   Loader2,
+  Maximize2,
+  Minimize2,
   MoreHorizontal,
+  Pencil,
+  Send,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { cn } from "@/lib/utils";
-import { stashBrollScriptForAfterAuth } from "@/lib/brollPendingScript";
-import { CoachScriptFeedback } from "@/components/CoachScriptFeedback";
-import {
-  CoachScriptSchedulePanel,
-  type CoachScriptSchedulePanelProps,
-} from "@/components/CoachScriptSchedulePanel";
-import { InstagramAudioPreviewList } from "@/components/InstagramAudioPreviewList";
 import { AiCoachScriptHealthPanel } from "@/components/AiCoachScriptHealthPanel";
 import {
   deriveSectionScores,
@@ -51,6 +51,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { CoachScriptFeedback } from "@/components/CoachScriptFeedback";
+import { buildCarouselGenerateHref } from "@/components/carousel-studio/carouselsHub";
 
 export type CoachResultScript = {
   id: number;
@@ -67,108 +69,8 @@ export type CoachResultScript = {
   contentFormat: string | null;
   formatLabel: string | null;
   productionNotes: string | null;
-  /** Remake import async production layer. Null for sync Studio paths. */
   productionNotesStatus?: "pending" | "processing" | "completed" | "failed" | null;
 };
-
-function hookOptionReason(type: string): string {
-  switch (type) {
-    case "story":
-      return "Credibility + curiosity";
-    case "contrarian":
-      return "Pattern interruption";
-    case "specific_outcome":
-      return "Clear promise";
-    case "pain_point":
-      return "Pain + tension";
-    case "curiosity_gap":
-      return "Open loop";
-    case "question":
-      return "Viewer engagement";
-    case "shock_data":
-      return "Proof + surprise";
-    case "pov":
-      return "Immersion";
-    case "show_end_first":
-      return "Result first";
-    default:
-      return "Strong angle";
-  }
-}
-
-function HookOptionCard({
-  variation,
-  optionLabel,
-  selected,
-  onSelect,
-}: {
-  variation: CoachHookVariation;
-  optionLabel: string;
-  selected: boolean;
-  onSelect: () => void;
-}) {
-  const typeLabel = formatCoachHookTypeLabel(variation.hookType);
-  const preview =
-    variation.spokenHook.trim().length > 90
-      ? `${variation.spokenHook.trim().slice(0, 87)}...`
-      : variation.spokenHook.trim();
-
-  return (
-    <button
-      type="button"
-      onClick={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        onSelect();
-      }}
-      className={cn(
-        "relative w-full min-w-0 rounded-xl border bg-white p-3.5 text-left transition dark:bg-gray-900",
-        selected
-          ? "border-violet-500 shadow-[0_0_0_1px_rgba(124,58,237,0.9)]"
-          : "border-gray-200 hover:border-gray-400 dark:border-gray-700 dark:hover:border-gray-500"
-      )}
-    >
-      <div className="flex items-center gap-2">
-        <span className="text-[11px] font-semibold text-muted-foreground">{optionLabel}</span>
-        <span className="inline-flex rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-medium text-violet-700 dark:bg-violet-950/50 dark:text-violet-200">
-          {typeLabel}
-        </span>
-      </div>
-      <h5 className="mt-2 text-sm font-semibold leading-snug text-gray-900 dark:text-gray-100">
-        {preview || "Untitled hook"}
-      </h5>
-      <p className="mt-1 text-[11px] leading-snug text-muted-foreground">
-        {hookOptionReason(variation.hookType)}
-      </p>
-    </button>
-  );
-}
-
-type EditSectionProps = {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-};
-
-function EditSection({ label, value, onChange }: EditSectionProps) {
-  return (
-    <div className="space-y-1.5">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <Textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="min-h-[80px] resize-none bg-white dark:bg-gray-900 text-sm"
-      />
-    </div>
-  );
-}
-
-function platformLabel(platform: string): string {
-  if (platform === "both") return "Instagram + TikTok";
-  if (platform === "instagram") return "Instagram Reels";
-  if (platform === "tiktok") return "TikTok";
-  return platform;
-}
 
 export type AiCoachEditDraft = CoachScriptSections & {
   hook: string;
@@ -201,13 +103,180 @@ type AiCoachResultViewProps = {
   onOpenMyScripts?: () => void;
   onFilmNow?: () => void;
   filmNowPending?: boolean;
-  /** Read-only embed (onboarding aha): hides edit, refine, hook tools, and top actions. */
   previewMode?: boolean;
-  /** Fix weakest section via targeted refine. */
   onFixWeakest?: () => void;
-  /** Run refine with an explicit instruction (quick actions). */
   onRefineWithInstruction?: (instruction: string) => void;
 };
+
+type SectionKey = "hook" | "explain" | "illustrate" | "teach" | "cta";
+
+type SelectedText = {
+  section: SectionKey;
+  text: string;
+  start: number;
+  end: number;
+  left: number;
+  top: number;
+};
+
+type InlineProposal = {
+  section: SectionKey;
+  beforeSection: string;
+  afterSection: string;
+  previousDraft: AiCoachEditDraft;
+};
+
+type AgentTurn = {
+  id: number;
+  role: "user" | "agent";
+  kind: "text" | "action";
+  text: string;
+  detail?: string;
+};
+
+type ScheduleResolution =
+  | { ok: true; date: Date; time: string; label: string }
+  | { ok: false; question: string };
+
+function platformLabel(platform: string): string {
+  if (platform === "both") return "Instagram Reels + TikTok";
+  if (platform === "instagram") return "Instagram Reels";
+  if (platform === "tiktok") return "TikTok";
+  if (platform === "youtube" || platform === "youtube_shorts") return "YouTube Shorts";
+  return platform || "Short-form video";
+}
+
+function hookOptionReason(type: string): string {
+  switch (type) {
+    case "story": return "Credibility + curiosity";
+    case "contrarian": return "Pattern interruption";
+    case "specific_outcome": return "Clear promise";
+    case "pain_point": return "Pain + tension";
+    case "curiosity_gap": return "Open loop";
+    case "question": return "Viewer engagement";
+    case "shock_data": return "Proof + surprise";
+    case "pov": return "Immersion";
+    case "show_end_first": return "Result first";
+    default: return "Strong angle";
+  }
+}
+
+function textOffset(root: HTMLElement, node: Node, offset: number): number {
+  const range = document.createRange();
+  range.selectNodeContents(root);
+  range.setEnd(node, offset);
+  return range.toString().length;
+}
+
+function diffText(before: string, after: string) {
+  let prefixLength = 0;
+  while (
+    prefixLength < before.length &&
+    prefixLength < after.length &&
+    before[prefixLength] === after[prefixLength]
+  ) {
+    prefixLength += 1;
+  }
+
+  let suffixLength = 0;
+  while (
+    suffixLength < before.length - prefixLength &&
+    suffixLength < after.length - prefixLength &&
+    before[before.length - 1 - suffixLength] === after[after.length - 1 - suffixLength]
+  ) {
+    suffixLength += 1;
+  }
+
+  return {
+    prefix: before.slice(0, prefixLength),
+    oldText: before.slice(prefixLength, before.length - suffixLength),
+    newText: after.slice(prefixLength, after.length - suffixLength),
+    suffix: before.slice(before.length - suffixLength),
+  };
+}
+
+function nextWeekday(base: Date, weekday: number): Date {
+  const next = new Date(base);
+  const delta = (weekday - base.getDay() + 7) % 7 || 7;
+  next.setDate(base.getDate() + delta);
+  return next;
+}
+
+function resolveFilmingSchedule(input: string): ScheduleResolution {
+  const text = input.trim().toLowerCase();
+  const now = new Date();
+  let date: Date | null = null;
+
+  if (/\btoday\b/.test(text)) date = new Date(now);
+  if (/\btomorrow\b/.test(text)) {
+    date = new Date(now);
+    date.setDate(date.getDate() + 1);
+  }
+
+  const weekdays: Record<string, number> = {
+    sunday: 0,
+    monday: 1,
+    tuesday: 2,
+    wednesday: 3,
+    thursday: 4,
+    friday: 5,
+    saturday: 6,
+  };
+  for (const [name, day] of Object.entries(weekdays)) {
+    if (new RegExp(`\\b${name}\\b`).test(text)) {
+      date = nextWeekday(now, day);
+      break;
+    }
+  }
+
+  let hour: number | null = null;
+  let minute = 0;
+  const explicit = text.match(/\b(1[0-2]|0?[1-9])(?::([0-5]\d))?\s*(am|pm)\b/);
+  if (explicit) {
+    hour = Number(explicit[1]);
+    minute = Number(explicit[2] ?? 0);
+    if (explicit[3] === "pm" && hour !== 12) hour += 12;
+    if (explicit[3] === "am" && hour === 12) hour = 0;
+  } else if (/\bmorning\b/.test(text)) {
+    hour = 9;
+  } else if (/\bafter lunch\b/.test(text)) {
+    hour = 13;
+  } else if (/\blunch\b/.test(text)) {
+    hour = 12;
+  } else if (/\bafternoon\b/.test(text)) {
+    hour = 15;
+  } else if (/\bevening\b/.test(text)) {
+    hour = 19;
+  } else {
+    const ambiguous = text.match(/\bat\s+(1[0-2]|0?[1-9])(?::([0-5]\d))?\b/);
+    if (ambiguous) {
+      return { ok: false, question: `Do you mean ${ambiguous[1]} AM or ${ambiguous[1]} PM?` };
+    }
+  }
+
+  if (!date && hour == null) return { ok: false, question: "When do you want to film this Reel?" };
+  if (!date) return { ok: false, question: "Which day do you want to film it?" };
+  if (hour == null) return { ok: false, question: "What time should I remind you to film it?" };
+
+  date.setHours(hour, minute, 0, 0);
+  const time = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+  const label = date.toLocaleString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  return { ok: true, date, time, label };
+}
+
+function safeFileName(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60) || "reel-script";
+}
 
 export function AiCoachResultView({
   result,
@@ -231,6 +300,7 @@ export function AiCoachResultView({
   onSaveToMyScripts,
   saveToMyScriptsPending,
   savedScriptId,
+  onOpenMyScripts,
   onFilmNow,
   filmNowPending,
   previewMode = false,
@@ -238,35 +308,75 @@ export function AiCoachResultView({
   onRefineWithInstruction,
 }: AiCoachResultViewProps) {
   const [, setLocation] = useLocation();
-  const refineInputRef = useRef<HTMLInputElement>(null);
-  const [scheduleOpen, setScheduleOpen] = useState(false);
-  const [originalIdeaOpen, setOriginalIdeaOpen] = useState(false);
+  const artifactRef = useRef<HTMLDivElement>(null);
+  const selectionEditorRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const turnIdRef = useRef(1);
+  const pendingInlineRef = useRef<{
+    selection: SelectedText;
+    beforeSection: string;
+    previousDraft: AiCoachEditDraft;
+    sawPending: boolean;
+  } | null>(null);
+  const pendingAgentRefineRef = useRef<{ label: string; signature: string; sawPending: boolean } | null>(null);
+  const pendingSaveRef = useRef(false);
+  const sawSavePendingRef = useRef(false);
+  const pendingScheduleRef = useRef<string | null>(null);
+  const sawSchedulePendingRef = useRef(false);
+
   const [filmHelpOpen, setFilmHelpOpen] = useState(false);
+  const [workOpen, setWorkOpen] = useState(false);
   const [healthOpen, setHealthOpen] = useState(false);
-  const [refineOpen, setRefineOpen] = useState(false);
-  const [selectedHookOptionIndex, setSelectedHookOptionIndex] = useState<number | null>(null);
   const [hookOptionsOpen, setHookOptionsOpen] = useState(false);
+  const [selectedHookOptionIndex, setSelectedHookOptionIndex] = useState<number | null>(null);
   const [copied, setCopied] = useState(false);
-  const wasSavingRef = useRef(false);
+  const [downloadPending, setDownloadPending] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [selectedText, setSelectedText] = useState<SelectedText | null>(null);
+  const [selectionCopied, setSelectionCopied] = useState(false);
+  const [selectionEditing, setSelectionEditing] = useState(false);
+  const [selectionInstruction, setSelectionInstruction] = useState("");
+  const [inlineProposal, setInlineProposal] = useState<InlineProposal | null>(null);
+  const [undoDraft, setUndoDraft] = useState<AiCoachEditDraft | null>(null);
+  const [agentInput, setAgentInput] = useState("");
+  const [agentBusy, setAgentBusy] = useState(false);
+  const [scheduleMode, setScheduleMode] = useState(false);
+  const [turns, setTurns] = useState<AgentTurn[]>([]);
+
   const production = parseProductionNotes(result.productionNotes);
   const health = mapCoachJudgeToHealth(production?.coachJudge);
   const sectionScores = health ? deriveSectionScores(health) : null;
   const weakest = sectionScores ? findWeakestSection(sectionScores) : null;
-  const isGeneratingProduction =
-    result.productionNotesStatus === "processing" ||
-    result.productionNotesStatus === "pending";
-  const originalIdea = production?.sourceDescription?.trim() || "";
-  const savedOnScreenText =
-    production?.hookOnScreenText?.trim() ||
-    production?.textOverlay?.trim() ||
-    "";
-  const savedVisualBeat = production?.hookVisualBeat?.trim() ?? "";
-  const hookOnScreenText = editMode ? editDraft.hookOnScreenText : savedOnScreenText;
-  const hookVisualBeat = editMode ? editDraft.hookVisualBeat : savedVisualBeat;
-  const bRollShots = (production?.bRoll ?? []).filter(
-    (shot) => typeof shot?.shot === "string" && shot.shot.trim()
-  );
-  const musicNote = production?.music?.trim() ?? "";
+  const isGeneratingProduction = result.productionNotesStatus === "processing" || result.productionNotesStatus === "pending";
+  const hookOnScreenText = editMode
+    ? editDraft.hookOnScreenText
+    : production?.hookOnScreenText?.trim() || production?.textOverlay?.trim() || "";
+  const hookVisualBeat = editMode ? editDraft.hookVisualBeat : production?.hookVisualBeat?.trim() || "";
+  const bRollShots = (production?.bRoll ?? []).filter((shot) => shot?.shot?.trim());
+  const signature = [result.hook, result.explain, result.illustrate, result.teach, result.cta].join("\n");
+
+  const currentDraft = useMemo<AiCoachEditDraft>(() => ({
+    hook: result.hook,
+    explain: result.explain,
+    illustrate: result.illustrate,
+    teach: result.teach,
+    cta: result.cta,
+    hookVisualBeat,
+    hookOnScreenText,
+  }), [result.hook, result.explain, result.illustrate, result.teach, result.cta, hookVisualBeat, hookOnScreenText]);
+
+  const sectionValue = (section: SectionKey): string => {
+    if (section === "hook") return result.hook;
+    return result[section];
+  };
+
+  const appendTurn = (role: "user" | "agent", text: string) => {
+    setTurns((prev) => [...prev, { id: turnIdRef.current++, role, kind: "text", text }]);
+  };
+
+  const appendAction = (text: string, detail?: string) => {
+    setTurns((prev) => [...prev, { id: turnIdRef.current++, role: "agent", kind: "action", text, detail }]);
+  };
 
   useEffect(() => {
     const plan = hookOptionsArrivalPlan(hookVariations);
@@ -274,51 +384,121 @@ export function AiCoachResultView({
   }, [hookVariations]);
 
   useEffect(() => {
-    if (hookVariationsPending) {
-      setHookOptionsOpen(true);
-    }
+    if (hookVariationsPending) setHookOptionsOpen(true);
   }, [hookVariationsPending]);
 
   useEffect(() => {
-    if (saveToMyScriptsPending) {
-      wasSavingRef.current = true;
+    const pending = pendingInlineRef.current;
+    if (!pending) return;
+    if (refinePending) {
+      pending.sawPending = true;
       return;
     }
-    if (wasSavingRef.current) {
-      wasSavingRef.current = false;
-      if (savedScriptId != null) {
-        setScheduleOpen(false);
-      }
+    if (!pending.sawPending) return;
+
+    const afterSection = sectionValue(pending.selection.section);
+    pendingInlineRef.current = null;
+    setAgentBusy(false);
+    setSelectionEditing(false);
+    setSelectedText(null);
+    setSelectionInstruction("");
+
+    if (afterSection !== pending.beforeSection) {
+      setInlineProposal({
+        section: pending.selection.section,
+        beforeSection: pending.beforeSection,
+        afterSection,
+        previousDraft: pending.previousDraft,
+      });
     }
+  }, [refinePending, signature]);
+
+  useEffect(() => {
+    const pending = pendingAgentRefineRef.current;
+    if (!pending) return;
+    if (refinePending) {
+      pending.sawPending = true;
+      return;
+    }
+    if (!pending.sawPending) return;
+    pendingAgentRefineRef.current = null;
+    setAgentBusy(false);
+    if (signature !== pending.signature) appendAction(pending.label, "The current Reel has been updated.");
+  }, [refinePending, signature]);
+
+  useEffect(() => {
+    if (!pendingSaveRef.current) return;
+    if (saveToMyScriptsPending) {
+      sawSavePendingRef.current = true;
+      return;
+    }
+    if (!sawSavePendingRef.current) return;
+    pendingSaveRef.current = false;
+    sawSavePendingRef.current = false;
+    setAgentBusy(false);
+    if (savedScriptId != null) appendAction("Saved to My Scripts", "This Reel is now in your script library.");
   }, [saveToMyScriptsPending, savedScriptId]);
 
-  const openScheduleSave = () => {
-    if (scheduleSave) {
-      setScheduleOpen(true);
+  useEffect(() => {
+    if (!pendingScheduleRef.current || !scheduleSave) return;
+    if (scheduleSave.isSaving) {
+      sawSchedulePendingRef.current = true;
       return;
     }
-    onSaveToMyScripts?.();
-  };
+    if (!sawSchedulePendingRef.current) return;
+    const label = pendingScheduleRef.current;
+    pendingScheduleRef.current = null;
+    sawSchedulePendingRef.current = false;
+    setAgentBusy(false);
+    appendAction("Filming reminder set", label);
+  }, [scheduleSave?.isSaving, savedScriptId]);
 
-  const sections: CoachScriptSections = {
-    explain: result.explain,
-    illustrate: result.illustrate,
-    teach: result.teach,
-    cta: result.cta,
-  };
+  useEffect(() => {
+    if (!undoDraft) return;
+    const matches =
+      editDraft.hook === undoDraft.hook &&
+      editDraft.explain === undoDraft.explain &&
+      editDraft.illustrate === undoDraft.illustrate &&
+      editDraft.teach === undoDraft.teach &&
+      editDraft.cta === undoDraft.cta &&
+      editDraft.hookVisualBeat === undoDraft.hookVisualBeat &&
+      editDraft.hookOnScreenText === undoDraft.hookOnScreenText;
+    if (!matches) return;
+    setUndoDraft(null);
+    setInlineProposal(null);
+    onSaveEdits();
+  }, [editDraft, undoDraft, onSaveEdits]);
 
-  const whatToSay = spokenWhatToSay({
-    explain: editMode ? editDraft.explain : result.explain,
-    illustrate: editMode ? editDraft.illustrate : result.illustrate,
-    teach: editMode ? editDraft.teach : result.teach,
-    cta: editMode ? editDraft.cta : result.cta,
-  });
+  useEffect(() => {
+    if (!selectionEditing) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const node = event.target as Node | null;
+      if (node && selectionEditorRef.current?.contains(node)) return;
+      setSelectionEditing(false);
+      setSelectionInstruction("");
+      setSelectedText(null);
+      window.getSelection()?.removeAllRanges();
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      setSelectionEditing(false);
+      setSelectionInstruction("");
+      setSelectedText(null);
+      window.getSelection()?.removeAllRanges();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [selectionEditing]);
 
   const copyScript = async () => {
     const text = flattenCoachScriptForCopy({
       title: result.title,
       hook: result.hook,
-      sections,
+      sections: { explain: result.explain, illustrate: result.illustrate, teach: result.teach, cta: result.cta },
       userFriendly: true,
       hookVisualBeat,
       hookOnScreenText,
@@ -326,523 +506,575 @@ export function AiCoachResultView({
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
-      window.setTimeout(() => setCopied(false), 1600);
+      window.setTimeout(() => setCopied(false), 1400);
     } catch {
       toast.error("Could not copy script");
     }
   };
 
-  const goGenerateBroll = () => {
+  const downloadBrandedScript = async () => {
+    if (downloadPending) return;
+    setDownloadPending(true);
+    try {
+      const docx = await import("docx");
+      const { saveAs } = await import("file-saver");
+      const body = [result.explain, result.illustrate, result.teach, result.cta].filter((part) => part.trim());
+      const filmChildren = [
+        hookVisualBeat ? new docx.Paragraph({ children: [new docx.TextRun({ text: "Opening visual: ", bold: true }), new docx.TextRun(hookVisualBeat)] }) : null,
+        hookOnScreenText ? new docx.Paragraph({ children: [new docx.TextRun({ text: "On-screen text: ", bold: true }), new docx.TextRun(hookOnScreenText)] }) : null,
+        bRollShots.length > 0 ? new docx.Paragraph({ children: [new docx.TextRun({ text: "B-roll: ", bold: true }), new docx.TextRun(bRollShots.map((shot) => shot.shot?.trim()).filter(Boolean).join("; "))] }) : null,
+        production?.voiceTone ? new docx.Paragraph({ children: [new docx.TextRun({ text: "Delivery: ", bold: true }), new docx.TextRun(production.voiceTone)] }) : null,
+      ].filter((item): item is InstanceType<typeof docx.Paragraph> => item != null);
+
+      const document = new docx.Document({
+        sections: [{
+          headers: {
+            default: new docx.Header({
+              children: [new docx.Paragraph({
+                children: [
+                  new docx.TextRun({ text: "SpyReels", bold: true, size: 24 }),
+                  new docx.TextRun({ text: `   ${platformLabel(result.platform)}`, color: "777777", size: 18 }),
+                ],
+              })],
+            }),
+          },
+          footers: {
+            default: new docx.Footer({
+              children: [new docx.Paragraph({
+                alignment: docx.AlignmentType.CENTER,
+                children: [new docx.TextRun({ text: "Created with SpyReels", color: "888888", size: 18 })],
+              })],
+            }),
+          },
+          children: [
+            new docx.Paragraph({ text: "Your Reel script", heading: docx.HeadingLevel.HEADING_1, spacing: { after: 280 } }),
+            new docx.Paragraph({ children: [new docx.TextRun({ text: "HOOK · 0-4 SEC", bold: true, color: "777777", size: 18 })] }),
+            new docx.Paragraph({ children: [new docx.TextRun({ text: result.hook, bold: true, size: 28 })], spacing: { after: 320 } }),
+            new docx.Paragraph({ children: [new docx.TextRun({ text: "WHAT TO SAY", bold: true, color: "777777", size: 18 })] }),
+            ...body.map((paragraph) => new docx.Paragraph({ text: paragraph, spacing: { after: 220 }, style: "Normal" })),
+            ...(filmChildren.length > 0 ? [
+              new docx.Paragraph({ text: "How to film", heading: docx.HeadingLevel.HEADING_2, spacing: { before: 300, after: 160 } }),
+              ...filmChildren,
+            ] : []),
+          ],
+        }],
+      });
+      const blob = await docx.Packer.toBlob(document);
+      saveAs(blob, `${safeFileName(result.title)}-spyreels.docx`);
+      appendAction("Downloaded branded script", "SpyReels header, clean script layout, filming notes, and a subtle footer.");
+    } catch (error) {
+      console.error(error);
+      toast.error("Could not download script");
+    } finally {
+      setDownloadPending(false);
+    }
+  };
+
+  const handleTextSelection = (event: ReactMouseEvent<HTMLDivElement>) => {
+    if (editMode || inlineProposal || refinePending) return;
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) {
+      if (!selectionEditing) setSelectedText(null);
+      return;
+    }
+    const anchorElement = selection.anchorNode instanceof Element ? selection.anchorNode : selection.anchorNode?.parentElement;
+    const focusElement = selection.focusNode instanceof Element ? selection.focusNode : selection.focusNode?.parentElement;
+    const anchorRoot = anchorElement?.closest<HTMLElement>("[data-agent-section]");
+    const focusRoot = focusElement?.closest<HTMLElement>("[data-agent-section]");
+    if (!anchorRoot || !focusRoot || anchorRoot !== focusRoot) return;
+
+    const section = anchorRoot.dataset.agentSection as SectionKey | undefined;
+    if (!section) return;
+    const range = selection.getRangeAt(0);
+    const text = selection.toString();
+    if (!text.trim()) return;
+    const start = textOffset(anchorRoot, range.startContainer, range.startOffset);
+    const end = textOffset(anchorRoot, range.endContainer, range.endOffset);
+    const rootRect = artifactRef.current?.getBoundingClientRect();
+    const rangeRect = range.getBoundingClientRect();
+    if (!rootRect) return;
+
+    setSelectedText({
+      section,
+      text,
+      start: Math.min(start, end),
+      end: Math.max(start, end),
+      left: Math.max(14, Math.min(rootRect.width - 190, rangeRect.left - rootRect.left)),
+      top: Math.max(62, rangeRect.top - rootRect.top - 48),
+    });
+    setSelectionEditing(false);
+    setSelectionCopied(false);
+    event.stopPropagation();
+  };
+
+  const copySelectedText = async () => {
+    if (!selectedText) return;
+    try {
+      await navigator.clipboard.writeText(selectedText.text);
+      setSelectionCopied(true);
+      window.setTimeout(() => {
+        setSelectionCopied(false);
+        setSelectedText(null);
+        window.getSelection()?.removeAllRanges();
+      }, 900);
+    } catch {
+      toast.error("Could not copy selected text");
+    }
+  };
+
+  const startInlineChange = () => {
+    if (!selectedText) return;
+    setSelectionEditing(true);
+    setSelectionInstruction("");
+    window.getSelection()?.removeAllRanges();
+    window.setTimeout(() => selectionEditorRef.current?.querySelector("input")?.focus(), 0);
+  };
+
+  const submitInlineChange = () => {
+    if (!selectedText || !selectionInstruction.trim() || !onRefineWithInstruction || refinePending) return;
+    const beforeSection = sectionValue(selectedText.section);
+    pendingInlineRef.current = {
+      selection: selectedText,
+      beforeSection,
+      previousDraft: currentDraft,
+      sawPending: false,
+    };
+    setAgentBusy(true);
+    const sectionLabel = selectedText.section === "hook" ? "hook" : "spoken script";
+    onRefineWithInstruction(
+      `Change only this exact selected text in the ${sectionLabel}: "${selectedText.text}". Instruction: ${selectionInstruction.trim()}. Keep every other word in every other section unchanged.`
+    );
+  };
+
+  const acceptInlineProposal = () => {
+    setInlineProposal(null);
+    appendAction("Selected text updated", "Only the requested wording changed.");
+  };
+
+  const undoInlineProposal = () => {
+    if (!inlineProposal) return;
+    setUndoDraft(inlineProposal.previousDraft);
+    onEditDraftChange(inlineProposal.previousDraft);
+    appendAction("Change undone", "The previous wording was restored.");
+  };
+
+  const runRefine = (instruction: string, label: string) => {
+    if (!onRefineWithInstruction || refinePending) return;
+    pendingAgentRefineRef.current = { label, signature, sawPending: false };
+    setAgentBusy(true);
+    onRefineWithInstruction(instruction);
+  };
+
+  const saveScript = () => {
+    if (savedScriptId != null) {
+      appendAction("Already saved", "This Reel is already in My Scripts.");
+      return;
+    }
+    if (!onSaveToMyScripts || saveToMyScriptsPending) return;
+    pendingSaveRef.current = true;
+    sawSavePendingRef.current = false;
+    setAgentBusy(true);
+    onSaveToMyScripts();
+  };
+
+  const scheduleFilming = (input: string) => {
+    if (!scheduleSave) {
+      appendTurn("agent", "Filming reminders are not available for this Reel yet.");
+      return;
+    }
+    const resolution = resolveFilmingSchedule(input);
+    if (!resolution.ok) {
+      appendTurn("agent", resolution.question);
+      setScheduleMode(true);
+      window.setTimeout(() => composerRef.current?.focus(), 0);
+      return;
+    }
+    scheduleSave.onPostDateChange(resolution.date);
+    scheduleSave.onPostTimeChange(resolution.time);
+    pendingScheduleRef.current = resolution.label;
+    sawSchedulePendingRef.current = false;
+    setAgentBusy(true);
+    setScheduleMode(false);
+    window.setTimeout(() => {
+      scheduleSave.onSave(true, { caption: "", hashtags: [] });
+    }, 0);
+  };
+
+  const turnIntoCarousel = () => {
     const text = flattenCoachScriptForCopy({
       title: result.title,
       hook: result.hook,
-      sections,
+      sections: { explain: result.explain, illustrate: result.illustrate, teach: result.teach, cta: result.cta },
       userFriendly: true,
       hookVisualBeat,
       hookOnScreenText,
     });
-    stashBrollScriptForAfterAuth(text, true);
-    setLocation("/broll-library");
+    setLocation(buildCarouselGenerateHref(text));
+  };
+
+  const routeAgentInput = (raw: string) => {
+    const input = raw.trim();
+    if (!input || agentBusy) return;
+    appendTurn("user", input);
+    setAgentInput("");
+
+    if (scheduleMode) {
+      scheduleFilming(input);
+      return;
+    }
+
+    const lower = input.toLowerCase();
+    if (/\bsave\b/.test(lower)) {
+      saveScript();
+      return;
+    }
+    if (/\b(download|export)\b/.test(lower)) {
+      void downloadBrandedScript();
+      return;
+    }
+    if (/\b(schedule|remind)\b/.test(lower) || /\bfilm\b/.test(lower) && /\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|am|pm|morning|afternoon|evening)\b/.test(lower)) {
+      scheduleFilming(input);
+      return;
+    }
+    if (/\bcarousel\b/.test(lower)) {
+      appendAction("Opening Carousel Studio", "Your current Reel is being carried over as the source.");
+      window.setTimeout(turnIntoCarousel, 250);
+      return;
+    }
+    if (/\bhook options?\b/.test(lower)) {
+      setHookOptionsOpen(true);
+      if (!hookVariations?.length && !hookVariationsPending) onRequestHookVariations();
+      return;
+    }
+    if (/\bscript health\b/.test(lower)) {
+      setHealthOpen(true);
+      return;
+    }
+    if (/\bshort(er|en)?\b/.test(lower)) {
+      runRefine("Shorten the full script while keeping the same idea, strongest proof, and ending. Cut filler only.", "Reel shortened");
+      return;
+    }
+    if (/\b(fun(ny|nier)|humor)\b/.test(lower)) {
+      runRefine("Make the script funnier without changing the core point, facts, or useful takeaway.", "Tone updated");
+      return;
+    }
+    if (/\b(viral|stronger hook|strong hook)\b/.test(lower)) {
+      runRefine("Make this more viral with a stronger hook, tighter pacing, and clearer payoff. Keep the same idea and facts.", "Reel strengthened");
+      return;
+    }
+    if (/\bsimpl(if|ify|er)\b/.test(lower)) {
+      runRefine("Simplify the language. Use shorter sentences and easier words without removing the useful detail.", "Reel simplified");
+      return;
+    }
+    if (/\bchange niche\b/.test(lower) || /\badapt (this )?(for|to)\b/.test(lower)) {
+      runRefine(input, "Niche adapted");
+      return;
+    }
+    if (onRefineWithInstruction) {
+      runRefine(input, "Reel updated");
+      return;
+    }
+    onRefineInputChange(input);
+    window.setTimeout(onRefine, 0);
   };
 
   const openHookOptions = () => {
     setHookOptionsOpen(true);
-    if (hookVariations && hookVariations.length > 0) return;
-    if (hookVariationsPending) return;
-    onRequestHookVariations();
+    if (!hookVariations?.length && !hookVariationsPending) onRequestHookVariations();
   };
 
+  const renderSectionText = (section: SectionKey, value: string, className: string) => {
+    const proposal = inlineProposal?.section === section ? inlineProposal : null;
+    if (proposal) {
+      const diff = diffText(proposal.beforeSection, proposal.afterSection);
+      return (
+        <div className={className} data-agent-section={section}>
+          <div className="mb-3 flex justify-end gap-1.5">
+            <button type="button" onClick={undoInlineProposal} className="rounded-lg px-3 py-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">Undo</button>
+            <button type="button" onClick={acceptInlineProposal} className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-700">Accept</button>
+          </div>
+          <span>{diff.prefix}</span>
+          {diff.oldText ? <span className="text-muted-foreground line-through decoration-red-400/70">{diff.oldText}</span> : null}
+          {diff.oldText && diff.newText ? <span> </span> : null}
+          {diff.newText ? <span className="text-violet-400">{diff.newText}</span> : null}
+          <span>{diff.suffix}</span>
+        </div>
+      );
+    }
+
+    if (selectionEditing && selectedText?.section === section) {
+      return (
+        <div className={className} data-agent-section={section}>
+          <span>{value.slice(0, selectedText.start)}</span>
+          <span className="rounded-sm bg-blue-500/25 ring-1 ring-blue-400/20">{value.slice(selectedText.start, selectedText.end)}</span>
+          <span>{value.slice(selectedText.end)}</span>
+        </div>
+      );
+    }
+
+    return <div className={className} data-agent-section={section}>{value}</div>;
+  };
+
+  const workItems = [
+    production?.sourceDescription ? "Kept the original idea as the source of truth" : null,
+    "Compared creative directions before writing",
+    production?.coachJudge ? "Checked the finished script for quality and fit" : null,
+    hookVisualBeat || hookOnScreenText || bRollShots.length > 0 || production?.voiceTone ? "Prepared filming direction" : null,
+  ].filter(Boolean) as string[];
+
   return (
-    <div className="min-h-full bg-[#fafafa] dark:bg-gray-950/40 -mx-2 sm:-mx-4 px-2 sm:px-4 py-6">
-      <div className="max-w-[720px] mx-auto px-2 sm:px-4">
-        <header className="mb-8">
-          <h1 className="text-[1.65rem] font-semibold text-gray-900 dark:text-gray-50 leading-tight tracking-tight">
-            {result.title}
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            {[platformLabel(result.platform), result.estimatedDuration].filter(Boolean).join(" · ")}
-          </p>
-        </header>
-
-        {originalIdea ? (
-          <div className="mb-5">
-            <button
-              type="button"
-              className="inline-flex max-w-full items-center gap-1.5 text-sm text-muted-foreground hover:text-gray-800 dark:hover:text-gray-200"
-              onClick={() => setOriginalIdeaOpen((open) => !open)}
-              aria-expanded={originalIdeaOpen}
-            >
-              <span>Your idea</span>
-              <ChevronDown className={cn("h-3.5 w-3.5 shrink-0 transition-transform", originalIdeaOpen && "rotate-180")} />
-            </button>
-            {originalIdeaOpen ? (
-              <p className="mt-2 text-sm text-gray-600 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
-                {originalIdea}
-              </p>
-            ) : (
-              <p className="mt-1 truncate text-sm text-muted-foreground">{originalIdea}</p>
-            )}
-          </div>
-        ) : null}
-
-        <section className="space-y-8">
-          <div className="border-l-2 border-violet-400/70 pl-4 dark:border-violet-500/50">
-            <p className="text-xs text-muted-foreground">Hook</p>
-            {editMode ? (
-              <Textarea
-                value={editDraft.hook}
-                onChange={(e) => onEditDraftChange({ ...editDraft, hook: e.target.value })}
-                className="mt-2 min-h-[72px] resize-none bg-white dark:bg-gray-900 text-lg font-semibold leading-snug"
-              />
-            ) : (
-              <p className="mt-2 text-[1.35rem] font-semibold leading-snug tracking-tight text-gray-900 dark:text-gray-50">
-                {result.hook}
-              </p>
-            )}
-          </div>
-
-          {editMode ? (
-            <div className="space-y-4">
-              <p className="text-xs text-muted-foreground">What to say</p>
-              <EditSection
-                label={VIRAL_SCRIPT_SECTION_LABELS.problem}
-                value={editDraft.explain}
-                onChange={(explain) => onEditDraftChange({ ...editDraft, explain })}
-              />
-              <EditSection
-                label={VIRAL_SCRIPT_SECTION_LABELS.story}
-                value={editDraft.illustrate}
-                onChange={(illustrate) => onEditDraftChange({ ...editDraft, illustrate })}
-              />
-              <EditSection
-                label={VIRAL_SCRIPT_SECTION_LABELS.takeaway}
-                value={editDraft.teach}
-                onChange={(teach) => onEditDraftChange({ ...editDraft, teach })}
-              />
-              <EditSection
-                label={VIRAL_SCRIPT_SECTION_LABELS.cta}
-                value={editDraft.cta}
-                onChange={(cta) => onEditDraftChange({ ...editDraft, cta })}
-              />
+    <div className={cn("min-h-full bg-[#fafafa] dark:bg-[#09090c] -mx-2 sm:-mx-4", expanded && "fixed inset-0 z-50 m-0 overflow-y-auto bg-background") }>
+      <div className="mx-auto w-full max-w-[860px] px-4 pb-36 pt-8 sm:px-6">
+        <div className="mb-6">
+          <button type="button" onClick={() => setWorkOpen((open) => !open)} className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground hover:text-foreground">
+            <span className="font-medium">Agent work</span>
+            <span>·</span>
+            <span>Compared directions</span>
+            {production?.coachJudge ? <><span>·</span><span>Quality checked</span></> : null}
+            {hookVisualBeat || hookOnScreenText || bRollShots.length > 0 ? <><span>·</span><span>Ready to film</span></> : null}
+            <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", workOpen && "rotate-180")} />
+          </button>
+          {workOpen ? (
+            <div className="mt-4 space-y-3 border-l border-border pl-4 text-sm text-muted-foreground">
+              {workItems.map((item) => <p key={item}>{item}</p>)}
             </div>
-          ) : (
-            <div>
-              <p className="text-xs text-muted-foreground">What to say</p>
-              <p className="mt-3 max-w-[38rem] whitespace-pre-line text-[16px] leading-8 text-gray-800 dark:text-gray-100">
-                {whatToSay || "This script is missing spoken lines. Use Refine to fill them in."}
-              </p>
-            </div>
-          )}
+          ) : null}
+        </div>
 
-          <div className="rounded-xl border border-gray-200/80 bg-white dark:border-gray-800 dark:bg-gray-900">
-            <button
-              type="button"
-              className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
-              onClick={() => setFilmHelpOpen((open) => !open)}
-              aria-expanded={filmHelpOpen}
-            >
-              <span className="text-sm font-medium text-gray-800 dark:text-gray-100">
-                How to film this
+        <div
+          ref={artifactRef}
+          onMouseUp={handleTextSelection}
+          className="relative overflow-hidden rounded-2xl border border-border/80 bg-card shadow-[0_18px_70px_rgba(0,0,0,0.12)]"
+        >
+          {!previewMode ? (
+            <div className="flex min-h-14 items-center gap-2 border-b border-border/70 px-3 sm:px-4">
+              {editMode ? (
+                <>
+                  <button type="button" onClick={onSaveEdits} disabled={savePending} className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-60">
+                    {savePending ? "Saving..." : "Save edits"}
+                  </button>
+                  <button type="button" onClick={onCancelEdit} className="rounded-lg px-3 py-2 text-xs text-muted-foreground hover:bg-muted">Cancel</button>
+                </>
+              ) : (
+                <button type="button" onClick={onToggleEdit} className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">
+                  <Pencil className="h-3.5 w-3.5" /> Edit
+                </button>
+              )}
+
+              <span className="text-xs text-muted-foreground">
+                {savedScriptId ? "Saved" : scheduleSave?.isSaving ? "Saving reminder..." : "Ready to film"}
               </span>
-              <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", filmHelpOpen && "rotate-180")} />
-            </button>
-            {filmHelpOpen ? (
-              <div className="space-y-6 border-t border-gray-100 px-4 py-5 dark:border-gray-800">
-                {isGeneratingProduction ? (
-                  <div className="inline-flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin text-violet-600" />
-                    <span>Adding filming notes...</span>
-                  </div>
-                ) : (
-                  <>
-                    <div className="space-y-3">
-                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Opening</p>
-                      <div>
-                        <p className="mb-1 text-xs text-muted-foreground">Visual opening</p>
-                        {editMode ? (
-                          <Textarea
-                            value={editDraft.hookVisualBeat}
-                            onChange={(e) =>
-                              onEditDraftChange({ ...editDraft, hookVisualBeat: e.target.value })
-                            }
-                            placeholder="What the viewer sees in the first second."
-                            className="min-h-[52px] resize-none text-sm"
-                          />
-                        ) : (
-                          <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-                            {hookVisualBeat || "No visual opening yet."}
-                          </p>
-                        )}
-                      </div>
-                      <div>
-                        <p className="mb-1 text-xs text-muted-foreground">On-screen text</p>
-                        {editMode ? (
-                          <Textarea
-                            value={editDraft.hookOnScreenText}
-                            onChange={(e) =>
-                              onEditDraftChange({
-                                ...editDraft,
-                                hookOnScreenText: e.target.value.toUpperCase(),
-                              })
-                            }
-                            placeholder="BOLD TEXT FOR MUTED VIEWERS"
-                            maxLength={60}
-                            className="min-h-[44px] resize-none text-sm font-semibold uppercase"
-                          />
-                        ) : (
-                          <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-                            {hookOnScreenText || "No on-screen text yet."}
-                          </p>
-                        )}
-                      </div>
-                    </div>
 
-                    {production?.setup || result.estimatedDuration || production?.voiceTone ? (
-                      <div className="space-y-3">
-                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">Delivery</p>
-                        {production?.setup ? (
-                          <div>
-                            <p className="mb-1 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                              <MapPin className="h-3.5 w-3.5" />
-                              Setup
-                            </p>
-                            <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-                              {production.setup}
-                            </p>
-                          </div>
-                        ) : null}
-                        {production?.voiceTone ? (
-                          <div>
-                            <p className="mb-1 text-xs text-muted-foreground">Delivery</p>
-                            <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-                              {production.voiceTone}
-                            </p>
-                          </div>
-                        ) : null}
-                        {result.estimatedDuration ? (
-                          <div>
-                            <p className="mb-1 inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-                              <Clock className="h-3.5 w-3.5" />
-                              Duration
-                            </p>
-                            <p className="text-sm text-gray-700 dark:text-gray-300">{result.estimatedDuration}</p>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
-
-                    {bRollShots.length > 0 || !previewMode ? (
-                      <div className="space-y-3">
-                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">B-roll</p>
-                        {bRollShots.length > 0 ? (
-                          <ul className="space-y-2">
-                            {bRollShots.map((shot, index) => (
-                              <li
-                                key={`${shot.shot}-${index}`}
-                                className="text-sm leading-relaxed text-gray-700 dark:text-gray-300"
-                              >
-                                {shot.shot}
-                                {shot.example?.trim() ? (
-                                  <span className="block text-muted-foreground">{shot.example}</span>
-                                ) : null}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : null}
-                        {!previewMode ? (
-                          <button
-                            type="button"
-                            onClick={goGenerateBroll}
-                            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-200 dark:hover:bg-gray-800"
-                          >
-                            <Clapperboard className="h-4 w-4 shrink-0" aria-hidden />
-                            Generate B-roll
-                          </button>
-                        ) : null}
-                      </div>
-                    ) : null}
-
-                    {production?.instagramAudio && production.instagramAudio.length > 0 ? (
-                      <div className="space-y-3">
-                        <p className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-900 dark:text-gray-100">
-                          <Music2 className="h-3.5 w-3.5 text-muted-foreground" />
-                          Audio
-                        </p>
-                        <InstagramAudioPreviewList picks={production.instagramAudio.slice(0, 2)} />
-                      </div>
-                    ) : musicNote ? (
-                      <div className="space-y-3">
-                        <p className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-900 dark:text-gray-100">
-                          <Music2 className="h-3.5 w-3.5 text-muted-foreground" />
-                          Audio
-                        </p>
-                        <p className="text-sm leading-relaxed text-gray-700 dark:text-gray-300">
-                          {musicNote}
-                        </p>
-                      </div>
-                    ) : null}
-                    {!production?.setup &&
-                    !production?.voiceTone &&
-                    !hookVisualBeat &&
-                    !hookOnScreenText &&
-                    !production?.instagramAudio?.length &&
-                    !musicNote &&
-                    bRollShots.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">
-                        Filming notes will appear here after generation.
-                      </p>
-                    ) : null}
-                  </>
-                )}
+              <div className="ml-auto flex items-center gap-1">
+                <button type="button" onClick={() => void copyScript()} title="Copy script" aria-label="Copy script" className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground">
+                  {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+                </button>
+                <button type="button" onClick={() => void downloadBrandedScript()} disabled={downloadPending} title="Download branded script" aria-label="Download branded script" className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50">
+                  {downloadPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                </button>
+                <button type="button" onClick={() => setExpanded((value) => !value)} title={expanded ? "Exit expanded view" : "Expand script"} aria-label={expanded ? "Exit expanded view" : "Expand script"} className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground">
+                  {expanded ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                </button>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button type="button" aria-label="More actions" className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"><MoreHorizontal className="h-4 w-4" /></button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-52">
+                    <DropdownMenuItem onSelect={saveScript}>Save to My Scripts</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => scheduleFilming("")}>Schedule filming</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={turnIntoCarousel}>Turn into carousel</DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={openHookOptions}>Hook options</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setHealthOpen(true)}>Script health</DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={onReset}>New script</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
-            ) : null}
+            </div>
+          ) : null}
+
+          <div className="px-6 py-8 sm:px-10 sm:py-10">
+            <h1 className="text-[1.8rem] font-semibold tracking-tight text-foreground sm:text-[2rem]">Your Reel script</h1>
+            <p className="mt-2 text-xs text-muted-foreground">{[platformLabel(result.platform), result.estimatedDuration].filter(Boolean).join(" · ")}</p>
+
+            <div className="mt-9">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Hook · 0-4 sec</p>
+              {editMode ? (
+                <Textarea value={editDraft.hook} onChange={(e) => onEditDraftChange({ ...editDraft, hook: e.target.value })} className="mt-3 min-h-[76px] resize-none text-lg font-semibold" />
+              ) : (
+                renderSectionText("hook", result.hook, "mt-3 border-l-2 border-violet-500 pl-4 text-[1.35rem] font-semibold leading-snug tracking-tight text-foreground")
+              )}
+            </div>
+
+            <div className="mt-9">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">What to say</p>
+              {editMode ? (
+                <div className="mt-3 space-y-4">
+                  {(["explain", "illustrate", "teach", "cta"] as const).map((section) => (
+                    <div key={section}>
+                      <p className="mb-1.5 text-xs text-muted-foreground">{section === "explain" ? VIRAL_SCRIPT_SECTION_LABELS.problem : section === "illustrate" ? VIRAL_SCRIPT_SECTION_LABELS.story : section === "teach" ? VIRAL_SCRIPT_SECTION_LABELS.takeaway : VIRAL_SCRIPT_SECTION_LABELS.cta}</p>
+                      <Textarea value={editDraft[section]} onChange={(e) => onEditDraftChange({ ...editDraft, [section]: e.target.value })} className="min-h-[80px] resize-none text-sm" />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-4 max-w-[44rem] space-y-5 text-[16px] leading-8 text-foreground/90">
+                  {result.explain ? renderSectionText("explain", result.explain, "whitespace-pre-line") : null}
+                  {result.illustrate ? renderSectionText("illustrate", result.illustrate, "whitespace-pre-line") : null}
+                  {result.teach ? renderSectionText("teach", result.teach, "whitespace-pre-line") : null}
+                  {result.cta ? renderSectionText("cta", result.cta, "whitespace-pre-line") : null}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-10 border-t border-border/70 pt-2">
+              <button type="button" onClick={() => setFilmHelpOpen((open) => !open)} className="flex w-full items-center justify-between gap-3 py-4 text-left">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">How to film</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Opening visual · on-screen text · B-roll · delivery</p>
+                </div>
+                <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", filmHelpOpen && "rotate-180")} />
+              </button>
+
+              {filmHelpOpen ? (
+                <div className="grid gap-3 pb-3 sm:grid-cols-2">
+                  {isGeneratingProduction ? (
+                    <div className="col-span-full flex items-center gap-2 py-5 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" /> Preparing filming direction...</div>
+                  ) : (
+                    <>
+                      <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Opening visual</p>
+                        {editMode ? <Textarea value={editDraft.hookVisualBeat} onChange={(e) => onEditDraftChange({ ...editDraft, hookVisualBeat: e.target.value })} className="mt-2 min-h-[70px] resize-none" /> : <p className="mt-2 text-sm leading-relaxed">{hookVisualBeat || production?.setup || "No opening visual yet."}</p>}
+                      </div>
+                      <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">On-screen text</p>
+                        {editMode ? <Textarea value={editDraft.hookOnScreenText} onChange={(e) => onEditDraftChange({ ...editDraft, hookOnScreenText: e.target.value })} className="mt-2 min-h-[70px] resize-none" /> : <p className="mt-2 text-sm font-medium leading-relaxed">{hookOnScreenText || "No on-screen text yet."}</p>}
+                      </div>
+                      <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">B-roll</p>
+                        <p className="mt-2 text-sm leading-relaxed">{bRollShots.length ? bRollShots.map((shot) => shot.shot?.trim()).filter(Boolean).join(" · ") : "No B-roll notes yet."}</p>
+                      </div>
+                      <div className="rounded-xl border border-border/70 bg-muted/20 p-4">
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Delivery</p>
+                        <p className="mt-2 text-sm leading-relaxed">{production?.voiceTone || production?.pacingNotes || "Use a natural delivery that matches the script."}</p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : null}
+            </div>
           </div>
-        </section>
+
+          {selectedText && !selectionEditing && !inlineProposal ? (
+            <div
+              onPointerDown={(event) => event.preventDefault()}
+              className="absolute z-30 flex items-center gap-1 rounded-xl border border-border bg-popover p-1.5 shadow-xl"
+              style={{ left: selectedText.left, top: selectedText.top }}
+            >
+              <button type="button" onClick={startInlineChange} className="rounded-lg px-3 py-2 text-xs font-medium hover:bg-muted">Ask for changes</button>
+              <span className="h-5 w-px bg-border" />
+              <button type="button" onClick={() => void copySelectedText()} aria-label="Copy selected text" className={cn("grid h-8 min-w-8 place-items-center rounded-lg px-2 text-muted-foreground hover:bg-muted hover:text-foreground", selectionCopied && "text-emerald-500")}>
+                {selectionCopied ? <span className="text-xs font-medium">✓ Copied</span> : <Copy className="h-4 w-4" />}
+              </button>
+            </div>
+          ) : null}
+
+          {selectedText && selectionEditing ? (
+            <div ref={selectionEditorRef} className="absolute z-30 w-[min(340px,calc(100%-24px))] rounded-2xl border border-border bg-popover p-3 shadow-2xl" style={{ left: selectedText.left, top: selectedText.top }}>
+              <div className="flex items-center gap-2">
+                <input value={selectionInstruction} onChange={(e) => setSelectionInstruction(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") submitInlineChange(); }} placeholder="Describe changes" className="h-10 min-w-0 flex-1 bg-transparent px-2 text-sm outline-none placeholder:text-muted-foreground" />
+                <button type="button" onClick={submitInlineChange} disabled={!selectionInstruction.trim() || refinePending} className="grid h-9 w-9 place-items-center rounded-full bg-violet-600 text-white disabled:opacity-40"><Send className="h-4 w-4" /></button>
+              </div>
+            </div>
+          ) : null}
+        </div>
 
         {!previewMode ? (
-          <div className="mt-8 space-y-4">
-            {editMode ? (
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="rounded-xl bg-violet-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
-                  onClick={onSaveEdits}
-                  disabled={savePending}
-                >
-                  {savePending ? "Saving..." : "Save script"}
-                </button>
-                <button
-                  type="button"
-                  className="rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:hover:bg-gray-800"
-                  onClick={onCancelEdit}
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={copyScript}
-                  className="inline-flex min-h-11 w-full min-w-[9.5rem] items-center justify-center gap-2 rounded-xl bg-violet-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-violet-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500/40 sm:w-auto"
-                >
-                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  {copied ? "Copied" : "Copy script"}
-                </button>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
-                  {onFilmNow ? (
-                    <button
-                      type="button"
-                      onClick={onFilmNow}
-                      disabled={filmNowPending}
-                      className="text-gray-600 hover:text-gray-950 disabled:opacity-60 dark:text-gray-300 dark:hover:text-white"
-                    >
-                      {filmNowPending ? "Opening teleprompter..." : "Film now"}
-                    </button>
-                  ) : null}
-                  <button
-                    type="button"
-                    onClick={onToggleEdit}
-                    className="text-gray-600 hover:text-gray-950 dark:text-gray-300 dark:hover:text-white"
-                  >
-                    Edit
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRefineOpen(true);
-                      window.setTimeout(() => refineInputRef.current?.focus(), 0);
-                    }}
-                    disabled={refinePending}
-                    className="text-gray-600 hover:text-gray-950 disabled:opacity-60 dark:text-gray-300 dark:hover:text-white"
-                  >
-                    Refine
-                  </button>
-                  {onSaveToMyScripts ? (
-                    savedScriptId ? (
-                      <span className="inline-flex items-center gap-1 text-gray-500 dark:text-gray-400">
-                        <Check className="h-3.5 w-3.5" aria-hidden />
-                        Saved
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={onSaveToMyScripts}
-                        disabled={saveToMyScriptsPending}
-                        className="text-gray-600 hover:text-gray-950 disabled:opacity-60 dark:text-gray-300 dark:hover:text-white"
-                      >
-                        {saveToMyScriptsPending ? "Saving..." : "Save"}
-                      </button>
-                    )
-                  ) : null}
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1 text-muted-foreground hover:text-gray-900 dark:hover:text-white"
-                      >
-                        More
-                        <MoreHorizontal className="h-3.5 w-3.5" />
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-52">
-                      {scheduleSave ? (
-                        <DropdownMenuItem onSelect={openScheduleSave}>
-                          Schedule
-                        </DropdownMenuItem>
-                      ) : null}
-                      <DropdownMenuItem onSelect={openHookOptions}>
-                        Hook options
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => setHealthOpen(true)}>
-                        Script health
-                      </DropdownMenuItem>
-                      {onRefineWithInstruction ? (
-                        <DropdownMenuItem
-                          onSelect={() =>
-                            onRefineWithInstruction(
-                              "Shorten the full script to about 30 seconds of spoken words. Keep the same idea. Cut filler only."
-                            )
-                          }
-                        >
-                          Shorten
-                        </DropdownMenuItem>
-                      ) : null}
-                      {onRefineWithInstruction ? (
-                        <DropdownMenuItem
-                          onSelect={() =>
-                            onRefineWithInstruction(
-                              "Make this more viral: stronger hook, tighter pacing, clearer takeaway. Keep the same idea."
-                            )
-                          }
-                        >
-                          Make more viral
-                        </DropdownMenuItem>
-                      ) : null}
-                      {onFixWeakest ? (
-                        <DropdownMenuItem onSelect={() => onFixWeakest()}>
-                          Fix weakest section
-                        </DropdownMenuItem>
-                      ) : null}
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem onSelect={onReset}>New script</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+          <>
+            <div className="mt-7 space-y-3">
+              {turns.map((turn) => turn.role === "user" ? (
+                <div key={turn.id} className="ml-auto w-fit max-w-[80%] rounded-2xl rounded-br-md border border-violet-500/20 bg-violet-500/10 px-4 py-2.5 text-sm text-foreground">{turn.text}</div>
+              ) : turn.kind === "action" ? (
+                <div key={turn.id} className="max-w-[520px] rounded-xl border border-border/70 bg-card/50 px-4 py-3">
+                  <p className="text-sm font-medium text-foreground"><span className="mr-2 text-emerald-500">✓</span>{turn.text}</p>
+                  {turn.detail ? <p className="mt-1 text-xs text-muted-foreground">{turn.detail}</p> : null}
                 </div>
-              </>
-            )}
+              ) : (
+                <p key={turn.id} className="max-w-[620px] text-sm leading-relaxed text-foreground/85">{turn.text}</p>
+              ))}
+              {agentBusy ? <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin text-violet-500" /> Agent is working...</div> : null}
+            </div>
 
-            {!editMode && refineOpen ? (
-              <div className="flex gap-2">
-                <input
-                  ref={refineInputRef}
-                  value={refineInput}
-                  onChange={(e) => onRefineInputChange(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && refineInput.trim() && !refinePending) onRefine();
-                  }}
-                  placeholder='e.g. "Make the hook more contrarian"'
-                  disabled={refinePending}
-                  className="min-w-0 flex-1 rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm placeholder:italic placeholder:text-gray-400 disabled:opacity-60 dark:border-gray-700 dark:bg-gray-900"
-                />
-                <button
-                  type="button"
-                  onClick={onRefine}
-                  disabled={refinePending || !refineInput.trim()}
-                  className="shrink-0 rounded-xl bg-violet-600 px-4 py-3 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
-                >
-                  {refinePending ? "Improving..." : "Improve"}
-                </button>
+            <div className="mt-5 flex flex-wrap gap-2">
+              <button type="button" onClick={() => routeAgentInput("Make it 30% shorter")} className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">Shorter</button>
+              <button type="button" onClick={() => routeAgentInput("Make the hook stronger") } className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">Stronger hook</button>
+              <button type="button" onClick={() => routeAgentInput("Make it funnier without changing the point") } className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">Funnier</button>
+              <button type="button" onClick={() => routeAgentInput("Simplify the language") } className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">Simplify</button>
+              <button type="button" onClick={() => { setAgentInput("Adapt this for "); window.setTimeout(() => composerRef.current?.focus(), 0); }} className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">Change niche</button>
+            </div>
+
+            <div className="sticky bottom-3 z-20 mt-4 rounded-2xl border border-border/90 bg-card/95 p-2 shadow-[0_18px_70px_rgba(0,0,0,0.24)] backdrop-blur-xl">
+              <Textarea
+                ref={composerRef}
+                value={agentInput}
+                onChange={(e) => setAgentInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
+                  e.preventDefault();
+                  routeAgentInput(agentInput);
+                }}
+                placeholder={scheduleMode ? "Tell Agent when you want to film it..." : "Ask Agent anything: rewrite a section, change the niche, shorten it, or turn it into a carousel..."}
+                className="min-h-[70px] resize-none border-0 bg-transparent px-3 py-3 text-sm shadow-none focus-visible:ring-0"
+              />
+              <div className="flex items-center justify-between gap-3 px-2 pb-1">
+                <span className="text-[11px] text-muted-foreground">Agent keeps the current Reel and context.</span>
+                <button type="button" onClick={() => routeAgentInput(agentInput)} disabled={!agentInput.trim() || agentBusy} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-violet-600 px-3 text-xs font-semibold text-white disabled:opacity-40">Send <Send className="h-3.5 w-3.5" /></button>
               </div>
-            ) : null}
+            </div>
 
-            <CoachScriptFeedback coachScriptId={result.id} />
-          </div>
+            <div className="mt-6"><CoachScriptFeedback coachScriptId={result.id} /></div>
+          </>
         ) : null}
       </div>
 
       <Sheet open={hookOptionsOpen} onOpenChange={setHookOptionsOpen}>
-        <SheetContent
-          side="right"
-          className="!w-[calc(100vw-1rem)] max-w-none overflow-y-auto p-4 pt-10 sm:!w-full sm:!max-w-md"
-        >
+        <SheetContent side="right" className="!w-[calc(100vw-1rem)] max-w-none overflow-y-auto p-4 pt-10 sm:!w-full sm:!max-w-md">
           <SheetHeader>
             <SheetTitle>Hook options</SheetTitle>
             <SheetDescription>Choose an opening. The rest of the script stays the same.</SheetDescription>
           </SheetHeader>
-          <div className="mt-4 grid grid-cols-1 gap-2.5">
+          <div className="mt-4 grid gap-2.5">
             {hookOptionsSheetShowsLoader(hookVariationsPending, hookVariations?.length ?? 0) ? (
-              <div className="flex flex-col items-center py-12 text-center">
-                <Loader2 className="h-5 w-5 animate-spin text-violet-600 dark:text-violet-400" aria-hidden />
-                <p className="mt-3 text-sm text-muted-foreground">Finding new hooks</p>
-              </div>
-            ) : hookVariations && hookVariations.length > 0 ? (
-              hookVariations.map((variation, index) => (
-                <HookOptionCard
-                  key={`${variation.hookType}-${index}`}
-                  variation={variation}
-                  optionLabel={`Option ${index + 1}`}
-                  selected={selectedHookOptionIndex === index}
-                  onSelect={() => {
-                    setSelectedHookOptionIndex(index);
-                    onApplyHookVariation(variation);
-                  }}
-                />
-              ))
-            ) : (
-              <p className="text-sm text-muted-foreground">No hook options yet.</p>
-            )}
+              <div className="flex flex-col items-center py-12 text-center"><Loader2 className="h-5 w-5 animate-spin text-violet-500" /><p className="mt-3 text-sm text-muted-foreground">Finding new hooks</p></div>
+            ) : hookVariations?.length ? hookVariations.map((variation, index) => (
+              <button key={`${variation.hookType}-${index}`} type="button" onClick={() => { setSelectedHookOptionIndex(index); onApplyHookVariation(variation); }} className={cn("rounded-xl border p-4 text-left transition", selectedHookOptionIndex === index ? "border-violet-500 bg-violet-500/5" : "border-border hover:bg-muted/40") }>
+                <div className="flex items-center gap-2 text-[11px] text-muted-foreground"><span className="font-semibold">Option {index + 1}</span><span className="rounded-full bg-violet-500/10 px-2 py-0.5 text-violet-500">{formatCoachHookTypeLabel(variation.hookType)}</span></div>
+                <p className="mt-2 text-sm font-semibold leading-snug">{variation.spokenHook}</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">{hookOptionReason(variation.hookType)}</p>
+              </button>
+            )) : <p className="text-sm text-muted-foreground">No hook options yet.</p>}
           </div>
         </SheetContent>
       </Sheet>
 
       <Sheet open={healthOpen} onOpenChange={setHealthOpen}>
         <SheetContent side="right" className="w-full overflow-y-auto p-4 pt-10 sm:max-w-md">
-          <SheetHeader>
-            <SheetTitle>Script health</SheetTitle>
-            <SheetDescription>Optional scores from the quality check.</SheetDescription>
-          </SheetHeader>
+          <SheetHeader><SheetTitle>Script health</SheetTitle><SheetDescription>Optional quality checks for this Reel.</SheetDescription></SheetHeader>
           <div className="mt-4">
             <AiCoachScriptHealthPanel
               health={health}
               weakest={weakest}
               onFixWeakest={onFixWeakest}
               fixPending={refinePending}
-              onShorten={
-                previewMode || !onRefineWithInstruction
-                  ? undefined
-                  : () =>
-                      onRefineWithInstruction(
-                        "Shorten the full script to about 30 seconds of spoken words. Keep the same idea. Cut filler only."
-                      )
-              }
-              onMakeViral={
-                previewMode || !onRefineWithInstruction
-                  ? undefined
-                  : () =>
-                      onRefineWithInstruction(
-                        "Make this more viral: stronger hook, tighter pacing, clearer takeaway. Keep the same idea."
-                      )
-              }
-              previewMode={previewMode}
+              onEditManually={onToggleEdit}
+              onShorten={onRefineWithInstruction ? () => runRefine("Shorten the full script while keeping the same idea and strongest proof.", "Reel shortened") : undefined}
+              onMakeViral={onRefineWithInstruction ? () => runRefine("Make this more viral with a stronger hook, tighter pacing, and clearer payoff. Keep the same idea and facts.", "Reel strengthened") : undefined}
+              onCopy={() => void copyScript()}
             />
           </div>
         </SheetContent>
       </Sheet>
-
-      {!previewMode && scheduleSave ? (
-        <Sheet open={scheduleOpen} onOpenChange={setScheduleOpen}>
-          <SheetContent side="right" className="w-full sm:max-w-md overflow-y-auto p-4 pt-10">
-            <SheetHeader className="sr-only">
-              <SheetTitle>Schedule &amp; save</SheetTitle>
-              <SheetDescription>
-                Add this script to My Scripts with your filming date.
-              </SheetDescription>
-            </SheetHeader>
-            <CoachScriptSchedulePanel {...scheduleSave} />
-          </SheetContent>
-        </Sheet>
-      ) : null}
     </div>
   );
 }
