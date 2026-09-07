@@ -28,9 +28,7 @@ export const isViralPostsYoutubeEnabled = parseViralPostsYoutubeEnabled(
 );
 
 export const isAnyViralPostsPlatformEnabled =
-  isViralPostsInstagramEnabled ||
-  isViralPostsTiktokEnabled ||
-  isViralPostsYoutubeEnabled;
+  isViralPostsInstagramEnabled || isViralPostsTiktokEnabled;
 
 /** Process-local refresher opt-in. Production web must be false. */
 export const isViralPostsPoolRefresherEnabled = parseViralPostsPoolRefresher(

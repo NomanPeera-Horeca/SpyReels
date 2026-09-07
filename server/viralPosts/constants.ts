@@ -2,16 +2,40 @@
 export const VIRAL_POOL_DEFAULTS = {
   /** Max ScrapeCreators calls per pool refresh run. */
   refreshMaxScCalls: 35,
-  /** Skip profile drilling on routine refreshes (hashtag-only). */
+  /** Legacy shallow-refresh switch retained for other discovery callers. */
   refreshSkipProfileDrilling: true,
+  /** Calls intentionally reserved from the 35-call Instagram pool budget for selective creator drilling. */
+  instagramPoolDrillReserveCalls: 18,
+  /**
+   * Breadth-first first pass: consider more hashtag-discovered creators instead
+   * of spending the whole drill reserve on a few deep accounts.
+   */
+  instagramPoolMaxCreatorsToDrill: 8,
+  /** Align creator history with the same 90-day recommendation reservoir used by Today. */
+  instagramPoolDrillTimeframeDays: 90,
+  /**
+   * First-pass Reel cap per creator. One recent slice is enough to establish
+   * whether the account produces usable viral supply; deeper history can be a
+   * later targeted optimization if benchmarks show it is needed.
+   */
+  instagramPoolDrillMaxReels: 12,
+  /** Keep a small set of strong rows per creator; Today diversity will narrow further. */
+  instagramPoolDrillKeepPerCreator: 6,
   /** Stop early once this many scored candidates exist. */
   refreshEarlyStopCandidates: 40,
   /** Per-pool daily ScrapeCreators budget. */
   dailyCallBudget: 60,
   /** Minimum fresh candidates before skipping a refresh. */
   minFreshCandidates: 40,
-  /** Candidate freshness window for assembly (hours). */
+  /** Short freshness window used only to decide whether a pool needs new discovery. */
   freshCandidateMaxAgeHours: 72,
+  /**
+   * Recommendation reservoir window. Proven candidates can stay eligible for
+   * Today’s Picks / browse for 90 days even while refresh continues every few days.
+   */
+  assemblyCandidateMaxAgeHours: 90 * 24,
+  /** Exact videos already shown in Today’s Picks stay suppressed for 90 days. */
+  todayPicksRepeatSuppressionDays: 90,
   /** Max candidates loaded from pool for scoring. */
   assemblyCandidateLimit: 120,
   /** How long to wait for a concurrent assembler (ms). */
@@ -32,6 +56,30 @@ export const VIRAL_POOL_DEFAULTS = {
   seedDailyCallBudget: 30,
   /** Approximate SC calls charged per seed handle scrape. */
   seedScCallsPerHandle: 3,
+  /** TikTok pool search: keyword queries in the first production experiment. */
+  tiktokPoolMaxKeywordQueries: 4,
+  /** TikTok pool search: optional Top queries. */
+  tiktokPoolMaxTopQueries: 2,
+  /** Hard ceiling for TikTok search calls. Does not consume the full 30-call seed budget. */
+  tiktokPoolMaxSearchCalls: 6,
+  /** Skip seed-handle scraping when search already admitted at least this many current-pool rows. */
+  tiktokPoolMinSearchAdmittedToSkipSeeds: 5,
+  /**
+   * Instagram Popular-first: hard ceiling for Popular search + selective enrichment
+   * inside one pool refresh. Remaining maxScCalls stay available for hashtag fallback.
+   */
+  instagramPoolMaxPopularScCalls: 18,
+  /** Popular search phrases attempted before enrichment. */
+  instagramPoolMaxPopularQueries: 5,
+  /** Unique creators profile-enriched from Popular shortlist. */
+  instagramPoolMaxPopularProfileCalls: 8,
+  /** Selective /v1/instagram/post enrichments for likes/comments recovery. */
+  instagramPoolMaxPopularPostDetailCalls: 5,
+  /**
+   * Skip expensive hashtag/profile-drill fallback when Popular already admitted
+   * at least this many current-pillar rows (mirrors TikTok search skip threshold).
+   */
+  instagramPoolMinPopularAdmittedToSkipFallback: 5,
 } as const;
 
 /** Pillar key for platform seed pools (one pool per niche+platform). */

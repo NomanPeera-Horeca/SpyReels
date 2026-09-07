@@ -1,20 +1,33 @@
 import { hostname } from "os";
 import type { ViralPostPool } from "../../drizzle/schema";
-import { runDiscoveryPipeline } from "../discovery/pipeline";
+import { isViralPostsV1Platform } from "../../shared/viralPosts";
 import { scrapeTikTokVideos } from "../tiktok";
-import { scrapeYouTubeShorts } from "../youtube";
-import { adaptDiscoveryResult, type AdaptedCandidate } from "./candidateAdapter";
-import { VIRAL_POOL_DEFAULTS, VIRAL_SEED_POOL_PILLAR } from "./constants";
+import type { AdaptedCandidate } from "./candidateAdapter";
+import { VIRAL_POOL_DEFAULTS } from "./constants";
 import {
   isViralPostsLive,
   isViralPostsPoolRefresherEnabled,
   viralPostsPoolRefreshMs,
 } from "./featureFlag";
-import { classifyCandidatePillars } from "./pillarClassify";
+import { loadFeaturedTransferableCandidates } from "./featuredSupply";
+import { discoverInstagramPoolCandidates } from "./instagramPoolDiscovery";
 import {
-  adaptTikTokVideos,
-  adaptYouTubeShorts,
-} from "./platformAdapters";
+  dedupeAdaptedCandidates,
+  dedupeSemanticReroutes,
+  discoverInstagramPopularFirstCandidates,
+  planInstagramAdaptiveBudgets,
+  shouldRunInstagramHashtagFallback,
+  shouldUseInstagramPopularDiscovery,
+  type InstagramPopularDiscoveryResult,
+} from "./instagramPopularDiscovery";
+import {
+  discoverTikTokPoolCandidates,
+  shouldRunTikTokSeedFallback,
+  shouldUseTikTokSearchDiscovery,
+} from "./tiktokPoolDiscovery";
+import { classifyCandidateForPoolAdmission } from "./poolAdmission";
+import type { SemanticPoolReroute } from "./semanticPoolRelevance";
+import { adaptTikTokVideos } from "./platformAdapters";
 import * as poolRepo from "./poolRepository";
 import * as repo from "./repository";
 import { scheduleThumbnailMirroring } from "./mediaMirror";
@@ -28,6 +41,7 @@ export type PoolRefreshResult = {
     | "skipped_budget"
     | "skipped_fresh"
     | "skipped_locked"
+    | "skipped_unsupported_platform"
     | "error";
   scCalls: number;
   candidateCount: number;
@@ -35,63 +49,97 @@ export type PoolRefreshResult = {
   error?: string;
 };
 
+/** Historical YouTube (and any non-V1) Viral Posts pools must not spend SC calls. */
+export function shouldSkipUnsupportedViralPostsPlatform(
+  platform: string | null | undefined
+): boolean {
+  return !isViralPostsV1Platform(platform);
+}
+
 function workerOwnerId(): string {
   const configured = process.env.VIRAL_POSTS_WORKER_ID?.trim();
   if (configured) return configured.slice(0, 120);
   return `${hostname()}:${process.pid}:${Math.random().toString(36).slice(2, 8)}`;
 }
 
-async function persistAdaptedToPool(args: {
+export function groupSemanticReroutes(
+  reroutes: SemanticPoolReroute[]
+): Map<string, AdaptedCandidate[]> {
+  const byPillar = new Map<string, AdaptedCandidate[]>();
+  for (const row of reroutes) {
+    const existing = byPillar.get(row.targetPillar) ?? [];
+    existing.push(row.candidate);
+    byPillar.set(row.targetPillar, existing);
+  }
+  return byPillar;
+}
+
+export function buildAdmittedPoolLinks(args: {
+  pool: Pick<ViralPostPool, "platform" | "niche" | "pillar">;
+  adapted: AdaptedCandidate[];
+  candidateIdsBySource: Map<string, number>;
+}): Array<{
+  candidateId: number;
+  classification: ReturnType<
+    typeof classifyCandidateForPoolAdmission
+  >["classification"];
+}> {
+  const links: Array<{
+    candidateId: number;
+    classification: ReturnType<
+      typeof classifyCandidateForPoolAdmission
+    >["classification"];
+  }> = [];
+
+  for (const candidate of args.adapted) {
+    const candidateId = args.candidateIdsBySource.get(candidate.sourceId);
+    if (candidateId == null) continue;
+    const decision = classifyCandidateForPoolAdmission({
+      pool: {
+        platform: args.pool.platform,
+        niche: args.pool.niche,
+        pillar: args.pool.pillar,
+      },
+      candidate,
+    });
+    if (!decision.admit) {
+      console.info("[viralPosts.pool] pool_link_rejected", {
+        platform: args.pool.platform,
+        pillar: args.pool.pillar,
+        sourceId: candidate.sourceId,
+        reason: decision.reason,
+        confidence: decision.classification.confidence,
+      });
+      continue;
+    }
+    links.push({
+      candidateId,
+      classification: decision.classification,
+    });
+  }
+  return links;
+}
+
+/**
+ * Canonical persistence/linking shared by live provider supply and the existing
+ * zero-provider-call Featured catalog. This does not spend budget or mark a
+ * provider refresh complete; callers own those lifecycle decisions.
+ */
+async function linkAdaptedToPool(args: {
   pool: ViralPostPool;
   adapted: AdaptedCandidate[];
-  scCalls: number;
-  costEstimateUsd?: number;
 }): Promise<number> {
-  const { pool, adapted, scCalls, costEstimateUsd } = args;
-  if (adapted.length === 0) {
-    await poolRepo.addBudgetUsage(pool.id, scCalls);
-    await poolRepo.markPoolRefreshed({
-      poolId: pool.id,
-      status: "refreshed",
-      scCalls,
-      candidateCount: 0,
-    });
-    return 0;
-  }
+  const { pool, adapted } = args;
+  if (adapted.length === 0) return 0;
 
   const upserted = await repo.upsertCandidates(adapted);
-  const bySource = new Map(upserted.map((c) => [c.sourceId, c]));
-  const assignPillar =
-    pool.pillar === VIRAL_SEED_POOL_PILLAR ? pool.niche : pool.pillar;
-
-  const links = adapted
-    .map((a) => {
-      const row = bySource.get(a.sourceId);
-      if (!row) return null;
-      const classification = classifyCandidatePillars({
-        caption: a.caption,
-        hook: a.hook,
-        hashtags: a.hashtags,
-        activePillars: [assignPillar],
-        fallbackNiche: pool.niche,
-      });
-      if (classification.confidence < 0.5) {
-        classification.primaryPillar = assignPillar;
-        classification.reason = `Assigned to pool ${pool.platform}/${assignPillar}`;
-        classification.confidence = 0.55;
-      }
-      return { candidateId: row.id, classification };
-    })
-    .filter((x): x is NonNullable<typeof x> => Boolean(x));
+  const links = buildAdmittedPoolLinks({
+    pool,
+    adapted,
+    candidateIdsBySource: new Map(upserted.map((c) => [c.sourceId, c.id])),
+  });
 
   await poolRepo.linkCandidatesToPool({ poolId: pool.id, links });
-  await poolRepo.addBudgetUsage(pool.id, scCalls);
-  await poolRepo.markPoolRefreshed({
-    poolId: pool.id,
-    status: "refreshed",
-    scCalls,
-    candidateCount: links.length,
-  });
 
   scheduleThumbnailMirroring(
     upserted.map((c) => ({
@@ -117,41 +165,197 @@ async function persistAdaptedToPool(args: {
     }
   );
 
-  void costEstimateUsd;
   return links.length;
+}
+
+/**
+ * Link semantically rerouted candidates into the correct sibling pool on the
+ * same platform. The source refresh already spent the provider budget; the
+ * sibling receives inventory only and is not marked as independently refreshed.
+ */
+export async function persistSemanticReroutes(args: {
+  sourcePool: ViralPostPool;
+  reroutes: SemanticPoolReroute[];
+}): Promise<number> {
+  if (args.reroutes.length === 0) return 0;
+  let linkedTotal = 0;
+  for (const [targetPillar, candidates] of groupSemanticReroutes(args.reroutes)) {
+    const sibling = await poolRepo.ensurePool({
+      niche: args.sourcePool.niche,
+      pillar: targetPillar,
+      platform: args.sourcePool.platform,
+      language: args.sourcePool.language,
+      region: args.sourcePool.region,
+    });
+    const linked = await linkAdaptedToPool({
+      pool: sibling,
+      adapted: candidates,
+    });
+    linkedTotal += linked;
+    console.info("[viralPosts.pool] instagram_semantic_reroute", {
+      sourcePoolId: args.sourcePool.id,
+      sourcePillar: args.sourcePool.pillar,
+      targetPoolId: sibling.id,
+      targetPillar,
+      linked,
+      providerCalls: 0,
+      siblingRefreshMarked: false,
+    });
+  }
+  return linkedTotal;
+}
+
+async function persistAdaptedToPool(args: {
+  pool: ViralPostPool;
+  adapted: AdaptedCandidate[];
+  scCalls: number;
+  costEstimateUsd?: number;
+}): Promise<number> {
+  const { pool, adapted, scCalls, costEstimateUsd } = args;
+  const linked = await linkAdaptedToPool({ pool, adapted });
+  await poolRepo.addBudgetUsage(pool.id, scCalls);
+  await poolRepo.markPoolRefreshed({
+    poolId: pool.id,
+    status: "refreshed",
+    scCalls,
+    candidateCount: linked,
+  });
+  void costEstimateUsd;
+  return linked;
+}
+
+/**
+ * Pull strong, production-feasible rows from the existing global Featured
+ * catalog into the same canonical Viral candidate/pool store. Zero provider
+ * calls and no separate recommendation system.
+ */
+async function hydrateFeaturedSupply(pool: ViralPostPool): Promise<number> {
+  if (pool.platform !== "instagram") return 0;
+  try {
+    const adapted = await loadFeaturedTransferableCandidates({
+      pillar: pool.pillar,
+      niche: pool.niche,
+      limit: 12,
+    });
+    const linked = await linkAdaptedToPool({ pool, adapted });
+    console.info("[viralPosts.pool] featured_supply", {
+      poolId: pool.id,
+      poolKey: pool.poolKey,
+      candidates: adapted.length,
+      linked,
+      providerCalls: 0,
+    });
+    return linked;
+  } catch (err) {
+    // Catalog enrichment must never take down live/provider refresh.
+    console.warn("[viralPosts.pool] featured_supply_failed", {
+      poolId: pool.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return 0;
+  }
 }
 
 async function refreshInstagramPool(
   pool: ViralPostPool,
   maxScCalls: number
-): Promise<{ scCalls: number; candidateCount: number; costEstimateUsd?: number }> {
-  const description = `Find Instagram Reels about ${pool.pillar} for creators in the ${pool.niche} niche. Prefer practical, remakeable talking-head and educational formats.`;
-  const result = await runDiscoveryPipeline(description, undefined, {
-    skipMediaMirroring: true,
-    maxScCalls,
-    skipProfileDrilling: VIRAL_POOL_DEFAULTS.refreshSkipProfileDrilling,
-    skipRelevanceFilter: VIRAL_POOL_DEFAULTS.refreshSkipProfileDrilling,
-    earlyStopCandidateCount: VIRAL_POOL_DEFAULTS.refreshEarlyStopCandidates,
+): Promise<{
+  scCalls: number;
+  candidateCount: number;
+  featuredCandidateCount: number;
+  costEstimateUsd?: number;
+}> {
+  let popular: InstagramPopularDiscoveryResult | null = null;
+  let popularScCalls = 0;
+
+  if (shouldUseInstagramPopularDiscovery(pool.pillar)) {
+    const { popularBudget } = planInstagramAdaptiveBudgets(maxScCalls);
+    popular = await discoverInstagramPopularFirstCandidates({
+      niche: pool.niche,
+      pillar: pool.pillar,
+      maxScCalls: popularBudget,
+    });
+    popularScCalls = popular.totalScCalls;
+  }
+
+  const leftover = Math.max(0, maxScCalls - popularScCalls);
+  const fallbackTriggered = shouldRunInstagramHashtagFallback({
+    admittedCount: popular?.adapted.length ?? 0,
+    remainingBudget: leftover,
   });
-  const adapted = adaptDiscoveryResult(result);
-  const candidateCount = await persistAdaptedToPool({
+  // Non-restaurant Instagram pools always use the existing hashtag/drill path.
+  const runFallback =
+    !shouldUseInstagramPopularDiscovery(pool.pillar) || fallbackTriggered;
+
+  const fallback = runFallback
+    ? await discoverInstagramPoolCandidates({
+        niche: pool.niche,
+        pillar: pool.pillar,
+        maxScCalls: leftover,
+      })
+    : null;
+
+  const adapted = dedupeAdaptedCandidates([
+    ...(popular?.adapted ?? []),
+    ...(fallback?.adapted ?? []),
+  ]);
+  const reroutes = dedupeSemanticReroutes([
+    ...(popular?.reroutedCandidates ?? []),
+    ...(fallback?.reroutedCandidates ?? []),
+  ]);
+  const scCalls = popularScCalls + (fallback?.totalScCalls ?? 0);
+  const costEstimateUsd =
+    (popular?.costEstimateUsd ?? 0) + (fallback?.costEstimateUsd ?? 0);
+
+  const providerCandidateCount = await persistAdaptedToPool({
     pool,
     adapted,
-    scCalls: result.scCallCount || 0,
-    costEstimateUsd: result.costEstimateUsd,
+    scCalls,
+    costEstimateUsd,
+  });
+  const reroutedCandidateCount = await persistSemanticReroutes({
+    sourcePool: pool,
+    reroutes,
+  });
+  const featuredCandidateCount = await hydrateFeaturedSupply(pool);
+  console.info("[viralPosts.pool] instagram_supply_mix", {
+    poolId: pool.id,
+    popularFirst: Boolean(popular),
+    popularCalls: popular?.popularCalls ?? 0,
+    popularSuccesses: popular?.popularSuccesses ?? 0,
+    popularFailures: popular?.popularFailures ?? 0,
+    popularAdmitted: popular?.adapted.length ?? 0,
+    popularStrict: popular?.strictViral ?? 0,
+    popularScCalls,
+    fallbackTriggered: runFallback,
+    fallbackScCalls: fallback?.totalScCalls ?? 0,
+    providerCandidates: providerCandidateCount,
+    reroutedCandidates: reroutedCandidateCount,
+    featuredCandidates: featuredCandidateCount,
+    providerCalls: scCalls,
+    shallowCalls: fallback?.shallowScCalls ?? 0,
+    drillCalls: fallback?.drillScCalls ?? 0,
+    hashtags: fallback?.hashtagsUsed ?? [],
+    shallowCandidates: fallback?.shallowCandidateCount ?? 0,
+    uniqueShallowCreators: fallback?.uniqueShallowCreators ?? 0,
+    selectedCreators: fallback?.selectedCreators.map((creator) => creator.handle) ?? [],
+    drilledCreators: fallback?.drilledCreatorHandles ?? [],
+    drilledReelsRead: fallback?.drilledReelsRead ?? 0,
+    drilledViralCandidates: fallback?.drilledViralCandidates ?? 0,
   });
   return {
-    scCalls: result.scCallCount || 0,
-    candidateCount,
-    costEstimateUsd: result.costEstimateUsd,
+    scCalls,
+    candidateCount: providerCandidateCount + featuredCandidateCount,
+    featuredCandidateCount,
+    costEstimateUsd,
   };
 }
 
-async function refreshSeedPlatformPool(
+async function collectSeedPlatformCandidates(
   pool: ViralPostPool,
-  platform: "tiktok" | "youtube",
+  platform: "tiktok",
   remainingBudget: number
-): Promise<{ scCalls: number; candidateCount: number }> {
+): Promise<{ adapted: AdaptedCandidate[]; scCalls: number }> {
   const maxHandles = Math.min(
     VIRAL_POOL_DEFAULTS.seedMaxHandlesPerRefresh,
     Math.max(
@@ -165,8 +369,12 @@ async function refreshSeedPlatformPool(
     limit: maxHandles,
   });
   if (seeds.length === 0) {
-    await persistAdaptedToPool({ pool, adapted: [], scCalls: 0 });
-    return { scCalls: 0, candidateCount: 0 };
+    console.info("[viralPosts.pool] seed_supply_empty", {
+      poolId: pool.id,
+      platform,
+      niche: pool.niche,
+    });
+    return { adapted: [], scCalls: 0 };
   }
 
   const adapted: AdaptedCandidate[] = [];
@@ -178,41 +386,18 @@ async function refreshSeedPlatformPool(
       break;
     }
     try {
-      if (platform === "tiktok") {
-        const result = await scrapeTikTokVideos(
-          seed.handle,
-          undefined,
-          {
-            maxVideos,
-            timeoutMs: 90_000,
-          }
-        );
-        scCalls += VIRAL_POOL_DEFAULTS.seedScCallsPerHandle;
-        adapted.push(
-          ...adaptTikTokVideos(result.videos.slice(0, maxVideos), {
-            niche: pool.niche,
-            creatorFollowers: result.followerCount,
-            creatorAvatarUrl: result.profilePicUrl,
-          })
-        );
-      } else {
-        const result = await scrapeYouTubeShorts(
-          seed.handle,
-          undefined,
-          {
-            maxVideos,
-            timeoutMs: 90_000,
-          }
-        );
-        scCalls += VIRAL_POOL_DEFAULTS.seedScCallsPerHandle;
-        adapted.push(
-          ...adaptYouTubeShorts(result.videos.slice(0, maxVideos), {
-            niche: pool.niche,
-            creatorFollowers: result.subscriberCount,
-            creatorAvatarUrl: result.profilePicUrl,
-          })
-        );
-      }
+      const result = await scrapeTikTokVideos(seed.handle, undefined, {
+        maxVideos,
+        timeoutMs: 90_000,
+      });
+      scCalls += VIRAL_POOL_DEFAULTS.seedScCallsPerHandle;
+      adapted.push(
+        ...adaptTikTokVideos(result.videos.slice(0, maxVideos), {
+          niche: pool.niche,
+          creatorFollowers: result.followerCount,
+          creatorAvatarUrl: result.profilePicUrl,
+        })
+      );
     } catch (err) {
       scCalls += 1;
       console.warn("[viralPosts.pool] seed_handle_failed", {
@@ -224,12 +409,83 @@ async function refreshSeedPlatformPool(
     }
   }
 
+  return { adapted, scCalls };
+}
+
+async function refreshSeedPlatformPool(
+  pool: ViralPostPool,
+  platform: "tiktok",
+  remainingBudget: number
+): Promise<{ scCalls: number; candidateCount: number }> {
+  const collected = await collectSeedPlatformCandidates(
+    pool,
+    platform,
+    remainingBudget
+  );
   const candidateCount = await persistAdaptedToPool({
     pool,
-    adapted,
-    scCalls,
+    adapted: collected.adapted,
+    scCalls: collected.scCalls,
   });
-  return { scCalls, candidateCount };
+  return { scCalls: collected.scCalls, candidateCount };
+}
+
+async function refreshTikTokPool(
+  pool: ViralPostPool,
+  remainingBudget: number
+): Promise<{ scCalls: number; candidateCount: number; costEstimateUsd?: number }> {
+  if (!shouldUseTikTokSearchDiscovery(pool.pillar)) {
+    return refreshSeedPlatformPool(pool, "tiktok", remainingBudget);
+  }
+
+  const searchBudget = Math.min(
+    VIRAL_POOL_DEFAULTS.tiktokPoolMaxSearchCalls,
+    remainingBudget
+  );
+  const search = await discoverTikTokPoolCandidates({
+    niche: pool.niche,
+    pillar: pool.pillar,
+    maxScCalls: searchBudget,
+    region: pool.region || undefined,
+  });
+
+  const leftover = Math.max(0, remainingBudget - search.totalScCalls);
+  const seedFallbackRan = shouldRunTikTokSeedFallback({
+    admittedCount: search.adapted.length,
+    remainingBudget: leftover,
+  });
+  const seeds = seedFallbackRan
+    ? await collectSeedPlatformCandidates(pool, "tiktok", leftover)
+    : { adapted: [] as AdaptedCandidate[], scCalls: 0 };
+
+  const scCalls = search.totalScCalls + seeds.scCalls;
+  const providerCandidateCount = await persistAdaptedToPool({
+    pool,
+    adapted: [...search.adapted, ...seeds.adapted],
+    scCalls,
+    costEstimateUsd: search.costEstimateUsd,
+  });
+  const reroutedCandidateCount = await persistSemanticReroutes({
+    sourcePool: pool,
+    reroutes: search.reroutedCandidates,
+  });
+  console.info("[viralPosts.pool] tiktok_supply_mix", {
+    poolId: pool.id,
+    searchCalls: search.totalScCalls,
+    seedCalls: seeds.scCalls,
+    seedFallbackRan,
+    providerCandidates: providerCandidateCount,
+    reroutedCandidates: reroutedCandidateCount,
+    searchAdmitted: search.adapted.length,
+    semanticRejected: search.semanticRejected,
+    keywordTopOverlap: search.keywordTopOverlap,
+    siblingRefreshMarked: false,
+  });
+  return {
+    scCalls,
+    candidateCount: providerCandidateCount,
+    costEstimateUsd: search.costEstimateUsd,
+  };
 }
 
 /**
@@ -270,38 +526,60 @@ export async function refreshPoolById(
     };
   }
 
+  // Viral Posts V1: Instagram + TikTok only. Historical YouTube pools stay in DB
+  // but must never spend ScrapeCreators budget.
+  if (shouldSkipUnsupportedViralPostsPlatform(pool.platform)) {
+    console.info("[viralPosts.pool] lock_skip", {
+      poolId: pool.id,
+      poolKey: pool.poolKey,
+      reason: "unsupported_platform",
+      platform: pool.platform,
+    });
+    return {
+      poolId: pool.id,
+      poolKey: pool.poolKey,
+      status: "skipped_unsupported_platform",
+      scCalls: 0,
+      candidateCount: 0,
+      error: "unsupported_viral_posts_platform",
+    };
+  }
+
   const fresh = await poolRepo.countFreshPoolCandidates(pool.id);
   if (!opts?.force && fresh >= pool.minFreshCandidates) {
+    const featuredCandidateCount = await hydrateFeaturedSupply(pool);
     console.info("[viralPosts.pool] lock_skip", {
       poolId: pool.id,
       reason: "fresh_enough",
       fresh,
+      featuredCandidateCount,
     });
     return {
       poolId: pool.id,
       poolKey: pool.poolKey,
       status: "skipped_fresh",
       scCalls: 0,
-      candidateCount: fresh,
+      candidateCount: fresh + featuredCandidateCount,
     };
   }
 
   const used = await poolRepo.getBudgetUsed(pool.id);
   const remaining = Math.max(0, pool.dailyCallBudget - used);
-  const minBudget =
-    pool.platform === "tiktok" || pool.platform === "youtube" ? 3 : 5;
+  const minBudget = pool.platform === "tiktok" ? 3 : 5;
   if (remaining < minBudget) {
+    const featuredCandidateCount = await hydrateFeaturedSupply(pool);
     console.info("[viralPosts.pool] lock_skip", {
       poolId: pool.id,
       reason: "budget",
       used,
+      featuredCandidateCount,
     });
     return {
       poolId: pool.id,
       poolKey: pool.poolKey,
       status: "skipped_budget",
       scCalls: 0,
-      candidateCount: fresh,
+      candidateCount: fresh + featuredCandidateCount,
     };
   }
 
@@ -348,13 +626,10 @@ export async function refreshPoolById(
     let costEstimateUsd: number | undefined;
 
     if (pool.platform === "tiktok") {
-      const result = await refreshSeedPlatformPool(pool, "tiktok", remaining);
+      const result = await refreshTikTokPool(pool, remaining);
       scCalls = result.scCalls;
       candidateCount = result.candidateCount;
-    } else if (pool.platform === "youtube") {
-      const result = await refreshSeedPlatformPool(pool, "youtube", remaining);
-      scCalls = result.scCalls;
-      candidateCount = result.candidateCount;
+      costEstimateUsd = result.costEstimateUsd;
     } else {
       const result = await refreshInstagramPool(pool, maxScCalls);
       scCalls = result.scCalls;

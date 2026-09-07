@@ -7,7 +7,11 @@ import {
   freshnessScoreFromAge,
   scoreCandidate,
 } from "../scoring";
-import { selectDiverseFeed, type DiversityCandidate } from "../diversity";
+import {
+  DAILY_PICK_MIN_FINAL_SCORE,
+  selectDiverseFeed,
+  type DiversityCandidate,
+} from "../diversity";
 
 describe("viralPosts scoring", () => {
   it("returns null reach when followers missing", () => {
@@ -268,7 +272,7 @@ describe("viralPosts diversity", () => {
     expect(selected.length).toBe(3);
   });
 
-  it("allows recently shown only when the pool has no fresh candidates", () => {
+  it("does not recycle recently shown posts just to fill the feed", () => {
     const input = [
       make({
         candidateId: 1,
@@ -307,7 +311,58 @@ describe("viralPosts diversity", () => {
       }),
     ];
     const selected = selectDiverseFeed(input, { min: 5, max: 7 });
-    expect(selected.length).toBe(5);
-    expect(selected.every((s) => s.recentlyShown)).toBe(true);
+    // Prefer an empty/short credible feed over recycling yesterday's cards.
+    expect(selected.length).toBe(0);
+  });
+
+  it("does not pad to min when a quality floor leaves fewer strong candidates", () => {
+    const input = [
+      make({ candidateId: 1, sourceId: "strong-a", creatorKey: "c1", finalScore: 0.82 }),
+      make({ candidateId: 2, sourceId: "strong-b", creatorKey: "c2", finalScore: 0.71 }),
+      make({ candidateId: 3, sourceId: "strong-c", creatorKey: "c3", finalScore: 0.6 }),
+      make({ candidateId: 4, sourceId: "weak-a", creatorKey: "c4", finalScore: 0.4 }),
+      make({ candidateId: 5, sourceId: "weak-b", creatorKey: "c5", finalScore: 0.3 }),
+      make({ candidateId: 6, sourceId: "weak-c", creatorKey: "c6", finalScore: 0.2 }),
+    ];
+    const selected = selectDiverseFeed(input, {
+      min: 5,
+      max: 7,
+      minFinalScore: DAILY_PICK_MIN_FINAL_SCORE,
+    });
+    expect(selected.map((s) => s.sourceId)).toEqual([
+      "strong-a",
+      "strong-b",
+      "strong-c",
+    ]);
+    expect(selected.every((s) => s.finalScore >= DAILY_PICK_MIN_FINAL_SCORE)).toBe(
+      true
+    );
+    expect(selected.length).toBe(3);
+  });
+
+  it("keeps existing padding behavior when minFinalScore is omitted", () => {
+    const input = [
+      make({ candidateId: 1, sourceId: "strong-a", creatorKey: "c1", finalScore: 0.82 }),
+      make({ candidateId: 2, sourceId: "strong-b", creatorKey: "c2", finalScore: 0.71 }),
+      make({ candidateId: 3, sourceId: "strong-c", creatorKey: "c3", finalScore: 0.6 }),
+      make({ candidateId: 4, sourceId: "weak-a", creatorKey: "c4", finalScore: 0.4 }),
+      make({ candidateId: 5, sourceId: "weak-b", creatorKey: "c5", finalScore: 0.3 }),
+      make({ candidateId: 6, sourceId: "weak-c", creatorKey: "c6", finalScore: 0.2 }),
+    ];
+    const selected = selectDiverseFeed(input, { min: 5, max: 7 });
+    const omitted = selectDiverseFeed(input).map((s) => s.sourceId);
+    expect(selected.map((s) => s.sourceId)).toEqual([
+      "strong-a",
+      "strong-b",
+      "strong-c",
+      "weak-a",
+      "weak-b",
+      "weak-c",
+    ]);
+    expect(selected.length).toBe(6);
+    expect(omitted).toEqual(selected.map((s) => s.sourceId));
+    expect(selected.some((s) => s.finalScore < DAILY_PICK_MIN_FINAL_SCORE)).toBe(
+      true
+    );
   });
 });

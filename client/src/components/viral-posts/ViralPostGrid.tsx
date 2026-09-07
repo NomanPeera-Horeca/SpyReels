@@ -14,6 +14,44 @@ type ViralPostGridProps = {
   onHideCreator: (post: ViralPost) => void;
 };
 
+/**
+ * Old Today/For You feeds are persisted, so changing the pool rules does not
+ * rewrite yesterday's rows. Apply a final presentation guard only to automatic
+ * daily-feed posts (`shownAt` is set by feed assembly). Explicit Explore/Search
+ * and Saved results are left untouched.
+ *
+ * This protects the product promise: V1 does not present historical YouTube
+ * rows as recommendations, obviously tiny ordinary posts are not labelled
+ * "viral", and one creator cannot own the whole grid. A genuinely accelerating
+ * early post can still pass the low-view floor when velocity/reach supports it.
+ */
+function visibleAutomaticFeedPosts(posts: ViralPost[]): ViralPost[] {
+  if (!posts.some((post) => Boolean(post.shownAt))) return posts;
+
+  const creatorCounts = new Map<string, number>();
+  return posts.filter((post) => {
+    if (post.platform === "youtube") return false;
+
+    const views = post.views ?? 0;
+    if (views > 0 && views < 1_000) {
+      const accelerating =
+        post.trendStatus === "breaking-out" || post.trendStatus === "rising-fast";
+      const hasVelocityEvidence =
+        (post.viewsPerHour ?? 0) >= 100 || (post.reachMultiplier ?? 0) >= 2;
+      if (!accelerating || !hasVelocityEvidence) return false;
+    }
+
+    const creatorKey = (post.creatorId || post.creatorHandle || "")
+      .toLowerCase()
+      .replace(/^@/, "");
+    if (!creatorKey) return true;
+    const count = creatorCounts.get(creatorKey) ?? 0;
+    if (count >= 1) return false;
+    creatorCounts.set(creatorKey, count + 1);
+    return true;
+  });
+}
+
 function GridCardSkeleton() {
   return (
     <div className="overflow-hidden rounded-[16px] border border-[#2b2739] bg-[#111019]">
@@ -66,7 +104,8 @@ export function ViralPostGrid({
     );
   }
 
-  if (!posts.length) {
+  const visiblePosts = visibleAutomaticFeedPosts(posts);
+  if (!visiblePosts.length) {
     return (
       <div className="rounded-2xl border border-[#2b2739] bg-[#111019] px-6 py-14 text-center">
         <h3 className="text-lg font-bold text-[#f6f4fb]">{emptyTitle}</h3>
@@ -79,7 +118,7 @@ export function ViralPostGrid({
 
   return (
     <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-      {posts.map((post) => (
+      {visiblePosts.map((post) => (
         <ViralPostCard
           key={post.id}
           post={post}

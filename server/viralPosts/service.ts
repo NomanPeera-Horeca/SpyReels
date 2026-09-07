@@ -6,7 +6,7 @@ import type {
   ViralPostPlatform,
   ViralSearchResponse,
 } from "@shared/viralPosts";
-import { VIRAL_DAILY_FEED_MAX, VIRAL_DAILY_FEED_MIN } from "@shared/viralPosts";
+import { VIRAL_DAILY_FEED_MAX, VIRAL_DAILY_FEED_MIN, isViralPostsV1Platform } from "@shared/viralPosts";
 import { eq } from "drizzle-orm";
 import {
   users,
@@ -18,14 +18,19 @@ import { runDiscoveryPipeline } from "../discovery/pipeline";
 import {
   adaptabilityScoreForCandidate,
   adaptDiscoveryResult,
+  inferFormatFromCopy,
   type AdaptedCandidate,
 } from "./candidateAdapter";
+import {
+  relevanceScoreForCandidate,
+  remakeabilityScoreForCandidate,
+} from "./rankingSignals";
 import {
   DEFAULT_CONTENT_PILLARS,
   VIRAL_POOL_DEFAULTS,
   VIRAL_SEED_POOL_PILLAR,
 } from "./constants";
-import { selectDiverseFeed } from "./diversity";
+import { DAILY_PICK_MIN_FINAL_SCORE, selectDiverseFeed } from "./diversity";
 import {
   isAnyViralPostsPlatformEnabled,
   isViralPostsInstagramEnabled,
@@ -44,7 +49,14 @@ import {
 import * as poolRepo from "./poolRepository";
 import { schedulePoolRefresh } from "./poolRefresh";
 import * as repo from "./repository";
-import { scoreCandidate } from "./scoring";
+import { scoreCandidate, TODAY_PICKS_SCORE_WEIGHTS } from "./scoring";
+import {
+  canonicalCandidateKey,
+  loadViralPersonalizationContext,
+  personalizationRelevanceBoost,
+  type ViralPersonalizationSignals,
+} from "./personalization";
+import { resolvePersonalCandidates } from "./personalCandidateBridge";
 
 const searchCache = new Map<
   string,
@@ -227,6 +239,42 @@ async function loadUserProfile(userId: number): Promise<{
   };
 }
 
+function todayPicksScoreInput(
+  candidate: AdaptedCandidate,
+  personalization?: ViralPersonalizationSignals
+) {
+  const storedConfidence = candidate.pillarConfidence;
+  const pillarConfidence =
+    storedConfidence != null && Number.isFinite(storedConfidence)
+      ? storedConfidence
+      : classifyCandidatePillars({
+          caption: candidate.caption,
+          hook: candidate.hook,
+          hashtags: candidate.hashtags,
+          activePillars: candidate.contentPillar ? [candidate.contentPillar] : undefined,
+          fallbackNiche: candidate.contentPillar,
+        }).confidence;
+  const baseRelevance = relevanceScoreForCandidate({
+    candidate,
+    pillarConfidence,
+    activePillar: candidate.contentPillar,
+  });
+  const personalBoost = personalization
+    ? personalizationRelevanceBoost(candidate, personalization)
+    : 0;
+  return {
+    views: candidate.views,
+    likes: candidate.likes,
+    comments: candidate.comments,
+    shares: candidate.shares,
+    saves: candidate.saves,
+    creatorFollowers: candidate.creatorFollowers,
+    publishedAt: candidate.publishedAt,
+    relevanceScore: Math.min(100, baseRelevance + personalBoost),
+    adaptabilityScore: remakeabilityScoreForCandidate(candidate),
+  };
+}
+
 function scoreAndSelect(
   adapted: AdaptedCandidate[],
   rows: ViralPostCandidate[],
@@ -234,26 +282,29 @@ function scoreAndSelect(
     hidden: Set<string>;
     dismissed: Set<number>;
     recentlyShown: Set<number>;
+    personalization?: ViralPersonalizationSignals;
   }
 ) {
-  const bySource = new Map(rows.map((r) => [r.sourceId, r]));
-  const poolInputs = adapted.map((a) => ({
-    views: a.views,
-    likes: a.likes,
-    comments: a.comments,
-    shares: a.shares,
-    saves: a.saves,
-    creatorFollowers: a.creatorFollowers,
-    publishedAt: a.publishedAt,
-    relevanceScore: a.relevanceHint,
-    adaptabilityScore: adaptabilityScoreForCandidate(a),
-  }));
+  const bySource = new Map(
+    rows.map((r) => [
+      canonicalCandidateKey({ platform: r.platform, sourceId: r.sourceId }),
+      r,
+    ])
+  );
+  const poolInputs = adapted.map((a) =>
+    todayPicksScoreInput(a, opts.personalization)
+  );
 
   const diversityInput = adapted
     .map((a, idx) => {
-      const row = bySource.get(a.sourceId);
+      const row = bySource.get(canonicalCandidateKey(a));
       if (!row) return null;
-      const scored = scoreCandidate(poolInputs[idx], poolInputs);
+      const scored = scoreCandidate(
+        poolInputs[idx],
+        poolInputs,
+        undefined,
+        TODAY_PICKS_SCORE_WEIGHTS
+      );
       return {
         adapted: a,
         row,
@@ -278,16 +329,116 @@ function scoreAndSelect(
     })
     .filter((x): x is NonNullable<typeof x> => Boolean(x));
 
-  // Persist scored trend onto in-memory view (DB already has adapter trend)
   const selected = selectDiverseFeed(
     diversityInput.map((d) => d.diversity),
-    { min: VIRAL_DAILY_FEED_MIN, max: VIRAL_DAILY_FEED_MAX }
+    {
+      min: VIRAL_DAILY_FEED_MIN,
+      max: VIRAL_DAILY_FEED_MAX,
+      minFinalScore: DAILY_PICK_MIN_FINAL_SCORE,
+    }
   );
 
   const byId = new Map(diversityInput.map((d) => [d.row.id, d]));
   return selected
     .map((s) => byId.get(s.candidateId))
     .filter((x): x is NonNullable<typeof x> => Boolean(x));
+}
+
+function personalPlatformEnabled(candidate: AdaptedCandidate): boolean {
+  if (candidate.platform === "tiktok") return isViralPostsTiktokEnabled;
+  if (candidate.platform === "youtube") return isViralPostsYoutubeEnabled;
+  return isViralPostsInstagramEnabled;
+}
+
+async function loadTodayCandidateUniverse(args: {
+  userId: number;
+  niche: string;
+  pillars: string[];
+  poolIds: number[];
+}) {
+  const poolRows = await poolRepo.loadPoolCandidatesForAssembly({
+    poolIds: args.poolIds,
+    limit: VIRAL_POOL_DEFAULTS.assemblyCandidateLimit,
+  });
+  const adapted: AdaptedCandidate[] = poolRows.map((row) =>
+    candidateRowToAdapted(row.candidate, {
+      contentPillar: row.primaryPillar,
+      pillarConfidence: row.pillarConfidence,
+      relevanceLabel: `Matches ${row.primaryPillar}`,
+      relevanceReason:
+        row.pillarReason ||
+        `Selected from shared ${args.niche} / ${row.primaryPillar} pool`,
+    })
+  );
+  const rows = poolRows.map((r) => r.candidate);
+  const keys = new Set(adapted.map((candidate) => canonicalCandidateKey(candidate)));
+
+  let personalization: ViralPersonalizationSignals | undefined;
+  let personalCandidateCount = 0;
+  let reusedCanonical = 0;
+  let insertedCanonical = 0;
+  let personalCounts:
+    | Awaited<ReturnType<typeof loadViralPersonalizationContext>>["counts"]
+    | undefined;
+
+  try {
+    const context = await loadViralPersonalizationContext({
+      userId: args.userId,
+      niche: args.niche,
+      pillars: args.pillars,
+    });
+    personalization = context.signals;
+    personalCounts = context.counts;
+    const eligible = context.personalCandidates.filter(personalPlatformEnabled);
+    const resolved = await resolvePersonalCandidates(eligible);
+    reusedCanonical = resolved.reusedCanonical;
+    insertedCanonical = resolved.insertedCanonical;
+
+    for (let index = 0; index < resolved.adapted.length; index++) {
+      const candidate = resolved.adapted[index]!;
+      const row = resolved.rows[index];
+      if (!row) continue;
+      const key = canonicalCandidateKey(candidate);
+      // When the same public reel is already in a shared pool, keep the richer
+      // pool adapter/relevance metadata. Private signals still boost it through
+      // `personalization`, so we do not duplicate the candidate in scoring.
+      if (keys.has(key)) continue;
+      keys.add(key);
+      adapted.push(candidate);
+      rows.push(row);
+      personalCandidateCount += 1;
+    }
+  } catch (err) {
+    // Personalization is additive. A legacy/missing private source must never
+    // break the base shared-pool feed.
+    console.warn("[viralPosts.personalization] load_failed", {
+      userId: args.userId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  console.info("[viralPosts.personalization] candidate_universe", {
+    userId: args.userId,
+    poolCandidates: poolRows.length,
+    personalCandidatesAdded: personalCandidateCount,
+    candidateUniverse: rows.length,
+    reusedCanonical,
+    insertedCanonical,
+    collectedRead: personalCounts?.collectedRead ?? 0,
+    collectedCandidates: personalCounts?.collectedCandidates ?? 0,
+    explicitCreatorHandles: personalCounts?.explicitCreatorHandles ?? 0,
+    radarSearchesRead: personalCounts?.radarSearchesRead ?? 0,
+    radarCreatorsRead: personalCounts?.radarCreatorsRead ?? 0,
+    radarCandidates: personalCounts?.radarCandidates ?? 0,
+  });
+
+  return {
+    poolRows,
+    adapted,
+    rows,
+    personalization,
+    personalCandidateCount,
+  };
 }
 
 export async function getOrCreateDailyFeed(args: {
@@ -352,7 +503,6 @@ export async function getOrCreateDailyFeed(args: {
     };
   }
 
-  // Concurrency lock: unique (userId, localDate). Loser waits for winner.
   let feed;
   try {
     feed = await repo.createDailyFeed({
@@ -397,31 +547,20 @@ export async function getOrCreateDailyFeed(args: {
       repo.getRecentlyDismissedCandidateIds(args.userId),
       repo.getRecentlyShownCandidateIds(args.userId),
     ]);
-    const poolIds = pools.map((p) => p.id);
-
-    const poolRows = await poolRepo.loadPoolCandidatesForAssembly({
-      poolIds,
-      limit: VIRAL_POOL_DEFAULTS.assemblyCandidateLimit,
+    const universe = await loadTodayCandidateUniverse({
+      userId: args.userId,
+      niche,
+      pillars,
+      poolIds: pools.map((p) => p.id),
     });
 
-    const adaptedLike: AdaptedCandidate[] = poolRows.map((row) =>
-      candidateRowToAdapted(row.candidate, {
-        contentPillar: row.primaryPillar,
-        relevanceLabel: `Matches ${row.primaryPillar}`,
-        relevanceReason:
-          row.pillarReason ||
-          `Selected from shared ${niche} / ${row.primaryPillar} pool`,
-      })
-    );
-    const upserted = poolRows.map((r) => r.candidate);
-
-    let picked = scoreAndSelect(adaptedLike, upserted, {
+    let picked = scoreAndSelect(universe.adapted, universe.rows, {
       hidden,
       dismissed,
       recentlyShown,
+      personalization: universe.personalization,
     });
 
-    // Re-apply pillar preference after diversity
     const pillarRanked = diversifyByPillar(
       picked.map((p) => ({
         ...p,
@@ -435,9 +574,7 @@ export async function getOrCreateDailyFeed(args: {
     const enough = picked.length >= VIRAL_DAILY_FEED_MIN;
     let poolRefreshStarted = false;
     if (!enough) {
-      const seedPools = pools.filter(
-        (p) => p.platform === "tiktok" || p.platform === "youtube"
-      );
+      const seedPools = pools.filter((p) => p.platform === "tiktok");
       const igPools = pools.filter((p) => p.platform === "instagram");
       const toRefresh = [...igPools.slice(0, 2), ...seedPools].slice(0, 4);
       if (toRefresh[0]) {
@@ -458,7 +595,7 @@ export async function getOrCreateDailyFeed(args: {
         relevanceScore: p.scored.finalScore * 100,
         relevanceLabel: p.adapted.relevanceLabel,
         relevanceReason: p.adapted.relevanceReason,
-        adaptabilityScore: adaptabilityScoreForCandidate(p.adapted),
+        adaptabilityScore: remakeabilityScoreForCandidate(p.adapted),
         finalScore: p.scored.finalScore,
       }))
     );
@@ -543,7 +680,9 @@ export async function getOrCreateDailyFeed(args: {
       userId: args.userId,
       feedId: feed.id,
       selected: items.length,
-      poolCandidateCount: poolRows.length,
+      poolCandidateCount: universe.poolRows.length,
+      personalCandidateCount: universe.personalCandidateCount,
+      candidateUniverseCount: universe.rows.length,
       providerCalls: 0,
       poolRefreshStarted,
       durationMs,
@@ -635,10 +774,6 @@ async function loadFeedResponse(
   });
 }
 
-/**
- * Shared mapper: feed row + ranked items → ViralDailyFeedResponse.
- * Used by getDailyFeed (via loadFeedResponse) and getFeedHistory.
- */
 function mapDailyFeedToResponse(
   existing: ViralPostDailyFeed,
   rows: Awaited<ReturnType<typeof repo.getFeedItemsWithCandidates>>,
@@ -654,6 +789,7 @@ function mapDailyFeedToResponse(
   const mirroredVideos = opts.mirroredVideos ?? new Map<number, string>();
   const items = rows
     .filter(({ candidate }) => {
+      if (!isViralPostsV1Platform(candidate.platform)) return false;
       if (opts.dismissed.has(candidate.id)) return false;
       const key = creatorKeyOf(candidate);
       if (key !== "unknown" && opts.hidden.has(key)) return false;
@@ -695,15 +831,9 @@ function mapDailyFeedToResponse(
   };
 }
 
-/**
- * Past daily feeds for the For You history stack (excludes today).
- * Cursor is exclusive upper bound on localDate (newest-first pages).
- */
 export async function getFeedHistory(args: {
   userId: number;
-  /** Exclusive upper bound YYYY-MM-DD; first page should pass today's localDate. */
   cursor?: string | null;
-  /** Today's localDate so today is never included even if cursor is omitted. */
   excludeLocalDate: string;
   limit?: number;
 }): Promise<ViralFeedHistoryResponse> {
@@ -779,10 +909,6 @@ async function waitForFeedReady(
   return repo.getDailyFeedByUserDate(userId, localDate);
 }
 
-/**
- * When a cold-start feed is still refreshing, reassemble from pools if they
- * now have enough candidates. Zero provider calls.
- */
 async function tryUpgradeRefreshingFeed(args: {
   feed: NonNullable<Awaited<ReturnType<typeof repo.getDailyFeedByUserDate>>>;
   userId: number;
@@ -794,11 +920,13 @@ async function tryUpgradeRefreshingFeed(args: {
   const niche = inferNiche(profile.businessDescription);
   const pillars = inferActivePillars(profile.businessDescription, niche);
   const pools = await ensureUserViralPools({ niche, pillars });
-  const poolRows = await poolRepo.loadPoolCandidatesForAssembly({
+  const universe = await loadTodayCandidateUniverse({
+    userId: args.userId,
+    niche,
+    pillars,
     poolIds: pools.map((p) => p.id),
-    limit: VIRAL_POOL_DEFAULTS.assemblyCandidateLimit,
   });
-  if (poolRows.length < VIRAL_DAILY_FEED_MIN) {
+  if (universe.rows.length < VIRAL_DAILY_FEED_MIN) {
     if (pools[0]) schedulePoolRefresh(pools[0].id, false);
     return null;
   }
@@ -806,20 +934,12 @@ async function tryUpgradeRefreshingFeed(args: {
   const hidden = await repo.getHiddenCreatorKeys(args.userId);
   const dismissed = await repo.getRecentlyDismissedCandidateIds(args.userId);
   const recentlyShown = await repo.getRecentlyShownCandidateIds(args.userId);
-  const adaptedLike = poolRows.map((row) =>
-    candidateRowToAdapted(row.candidate, {
-      contentPillar: row.primaryPillar,
-      relevanceLabel: `Matches ${row.primaryPillar}`,
-      relevanceReason:
-        row.pillarReason ||
-        `Selected from shared ${niche} / ${row.primaryPillar} pool`,
-    })
-  );
-  let picked = scoreAndSelect(
-    adaptedLike,
-    poolRows.map((r) => r.candidate),
-    { hidden, dismissed, recentlyShown }
-  );
+  let picked = scoreAndSelect(universe.adapted, universe.rows, {
+    hidden,
+    dismissed,
+    recentlyShown,
+    personalization: universe.personalization,
+  });
   const pillarRanked = diversifyByPillar(
     picked.map((p) => ({
       ...p,
@@ -841,7 +961,7 @@ async function tryUpgradeRefreshingFeed(args: {
       relevanceScore: p.scored.finalScore * 100,
       relevanceLabel: p.adapted.relevanceLabel,
       relevanceReason: p.adapted.relevanceReason,
-      adaptabilityScore: adaptabilityScoreForCandidate(p.adapted),
+      adaptabilityScore: remakeabilityScoreForCandidate(p.adapted),
       finalScore: p.scored.finalScore,
     }))
   );
@@ -873,7 +993,9 @@ async function tryUpgradeRefreshingFeed(args: {
     userId: args.userId,
     feedId: args.feed.id,
     selected: picked.length,
-    poolCandidateCount: poolRows.length,
+    poolCandidateCount: universe.poolRows.length,
+    personalCandidateCount: universe.personalCandidateCount,
+    candidateUniverseCount: universe.rows.length,
     providerCalls: 0,
     durationMs,
   });
@@ -928,19 +1050,16 @@ async function ensureUserViralPools(args: {
     }
   }
   if (isViralPostsTiktokEnabled) {
+    for (const pillar of args.pillars.slice(0, 6)) {
+      specs.push({ niche: args.niche, pillar, platform: "tiktok" });
+    }
     specs.push({
       niche: args.niche,
       pillar: VIRAL_SEED_POOL_PILLAR,
       platform: "tiktok",
     });
   }
-  if (isViralPostsYoutubeEnabled) {
-    specs.push({
-      niche: args.niche,
-      pillar: VIRAL_SEED_POOL_PILLAR,
-      platform: "youtube",
-    });
-  }
+  // Viral Posts V1: no YouTube pool ensure (historical rows may remain).
   if (specs.length === 0 && isViralPostsInstagramEnabled) {
     specs.push({
       niche: args.niche,
@@ -955,20 +1074,26 @@ function candidateRowToAdapted(
   candidate: ViralPostCandidate,
   extras: {
     contentPillar: string;
+    pillarConfidence?: number | null;
     relevanceLabel: string;
     relevanceReason: string;
   }
 ): AdaptedCandidate {
-  const classification = classifyCandidatePillars({
-    caption: candidate.caption,
-    hashtags: candidate.hashtags ?? [],
-    activePillars: [extras.contentPillar],
-    fallbackNiche: extras.contentPillar,
-  });
+  const pillarConfidence =
+    extras.pillarConfidence != null && Number.isFinite(extras.pillarConfidence)
+      ? extras.pillarConfidence
+      : classifyCandidatePillars({
+          caption: candidate.caption,
+          hashtags: candidate.hashtags ?? [],
+          activePillars: [extras.contentPillar],
+          fallbackNiche: extras.contentPillar,
+        }).confidence;
   const platform =
     candidate.platform === "tiktok" || candidate.platform === "youtube"
       ? candidate.platform
       : "instagram";
+  const hook = deriveHook(candidate.caption);
+  const format = inferFormatFromCopy({ caption: candidate.caption, hook });
   return {
     platform,
     sourceId: candidate.sourceId,
@@ -1000,12 +1125,22 @@ function candidateRowToAdapted(
     viewsPerHour:
       candidate.viewsPerHour != null ? Number(candidate.viewsPerHour) : null,
     trendStatus: (candidate.trendStatus as AdaptedCandidate["trendStatus"]) || "unknown",
-    relevanceHint: 70,
-    contentPillar: classification.primaryPillar || extras.contentPillar,
+    relevanceHint: relevanceScoreForCandidate({
+      candidate: {
+        caption: candidate.caption,
+        hook,
+        hashtags: candidate.hashtags ?? [],
+        contentPillar: extras.contentPillar,
+      },
+      pillarConfidence,
+      activePillar: extras.contentPillar,
+    }),
+    contentPillar: extras.contentPillar,
+    pillarConfidence,
     relevanceLabel: extras.relevanceLabel,
     relevanceReason: extras.relevanceReason,
-    hook: deriveHook(candidate.caption),
-    format: null,
+    hook,
+    format,
     hashtagKey: (candidate.hashtags ?? [])[0] || null,
     rawProviderPayload: {},
   };
@@ -1123,7 +1258,6 @@ export async function searchViralPosts(args: {
       })
     );
 
-    // Never cache empty Explore results; they poison retries after fixes/deploys.
     if (items.length > 0) {
       searchCache.set(cacheKey, { at: Date.now(), items, fromCache: false });
     }
@@ -1161,7 +1295,6 @@ export async function searchViralPosts(args: {
   }
 }
 
-/** Exported for tests: normalize Explore cache keys. */
 export function normalizeSearchCacheKey(userId: number, query: string): string {
   const normalized = query
     .toLowerCase()
@@ -1173,11 +1306,13 @@ export function normalizeSearchCacheKey(userId: number, query: string): string {
 
 export async function getSavedViralPosts(userId: number): Promise<ViralPost[]> {
   const rows = await repo.getSavedCandidates(userId);
-  return rows.map(({ candidate }) =>
-    candidateToViralPost(candidate, {
-      relevanceLabel: "Saved",
-      relevanceReason: "You saved this post for later.",
-      saved: true,
-    })
-  );
+  return rows
+    .filter(({ candidate }) => isViralPostsV1Platform(candidate.platform))
+    .map(({ candidate }) =>
+      candidateToViralPost(candidate, {
+        relevanceLabel: "Saved",
+        relevanceReason: "You saved this post for later.",
+        saved: true,
+      })
+    );
 }

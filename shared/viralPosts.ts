@@ -9,6 +9,43 @@ export type ViralTrendStatus =
 
 export type ViralPostPlatform = "instagram" | "tiktok" | "youtube";
 
+/**
+ * Viral Posts V1 ships Instagram + TikTok only.
+ * YouTube remains a typed platform for historical rows and non-Viral-Posts
+ * SpyReels features, but is not a supported Viral Posts V1 discovery source.
+ */
+export const VIRAL_POSTS_V1_PLATFORMS = ["instagram", "tiktok"] as const;
+export type ViralPostsV1Platform = (typeof VIRAL_POSTS_V1_PLATFORMS)[number];
+export const VIRAL_POSTS_V1_DEFAULT_PLATFORM: ViralPostsV1Platform = "instagram";
+
+export function isViralPostsV1Platform(
+  platform: string | null | undefined
+): platform is ViralPostsV1Platform {
+  const clean = (platform || "").trim().toLowerCase();
+  return (VIRAL_POSTS_V1_PLATFORMS as readonly string[]).includes(clean);
+}
+
+/** Map stale youtube (or unknown) Viral Posts platform state to the V1 default. */
+export function normalizeViralPostsV1Platform(
+  platform: string | null | undefined
+): ViralPostsV1Platform {
+  const clean = (platform || "").trim().toLowerCase();
+  if (clean === "tiktok") return "tiktok";
+  return VIRAL_POSTS_V1_DEFAULT_PLATFORM;
+}
+
+/** Explore filter platforms: force YouTube off for Viral Posts V1. */
+export function normalizeViralPostsExplorePlatforms(platforms: {
+  instagram: boolean;
+  tiktok: boolean;
+  youtube: boolean;
+}): { instagram: boolean; tiktok: boolean; youtube: boolean } {
+  return {
+    ...platforms,
+    youtube: false,
+  };
+}
+
 export type ViralFeedbackType =
   | "more_like_this"
   | "not_relevant"
@@ -141,14 +178,18 @@ export function parseViralPostsTiktokEnabled(
   return viralPostsLive;
 }
 
-/** Parsed from VIRAL_POSTS_YOUTUBE_ENABLED (default: follows VIRAL_POSTS_LIVE). */
+/**
+ * Parsed from VIRAL_POSTS_YOUTUBE_ENABLED.
+ * Viral Posts V1 keeps YouTube off even when VIRAL_POSTS_LIVE is on.
+ * Explicit true is ignored so V1 cannot re-enable YouTube pool creation.
+ */
 export function parseViralPostsYoutubeEnabled(
   raw: string | undefined,
   viralPostsLive: boolean
 ): boolean {
-  const parsed = parseExplicitBoolean(raw);
-  if (parsed !== null) return parsed;
-  return viralPostsLive;
+  void raw;
+  void viralPostsLive;
+  return false;
 }
 
 /**

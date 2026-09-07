@@ -1,8 +1,9 @@
 /**
- * Ensure a shared `reels` row for Viral Posts IG/TikTok playback.
- * Cheap DB insert only; video R2 mirroring is fire-and-forget (like thumbnails).
+ * Ensure a workspace-local `reels` row for Viral Posts IG/TikTok playback.
+ * The canonical Viral candidate is global; its mirroredReelId is therefore a
+ * cache hint only and must never be trusted across workspace boundaries.
  */
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import {
   reels as reelsTable,
   viralPostCandidates,
@@ -12,8 +13,9 @@ import { getDb, getReelById } from "../db";
 import { isDurableReelVideoUrl, scheduleReelVideoMirror } from "../reelVideoR2";
 
 /**
- * Idempotent: returns existing mirroredReelId when already linked.
- * YouTube returns null (no inline play).
+ * Idempotent per workspace. YouTube returns null (no inline play).
+ * Existing Collected/jobId=0 mirrors are reused when they match the same
+ * workspace + canonical external id.
  */
 export async function ensureViralMirrorReel(
   candidate: ViralPostCandidate,
@@ -22,23 +24,54 @@ export async function ensureViralMirrorReel(
   const platform = (candidate.platform || "instagram").toLowerCase();
   if (platform === "youtube") return null;
 
+  const shortcode = (candidate.sourceId || "").trim();
+  if (!shortcode) return null;
+
+  // A global candidate may currently point at another user's workspace mirror.
+  // Reuse the hint only when ownership matches the requesting workspace.
   if (candidate.mirroredReelId != null && candidate.mirroredReelId > 0) {
-    const existing = await getReelById(candidate.mirroredReelId);
-    if (existing) {
-      scheduleBackgroundVideoMirror(existing.id, candidate);
-      return existing.id;
+    const hinted = await getReelById(candidate.mirroredReelId);
+    if (hinted && hinted.workspaceId === workspaceId) {
+      scheduleBackgroundVideoMirror(hinted.id, candidate);
+      return hinted.id;
     }
   }
 
   const db = await getDb();
   if (!db) return null;
 
-  const shortcode = (candidate.sourceId || "").trim();
-  if (!shortcode) return null;
+  // Before creating anything, reuse a workspace-local jobId=0 mirror. This also
+  // lets a reel already present in Collected remain the same local reel instead
+  // of creating a second copy just because Viral Posts recommended it.
+  const [local] = await db
+    .select()
+    .from(reelsTable)
+    .where(
+      and(
+        eq(reelsTable.workspaceId, workspaceId),
+        eq(reelsTable.jobId, 0),
+        eq(reelsTable.shortcode, shortcode)
+      )
+    )
+    .orderBy(desc(reelsTable.id))
+    .limit(1);
 
-  const reelUrl = (candidate.sourceUrl || "").trim() || `https://www.instagram.com/reel/${shortcode}/`;
+  if (local) {
+    await db
+      .update(viralPostCandidates)
+      .set({ mirroredReelId: local.id, refreshedAt: new Date() })
+      .where(eq(viralPostCandidates.id, candidate.id));
+    candidate.mirroredReelId = local.id;
+    scheduleBackgroundVideoMirror(local.id, candidate);
+    return local.id;
+  }
+
+  const reelUrl =
+    (candidate.sourceUrl || "").trim() ||
+    `https://www.instagram.com/reel/${shortcode}/`;
   const videoUrl = (candidate.videoUrl || "").trim() || "";
-  const thumb = (candidate.thumbnailUrl || candidate.sourceThumbnailUrl || "").trim() || "";
+  const thumb =
+    (candidate.thumbnailUrl || candidate.sourceThumbnailUrl || "").trim() || "";
 
   const result = await db.insert(reelsTable).values({
     jobId: 0,
@@ -59,6 +92,8 @@ export async function ensureViralMirrorReel(
   });
   const reelId = result[0].insertId;
 
+  // This remains a global cache hint, not an ownership source of truth. Every
+  // caller re-validates workspace ownership before reusing it.
   await db
     .update(viralPostCandidates)
     .set({ mirroredReelId: reelId, refreshedAt: new Date() })
@@ -82,7 +117,8 @@ function scheduleBackgroundVideoMirror(
 
 /**
  * Ensure mirrors for a batch of daily-feed candidates. Mutates rows in place
- * with mirroredReelId when created. Never throws to the feed critical path.
+ * with the requesting workspace's mirroredReelId. Never throws to the feed
+ * critical path.
  */
 export async function ensureViralMirrorReelsForFeed(args: {
   candidates: ViralPostCandidate[];
