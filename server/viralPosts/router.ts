@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import {
   VIRAL_POSTS_NOT_ENABLED_MESSAGE,
+  type ViralFeedbackType,
 } from "@shared/viralPosts";
 import { users } from "../../drizzle/schema";
 import { protectedProcedure, router } from "../_core/trpc";
@@ -47,6 +48,24 @@ function parseCandidateId(id: string): number {
   }
   return n;
 }
+
+const feedbackTypeInput = z.enum([
+  "more_like_this",
+  "not_relevant",
+  "dismissed",
+  // Explicit thumbs-down reasons. Stored as distinct values so we can learn
+  // whether a miss was niche, quality, format, or repetition related.
+  "not_my_niche",
+  "too_few_views",
+  "wrong_content_type",
+  "already_seen",
+  // High-signal implicit behavior. No-click is intentionally not recorded as
+  // negative feedback.
+  "post_impression",
+  "remake_started",
+  "open_original",
+  "why_it_works_opened",
+]);
 
 export const viralPostsRouter = router({
   getDailyFeed: viralPostsProcedure
@@ -165,11 +184,7 @@ export const viralPostsRouter = router({
     .input(
       z.object({
         postId: z.string().min(1),
-        feedbackType: z.enum([
-          "more_like_this",
-          "not_relevant",
-          "dismissed",
-        ]),
+        feedbackType: feedbackTypeInput,
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -181,7 +196,10 @@ export const viralPostsRouter = router({
       await repo.recordFeedback({
         userId: ctx.user.id,
         candidateId,
-        feedbackType: input.feedbackType,
+        // The DB column is varchar. The shared union currently represents the
+        // original recommendation types; these V1 learning signals deliberately
+        // extend that stored vocabulary without a schema migration.
+        feedbackType: input.feedbackType as ViralFeedbackType,
       });
       return { ok: true as const, postId: input.postId };
     }),
