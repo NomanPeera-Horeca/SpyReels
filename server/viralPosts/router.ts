@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import {
   VIRAL_POSTS_NOT_ENABLED_MESSAGE,
+  type ViralDailyFeedResponse,
   type ViralFeedbackType,
 } from "@shared/viralPosts";
 import { users } from "../../drizzle/schema";
@@ -49,6 +50,35 @@ function parseCandidateId(id: string): number {
   return n;
 }
 
+/**
+ * Old persisted daily feeds can predate the Instagram + TikTok V1 cutover.
+ * Detect the obvious bad states seen in production and regenerate that date
+ * once from the current pool/ranking rules instead of serving stale YouTube or
+ * one-creator/very-low-signal recommendations indefinitely.
+ */
+function shouldRegenerateStaleV1Feed(feed: ViralDailyFeedResponse): boolean {
+  if (!feed.fromCache || feed.items.length === 0) return false;
+  if (feed.items.some((post) => post.platform === "youtube")) return true;
+
+  const creatorCounts = new Map<string, number>();
+  for (const post of feed.items) {
+    const key = (post.creatorId || post.creatorHandle || "")
+      .toLowerCase()
+      .replace(/^@/, "");
+    if (!key) continue;
+    const count = (creatorCounts.get(key) ?? 0) + 1;
+    creatorCounts.set(key, count);
+    if (count > 2) return true;
+  }
+
+  return feed.items.some((post) => {
+    const views = post.views ?? 0;
+    const isAccelerating =
+      post.trendStatus === "breaking-out" || post.trendStatus === "rising-fast";
+    return views > 0 && views < 500 && !isAccelerating;
+  });
+}
+
 const feedbackTypeInput = z.enum([
   "more_like_this",
   "not_relevant",
@@ -88,11 +118,22 @@ export const viralPostsRouter = router({
             .where(eq(users.id, ctx.user.id));
         }
       }
-      return getOrCreateDailyFeed({
+
+      const request = {
         userId: ctx.user.id,
         localDate: input.localDate,
         timezone: input.timezone,
+      };
+      const feed = await getOrCreateDailyFeed(request);
+      if (!shouldRegenerateStaleV1Feed(feed)) return feed;
+
+      console.info("[viralPosts] stale_v1_feed_regenerate", {
+        userId: ctx.user.id,
+        localDate: input.localDate,
+        feedId: feed.feedId,
+        platforms: [...new Set(feed.items.map((post) => post.platform))],
       });
+      return getOrCreateDailyFeed({ ...request, force: true });
     }),
 
   getFeedHistory: viralPostsProcedure
