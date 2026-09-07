@@ -1,7 +1,7 @@
 import { hostname } from "os";
 import type { ViralPostPool } from "../../drizzle/schema";
+import { isViralPostsV1Platform } from "../../shared/viralPosts";
 import { scrapeTikTokVideos } from "../tiktok";
-import { scrapeYouTubeShorts } from "../youtube";
 import type { AdaptedCandidate } from "./candidateAdapter";
 import { VIRAL_POOL_DEFAULTS } from "./constants";
 import {
@@ -27,10 +27,7 @@ import {
 } from "./tiktokPoolDiscovery";
 import { classifyCandidateForPoolAdmission } from "./poolAdmission";
 import type { SemanticPoolReroute } from "./semanticPoolRelevance";
-import {
-  adaptTikTokVideos,
-  adaptYouTubeShorts,
-} from "./platformAdapters";
+import { adaptTikTokVideos } from "./platformAdapters";
 import * as poolRepo from "./poolRepository";
 import * as repo from "./repository";
 import { scheduleThumbnailMirroring } from "./mediaMirror";
@@ -44,12 +41,20 @@ export type PoolRefreshResult = {
     | "skipped_budget"
     | "skipped_fresh"
     | "skipped_locked"
+    | "skipped_unsupported_platform"
     | "error";
   scCalls: number;
   candidateCount: number;
   costEstimateUsd?: number;
   error?: string;
 };
+
+/** Historical YouTube (and any non-V1) Viral Posts pools must not spend SC calls. */
+export function shouldSkipUnsupportedViralPostsPlatform(
+  platform: string | null | undefined
+): boolean {
+  return !isViralPostsV1Platform(platform);
+}
 
 function workerOwnerId(): string {
   const configured = process.env.VIRAL_POSTS_WORKER_ID?.trim();
@@ -348,7 +353,7 @@ async function refreshInstagramPool(
 
 async function collectSeedPlatformCandidates(
   pool: ViralPostPool,
-  platform: "tiktok" | "youtube",
+  platform: "tiktok",
   remainingBudget: number
 ): Promise<{ adapted: AdaptedCandidate[]; scCalls: number }> {
   const maxHandles = Math.min(
@@ -381,41 +386,18 @@ async function collectSeedPlatformCandidates(
       break;
     }
     try {
-      if (platform === "tiktok") {
-        const result = await scrapeTikTokVideos(
-          seed.handle,
-          undefined,
-          {
-            maxVideos,
-            timeoutMs: 90_000,
-          }
-        );
-        scCalls += VIRAL_POOL_DEFAULTS.seedScCallsPerHandle;
-        adapted.push(
-          ...adaptTikTokVideos(result.videos.slice(0, maxVideos), {
-            niche: pool.niche,
-            creatorFollowers: result.followerCount,
-            creatorAvatarUrl: result.profilePicUrl,
-          })
-        );
-      } else {
-        const result = await scrapeYouTubeShorts(
-          seed.handle,
-          undefined,
-          {
-            maxVideos,
-            timeoutMs: 90_000,
-          }
-        );
-        scCalls += VIRAL_POOL_DEFAULTS.seedScCallsPerHandle;
-        adapted.push(
-          ...adaptYouTubeShorts(result.videos.slice(0, maxVideos), {
-            niche: pool.niche,
-            creatorFollowers: result.subscriberCount,
-            creatorAvatarUrl: result.profilePicUrl,
-          })
-        );
-      }
+      const result = await scrapeTikTokVideos(seed.handle, undefined, {
+        maxVideos,
+        timeoutMs: 90_000,
+      });
+      scCalls += VIRAL_POOL_DEFAULTS.seedScCallsPerHandle;
+      adapted.push(
+        ...adaptTikTokVideos(result.videos.slice(0, maxVideos), {
+          niche: pool.niche,
+          creatorFollowers: result.followerCount,
+          creatorAvatarUrl: result.profilePicUrl,
+        })
+      );
     } catch (err) {
       scCalls += 1;
       console.warn("[viralPosts.pool] seed_handle_failed", {
@@ -432,7 +414,7 @@ async function collectSeedPlatformCandidates(
 
 async function refreshSeedPlatformPool(
   pool: ViralPostPool,
-  platform: "tiktok" | "youtube",
+  platform: "tiktok",
   remainingBudget: number
 ): Promise<{ scCalls: number; candidateCount: number }> {
   const collected = await collectSeedPlatformCandidates(
@@ -544,6 +526,25 @@ export async function refreshPoolById(
     };
   }
 
+  // Viral Posts V1: Instagram + TikTok only. Historical YouTube pools stay in DB
+  // but must never spend ScrapeCreators budget.
+  if (shouldSkipUnsupportedViralPostsPlatform(pool.platform)) {
+    console.info("[viralPosts.pool] lock_skip", {
+      poolId: pool.id,
+      poolKey: pool.poolKey,
+      reason: "unsupported_platform",
+      platform: pool.platform,
+    });
+    return {
+      poolId: pool.id,
+      poolKey: pool.poolKey,
+      status: "skipped_unsupported_platform",
+      scCalls: 0,
+      candidateCount: 0,
+      error: "unsupported_viral_posts_platform",
+    };
+  }
+
   const fresh = await poolRepo.countFreshPoolCandidates(pool.id);
   if (!opts?.force && fresh >= pool.minFreshCandidates) {
     const featuredCandidateCount = await hydrateFeaturedSupply(pool);
@@ -564,8 +565,7 @@ export async function refreshPoolById(
 
   const used = await poolRepo.getBudgetUsed(pool.id);
   const remaining = Math.max(0, pool.dailyCallBudget - used);
-  const minBudget =
-    pool.platform === "tiktok" || pool.platform === "youtube" ? 3 : 5;
+  const minBudget = pool.platform === "tiktok" ? 3 : 5;
   if (remaining < minBudget) {
     const featuredCandidateCount = await hydrateFeaturedSupply(pool);
     console.info("[viralPosts.pool] lock_skip", {
@@ -630,10 +630,6 @@ export async function refreshPoolById(
       scCalls = result.scCalls;
       candidateCount = result.candidateCount;
       costEstimateUsd = result.costEstimateUsd;
-    } else if (pool.platform === "youtube") {
-      const result = await refreshSeedPlatformPool(pool, "youtube", remaining);
-      scCalls = result.scCalls;
-      candidateCount = result.candidateCount;
     } else {
       const result = await refreshInstagramPool(pool, maxScCalls);
       scCalls = result.scCalls;

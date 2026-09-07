@@ -574,9 +574,7 @@ export async function getOrCreateDailyFeed(args: {
     const enough = picked.length >= VIRAL_DAILY_FEED_MIN;
     let poolRefreshStarted = false;
     if (!enough) {
-      const seedPools = pools.filter(
-        (p) => p.platform === "tiktok" || p.platform === "youtube"
-      );
+      const seedPools = pools.filter((p) => p.platform === "tiktok");
       const igPools = pools.filter((p) => p.platform === "instagram");
       const toRefresh = [...igPools.slice(0, 2), ...seedPools].slice(0, 4);
       if (toRefresh[0]) {
@@ -1060,13 +1058,7 @@ async function ensureUserViralPools(args: {
       platform: "tiktok",
     });
   }
-  if (isViralPostsYoutubeEnabled) {
-    specs.push({
-      niche: args.niche,
-      pillar: VIRAL_SEED_POOL_PILLAR,
-      platform: "youtube",
-    });
-  }
+  // Viral Posts V1: no YouTube pool ensure (historical rows may remain).
   if (specs.length === 0 && isViralPostsInstagramEnabled) {
     specs.push({
       niche: args.niche,

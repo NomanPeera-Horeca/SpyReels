@@ -7,6 +7,7 @@ import {
   type ViralPostCandidate,
   type ViralPostPool,
 } from "../../drizzle/schema";
+import { isViralPostsV1Platform } from "../../shared/viralPosts";
 import { getDb } from "../db";
 import {
   buildPoolKey,
@@ -19,33 +20,43 @@ function utcDateString(d = new Date()): string {
   return d.toISOString().slice(0, 10);
 }
 
-export async function ensurePool(args: {
+export type ViralPoolEnsureSpec = {
   niche: string;
   pillar: string;
   platform?: string;
   language?: string;
   region?: string | null;
   priority?: number;
-}): Promise<ViralPostPool> {
+};
+
+/** Drop non-V1 platforms so Viral Posts never creates new YouTube pools. */
+export function filterViralPostsV1PoolSpecs(
+  specs: ViralPoolEnsureSpec[]
+): ViralPoolEnsureSpec[] {
+  return specs.filter((spec) =>
+    isViralPostsV1Platform(spec.platform || "instagram")
+  );
+}
+
+export async function ensurePool(args: ViralPoolEnsureSpec): Promise<ViralPostPool> {
+  if (!isViralPostsV1Platform(args.platform || "instagram")) {
+    throw new Error("unsupported_viral_posts_platform");
+  }
   const pools = await ensurePools([args]);
-  return pools[0]!;
+  const pool = pools[0];
+  if (!pool) throw new Error("Failed to ensure pool");
+  return pool;
 }
 
 export async function ensurePools(
-  specs: Array<{
-    niche: string;
-    pillar: string;
-    platform?: string;
-    language?: string;
-    region?: string | null;
-    priority?: number;
-  }>
+  specs: ViralPoolEnsureSpec[]
 ): Promise<ViralPostPool[]> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  if (specs.length === 0) return [];
+  const v1Specs = filterViralPostsV1PoolSpecs(specs);
+  if (v1Specs.length === 0) return [];
 
-  const keys = specs.map((s) =>
+  const keys = v1Specs.map((s) =>
     buildPoolKey({
       platform: s.platform,
       niche: s.niche,
@@ -60,16 +71,14 @@ export async function ensurePools(
     .from(viralPostPools)
     .where(inArray(viralPostPools.poolKey, keys));
   const byKey = new Map(existing.map((p) => [p.poolKey, p]));
-  const missing = specs.filter((s, i) => !byKey.has(keys[i]!));
+  const missing = v1Specs.filter((s, i) => !byKey.has(keys[i]!));
 
   if (missing.length > 0) {
     await db.insert(viralPostPools).values(
       missing.map((args) => {
         const platform = args.platform || "instagram";
         const isSeed =
-          platform === "tiktok" ||
-          platform === "youtube" ||
-          args.pillar === VIRAL_SEED_POOL_PILLAR;
+          platform === "tiktok" || args.pillar === VIRAL_SEED_POOL_PILLAR;
         return {
           poolKey: buildPoolKey({
             platform,
@@ -119,6 +128,7 @@ export async function listPoolsNeedingRefresh(limit = 8): Promise<ViralPostPool[
   const out: ViralPostPool[] = [];
   for (const pool of rows) {
     if (out.length >= limit) break;
+    if (!isViralPostsV1Platform(pool.platform)) continue;
     const fresh = await countFreshPoolCandidates(pool.id);
     const stale =
       !pool.lastRefreshedAt || pool.lastRefreshedAt.getTime() < staleBefore.getTime();

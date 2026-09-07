@@ -12,7 +12,7 @@ import type {
   ExploreAdvancedFilters,
   ExploreQuickFilter,
 } from "@/lib/viralPosts/types";
-import { DEFAULT_EXPLORE_FILTERS } from "@/lib/viralPosts/types";
+import { DEFAULT_EXPLORE_FILTERS, normalizeExploreFilters } from "@/lib/viralPosts/types";
 
 type ViralPostFiltersProps = {
   quickFilter: ExploreQuickFilter;
@@ -105,16 +105,6 @@ export function ViralPostFilters({
                   setDraft((d) => ({
                     ...d,
                     platforms: { ...d.platforms, tiktok: checked },
-                  }))
-                }
-              />
-              <CheckRow
-                label="YouTube Shorts"
-                checked={draft.platforms.youtube}
-                onChange={(checked) =>
-                  setDraft((d) => ({
-                    ...d,
-                    platforms: { ...d.platforms, youtube: checked },
                   }))
                 }
               />
@@ -229,8 +219,9 @@ export function ViralPostFilters({
               variant="outline"
               className="border-[#2b2739] bg-transparent text-[#f6f4fb]"
               onClick={() => {
-                setDraft(DEFAULT_EXPLORE_FILTERS);
-                onFiltersChange(DEFAULT_EXPLORE_FILTERS);
+                const next = normalizeExploreFilters(DEFAULT_EXPLORE_FILTERS);
+                setDraft(next);
+                onFiltersChange(next);
                 onReset();
                 setDrawerOpen(false);
               }}
@@ -241,8 +232,9 @@ export function ViralPostFilters({
               type="button"
               className="bg-[#7c3aed] text-white hover:bg-[#6d28d9]"
               onClick={() => {
-                onFiltersChange(draft);
-                onApply(draft);
+                const next = normalizeExploreFilters(draft);
+                onFiltersChange(next);
+                onApply(next);
                 setDrawerOpen(false);
               }}
             >

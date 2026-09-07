@@ -25,7 +25,7 @@ import type {
   ViralPost,
   ViralPostsTab,
 } from "@/lib/viralPosts/types";
-import { DEFAULT_EXPLORE_FILTERS } from "@/lib/viralPosts/types";
+import { DEFAULT_EXPLORE_FILTERS, normalizeExploreFilters } from "@/lib/viralPosts/types";
 import type { ViralDailyFeedResponse } from "@shared/viralPosts";
 
 function parseTab(raw: string | null): ViralPostsTab {
@@ -58,9 +58,11 @@ export default function ViralPosts() {
 
   const [exploreQuery, setExploreQuery] = useState("");
   const [exploreQuick, setExploreQuick] = useState<ExploreQuickFilter>("all");
-  const [exploreFilters, setExploreFilters] = useState<ExploreAdvancedFilters>(
+  const [exploreFilters, setExploreFiltersRaw] = useState<ExploreAdvancedFilters>(
     DEFAULT_EXPLORE_FILTERS
   );
+  const setExploreFilters = (value: ExploreAdvancedFilters) =>
+    setExploreFiltersRaw(normalizeExploreFilters(value));
   const [savedFilter, setSavedFilter] = useState<SavedPostsFilter>("all");
   const [bannerVisible, setBannerVisible] = useState(true);
 

@@ -33,10 +33,11 @@ describe("viralPosts feature flags", () => {
     expect(parseViralPostsInstagramEnabled("false", true)).toBe(false);
   });
 
-  it("tiktok and youtube flags default to live flag", () => {
+  it("tiktok flag defaults to live flag; youtube stays off for V1", () => {
     expect(parseViralPostsTiktokEnabled(undefined, true)).toBe(true);
     expect(parseViralPostsTiktokEnabled("false", true)).toBe(false);
-    expect(parseViralPostsYoutubeEnabled(undefined, true)).toBe(true);
+    expect(parseViralPostsYoutubeEnabled(undefined, true)).toBe(false);
+    expect(parseViralPostsYoutubeEnabled("true", true)).toBe(false);
     expect(parseViralPostsYoutubeEnabled("false", true)).toBe(false);
   });
 

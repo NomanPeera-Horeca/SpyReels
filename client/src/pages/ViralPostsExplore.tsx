@@ -19,7 +19,7 @@ import type {
   ViralPost,
   ViralPostsTab,
 } from "@/lib/viralPosts/types";
-import { DEFAULT_EXPLORE_FILTERS } from "@/lib/viralPosts/types";
+import { DEFAULT_EXPLORE_FILTERS, normalizeExploreFilters } from "@/lib/viralPosts/types";
 
 function creatorKey(post: ViralPost): string {
   return (post.creatorId || post.creatorHandle || "")
@@ -32,9 +32,11 @@ export default function ViralPostsExplore() {
   const [exploreQuery, setExploreQuery] = useState("");
   const [submittedQuery, setSubmittedQuery] = useState("");
   const [quickFilter, setQuickFilter] = useState<ExploreQuickFilter>("all");
-  const [filters, setFilters] = useState<ExploreAdvancedFilters>(
+  const [filters, setFiltersRaw] = useState<ExploreAdvancedFilters>(
     DEFAULT_EXPLORE_FILTERS
   );
+  const setFilters = (value: ExploreAdvancedFilters) =>
+    setFiltersRaw(normalizeExploreFilters(value));
   const [whyPost, setWhyPost] = useState<ViralPost | null>(null);
   const [whyOpen, setWhyOpen] = useState(false);
   const [remakeBusy, setRemakeBusy] = useState(false);

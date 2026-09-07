@@ -22,7 +22,6 @@ import {
   isViralPostsInstagramEnabled,
   isViralPostsLive,
   isViralPostsTiktokEnabled,
-  isViralPostsYoutubeEnabled,
 } from "./featureFlag";
 import { resolveThumbnailFallback } from "./mediaMirror";
 import { classifyCandidatePillars } from "./pillarClassify";
@@ -103,13 +102,7 @@ async function ensureBrowsePools(args: { niche: string; pillars: string[] }) {
       platform: "tiktok",
     });
   }
-  if (isViralPostsYoutubeEnabled) {
-    specs.push({
-      niche: args.niche,
-      pillar: VIRAL_SEED_POOL_PILLAR,
-      platform: "youtube",
-    });
-  }
+  // Viral Posts V1: no YouTube pool ensure (historical rows may remain).
 
   return poolRepo.ensurePools(specs);
 }

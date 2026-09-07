@@ -8,6 +8,14 @@ export type {
   ViralSearchResponse,
   ViralTrendStatus,
 } from "@shared/viralPosts";
+export {
+  VIRAL_POSTS_V1_DEFAULT_PLATFORM,
+  VIRAL_POSTS_V1_PLATFORMS,
+  isViralPostsV1Platform,
+  normalizeViralPostsExplorePlatforms,
+  normalizeViralPostsV1Platform,
+} from "@shared/viralPosts";
+import { normalizeViralPostsExplorePlatforms } from "@shared/viralPosts";
 
 export type ViralPostsTab = "for-you" | "explore" | "saved";
 export type SavedPostsFilter = "all" | "unused" | "remade";
@@ -40,8 +48,9 @@ export type ViralRemakePreview = {
   brollSuggestions: string[];
 };
 
+/** Viral Posts V1 UI: Instagram + TikTok only (youtube kept off for stale state). */
 export const DEFAULT_EXPLORE_FILTERS: ExploreAdvancedFilters = {
-  platforms: { instagram: true, tiktok: true, youtube: true },
+  platforms: { instagram: true, tiktok: true, youtube: false },
   momentum: {
     breakingOut: true,
     risingFast: true,
@@ -55,3 +64,13 @@ export const DEFAULT_EXPLORE_FILTERS: ExploreAdvancedFilters = {
   },
   postedWithin: "7d",
 };
+
+/** Force YouTube off so stale saved filter state cannot show an empty YouTube view. */
+export function normalizeExploreFilters(
+  filters: ExploreAdvancedFilters
+): ExploreAdvancedFilters {
+  return {
+    ...filters,
+    platforms: normalizeViralPostsExplorePlatforms(filters.platforms),
+  };
+}
