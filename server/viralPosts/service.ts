@@ -6,7 +6,7 @@ import type {
   ViralPostPlatform,
   ViralSearchResponse,
 } from "@shared/viralPosts";
-import { VIRAL_DAILY_FEED_MAX, VIRAL_DAILY_FEED_MIN } from "@shared/viralPosts";
+import { VIRAL_DAILY_FEED_MAX, VIRAL_DAILY_FEED_MIN, isViralPostsV1Platform } from "@shared/viralPosts";
 import { eq } from "drizzle-orm";
 import {
   users,
@@ -789,6 +789,7 @@ function mapDailyFeedToResponse(
   const mirroredVideos = opts.mirroredVideos ?? new Map<number, string>();
   const items = rows
     .filter(({ candidate }) => {
+      if (!isViralPostsV1Platform(candidate.platform)) return false;
       if (opts.dismissed.has(candidate.id)) return false;
       const key = creatorKeyOf(candidate);
       if (key !== "unknown" && opts.hidden.has(key)) return false;
@@ -1305,11 +1306,13 @@ export function normalizeSearchCacheKey(userId: number, query: string): string {
 
 export async function getSavedViralPosts(userId: number): Promise<ViralPost[]> {
   const rows = await repo.getSavedCandidates(userId);
-  return rows.map(({ candidate }) =>
-    candidateToViralPost(candidate, {
-      relevanceLabel: "Saved",
-      relevanceReason: "You saved this post for later.",
-      saved: true,
-    })
-  );
+  return rows
+    .filter(({ candidate }) => isViralPostsV1Platform(candidate.platform))
+    .map(({ candidate }) =>
+      candidateToViralPost(candidate, {
+        relevanceLabel: "Saved",
+        relevanceReason: "You saved this post for later.",
+        saved: true,
+      })
+    );
 }

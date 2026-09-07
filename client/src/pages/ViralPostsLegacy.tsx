@@ -31,6 +31,11 @@ import {
   applyExplorePostFilters,
   exploreEmptyCopy,
 } from "@shared/viralPostsExploreFilters";
+import { isViralPostsV1Platform } from "@shared/viralPosts";
+import {
+  invalidateViralPostsSaveQueries,
+  patchSavedFlagInPosts,
+} from "@/lib/viralPosts/savedState";
 
 function parseTab(raw: string | null): ViralPostsTab {
   if (raw === "explore" || raw === "saved" || raw === "for-you") return raw;
@@ -42,6 +47,7 @@ function filterVisiblePosts(
   hiddenCreatorKeys: Set<string>
 ): ViralPost[] {
   return items.filter((p) => {
+    if (!isViralPostsV1Platform(p.platform)) return false;
     const key = (p.creatorId || p.creatorHandle || "")
       .toLowerCase()
       .replace(/^@/, "");
@@ -166,6 +172,11 @@ export default function ViralPosts() {
     }
   );
 
+  const browseQuery = trpc.viralPosts.browse.useQuery(undefined, {
+    enabled: tab === "explore",
+    staleTime: 60_000,
+  });
+
   const savedQuery = trpc.viralPosts.getSaved.useQuery(undefined, {
     enabled: tab === "saved",
     staleTime: 30_000,
@@ -192,17 +203,23 @@ export default function ViralPosts() {
     [feed?.items, hiddenCreatorKeys]
   );
 
+  const usingExploreSearch = exploreSubmitted.trim().length >= 3;
+
   const explorePosts = useMemo(
     () =>
       applyExplorePostFilters({
-        posts: searchQuery.data?.items ?? [],
+        posts: usingExploreSearch
+          ? searchQuery.data?.items ?? []
+          : browseQuery.data?.items ?? [],
         platforms: exploreFilters.platforms,
         postedWithin: exploreFilters.postedWithin,
         quickFilter: exploreQuick,
         hiddenCreatorKeys,
       }),
     [
+      usingExploreSearch,
       searchQuery.data?.items,
+      browseQuery.data?.items,
       exploreFilters.platforms,
       exploreFilters.postedWithin,
       exploreQuick,
@@ -211,19 +228,32 @@ export default function ViralPosts() {
   );
   const exploreEmpty = exploreEmptyCopy({
     platforms: exploreFilters.platforms,
-    usingSearch: exploreSubmitted.trim().length >= 3,
-    rawResultCount: searchQuery.data?.items.length ?? 0,
+    usingSearch: usingExploreSearch,
+    rawResultCount: usingExploreSearch
+      ? searchQuery.data?.items.length ?? 0
+      : browseQuery.data?.items.length ?? 0,
     quickFilter: exploreQuick,
   });
 
   const exploreSearching =
     tab === "explore" &&
-    exploreSubmitted.trim().length >= 3 &&
+    usingExploreSearch &&
     searchQuery.isFetching &&
     explorePosts.length === 0;
 
+  const noExplorePlatformSelected =
+    !exploreFilters.platforms.instagram && !exploreFilters.platforms.tiktok;
+
+  const exploreBrowseLoading =
+    tab === "explore" &&
+    !usingExploreSearch &&
+    browseQuery.isLoading &&
+    !noExplorePlatformSelected;
+
   const savedPosts = useMemo(() => {
-    let items = savedQuery.data?.items ?? [];
+    let items = (savedQuery.data?.items ?? []).filter((p) =>
+      isViralPostsV1Platform(p.platform)
+    );
     items = items.filter((p) => {
       const key = (p.creatorId || p.creatorHandle || "")
         .toLowerCase()
@@ -293,6 +323,30 @@ export default function ViralPosts() {
       const prev = post.saved;
       const next = !prev;
       patchFeedSaved(post.id, next);
+      utils.viralPosts.getSaved.setData(undefined, (old) => {
+        if (!old) return old;
+        if (!next) {
+          return {
+            ...old,
+            items: old.items.filter((item) => item.id !== post.id),
+          };
+        }
+        const exists = old.items.some((item) => item.id === post.id);
+        if (exists) {
+          return {
+            ...old,
+            items: patchSavedFlagInPosts(old.items, post.id, true),
+          };
+        }
+        return { ...old, items: [{ ...post, saved: true }, ...old.items] };
+      });
+      utils.viralPosts.browse.setData(undefined, (old) => {
+        if (!old) return old;
+        return {
+          ...old,
+          items: patchSavedFlagInPosts(old.items, post.id, next),
+        };
+      });
       try {
         if (prev) {
           await unsaveMutation.mutateAsync({ postId: post.id });
@@ -301,9 +355,10 @@ export default function ViralPosts() {
           await saveMutation.mutateAsync({ postId: post.id });
           toast.success("Saved");
         }
-        await utils.viralPosts.getSaved.invalidate();
+        await invalidateViralPostsSaveQueries(utils.viralPosts);
       } catch {
         patchFeedSaved(post.id, prev);
+        await invalidateViralPostsSaveQueries(utils.viralPosts);
       }
     },
     [patchFeedSaved, saveMutation, unsaveMutation, utils]
@@ -333,7 +388,10 @@ export default function ViralPosts() {
           feedbackType: "not_relevant",
         });
         toast.success("Recommendation feedback saved");
-        await utils.viralPosts.search.invalidate();
+        await Promise.all([
+          utils.viralPosts.search.invalidate(),
+          utils.viralPosts.browse.invalidate(),
+        ]);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Could not save feedback");
         loadFeed();
@@ -355,8 +413,11 @@ export default function ViralPosts() {
         const res = await hideMutation.mutateAsync({ postId: post.id });
         setHiddenCreatorKeys((prev) => new Set(prev).add(res.creatorKey));
         toast.success("Creator hidden from recommendations");
-        await utils.viralPosts.search.invalidate();
-        await utils.viralPosts.getSaved.invalidate();
+        await Promise.all([
+          utils.viralPosts.search.invalidate(),
+          utils.viralPosts.browse.invalidate(),
+          utils.viralPosts.getSaved.invalidate(),
+        ]);
         await utils.viralPosts.getFeedHistory.invalidate();
       } catch (err) {
         setHiddenCreatorKeys(prevHidden);
@@ -411,14 +472,13 @@ export default function ViralPosts() {
   const runExploreSearch = (q?: string) => {
     const next = (q ?? exploreQuery).trim();
     setExploreQuery(next);
-    setExploreSubmitted(next);
+    if (next.length >= 3) setExploreSubmitted(next);
   };
 
-  useEffect(() => {
-    if (tab === "explore" && !exploreSubmitted) {
-      // no-op until user searches
-    }
-  }, [tab, exploreSubmitted]);
+  const clearExploreSearch = () => {
+    setExploreQuery("");
+    setExploreSubmitted("");
+  };
 
   const feedUpdatedToday =
     feed?.generatedAt != null &&
@@ -437,7 +497,7 @@ export default function ViralPosts() {
             </h1>
           </div>
           <p className="max-w-xl text-sm text-[#a9a4b8]">
-            Fresh Instagram Reels selected for your niche.
+            Fresh Instagram and TikTok posts selected for your niche.
           </p>
         </div>
         <Button
@@ -565,7 +625,7 @@ export default function ViralPosts() {
                   className="border-[#2b2739] bg-transparent text-[#f6f4fb]"
                   onClick={() => setTab("explore")}
                 >
-                  Explore Instagram posts
+                  Explore more posts
                 </Button>
               </div>
             </div>
@@ -578,7 +638,7 @@ export default function ViralPosts() {
                 posts={dailyPosts}
                 loading={feedLoading}
                 emptyTitle="We couldn't find enough strong matches yet."
-                emptyDescription="Try adjusting recommendations or explore Instagram posts."
+                emptyDescription="Try adjusting recommendations or explore more posts."
                 {...cardHandlers}
               />
             </div>
@@ -638,7 +698,7 @@ export default function ViralPosts() {
                 You've seen today's best matches
               </h3>
               <p className="mx-auto mt-2 max-w-md text-sm text-[#a9a4b8]">
-                Explore more Instagram Reels when you want more options.
+                Explore more Instagram and TikTok posts when you want more options.
               </p>
               <Button
                 type="button"
@@ -659,13 +719,19 @@ export default function ViralPosts() {
               Explore viral posts
             </h2>
             <p className="mt-1 text-sm text-[#a9a4b8]">
-              Search Instagram Reels by topic. TikTok and YouTube appear in For
-              You from niche seed creators.
+              Browse fresh posts from your niche, or search for a topic, creator,
+              or competitor.
             </p>
             <div className="mt-4 flex flex-col gap-2 sm:flex-row">
               <Input
                 value={exploreQuery}
-                onChange={(e) => setExploreQuery(e.target.value)}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setExploreQuery(next);
+                  if (next.trim().length < 3 && usingExploreSearch) {
+                    setExploreSubmitted("");
+                  }
+                }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter") runExploreSearch();
                 }}
@@ -673,6 +739,16 @@ export default function ViralPosts() {
                 disabled={exploreSearching}
                 className="h-11 border-[#2b2739] bg-[#171522] text-[#f6f4fb]"
               />
+              {usingExploreSearch ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 shrink-0 border-[#2b2739] bg-[#171522] px-5 text-[#f6f4fb]"
+                  onClick={clearExploreSearch}
+                >
+                  Clear
+                </Button>
+              ) : null}
               <Button
                 type="button"
                 className="h-11 shrink-0 bg-[#7c3aed] px-5 text-white hover:bg-[#6d28d9]"
@@ -704,11 +780,20 @@ export default function ViralPosts() {
           </div>
 
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <h3 className="text-base font-bold text-[#f6f4fb]">
-              {exploreSubmitted.trim()
-                ? `Instagram results for "${exploreSubmitted.trim()}"`
-                : "Search Instagram to explore"}
-            </h3>
+            <div>
+              <h3 className="text-base font-bold text-[#f6f4fb]">
+                {usingExploreSearch
+                  ? `Search results for "${exploreSubmitted.trim()}"`
+                  : browseQuery.data?.niche
+                    ? `Popular in ${browseQuery.data.niche}`
+                    : "Popular posts for you"}
+              </h3>
+              {!usingExploreSearch && browseQuery.data?.poolRefreshStarted ? (
+                <p className="mt-1 text-xs text-[#8e899b]">
+                  Refreshing your niche pool in the background for more options.
+                </p>
+              ) : null}
+            </div>
             <ViralPostFilters
               quickFilter={exploreQuick}
               onQuickFilterChange={setExploreQuick}
@@ -725,17 +810,23 @@ export default function ViralPosts() {
             />
           </div>
 
-          {!exploreSubmitted ? (
+          {browseQuery.error && !usingExploreSearch ? (
             <div className="rounded-2xl border border-[#2b2739] bg-[#111019] px-6 py-14 text-center">
               <h3 className="text-lg font-bold text-[#f6f4fb]">
-                Search Instagram Reels
+                We couldn't load Explore
               </h3>
               <p className="mx-auto mt-2 max-w-md text-sm text-[#a9a4b8]">
-                Enter a topic or use a suggested search. Results use live
-                Instagram discovery.
+                {browseQuery.error.message || "Please try again."}
               </p>
+              <Button
+                type="button"
+                className="mt-4 bg-[#7c3aed] text-white hover:bg-[#6d28d9]"
+                onClick={() => void browseQuery.refetch()}
+              >
+                Try again
+              </Button>
             </div>
-          ) : searchQuery.error ? (
+          ) : searchQuery.error && usingExploreSearch ? (
             <div className="rounded-2xl border border-[#2b2739] bg-[#111019] px-6 py-14 text-center">
               <h3 className="text-lg font-bold text-[#f6f4fb]">Search failed</h3>
               <p className="mx-auto mt-2 max-w-md text-sm text-[#a9a4b8]">
@@ -754,7 +845,7 @@ export default function ViralPosts() {
           ) : (
             <ViralPostGrid
               posts={explorePosts}
-              loading={false}
+              loading={exploreBrowseLoading}
               emptyTitle={exploreEmpty.title}
               emptyDescription={exploreEmpty.description}
               {...cardHandlers}

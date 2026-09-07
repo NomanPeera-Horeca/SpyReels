@@ -272,7 +272,7 @@ describe("viralPosts diversity", () => {
     expect(selected.length).toBe(3);
   });
 
-  it("allows recently shown only when the pool has no fresh candidates", () => {
+  it("does not recycle recently shown posts just to fill the feed", () => {
     const input = [
       make({
         candidateId: 1,
@@ -311,8 +311,8 @@ describe("viralPosts diversity", () => {
       }),
     ];
     const selected = selectDiverseFeed(input, { min: 5, max: 7 });
-    expect(selected.length).toBe(5);
-    expect(selected.every((s) => s.recentlyShown)).toBe(true);
+    // Prefer an empty/short credible feed over recycling yesterday's cards.
+    expect(selected.length).toBe(0);
   });
 
   it("does not pad to min when a quality floor leaves fewer strong candidates", () => {

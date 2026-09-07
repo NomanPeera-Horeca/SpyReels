@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 import {
   VIRAL_POSTS_NOT_ENABLED_MESSAGE,
+  isViralPostsV1Platform,
   type ViralDailyFeedResponse,
   type ViralFeedbackType,
 } from "@shared/viralPosts";
@@ -177,7 +178,7 @@ export const viralPostsRouter = router({
         userId: ctx.user.id,
         query: input.query,
       });
-      let items = result.items;
+      let items = result.items.filter((i) => isViralPostsV1Platform(i.platform));
       if (input.rising) {
         items = items.filter(
           (i) =>

@@ -3,6 +3,7 @@ import type {
   ViralPost,
   ViralPostPlatform,
 } from "@shared/viralPosts";
+import { isViralPostsV1Platform } from "@shared/viralPosts";
 import { eq } from "drizzle-orm";
 import {
   users,
@@ -287,6 +288,7 @@ export async function browseViralPosts(userId: number): Promise<{
       ),
     }))
     .filter(({ row }) => {
+      if (!isViralPostsV1Platform(row.candidate.platform)) return false;
       if (dismissed.has(row.candidate.id)) return false;
       const creatorKey = (
         row.candidate.creatorId ||
