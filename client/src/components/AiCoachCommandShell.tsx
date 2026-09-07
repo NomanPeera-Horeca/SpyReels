@@ -42,7 +42,6 @@ type InputIntent = {
   helper: string;
   platform: string | null;
   icon: "idea" | "link" | "script";
-  sourceUrl?: string;
 };
 
 type SocialSource = {
@@ -88,7 +87,6 @@ function inferInputIntent(value: string): InputIntent | null {
       helper: "I will load the source and start the real remake workflow using your creator profile.",
       platform: social.platform,
       icon: "link",
-      sourceUrl: social.url,
     };
   }
 
@@ -99,7 +97,7 @@ function inferInputIntent(value: string): InputIntent | null {
   if (looksLikeScript) {
     return {
       label: "Existing script detected",
-      helper: "Ask for a rewrite, shorter version, stronger hook, simpler language, or a new niche.",
+      helper: "I will keep your pasted words, structure them as a Reel, then you can keep editing with Agent.",
       platform: null,
       icon: "script",
     };
@@ -138,7 +136,9 @@ export function AiCoachCommandShell({
   const intent = useMemo(() => inferInputIntent(description), [description]);
   const trpcUtils = trpc.useUtils();
   const addByUrlMutation = trpc.collected.addByUrl.useMutation();
+  const convertRoughMutation = trpc.studio.convertRough.useMutation();
   const { startRemake, RemakeDialogs } = useLibraryRemakeChain();
+  const conversionBusy = convertRoughMutation.isPending;
 
   useAutoGrowTextarea(textareaRef, description);
 
@@ -147,12 +147,12 @@ export function AiCoachCommandShell({
   }, []);
 
   useEffect(() => {
-    if (isStreaming || linkBusy) {
+    if (isStreaming || linkBusy || conversionBusy) {
       setPromptReady(false);
       return;
     }
     setPromptReady(description.trim().length >= 10);
-  }, [description, isStreaming, linkBusy]);
+  }, [description, isStreaming, linkBusy, conversionBusy]);
 
   useEffect(() => {
     if (!activeCapability) return;
@@ -167,7 +167,7 @@ export function AiCoachCommandShell({
   }, [activeCapability, onCapabilitySelect]);
 
   const handleActionClick = async (action: CoachModeAction) => {
-    if (isStreaming || isBusy || linkBusy) return;
+    if (isStreaming || isBusy || linkBusy || conversionBusy) return;
     streamAbortRef.current?.abort();
     const controller = new AbortController();
     streamAbortRef.current = controller;
@@ -190,33 +190,50 @@ export function AiCoachCommandShell({
   };
 
   const handleSubmitRequest = async () => {
+    if (isBusy || isStreaming || linkBusy || conversionBusy) return;
+
     const social = findSocialSource(description);
-    if (!social) {
-      onSubmit();
+    if (social) {
+      setLinkBusy(true);
+      try {
+        await ingestUrlAndStartLibraryRemake(social.url, {
+          addByUrl: async (url) => {
+            const added = await addByUrlMutation.mutateAsync({ url });
+            await trpcUtils.collected.list.invalidate();
+            return { id: added.id, duplicate: added.duplicate };
+          },
+          fetchCollectedList: () => trpcUtils.collected.list.fetch(undefined, { staleTime: 0 }),
+          startRemake,
+        });
+        onDescriptionChange("");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not load that video. Try again.");
+      } finally {
+        setLinkBusy(false);
+      }
       return;
     }
-    if (isBusy || isStreaming || linkBusy) return;
 
-    setLinkBusy(true);
-    try {
-      await ingestUrlAndStartLibraryRemake(social.url, {
-        addByUrl: async (url) => {
-          const added = await addByUrlMutation.mutateAsync({ url });
-          await trpcUtils.collected.list.invalidate();
-          return { id: added.id, duplicate: added.duplicate };
-        },
-        fetchCollectedList: () => trpcUtils.collected.list.fetch(undefined, { staleTime: 0 }),
-        startRemake,
-      });
-      onDescriptionChange("");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not load that video. Try again.");
-    } finally {
-      setLinkBusy(false);
+    if (intent?.icon === "script") {
+      const roughScript = description.trim();
+      if (roughScript.length > 12000) {
+        toast.error("That script is too long. Keep it under 12,000 characters.");
+        return;
+      }
+      try {
+        const converted = await convertRoughMutation.mutateAsync({ roughScript });
+        onDescriptionChange("");
+        window.location.assign(`/studio?script=${converted.id}`);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Could not convert that script. Try again.");
+      }
+      return;
     }
+
+    onSubmit();
   };
 
-  const submitDisabled = !promptReady || isBusy || isStreaming || linkBusy;
+  const submitDisabled = !promptReady || isBusy || isStreaming || linkBusy || conversionBusy;
   const secondaryCapabilities = COACH_CAPABILITIES.filter((cap) => cap.id !== "write_script");
   const nicheLabel = nichePill?.trim() || heroSubhead?.split("·")[0]?.replace(/^Scripts for\s*/i, "").trim() || "your niche";
 
@@ -242,7 +259,7 @@ export function AiCoachCommandShell({
           <div
             className={cn(
               "overflow-hidden rounded-[26px] border bg-card/80 shadow-[0_18px_70px_rgba(0,0,0,0.12)] transition-colors",
-              isStreaming || linkBusy ? "border-violet-500/45" : "border-border/80"
+              isStreaming || linkBusy || conversionBusy ? "border-violet-500/45" : "border-border/80"
             )}
           >
             <div className="max-h-[calc(1.6rem*9+2rem)] overflow-y-auto">
@@ -256,7 +273,7 @@ export function AiCoachCommandShell({
                   e.preventDefault();
                   void handleSubmitRequest();
                 }}
-                disabled={isStreaming || linkBusy}
+                disabled={isStreaming || linkBusy || conversionBusy}
                 name="spyreels-agent-prompt"
                 autoComplete="off"
                 autoCorrect="on"
@@ -282,7 +299,7 @@ export function AiCoachCommandShell({
               ) : intent ? (
                 <span className="inline-flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
                   {intent.icon === "link" ? <Link2 className="h-3.5 w-3.5 text-violet-500" /> : <span className="h-2 w-2 rounded-full bg-violet-500" />}
-                  <span className="truncate">{intent.label}</span>
+                  <span className="truncate">{conversionBusy ? "Converting your script" : intent.label}</span>
                 </span>
               ) : (
                 <span className="text-xs text-muted-foreground/60">Agent adapts to what you give it.</span>
@@ -295,7 +312,7 @@ export function AiCoachCommandShell({
                 disabled={submitDisabled}
                 aria-label="Create script"
               >
-                {isBusy || linkBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" aria-hidden />}
+                {isBusy || linkBusy || conversionBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" aria-hidden />}
               </Button>
             </div>
           </div>
@@ -306,7 +323,7 @@ export function AiCoachCommandShell({
                 <button
                   key={chip.label}
                   type="button"
-                  disabled={isStreaming || isBusy || linkBusy}
+                  disabled={isStreaming || isBusy || linkBusy || conversionBusy}
                   onClick={() => {
                     onDescriptionChange(chip.value);
                     textareaRef.current?.focus();
@@ -336,7 +353,7 @@ export function AiCoachCommandShell({
                   key={cap.id}
                   type="button"
                   onClick={() => onCapabilitySelect(activeCapability === cap.id ? null : cap.id)}
-                  disabled={isStreaming || linkBusy}
+                  disabled={isStreaming || linkBusy || conversionBusy}
                   className={cn(
                     "text-sm transition-colors",
                     activeCapability === cap.id ? "text-foreground" : "text-muted-foreground hover:text-foreground"
@@ -364,7 +381,7 @@ export function AiCoachCommandShell({
                     <button
                       key={action.id}
                       type="button"
-                      disabled={isStreaming || isBusy || linkBusy}
+                      disabled={isStreaming || isBusy || linkBusy || conversionBusy}
                       onClick={() => void handleActionClick(action)}
                       className="flex w-full gap-3 px-4 py-3 text-left transition-colors hover:bg-violet-500/5 disabled:opacity-50"
                     >
