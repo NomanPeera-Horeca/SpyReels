@@ -988,11 +988,13 @@ export default function AiCoach() {
     );
   }
 
-  if (refineMutation.isPending) {
+  // Keep the result artifact mounted during refine so inline selection
+  // proposal state (diff / Undo / Accept) and agentBusy survive the round trip.
+  if (refineMutation.isPending && !result) {
     return shellLayout(<CoachQuietWait title="Refining your script" />);
   }
 
-  if (result && (phase === "result" || hookVariationsMutation.isPending)) {
+  if (result && (phase === "result" || hookVariationsMutation.isPending || refineMutation.isPending)) {
     return shellLayout(
       <AiCoachResultView
         result={result}
