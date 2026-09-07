@@ -311,6 +311,8 @@ export function AiCoachResultView({
   const artifactRef = useRef<HTMLDivElement>(null);
   const selectionEditorRef = useRef<HTMLDivElement>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
+  const scheduleSaveRef = useRef(scheduleSave);
+  scheduleSaveRef.current = scheduleSave;
   const turnIdRef = useRef(1);
   const pendingInlineRef = useRef<{
     selection: SelectedText;
@@ -696,7 +698,7 @@ export function AiCoachResultView({
     setAgentBusy(true);
     setScheduleMode(false);
     window.setTimeout(() => {
-      scheduleSave.onSave(true, { caption: "", hashtags: [] });
+      scheduleSaveRef.current?.onSave(true, { caption: "", hashtags: [] });
     }, 0);
   };
 
