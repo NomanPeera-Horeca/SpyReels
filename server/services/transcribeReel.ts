@@ -2,6 +2,8 @@ import { DeepgramClient, DeepgramError } from "@deepgram/sdk";
 import { spawn } from "node:child_process";
 import { gotScraping } from "got-scraping";
 import { isDurableReelVideoUrl } from "../reelVideoR2";
+import { estimateSttCost } from "../analytics/aiCostModel";
+import { reportAiUsage } from "../analytics/aiUsageReporter";
 
 export type Segment = { start: number; end: number; text: string };
 
@@ -454,12 +456,31 @@ async function attemptTranscription(input: {
  * once. Non-transient failures (no speech, too large, too long, bad audio)
  * return immediately. Always returns a TranscriptionResult - never throws.
  */
+function reportTranscriptionUsage(result: Extract<TranscriptionResult, { success: true }>) {
+  if (result.durationSec <= 0) return;
+  const est = estimateSttCost({
+    provider: "deepgram",
+    model: "nova-3",
+    durationSec: result.durationSec,
+  });
+  reportAiUsage({
+    provider: "deepgram",
+    model: est.model,
+    durationSec: est.durationSec,
+    costUsd: est.costUsd,
+    estimated: est.estimated,
+  });
+}
+
 export async function transcribeReel(input: {
   videoUrl: string;
   shortcode: string;
 }): Promise<TranscriptionResult> {
   const result = await attemptTranscription(input);
-  if (result.success) return result;
+  if (result.success) {
+    reportTranscriptionUsage(result);
+    return result;
+  }
 
   if (!TRANSIENT_ERROR_CODES.has(result.errorCode)) {
     return result;

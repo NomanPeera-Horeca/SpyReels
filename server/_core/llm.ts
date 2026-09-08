@@ -15,6 +15,8 @@ import {
   resolveInvokeTelemetry,
   type GenerationTelemetryContext,
 } from "../carousel/generationTelemetry";
+import { estimateLlmCost } from "../analytics/aiCostModel";
+import { reportAiUsage } from "../analytics/aiUsageReporter";
 
 export function errorContextForOperation(operation?: string): IdeaScriptErrorContext {
   if (
@@ -744,6 +746,21 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   logAngleInvoke("logical_completed", {
     actualModel: response.model,
     durationMs: Math.max(0, Math.round(performance.now() - logicalStarted)),
+  });
+
+  const est = estimateLlmCost({
+    model: response.model,
+    inputTokens: response.usage.input_tokens,
+    outputTokens: response.usage.output_tokens,
+  });
+  reportAiUsage({
+    provider: "anthropic",
+    model: est.model,
+    operation,
+    inputTokens: est.inputTokens,
+    outputTokens: est.outputTokens,
+    costUsd: est.costUsd,
+    estimated: est.estimated,
   });
 
   return {
