@@ -3,21 +3,7 @@
  * when the product path is verified on Collected Reels.
  */
 import { useState } from "react";
-import { RemakeWorkspaceDialog } from "@/components/RemakeWorkspaceDialog";
-
-const PREVIEW_SCRIPT = `[HOOK] Stop designing your menu before you understand your kitchen.
-
-[BODY] Most restaurant owners spend weeks on menu design, then discover the prep station cannot keep up. Walk the kitchen path first. Time how long it takes to plate one dish during a rush. Fix the bottlenecks, then design the menu around what your kitchen can actually deliver.
-
-[CTA] Comment KITCHEN and I will send you the free layout checklist.`;
-
-const PREVIEW_CAPTION = `Your kitchen layout is the silent profit killer.
-
-Walk the path before you redesign the menu.
-
-Comment KITCHEN for the checklist.
-
-#restaurants #kitchenops #foodbusiness`;
+import { RemakeWorkspaceUiPreviewV2 } from "@/components/RemakeWorkspaceUiPreviewV2";
 
 export default function DevRemakeWorkspacePreview() {
   const [open, setOpen] = useState(true);
@@ -28,10 +14,10 @@ export default function DevRemakeWorkspacePreview() {
       data-testid="dev-remake-workspace"
     >
       <div className="mx-auto mb-4 max-w-3xl rounded-xl border border-[#2a2640] bg-[#1a1722] p-4 text-sm text-[#a39db8]">
-        <strong className="text-[#f3f0fa]">Local Remake workspace preview</strong>
+        <strong className="text-[#f3f0fa]">Local Remake workspace preview v2</strong>
         <p className="mt-1">
-          This mounts the real React component (not the HTML mockup). Log in and use Collected
-          Reels → Remake for the live generate path. AI save calls need a real script id.
+          Product-design preview only. This keeps the current production Remake component untouched
+          while we review the simplified Script → Visuals → Preview flow.
         </p>
         {!open ? (
           <button
@@ -44,13 +30,7 @@ export default function DevRemakeWorkspacePreview() {
         ) : null}
       </div>
 
-      <RemakeWorkspaceDialog
-        open={open}
-        onOpenChange={setOpen}
-        target={{ scriptId: null, reelId: null, remakeKey: "dev-preview" }}
-        remakeState={{ stage: "ready", progressPercent: 100 }}
-        previewSeed={{ script: PREVIEW_SCRIPT, caption: PREVIEW_CAPTION }}
-      />
+      {open ? <RemakeWorkspaceUiPreviewV2 onClose={() => setOpen(false)} /> : null}
     </div>
   );
 }
