@@ -1,34 +1,43 @@
 import type { ErrorRequestHandler, Express } from "express";
-import { capturePostHogEvent, posthogDistinctIdForUser } from "./posthogServer";
+import { PostHog } from "posthog-node";
 
 /**
  * PostHog Error Tracking from the server.
  *
- * Sends `$exception` events (the format PostHog's Error Tracking UI reads)
- * using the existing hand-rolled capture utility — no posthog-node SDK.
+ * Uses the official `posthog-node` SDK's `captureException`, which builds the
+ * exact `$exception_list` schema PostHog's Error Tracking processor expects.
+ * Previous hand-rolled `$exception_type/$exception_message/$exception_stack_trace`
+ * properties were ingested but rejected by the processor
+ * (`error_tracking_exception_processing_errors`) — never go back to that.
  * Fire-and-forget; never throws into the request path.
  */
 
-export function isServerErrorTrackingEnabled(): boolean {
-  return Boolean(
-    process.env.POSTHOG_API_KEY?.trim() || process.env.VITE_PUBLIC_POSTHOG_TOKEN?.trim()
+function posthogKey(): string | null {
+  return (
+    process.env.POSTHOG_API_KEY?.trim() ||
+    process.env.VITE_PUBLIC_POSTHOG_TOKEN?.trim() ||
+    null
   );
 }
 
-function errorName(error: unknown): string {
-  return error instanceof Error ? error.name : String(error);
+function posthogHost(): string {
+  const raw = process.env.VITE_PUBLIC_POSTHOG_HOST?.trim() || "https://us.i.posthog.com";
+  return raw.replace(/\/$/, "");
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+export function isServerErrorTrackingEnabled(): boolean {
+  return Boolean(posthogKey());
 }
 
-function errorStack(error: unknown): string | undefined {
-  return error instanceof Error ? error.stack : undefined;
-}
+let client: PostHog | null = null;
 
-function truncated(value: string | undefined, max: number): string | undefined {
-  return value && value.length > max ? value.slice(0, max) : value;
+function getClient(): PostHog | null {
+  const key = posthogKey();
+  if (!key) return null;
+  if (!client) {
+    client = new PostHog(key, { host: posthogHost() });
+  }
+  return client;
 }
 
 export async function captureServerException(
@@ -36,19 +45,12 @@ export async function captureServerException(
   extra?: Record<string, unknown>,
   distinctId: string = "spyreels-server"
 ): Promise<void> {
-  if (!isServerErrorTrackingEnabled()) return;
+  const ph = getClient();
+  if (!ph) return;
   try {
-    await capturePostHogEvent({
-      distinctId,
-      event: "$exception",
-      properties: {
-        $exception_type: errorName(error),
-        $exception_message: truncated(errorMessage(error), 2000),
-        $exception_stack_trace: truncated(errorStack(error), 200_000),
-        $exception_source: "spyreels_server",
-        level: "error",
-        ...extra,
-      },
+    await ph.captureExceptionImmediate(error, distinctId, {
+      ...extra,
+      exception_source: "spyreels_server",
     });
   } catch (err) {
     console.warn("[PostHog] exception capture failed:", err);
