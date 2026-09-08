@@ -101,7 +101,7 @@ const SIDEBAR_NAV_TOOLTIPS: Partial<Record<string, string>> = {
   "/scripts": "Your AI-generated scripts library",
   // "/ideas": "Turn a rough idea into a viral-ready script",
   "/plan": "30-day content calendar with AI-generated ideas",
-  "/studio": "AI Coach for viral Reel scripts",
+  "/studio": "Agent for short-form video creation",
   "/carousels":
     "Create a carousel or reopen recent work",
   "/carousels/library":
@@ -142,7 +142,7 @@ function buildNavSections(): SidebarNavSection[] {
       id: "create",
       label: "Create",
       items: [
-        { icon: Sparkles, label: "AI Coach", path: "/studio", badge: "new", featured: true },
+        { icon: Sparkles, label: "Agent", path: "/studio", badge: "new", featured: true },
         { icon: CalendarDays, label: "30-Day Plan", path: "/plan" },
         // { icon: Lightbulb, label: "Idea to Script", path: "/ideas" },
         { icon: Images, label: "Carousels", path: "/carousels", badge: "new" },
@@ -364,7 +364,11 @@ function DashboardLayoutContent({
     selectedNicheSlugs: onboardingStateQuery.data?.selectedNicheSlugs,
   });
 
-  const targetAudience = onboardingStateQuery.data?.targetAudience?.trim() || null;
+  const savedTargetAudience = onboardingStateQuery.data?.targetAudience?.trim() || null;
+  const targetAudience =
+    savedTargetAudience?.toLowerCase() === "instagram reels viewers"
+      ? "Short-form video creators"
+      : savedTargetAudience;
 
   const activeMenuItem =
     flatNavItems.find((item) => isSidebarPathActive(location, item.path)) ??
