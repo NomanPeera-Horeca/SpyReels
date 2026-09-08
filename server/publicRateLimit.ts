@@ -42,6 +42,32 @@ export function isPublicIpRateLimited(ip: string): boolean {
 }
 
 /**
+ * Sliding auth-endpoint limiter: 20 login/register/forgot/reset attempts per
+ * IP per 10 minutes. Separate from the public limiter so a username spray can't
+ * burn the anonymous preview budget (or vice versa). Same process-local
+ * trade-off as `isPublicIpRateLimited` (see note above).
+ */
+const AUTH_WINDOW_MS = 10 * 60 * 1000;
+const AUTH_MAX_REQUESTS_PER_WINDOW = 20;
+
+const authRateBuckets = new Map<string, RateBucket>();
+
+function consume(bucketMap: Map<string, RateBucket>, ip: string, windowMs: number, max: number) {
+  const now = Date.now();
+  let bucket = bucketMap.get(ip);
+  if (!bucket || now > bucket.resetAt) {
+    bucket = { count: 0, resetAt: now + windowMs };
+    bucketMap.set(ip, bucket);
+  }
+  bucket.count += 1;
+  return bucket.count > max;
+}
+
+export function isAuthIpRateLimited(ip: string): boolean {
+  return consume(authRateBuckets, ip, AUTH_WINDOW_MS, AUTH_MAX_REQUESTS_PER_WINDOW);
+}
+
+/**
  * Rolling 24h anonymous B-roll preview limiter (script + video modes).
  * Process-local Map, same trade-offs as `isPublicIpRateLimited` (no Redis).
  */

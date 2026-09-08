@@ -39,10 +39,15 @@ export function getSessionCookieOptions(
   //       ? hostname
   //       : undefined;
 
+  // SameSite=Lax blocks cross-site (CSRF) requests from sending the cookie on
+  // state-changing POSTs, while still allowing same-site navigation (OAuth
+  // callbacks are top-level navigations, which Lax permits). The Chrome
+  // extension authenticates with a Bearer token, not this cookie, so nothing
+  // in this app relies on cross-site cookie delivery.
   return {
     httpOnly: true,
     path: "/",
-    sameSite: "none",
+    sameSite: "lax",
     secure: isSecureRequest(req),
   };
 }

@@ -127,4 +127,6 @@ scripts/discovery-pipeline-results.json
 .env.backup
 .env.had-rotated-creds
 .env.swap-bak
+# E2E test credentials (contain a real password — never commit)
+tests/e2e/.env.test
 scripts/output/
