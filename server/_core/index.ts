@@ -4,6 +4,7 @@ import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
+import { csrfOriginGuard } from "./csrf";
 import { registerResendWebhookRoutes } from "../resendWebhook";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
@@ -62,6 +63,10 @@ async function startServer() {
     }
     next();
   });
+
+  // CSRF origin guard: reject cross-site state-changing /api requests.
+  // Registered before body parsing and all routes.
+  app.use(csrfOriginGuard);
 
   // Stripe webhook MUST be registered BEFORE express.json() for signature verification
   app.post("/api/stripe/webhook", express.raw({ type: "application/json" }), async (req, res) => {

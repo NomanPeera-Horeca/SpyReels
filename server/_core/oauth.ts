@@ -3,6 +3,7 @@ import type { Express, Request, Response } from "express";
 import * as db from "../db";
 import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
+import { clientIpFromRequest, isAuthIpRateLimited } from "../publicRateLimit";
 import { notifyOwnerViaTelegram } from "../telegramBot";
 import axios from "axios";
 import { sendWelcomeEmail, sendPasswordResetEmail } from "../utils/email.js";
@@ -144,6 +145,10 @@ export function registerOAuthRoutes(app: Express) {
 
   // Email/password login
   app.post("/api/auth/login", async (req, res) => {
+    if (isAuthIpRateLimited(clientIpFromRequest(req))) {
+      res.status(429).json({ error: "Too many attempts. Please try again in a few minutes." });
+      return;
+    }
     const { email, password } = req.body;
     if (!email || !password) {
       res.status(400).json({ error: "Email and password required" });
@@ -176,6 +181,10 @@ export function registerOAuthRoutes(app: Express) {
 
   // Email/password register
   app.post("/api/auth/register", async (req, res) => {
+    if (isAuthIpRateLimited(clientIpFromRequest(req))) {
+      res.status(429).json({ error: "Too many attempts. Please try again in a few minutes." });
+      return;
+    }
     const { email, password, name, attribution } = req.body as {
       email?: string;
       password?: string;
@@ -237,6 +246,10 @@ export function registerOAuthRoutes(app: Express) {
 
   // Forgot password
   app.post("/api/auth/forgot-password", async (req, res) => {
+    if (isAuthIpRateLimited(clientIpFromRequest(req))) {
+      res.status(429).json({ error: "Too many attempts. Please try again in a few minutes." });
+      return;
+    }
     const { email } = req.body;
     if (!email) {
       res.status(400).json({ error: "Email required" });
@@ -269,6 +282,10 @@ export function registerOAuthRoutes(app: Express) {
 
   // Reset password
   app.post("/api/auth/reset-password", async (req, res) => {
+    if (isAuthIpRateLimited(clientIpFromRequest(req))) {
+      res.status(429).json({ error: "Too many attempts. Please try again in a few minutes." });
+      return;
+    }
     const { token, password } = req.body;
     if (!token || !password) {
       res.status(400).json({ error: "Token and password required" });
