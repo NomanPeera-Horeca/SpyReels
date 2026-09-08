@@ -101,7 +101,7 @@ const SIDEBAR_NAV_TOOLTIPS: Partial<Record<string, string>> = {
   "/scripts": "Your AI-generated scripts library",
   // "/ideas": "Turn a rough idea into a viral-ready script",
   "/plan": "30-day content calendar with AI-generated ideas",
-  "/studio": "AI Coach for viral Reel scripts",
+  "/studio": "Agent for viral short-form scripts",
   "/carousels":
     "Create a carousel or reopen recent work",
   "/carousels/library":
@@ -142,7 +142,7 @@ function buildNavSections(): SidebarNavSection[] {
       id: "create",
       label: "Create",
       items: [
-        { icon: Sparkles, label: "AI Coach", path: "/studio", badge: "new", featured: true },
+        { icon: Sparkles, label: "Agent", path: "/studio", badge: "new", featured: true },
         { icon: CalendarDays, label: "30-Day Plan", path: "/plan" },
         // { icon: Lightbulb, label: "Idea to Script", path: "/ideas" },
         { icon: Images, label: "Carousels", path: "/carousels", badge: "new" },
@@ -214,13 +214,7 @@ function isSidebarPathActive(location: string, path: string): boolean {
   return location === path;
 }
 
-function SidebarNicheCard({
-  nicheLabel,
-  targetAudience,
-}: {
-  nicheLabel: string;
-  targetAudience: string | null;
-}) {
+function SidebarNicheCard({ nicheLabel }: { nicheLabel: string }) {
   return (
     <div className="mx-2 mb-2 min-h-[4.75rem] rounded-xl border border-sidebar-border bg-background px-3 py-2.5 group-data-[collapsible=icon]:hidden">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -228,7 +222,7 @@ function SidebarNicheCard({
       </p>
       <p className="text-sm font-semibold leading-tight text-foreground">{nicheLabel}</p>
       <p className="mt-0.5 line-clamp-2 min-h-[2rem] text-xs text-muted-foreground">
-        {targetAudience || "\u00a0"}
+        Short-form video
       </p>
     </div>
   );
@@ -364,8 +358,6 @@ function DashboardLayoutContent({
     selectedNicheSlugs: onboardingStateQuery.data?.selectedNicheSlugs,
   });
 
-  const targetAudience = onboardingStateQuery.data?.targetAudience?.trim() || null;
-
   const activeMenuItem =
     flatNavItems.find((item) => isSidebarPathActive(location, item.path)) ??
     adminMenuItems.find((item) => isSidebarPathActive(location, item.path));
@@ -479,7 +471,7 @@ function DashboardLayoutContent({
           </SidebarHeader>
 
           {!isCollapsed ? (
-            <SidebarNicheCard nicheLabel={nicheLabel} targetAudience={targetAudience} />
+            <SidebarNicheCard nicheLabel={nicheLabel} />
           ) : null}
 
           <SidebarContent className="gap-0">

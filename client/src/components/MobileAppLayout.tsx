@@ -32,22 +32,14 @@ const TABS: Array<{
   { id: "more", label: "More", path: MOBILE_CREATE_TAB_PATHS.more, icon: MoreHorizontal },
 ];
 
-function MobileNicheBar({
-  nicheLabel,
-  targetAudience,
-}: {
-  nicheLabel: string;
-  targetAudience: string | null;
-}) {
+function MobileNicheBar({ nicheLabel }: { nicheLabel: string }) {
   return (
     <div className="border-b border-border/60 bg-card/80 px-4 py-2.5 pt-safe backdrop-blur supports-[backdrop-filter]:bg-card/70">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         Your niche
       </p>
       <p className="text-sm font-semibold leading-tight text-foreground">{nicheLabel}</p>
-      {targetAudience ? (
-        <p className="line-clamp-1 text-xs text-muted-foreground">{targetAudience}</p>
-      ) : null}
+      <p className="line-clamp-1 text-xs text-muted-foreground">Short-form video</p>
     </div>
   );
 }
@@ -131,15 +123,13 @@ function MobileAppLayoutShell({ children }: { children: React.ReactNode }) {
     selectedNicheSlugs: onboardingStateQuery.data?.selectedNicheSlugs,
   });
 
-  const targetAudience = onboardingStateQuery.data?.targetAudience?.trim() || null;
-
   useEffect(() => {
     recordAppNavigation(getCurrentAppPath());
   }, [location, searchString]);
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-background">
-      <MobileNicheBar nicheLabel={nicheLabel} targetAudience={targetAudience} />
+      <MobileNicheBar nicheLabel={nicheLabel} />
       <main className="flex-1 overflow-x-hidden overflow-y-auto px-safe pb-mobile-tabs pt-3">
         <div
           className={cn(
