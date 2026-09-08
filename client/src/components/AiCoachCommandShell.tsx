@@ -301,9 +301,7 @@ export function AiCoachCommandShell({
                   {intent.icon === "link" ? <Link2 className="h-3.5 w-3.5 text-violet-500" /> : <span className="h-2 w-2 rounded-full bg-violet-500" />}
                   <span className="truncate">{conversionBusy ? "Converting your script" : intent.label}</span>
                 </span>
-              ) : (
-                <span className="text-xs text-muted-foreground/60">Agent adapts to what you give it.</span>
-              )}
+              ) : null}
 
               <Button
                 size="icon"
