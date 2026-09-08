@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { reportDirectAnthropicUsage } from "../../_core/llmMeasured";
 import type {
   NicheRoutingInput,
   NicheRoutingOutput,
@@ -77,6 +78,8 @@ export async function routeNiche(
       },
     ],
   });
+
+  reportDirectAnthropicUsage(response, "niche_routing");
 
   const textBlock = response.content.find((block) => block.type === "text");
   if (!textBlock || textBlock.type !== "text") {

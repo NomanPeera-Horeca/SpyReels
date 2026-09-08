@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { reportDirectAnthropicUsage } from "../_core/llmMeasured";
 import type { AdaptedCandidate } from "./candidateAdapter";
 import { DEFAULT_CONTENT_PILLARS } from "./constants";
 
@@ -159,6 +160,8 @@ async function classifyBatch(
       },
     ],
   });
+
+  reportDirectAnthropicUsage(response, "semantic_pool_relevance");
 
   const textBlock = response.content.find((block) => block.type === "text");
   if (!textBlock || textBlock.type !== "text") {

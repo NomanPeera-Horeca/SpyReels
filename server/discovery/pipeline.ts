@@ -5,6 +5,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { routeNiche } from "../ai/prompts/niche-routing";
+import { reportDirectAnthropicUsage } from "../_core/llmMeasured";
 import {
   coerceInstagramTakenAtRaw,
   createDiscoveryScCallTracker,
@@ -210,6 +211,8 @@ Return 5 to 8 Instagram-native hashtags as JSON.`;
     messages: [{ role: "user", content: userMessage }],
   });
 
+  reportDirectAnthropicUsage(response, "discovery_hashtag_expand");
+
   const textBlock = response.content.find((block) => block.type === "text");
   if (!textBlock || textBlock.type !== "text") {
     throw new Error("No text block in hashtag expansion response");
@@ -254,6 +257,8 @@ Return 5 to 8 broader Instagram-native hashtags as JSON.`;
     system: HASHTAG_WIDEN_EXPANSION_PROMPT,
     messages: [{ role: "user", content: userMessage }],
   });
+
+  reportDirectAnthropicUsage(response, "discovery_hashtag_widen");
 
   const textBlock = response.content.find((block) => block.type === "text");
   if (!textBlock || textBlock.type !== "text") {
@@ -682,6 +687,8 @@ Return relevance JSON for every shortcode listed above.`;
     system: RELEVANCE_SCORING_PROMPT,
     messages: [{ role: "user", content: userMessage }],
   });
+
+  reportDirectAnthropicUsage(response, "discovery_reel_relevance_scoring");
 
   const textBlock = response.content.find((block) => block.type === "text");
   if (!textBlock || textBlock.type !== "text") {

@@ -5,6 +5,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { routeNiche } from "../ai/prompts/niche-routing";
+import { reportDirectAnthropicUsage } from "../_core/llmMeasured";
 import {
   searchReelsByKeyword,
   type SearchReelData,
@@ -270,6 +271,8 @@ Detect this niche's real content pillars and return ${TOPICS_TARGET} searchable 
     messages: [{ role: "user", content: userMessage }],
   });
 
+  reportDirectAnthropicUsage(response, "creator_discovery_pillar_topics");
+
   const raw = stripCodeFences(firstTextBlock(response.content));
   const parsed = JSON.parse(raw) as {
     pillars?: Array<{ name?: string; why?: string; topics?: string[] }>;
@@ -333,6 +336,7 @@ Return a keep/reason verdict for every username.`;
       system: PEER_SCORE_SYSTEM,
       messages: [{ role: "user", content: userMessage }],
     });
+    reportDirectAnthropicUsage(response, "creator_discovery_peer_score");
     const parsed = JSON.parse(stripCodeFences(firstTextBlock(response.content))) as {
       verdicts?: PeerVerdict[];
     };
