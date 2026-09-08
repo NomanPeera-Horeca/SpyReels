@@ -5,19 +5,33 @@
 import { useState } from "react";
 import { RemakeWorkspaceDialog } from "@/components/RemakeWorkspaceDialog";
 
-const PREVIEW_SCRIPT = `[HOOK] Stop designing your menu before you understand your kitchen.
+const PREVIEW_SCRIPT = `Opening a restaurant with no experience. Bad idea. Right?
 
-[BODY] Most restaurant owners spend weeks on menu design, then discover the prep station cannot keep up. Walk the kitchen path first. Time how long it takes to plate one dish during a rush. Fix the bottlenecks, then design the menu around what your kitchen can actually deliver.
+Okay. Fine. Let's do it.
 
-[CTA] Comment KITCHEN and I will send you the free layout checklist.`;
+You have no culinary school. No investor backing. No clue what a POS system even is.
 
-const PREVIEW_CAPTION = `Your kitchen layout is the silent profit killer.
+And you're still sitting here googling "how to open a restaurant" at midnight.
 
-Walk the path before you redesign the menu.
+Same. We did the same thing.
 
-Comment KITCHEN for the checklist.
+Here's what nobody tells you. Most successful restaurant owners started exactly where you are. Clueless. Passionate. A little bit broke.
 
-#restaurants #kitchenops #foodbusiness`;
+The ones who make it learn fast. They hire people smarter than them. And they stop waiting until they feel ready.
+
+Because ready never comes.
+
+You figure out the permits while you're scared. You learn food cost math while you're losing money. You build the menu while people are already asking when you open.
+
+The chaos doesn't go away. You just get better at moving through it.
+
+Open the thing.`;
+
+const PREVIEW_CAPTION = `You do not need to know everything before you start.
+
+You need to learn faster than the problems arrive.
+
+Save this if you're opening your first restaurant.`;
 
 export default function DevRemakeWorkspacePreview() {
   const [open, setOpen] = useState(true);
@@ -30,8 +44,8 @@ export default function DevRemakeWorkspacePreview() {
       <div className="mx-auto mb-4 max-w-3xl rounded-xl border border-[#2a2640] bg-[#1a1722] p-4 text-sm text-[#a39db8]">
         <strong className="text-[#f3f0fa]">Local Remake workspace preview</strong>
         <p className="mt-1">
-          This mounts the real React component (not the HTML mockup). Log in and use Collected
-          Reels → Remake for the live generate path. AI save calls need a real script id.
+          This mounts the real Remake workspace component with local preview content. Log in and use
+          the normal Remake flow to test live AI, saving, versions, and B-roll.
         </p>
         {!open ? (
           <button
