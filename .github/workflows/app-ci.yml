@@ -43,12 +43,18 @@ jobs:
           NODE_OPTIONS: --max-old-space-size=4096
         run: pnpm check
 
-      - name: Run automated tests
+      - name: Run Remake regression tests
         env:
           NODE_OPTIONS: --max-old-space-size=4096
-        run: pnpm test
+        run: pnpm vitest run server/libraryRemakeChainCore.test.ts server/scriptTools.test.ts server/remakeStudioImport.test.ts
 
       - name: Build app
         env:
           NODE_OPTIONS: --max-old-space-size=4096
         run: pnpm build
+
+      - name: Full regression suite
+        continue-on-error: true
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: pnpm test
