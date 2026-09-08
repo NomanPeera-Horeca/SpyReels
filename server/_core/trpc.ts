@@ -5,15 +5,26 @@ import superjson from "superjson";
 import { ZodError } from "zod";
 import type { TrpcContext } from "./context";
 import { assertAdminEmailUser } from "../middleware/requireAdmin";
+import { captureServerException } from "../analytics/posthogErrors";
+import { posthogDistinctIdForUser } from "../analytics/posthogServer";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
-  errorFormatter({ shape, error }) {
+  errorFormatter({ shape, error, ctx }) {
     if (error.cause instanceof ZodError) {
       return {
         ...shape,
         message: formatZodIssuesForUser(error.cause.issues),
       };
+    }
+
+    // Report genuine server failures to PostHog Error Tracking; skip expected client errors.
+    if (error.code === "INTERNAL_SERVER_ERROR") {
+      captureServerException(
+        error.cause instanceof Error ? error.cause : error,
+        { trpcCode: error.code, message: shape.message ?? undefined },
+        ctx?.user ? posthogDistinctIdForUser(ctx.user.id) : undefined
+      );
     }
 
     const friendly = formatTrpcValidationMessage(shape.message);
