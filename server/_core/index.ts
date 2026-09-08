@@ -5,6 +5,10 @@ import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { csrfOriginGuard } from "./csrf";
+import {
+  registerPostHogExpressErrors,
+  registerServerErrorMonitoring,
+} from "../analytics/posthogErrors";
 import { registerResendWebhookRoutes } from "../resendWebhook";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
@@ -40,6 +44,7 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  registerServerErrorMonitoring();
   const app = express();
   const server = createServer(app);
 
@@ -280,6 +285,9 @@ async function startServer() {
   } else {
     serveStatic(app);
   }
+
+  // PostHog error handler must come AFTER all routes/middleware.
+  registerPostHogExpressErrors(app);
 
   const preferredPort = parseInt(process.env.PORT || "3000");
   const port = await findAvailablePort(preferredPort);
