@@ -1,7 +1,7 @@
 export {
   RemakeWorkspaceDialog,
-} from "@/components/RemakeWorkspaceDialogAgentic";
+} from "@/components/RemakeWorkspaceDialogAgenticV2";
 
 export type {
   RemakeWorkspaceTarget,
-} from "@/components/RemakeWorkspaceDialogAgentic";
+} from "@/components/RemakeWorkspaceDialogAgenticV2";
