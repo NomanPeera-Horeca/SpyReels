@@ -6,10 +6,8 @@ import {
   ChevronUp,
   History,
   Loader2,
-  Mic,
   Play,
   RotateCcw,
-  Scissors,
   Send,
   Sparkles,
   Wand2,
@@ -197,6 +195,7 @@ export function RemakeWorkspaceDialog({
   const [agentInput, setAgentInput] = useState("");
   const [agentBusy, setAgentBusy] = useState(false);
   const [scheduleMode, setScheduleMode] = useState(false);
+  const [scheduleContext, setScheduleContext] = useState("");
   const [selection, setSelection] = useState<SelectedText | null>(null);
   const [undo, setUndo] = useState<{ script: string; caption: string } | null>(null);
   const [saveState, setSaveState] = useState<"saved" | "saving" | "unsaved">("saved");
@@ -238,9 +237,9 @@ export function RemakeWorkspaceDialog({
   const voiceSummary = useMemo(() => {
     const audience = onboardingQuery.data?.targetAudience?.trim();
     const business = onboardingQuery.data?.businessDescription?.trim();
-    if (business && audience) return `${business.slice(0, 26)}${business.length > 26 ? "…" : ""} · ${audience.slice(0, 30)}`;
-    if (audience) return audience.slice(0, 52);
-    if (business) return business.slice(0, 52);
+    if (business && audience) return `${business.slice(0, 24)}${business.length > 24 ? "…" : ""} · ${audience.slice(0, 24)}`;
+    if (audience) return audience.slice(0, 46);
+    if (business) return business.slice(0, 46);
     return "Creator profile applied";
   }, [onboardingQuery.data]);
 
@@ -309,6 +308,7 @@ export function RemakeWorkspaceDialog({
     setAgentInput("");
     setAgentBusy(false);
     setScheduleMode(false);
+    setScheduleContext("");
     setSelection(null);
     setUndo(null);
     setBroll(null);
@@ -413,9 +413,10 @@ export function RemakeWorkspaceDialog({
       setScheduleTime(time);
       setScheduledLabel(label);
       setScheduleMode(false);
+      setScheduleContext("");
       setScheduleOpen(false);
       void utils.scripts.list.invalidate();
-      addTurn({ role: "agent", kind: "action", text: "Filming reminder set", detail: label });
+      addTurn({ role: "agent", kind: "action", text: `Scheduled for ${label}` });
       toast.success(`Scheduled for ${label}`);
     } catch {
       setSaveState("unsaved");
@@ -425,15 +426,18 @@ export function RemakeWorkspaceDialog({
   }, [addTurn, caption, isPreview, script, scriptId, updateMutation, utils.scripts.list]);
 
   const scheduleFromAgent = useCallback(async (input: string) => {
-    const result = resolveSchedule(input);
+    const combined = [scheduleContext, input].filter(Boolean).join(" ").trim();
+    const result = resolveSchedule(combined);
     if (!result.ok) {
+      setScheduleContext(combined);
       addTurn({ role: "agent", kind: "text", text: result.question });
       setScheduleMode(true);
       window.setTimeout(() => composerRef.current?.focus(), 0);
       return;
     }
+    setScheduleContext("");
     await scheduleAt(result.date, result.time, result.label);
-  }, [addTurn, scheduleAt]);
+  }, [addTurn, scheduleAt, scheduleContext]);
 
   const runAgent = useCallback(async (
     raw: string,
@@ -445,6 +449,13 @@ export function RemakeWorkspaceDialog({
     setAgentInput("");
 
     const lower = prompt.toLowerCase();
+    if (scheduleMode && /\b(cancel|never mind|nevermind)\b/.test(lower)) {
+      setScheduleMode(false);
+      setScheduleContext("");
+      addTurn({ role: "agent", kind: "text", text: "Okay. I will leave the filming schedule unchanged." });
+      return;
+    }
+
     if (
       scheduleMode ||
       /\b(schedule|remind)\b/.test(lower) ||
@@ -524,7 +535,6 @@ export function RemakeWorkspaceDialog({
         role: "agent",
         kind: "action",
         text: response.text,
-        detail: "Undo is available if you want the previous version back.",
         chips: response.chips,
       });
     } catch (error) {
@@ -579,7 +589,7 @@ export function RemakeWorkspaceDialog({
     setTab("script");
     setSelection(null);
     await persist(version.content, caption, "manual_edit", `Restored v${version.versionNumber}`);
-    addTurn({ role: "agent", kind: "action", text: `Restored version ${version.versionNumber}`, detail: "The restored script is live on the right." });
+    addTurn({ role: "agent", kind: "action", text: `Restored version ${version.versionNumber}` });
   }, [addTurn, caption, persist]);
 
   const openSchedule = useCallback(() => {
@@ -598,11 +608,11 @@ export function RemakeWorkspaceDialog({
     await scheduleAt(date, scheduleTime, formatSchedulePostButtonSubtitle(date, scheduleTime));
   }, [scheduleAt, scheduleDate, scheduleTime]);
 
-  const quickActions: Array<{ label: string; prompt: string; icon: typeof Scissors }> = [
-    { label: "Shorter", prompt: "Make it 30% shorter while keeping the main point", icon: Scissors },
-    { label: "Stronger hook", prompt: "Make the hook stronger", icon: Wand2 },
-    { label: "Easier to say", prompt: "Make it easier to say out loud with shorter sentences and natural rhythm", icon: Mic },
-    { label: "More casual", prompt: "Make it more casual and natural to say on camera", icon: Sparkles },
+  const quickActions: Array<{ label: string; prompt: string }> = [
+    { label: "Shorter", prompt: "Make it 30% shorter while keeping the main point" },
+    { label: "Stronger hook", prompt: "Make the hook stronger" },
+    { label: "Easier to say", prompt: "Make it easier to say out loud with shorter sentences and natural rhythm" },
+    { label: "More casual", prompt: "Make it more casual and natural to say on camera" },
   ];
 
   return (
@@ -649,61 +659,64 @@ export function RemakeWorkspaceDialog({
             </div>
           </header>
 
-          <div className="grid min-h-0 flex-1 grid-cols-[330px_minmax(0,1fr)]">
+          <div className="grid min-h-0 flex-1 grid-cols-[310px_minmax(0,1fr)]">
             <aside className="flex min-h-0 flex-col border-r border-[#2d2940] bg-[#191620]">
-              <div className="min-h-0 flex-1 overflow-y-auto p-4">
-                <div className="mb-4 flex items-start gap-3">
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-violet-500/10 text-violet-400"><Sparkles className="h-4 w-4" /></span>
-                  <div>
-                    <h3 className="text-sm font-bold text-white">SpyReels Agent</h3>
-                    <p className="mt-0.5 text-xs leading-relaxed text-[#8f879f]">Tell me what to change. I work directly on the live result on the right.</p>
+              <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+                <div className="mb-3 flex items-start gap-2.5">
+                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-violet-500/10 text-violet-400"><Sparkles className="h-3.5 w-3.5" /></span>
+                  <div className="min-w-0">
+                    <h3 className="text-[13px] font-bold text-white">SpyReels Agent</h3>
+                    <p className="mt-0.5 text-[11px] text-[#8f879f]">Edit the live result with AI.</p>
                   </div>
                 </div>
 
+                <div className="mb-4 flex flex-wrap gap-1.5">
+                  {quickActions.map(({ label, prompt }) => (
+                    <button
+                      key={label}
+                      type="button"
+                      disabled={agentBusy || isGenerating || !script.trim()}
+                      onClick={() => { setSelection(null); void runAgent(prompt, { ignoreSelection: true }); }}
+                      className="rounded-full border border-[#363047] bg-[#201c2a] px-2.5 py-1.5 text-[11px] font-medium text-[#aaa3b8] transition hover:border-violet-500/35 hover:bg-[#272131] hover:text-white disabled:opacity-40"
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
                 {turns.length === 0 ? (
-                  <div className="space-y-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[#777083]">Improve</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {quickActions.map(({ label, prompt, icon: Icon }) => (
-                        <button
-                          key={label}
-                          type="button"
-                          disabled={agentBusy || isGenerating || !script.trim()}
-                          onClick={() => { setSelection(null); void runAgent(prompt, { ignoreSelection: true }); }}
-                          className="flex min-h-[76px] flex-col items-start gap-2 rounded-xl border border-[#302b40] bg-[#211d2b] p-3 text-left text-xs font-semibold text-[#c5bed2] transition hover:border-violet-500/40 hover:bg-[#252031] disabled:opacity-40"
-                        >
-                          <Icon className="h-4 w-4 text-violet-400" />
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                  <p className="text-[12px] leading-relaxed text-[#777083]">Ask for an edit, or use a quick action above.</p>
                 ) : (
                   <div className="space-y-3">
                     {turns.map((turn) => turn.role === "user" ? (
-                      <div key={turn.id} className="ml-auto max-w-[88%] rounded-2xl rounded-br-md border border-violet-500/20 bg-violet-500/10 px-3 py-2.5 text-sm text-[#f5f2fa]">{turn.text}</div>
+                      <div key={turn.id} className="ml-auto max-w-[92%] rounded-xl bg-violet-500/10 px-3 py-2 text-[13px] leading-relaxed text-[#f5f2fa]">{turn.text}</div>
                     ) : turn.kind === "action" ? (
-                      <div key={turn.id} className="rounded-xl border border-[#302b40] bg-[#211d2b] px-3 py-3">
-                        <p className="text-sm font-medium leading-relaxed text-[#f1edf7]"><span className="mr-2 text-emerald-400">✓</span>{turn.text}</p>
-                        {turn.detail ? <p className="mt-1 text-xs leading-relaxed text-[#8f879f]">{turn.detail}</p> : null}
-                        {turn.chips?.length ? (
-                          <div className="mt-3 flex flex-wrap gap-1.5">
-                            {turn.chips.map((chip) => (
-                              <button key={chip} type="button" disabled={agentBusy} onClick={() => { setSelection(null); void runAgent(chipPrompt(chip), { ignoreSelection: true }); }} className="rounded-full border border-[#3b354b] px-2.5 py-1 text-[11px] font-medium text-[#b9b2c5] hover:bg-[#2a2436] hover:text-white">{chip}</button>
-                            ))}
+                      <div key={turn.id} className="py-0.5">
+                        <div className="flex items-start gap-2">
+                          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-400" />
+                          <div className="min-w-0">
+                            <p className="text-[13px] leading-relaxed text-[#e9e5ef]">{turn.text}</p>
+                            {turn.detail ? <p className="mt-1 text-[11px] leading-relaxed text-[#827b92]">{turn.detail}</p> : null}
+                            {turn.chips?.length ? (
+                              <div className="mt-2 flex flex-wrap gap-1.5">
+                                {turn.chips.map((chip) => (
+                                  <button key={chip} type="button" disabled={agentBusy} onClick={() => { setSelection(null); void runAgent(chipPrompt(chip), { ignoreSelection: true }); }} className="rounded-full border border-[#383247] px-2.5 py-1 text-[10px] font-medium text-[#aaa3b8] hover:bg-[#272131] hover:text-white">{chip}</button>
+                                ))}
+                              </div>
+                            ) : null}
                           </div>
-                        ) : null}
+                        </div>
                       </div>
                     ) : (
-                      <p key={turn.id} className="text-sm leading-relaxed text-[#b9b2c5]">{turn.text}</p>
+                      <p key={turn.id} className="text-[13px] leading-relaxed text-[#b9b2c5]">{turn.text}</p>
                     ))}
-                    {agentBusy ? <div className="flex items-center gap-2 text-sm text-[#928aa3]"><Loader2 className="h-4 w-4 animate-spin text-violet-400" /> Agent is working...</div> : null}
+                    {agentBusy ? <div className="flex items-center gap-2 text-[12px] text-[#827b92]"><Loader2 className="h-3.5 w-3.5 animate-spin text-violet-400" /> Working...</div> : null}
                   </div>
                 )}
               </div>
 
               <div className="border-t border-[#2d2940] p-3">
-                <p className="mb-2 truncate px-1 text-[11px] text-[#777083]">Writing as: <span className="text-[#a9a1b7]">{voiceSummary}</span></p>
+                <p className="mb-2 truncate px-1 text-[10px] text-[#777083]">Creator profile · <span className="text-[#a9a1b7]">{voiceSummary}</span></p>
                 {selection ? (
                   <div className="mb-2 flex items-center gap-2 rounded-lg border border-violet-500/25 bg-violet-500/10 px-2.5 py-2 text-[11px] text-violet-200">
                     <span className="min-w-0 flex-1 truncate">Selected: “{selection.text}”</span>
@@ -721,12 +734,12 @@ export function RemakeWorkspaceDialog({
                       event.preventDefault();
                       void runAgent(agentInput);
                     }}
-                    placeholder={scheduleMode ? "Tell Agent when you want to film it..." : selection ? "What should I change in this selection?" : "Ask SpyReels to change anything..."}
-                    className="min-h-[62px] w-full resize-none bg-transparent px-1 py-1 text-sm text-white outline-none placeholder:text-[#6f687d]"
+                    placeholder={scheduleMode ? "Tell me the missing date or time..." : selection ? "What should I change here?" : "Ask SpyReels anything..."}
+                    className="min-h-[44px] max-h-[112px] w-full resize-none bg-transparent px-1 py-1 text-[13px] leading-5 text-white outline-none placeholder:text-[#6f687d]"
                   />
                   <div className="flex items-center justify-between gap-2 pt-1">
                     {undo ? <button type="button" disabled={agentBusy} onClick={() => void undoAi()} className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-medium text-[#a9a1b7] hover:bg-[#2a2534] hover:text-white"><RotateCcw className="h-3.5 w-3.5" /> Undo</button> : <span />}
-                    <button type="button" disabled={agentBusy || !agentInput.trim()} onClick={() => void runAgent(agentInput)} className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-violet-600 px-3 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40">Send <Send className="h-3.5 w-3.5" /></button>
+                    <button type="button" aria-label="Send to SpyReels" disabled={agentBusy || !agentInput.trim()} onClick={() => void runAgent(agentInput)} className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-violet-600 text-white hover:bg-violet-500 disabled:opacity-40"><Send className="h-3.5 w-3.5" /></button>
                   </div>
                 </div>
               </div>
