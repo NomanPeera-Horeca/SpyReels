@@ -181,7 +181,7 @@ export async function prepareReelsForExport(
   scope: ExportScope = "all",
   onProgress?: ExportProgressCallback
 ): Promise<void> {
-  const { runTranscription } = await import("./routers.js");
+  const { runTranscription } = await import("./routers/_shared.js");
   const job = await getScrapeJob(jobId);
   const reelsList = await getReelsByJobId(jobId);
   const followerCount = job?.followerCount || 0;
