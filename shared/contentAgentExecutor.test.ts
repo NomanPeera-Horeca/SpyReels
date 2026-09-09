@@ -73,14 +73,18 @@ describe("Content Agent executor", () => {
     expect(d.saveScript).not.toHaveBeenCalled();
   });
 
-  it("blocks remake without a source URL", async () => {
+  it("asks for a Remake source URL instead of treating missing input as failure", async () => {
     const d = deps();
-    await expect(
-      executeContentAgentAction(
-        { tool: "remake_social_video", confidence: 100, source: "rule" },
-        d
-      )
-    ).rejects.toThrow("public Instagram, TikTok, or YouTube link");
+    const result = await executeContentAgentAction(
+      { tool: "remake_social_video", confidence: 100, source: "rule" },
+      d
+    );
+
+    expect(result).toEqual({
+      status: "requires_input",
+      message: "Paste the Instagram, TikTok, or YouTube link you want me to remake.",
+    });
+    expect(d.remakeSocialVideo).not.toHaveBeenCalled();
   });
 
   it("builds button actions using the same action shape as chat", () => {
