@@ -65,6 +65,22 @@ This prevents follow-up answers from being reclassified incorrectly. For example
 
 The final answer stays inside `schedule_filming` instead of being mistaken for a script rewrite.
 
+`continueContentAgentAction(...)` contains the deterministic follow-up behavior so schedule, Remake URL, and refine clarifications can be tested without React state.
+
+## Filming schedule language
+
+`resolveFilmingScheduleText(...)` parses only the schedule phrases SpyReels actually promises in the Agent conversation. It accepts the creator-local current date instead of assuming the server timezone.
+
+Supported examples include:
+
+- `today at 4pm`
+- `tomorrow morning`
+- `Friday after lunch`
+
+Ambiguous time such as `today at 4` is not guessed. The Agent asks whether the creator means AM or PM. A time without a day asks for the missing day. A generic `schedule this` asks when to film.
+
+This schedule is for filming reminders only. It does not imply posting or publishing.
+
 ## Conversation presentation
 
 The reusable conversation layer supports:
@@ -90,10 +106,11 @@ The reusable conversation layer supports:
 6. No em dash characters in user-facing SpyReels copy or Agent-generated content.
 7. A clarification reply must continue the pending tool instead of being sent through general intent routing again.
 8. Buttons and chat must enter the same executor and update the same artifact state.
+9. Filming schedule parsing must use creator-local date context and must ask rather than guess ambiguous times.
 
 ## Current migration boundary
 
-The runtime, executor, conversation model, presentation helpers, and conversation controller are now in place on the feature branch.
+The runtime, executor, conversation model, presentation helpers, conversation controller, clarification continuation, and filming schedule parser are now in place on the feature branch.
 
 The live Agent result component still contains legacy local regex command routing and must be migrated to the shared controller before this work is considered release-ready. The empty Agent composer must also use the same execution layer.
 
