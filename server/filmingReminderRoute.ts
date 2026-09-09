@@ -1,6 +1,10 @@
 import type { Express, Request, Response } from "express";
 import { z } from "zod";
-import { createContext } from "./_core/context";
+import { sdk } from "./_core/sdk";
+import {
+  parseWorkspaceIdHeader,
+  resolveWorkspaceContext,
+} from "./_core/workspaceContext";
 import {
   getFilmingReminderForScript,
   scheduleFilmingReminder,
@@ -15,13 +19,32 @@ const scheduleBodySchema = z.object({
 
 const scriptIdParamSchema = z.coerce.number().int().positive();
 
-async function authenticatedContext(req: Request, res: Response) {
-  const context = await createContext({ req, res });
-  if (!context.user || !context.workspaceId) {
+type AuthenticatedFilmingContext = {
+  userId: number;
+  workspaceId: string;
+};
+
+async function authenticatedContext(
+  req: Request,
+  res: Response
+): Promise<AuthenticatedFilmingContext | null> {
+  try {
+    const user = await sdk.authenticateRequest(req);
+    const requestedWorkspaceId = parseWorkspaceIdHeader(
+      req.headers["x-workspace-id"]
+    );
+    const resolved = await resolveWorkspaceContext(
+      user.id,
+      requestedWorkspaceId
+    );
+    return {
+      userId: user.id,
+      workspaceId: resolved.workspaceId,
+    };
+  } catch {
     res.status(401).json({ error: "Sign in to manage filming reminders." });
     return null;
   }
-  return context;
 }
 
 /**
@@ -46,7 +69,7 @@ export function registerFilmingReminderRoutes(app: Express): void {
 
     try {
       const result = await scheduleFilmingReminder({
-        userId: context.user.id,
+        userId: context.userId,
         workspaceId: context.workspaceId,
         coachScriptId: parsed.data.coachScriptId,
         scheduleText: parsed.data.scheduleText,
