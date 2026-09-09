@@ -14,9 +14,13 @@ export function continueContentAgentAction(
   const value = reply.trim();
 
   if (action.tool === "schedule_filming") {
+    const previous = action.scheduleText?.trim();
+    const scheduleText = previous
+      ? `${previous} ${value}`.trim()
+      : value;
     return {
       ...action,
-      scheduleText: value,
+      scheduleText,
       confidence: 100,
       source: "rule",
     };
