@@ -39,6 +39,10 @@ async function auth(req: Request, res: Response) {
   }
 }
 
+function agentRunStatus(error: unknown): number {
+  return error instanceof Error && error.message === "Agent run not found" ? 404 : 500;
+}
+
 export function registerContentAgentRunRoutes(app: Express): void {
   app.post("/api/content-agent/runs", async (req, res) => {
     const context = await auth(req, res);
@@ -75,14 +79,14 @@ export function registerContentAgentRunRoutes(app: Express): void {
     try {
       await updateContentAgentRun({
         runId: id.data,
-        workspaceId: context.workspaceId,
+        ...context,
         status: body.data.status,
         pendingTool: body.data.pendingTool,
         artifact: body.data.artifact,
       });
       return res.json({ ok: true });
     } catch (error) {
-      return res.status(500).json({
+      return res.status(agentRunStatus(error)).json({
         error: error instanceof Error ? error.message : "Could not update Agent run.",
       });
     }
@@ -104,7 +108,7 @@ export function registerContentAgentRunRoutes(app: Express): void {
     try {
       await upsertContentAgentToolRun({
         runId: id.data,
-        workspaceId: context.workspaceId,
+        ...context,
         stepIndex: step.data,
         tool: body.data.tool,
         status: body.data.status,
@@ -114,7 +118,7 @@ export function registerContentAgentRunRoutes(app: Express): void {
       });
       return res.json({ ok: true });
     } catch (error) {
-      return res.status(500).json({
+      return res.status(agentRunStatus(error)).json({
         error: error instanceof Error ? error.message : "Could not update Agent tool run.",
       });
     }
@@ -139,7 +143,7 @@ export function registerContentAgentRunRoutes(app: Express): void {
     const id = runIdSchema.safeParse(req.params.runId);
     if (!id.success) return res.status(400).json({ error: "Invalid Agent run id." });
     try {
-      const data = await getContentAgentRun({ runId: id.data, workspaceId: context.workspaceId });
+      const data = await getContentAgentRun({ runId: id.data, ...context });
       if (!data) return res.status(404).json({ error: "Agent run not found." });
       return res.json(data);
     } catch (error) {
