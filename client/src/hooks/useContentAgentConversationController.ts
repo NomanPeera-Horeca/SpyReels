@@ -8,6 +8,7 @@ import type {
   ContentAgentAction,
   ContentAgentToolName,
 } from "@shared/contentAgentTools";
+import { continueContentAgentAction } from "@shared/contentAgentClarification";
 import {
   errorTurn,
   type ContentAgentTurn,
@@ -113,36 +114,6 @@ export function useContentAgentConversationController({
     }
   }, [appendTurn, executeAction, nextTurnId, onActionResult]);
 
-  const continuePendingAction = useCallback((
-    action: ContentAgentAction,
-    reply: string
-  ): ContentAgentAction => {
-    if (action.tool === "schedule_filming") {
-      return {
-        ...action,
-        scheduleText: reply,
-        confidence: 100,
-        source: "rule",
-      };
-    }
-
-    if (action.tool === "remake_social_video") {
-      return {
-        ...action,
-        sourceUrl: reply.trim(),
-        confidence: 100,
-        source: "rule",
-      };
-    }
-
-    return {
-      ...action,
-      refineInstruction: reply,
-      confidence: 100,
-      source: "rule",
-    };
-  }, []);
-
   const sendMessage = useCallback(async (message: string) => {
     const trimmed = message.trim();
     if (!trimmed || working) return null;
@@ -151,7 +122,7 @@ export function useContentAgentConversationController({
 
     const pending = pendingActionRef.current;
     if (pending) {
-      return runResolvedAction(continuePendingAction(pending, trimmed));
+      return runResolvedAction(continueContentAgentAction(pending, trimmed));
     }
 
     setWorking(true);
@@ -176,7 +147,7 @@ export function useContentAgentConversationController({
       ));
       return null;
     }
-  }, [appendTurn, appendUserTurn, context, continuePendingAction, nextTurnId, resolveMessage, runResolvedAction, working]);
+  }, [appendTurn, appendUserTurn, context, nextTurnId, resolveMessage, runResolvedAction, working]);
 
   const runButton = useCallback(async (
     tool: ContentAgentToolName,
