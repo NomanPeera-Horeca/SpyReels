@@ -10,10 +10,11 @@ import type { CoachModeAction } from "@shared/coachModeActions";
 import type { StarterChip } from "@shared/ideaStarterPrompts";
 import { cn } from "@/lib/utils";
 import { useAutoGrowTextarea } from "@/hooks/useAutoGrowTextarea";
-import { trpc } from "@/lib/trpc";
-import { useLibraryRemakeChain } from "@/hooks/useLibraryRemakeChain";
-import { ingestUrlAndStartLibraryRemake } from "@/lib/ingestUrlAndStartLibraryRemake";
-import { toast } from "sonner";
+import {
+  extractSocialSource,
+  looksLikeExistingScript,
+} from "@shared/contentAgentTools";
+import { useAiCoachCommandAgentController } from "@/hooks/useAiCoachCommandAgentController";
 
 type AiCoachCommandShellProps = {
   description: string;
@@ -39,60 +40,24 @@ type InputIntent = {
   icon: "idea" | "link" | "script";
 };
 
-type SocialSource = {
-  url: string;
-  platform: "Instagram Reels" | "TikTok" | "YouTube Shorts";
-};
-
-function findSocialSource(value: string): SocialSource | null {
-  const matches = value.match(/https?:\/\/[^\s]+/gi) ?? [];
-  for (const raw of matches) {
-    const url = raw.replace(/[),.;!?]+$/, "");
-    try {
-      const host = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
-      if (host === "instagram.com" || host.endsWith(".instagram.com")) {
-        return { url, platform: "Instagram Reels" };
-      }
-      if (host === "tiktok.com" || host.endsWith(".tiktok.com")) {
-        return { url, platform: "TikTok" };
-      }
-      if (
-        host === "youtube.com" ||
-        host.endsWith(".youtube.com") ||
-        host === "youtu.be" ||
-        host.endsWith(".youtu.be")
-      ) {
-        return { url, platform: "YouTube Shorts" };
-      }
-    } catch {
-      continue;
-    }
-  }
-  return null;
-}
-
 function inferInputIntent(value: string): InputIntent | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
 
-  const social = findSocialSource(trimmed);
+  const social = extractSocialSource(trimmed);
   if (social) {
     return {
-      label: `${social.platform} link detected`,
-      helper: "I will load the source and start the real remake workflow using your creator profile.",
-      platform: social.platform,
+      label: `${social.platformLabel} link detected`,
+      helper: "Agent will load the source and start the real remake workflow using your creator profile.",
+      platform: social.platformLabel,
       icon: "link",
     };
   }
 
-  const lineCount = trimmed.split(/\n+/).filter(Boolean).length;
-  const wordCount = trimmed.split(/\s+/).filter(Boolean).length;
-  const looksLikeScript = lineCount >= 4 || wordCount >= 90;
-
-  if (looksLikeScript) {
+  if (looksLikeExistingScript(trimmed)) {
     return {
       label: "Existing script detected",
-      helper: "I will keep your pasted words, structure them as a Reel, then you can keep editing with Agent.",
+      helper: "Agent will keep your pasted words, structure them as a Reel, then keep the same content context for edits.",
       platform: null,
       icon: "script",
     };
@@ -100,7 +65,7 @@ function inferInputIntent(value: string): InputIntent | null {
 
   return {
     label: "Reel idea detected",
-    helper: "I will use your profile, compare strong directions, and write the best version.",
+    helper: "Agent will use your profile, compare strong directions, and write the best version.",
     platform: null,
     icon: "idea",
   };
@@ -117,70 +82,32 @@ export function AiCoachCommandShell({
   nichePill = null,
 }: AiCoachCommandShellProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [linkBusy, setLinkBusy] = useState(false);
   const [promptReady, setPromptReady] = useState(false);
   const intent = useMemo(() => inferInputIntent(description), [description]);
-  const trpcUtils = trpc.useUtils();
-  const addByUrlMutation = trpc.collected.addByUrl.useMutation();
-  const convertRoughMutation = trpc.studio.convertRough.useMutation();
-  const { startRemake, RemakeDialogs } = useLibraryRemakeChain();
-  const conversionBusy = convertRoughMutation.isPending;
+  const agent = useAiCoachCommandAgentController({
+    description,
+    attachedPlanCardId: attachedContext?.planCardId,
+    onDescriptionChange,
+    onWriteIdea: onSubmit,
+  });
+  const busy = isBusy || agent.isBusy;
 
   useAutoGrowTextarea(textareaRef, description);
 
   useEffect(() => {
-    if (linkBusy || conversionBusy) {
+    if (busy) {
       setPromptReady(false);
       return;
     }
     setPromptReady(description.trim().length >= 10);
-  }, [description, linkBusy, conversionBusy]);
+  }, [description, busy]);
 
   const handleSubmitRequest = async () => {
-    if (isBusy || linkBusy || conversionBusy) return;
-
-    const social = findSocialSource(description);
-    if (social) {
-      setLinkBusy(true);
-      try {
-        await ingestUrlAndStartLibraryRemake(social.url, {
-          addByUrl: async (url) => {
-            const added = await addByUrlMutation.mutateAsync({ url });
-            await trpcUtils.collected.list.invalidate();
-            return { id: added.id, duplicate: added.duplicate };
-          },
-          fetchCollectedList: () => trpcUtils.collected.list.fetch(undefined, { staleTime: 0 }),
-          startRemake,
-        });
-        onDescriptionChange("");
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Could not load that video. Try again.");
-      } finally {
-        setLinkBusy(false);
-      }
-      return;
-    }
-
-    if (intent?.icon === "script") {
-      const roughScript = description.trim();
-      if (roughScript.length > 12000) {
-        toast.error("That script is too long. Keep it under 12,000 characters.");
-        return;
-      }
-      try {
-        const converted = await convertRoughMutation.mutateAsync({ roughScript });
-        onDescriptionChange("");
-        window.location.assign(`/studio?script=${converted.id}`);
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : "Could not convert that script. Try again.");
-      }
-      return;
-    }
-
-    onSubmit();
+    if (busy || !promptReady) return;
+    await agent.submit();
   };
 
-  const submitDisabled = !promptReady || isBusy || linkBusy || conversionBusy;
+  const submitDisabled = !promptReady || busy;
   const nicheLabel = nichePill?.trim() || heroSubhead?.split("·")[0]?.replace(/^Scripts for\s*/i, "").trim() || "your niche";
 
   return (
@@ -205,7 +132,7 @@ export function AiCoachCommandShell({
           <div
             className={cn(
               "overflow-hidden rounded-[26px] border bg-card/80 shadow-[0_18px_70px_rgba(0,0,0,0.12)] transition-colors",
-              linkBusy || conversionBusy ? "border-violet-500/45" : "border-border/80"
+              busy ? "border-violet-500/45" : "border-border/80"
             )}
           >
             <div className="max-h-[calc(1.6rem*9+2rem)] overflow-y-auto">
@@ -219,7 +146,7 @@ export function AiCoachCommandShell({
                   e.preventDefault();
                   void handleSubmitRequest();
                 }}
-                disabled={linkBusy || conversionBusy}
+                disabled={busy}
                 name="spyreels-agent-prompt"
                 autoComplete="off"
                 autoCorrect="on"
@@ -245,7 +172,7 @@ export function AiCoachCommandShell({
               ) : intent ? (
                 <span className="inline-flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
                   {intent.icon === "link" ? <Link2 className="h-3.5 w-3.5 text-violet-500" /> : <span className="h-2 w-2 rounded-full bg-violet-500" />}
-                  <span className="truncate">{conversionBusy ? "Converting your script" : intent.label}</span>
+                  <span className="truncate">{busy ? "Agent is working" : intent.label}</span>
                 </span>
               ) : null}
 
@@ -254,9 +181,9 @@ export function AiCoachCommandShell({
                 className="ml-auto h-10 w-10 rounded-full bg-violet-600 hover:bg-violet-700"
                 onClick={() => void handleSubmitRequest()}
                 disabled={submitDisabled}
-                aria-label="Create script"
+                aria-label="Send to Agent"
               >
-                {isBusy || linkBusy || conversionBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" aria-hidden />}
+                {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowUp className="h-4 w-4" aria-hidden />}
               </Button>
             </div>
           </div>
@@ -271,7 +198,7 @@ export function AiCoachCommandShell({
           ) : null}
         </div>
       </div>
-      {RemakeDialogs}
+      {agent.RemakeDialogs}
     </>
   );
 }
