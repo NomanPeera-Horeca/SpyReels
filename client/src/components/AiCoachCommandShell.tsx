@@ -20,6 +20,8 @@ type AiCoachCommandShellProps = {
   description: string;
   onDescriptionChange: (value: string) => void;
   onSubmit: () => void;
+  /** Called after shared Agent routing has already chosen create-script. */
+  onWriteIdea?: (idea: string) => void;
   isBusy: boolean;
   attachedContext: StudioPrefillMeta | null;
   onClearPlanContext: () => void;
@@ -75,6 +77,7 @@ export function AiCoachCommandShell({
   description,
   onDescriptionChange,
   onSubmit,
+  onWriteIdea,
   isBusy,
   attachedContext,
   onClearPlanContext,
@@ -88,7 +91,7 @@ export function AiCoachCommandShell({
     description,
     attachedPlanCardId: attachedContext?.planCardId,
     onDescriptionChange,
-    onWriteIdea: onSubmit,
+    onWriteIdea: onWriteIdea ?? (() => onSubmit()),
   });
   const busy = isBusy || agent.isBusy;
 
