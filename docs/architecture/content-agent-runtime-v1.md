@@ -1,88 +1,100 @@
-# SpyReels Content Agent Runtime V1
+# SpyReels Content Agent Runtime V1 Architecture
 
-## Product rule
+## North star
 
-Agent decides what creator-level job to do. Existing SpyReels workflows decide how to execute it.
+**Agent decides what to do. Existing SpyReels systems decide how to do it.**
 
-The Agent should never expose internal APIs to creators. It should reason in creator jobs such as remake this Reel, make the hook stronger, create a carousel, save this, or schedule filming.
+The Agent is an orchestrator over proven creator workflows, not a replacement for them.
 
-## Runtime layers
+## Execution shape
 
-1. Creator request
-2. Content Agent intent and current context
-3. Typed creator-level tool selection
-4. Unified executor
-5. Existing SpyReels workflow
-6. Tool result
-7. Agent decides whether another step is needed
-8. Content artifact and conversation update together
+Creator request
+-> shared intent resolution
+-> creator-level tool
+-> existing SpyReels workflow adapter
+-> structured tool result
+-> current artifact update
+-> Agent decides whether another bounded step is required
 
-## V1 tool registry
+Natural language and explicit UI buttons enter the same creator-level executor.
 
-- write_viral_script
-- refine_script
-- generate_hook_ideas
-- load_plan_card
-- remake_social_video
-- convert_existing_script
-- create_carousel
-- save_script
-- schedule_filming
-- download_script
-- inspect_script_health
+## Tool boundary
 
-## Tool boundaries
+V1 tools intentionally describe creator jobs rather than infrastructure calls:
 
-Tools are intentionally creator-level.
+- create Reel
+- refine Reel
+- generate hooks
+- load plan idea
+- remake social video
+- convert pasted script
+- create carousel
+- save script
+- schedule filming
+- download script
+- inspect script health
 
-For example, remake_social_video should own the existing sequence of URL ingestion, metadata readiness, transcription, remakeability checks, generation, and opening the remake workspace. The Agent should not independently reason through each internal network or database step.
+Internal transcription polling, collected Reel ingestion, storage, and other implementation details remain owned by their existing workflows.
 
-## Conversation UX
+## Live adapters
 
-The Agent runtime and chat UI are one product. The UI should feel as effortless as a mature general AI assistant, while being more useful for short-form content creation.
+### New idea
 
-The conversation should use:
+The shared Agent routes the idea once, then hands the text directly to the existing Studio analyze and generation flow. It does not send the same request through the legacy intent resolver again.
 
-- small right-aligned user bubbles
-- mostly plain left-aligned Agent responses
-- compact action receipts for completed actions
-- truthful live work events driven by real tool activity
-- a collapsed Worked for Ns summary after completion when duration is known
-- the content artifact as the visual hero
-- one sticky composer for follow-up actions
-- current artifact and source context near the composer
-- local selected-text editing for precise wording changes
-- clarification only when required information is missing
-- recovery messages that preserve completed work if a later tool fails
+### Pasted script
 
-The Agent must never show fake chain-of-thought or pretend a tool ran when it did not.
+Uses `studio.convertRough` and returns the finished Studio Reel artifact. A later step can therefore refine, save, schedule, or repurpose that Reel.
 
-## Unified executor milestone
+### Public social URL
 
-The next implementation step is one executor used by all Agent entry points.
+Uses the existing URL ingestion and `useLibraryRemakeChain` workflow. The Agent waits for the existing chain to reach a real ready state, reads the generated script, imports it into Studio, and returns that Reel as the next artifact.
 
-The following must converge on the same tool execution path:
+This makes requests such as `remake this TikTok, save it, then turn it into a carousel` possible without duplicating Remake logic.
 
-- empty Agent composer
-- result conversation composer
-- artifact toolbar actions
-- More menu actions
-- social URL remake entry
-- pasted script conversion
-- save and filming schedule
-- Carousel handoff
+The existing Remake chain is still browser-managed. It is not yet a durable server job, so refresh during the Remake itself can interrupt that specific workflow.
 
-Buttons are shortcuts. Natural language is the primary control surface.
+### Result actions
 
-## State and multi-step work
+The finished Reel conversation and toolbar share the same Agent executor for refine, hooks, save, filming schedule, download, carousel, and script health. Selected-text editing remains a deliberately local exact replacement flow because it edits a precise range rather than issuing a creator-level artifact action.
 
-After the unified executor is stable, add persisted Agent runs and tool runs so work can survive refresh, avoid duplicate tool calls, support retries, and provide real progress events.
+## Bounded multi-step planning
 
-Then support bounded multi-step requests such as:
+Explicit sequential requests are capped at five creator-level steps. Each step resolves against the artifact produced by the previous step.
 
-Remake this TikTok for coffee shops, make it 30 seconds, turn it into a carousel, and save both.
+If a tool has only started and has not returned the artifact required by the next step, execution pauses. The Agent never runs the next action against an older Reel just to keep the conversation moving.
 
-The Agent should execute a bounded sequence of creator-level tools and stop if a tool fails or required information is missing.
+## Persistence
+
+`content_agent_runs` records the creator request and overall execution state.
+
+`content_agent_tool_runs` records each tool step, typed action payload, result, status, and error.
+
+The finished Reel conversation restores the latest persisted run for that artifact after refresh. Clarification state can also be restored. In-flight side effects are not replayed automatically because duplicate save, schedule, or generation actions would be worse than requiring an explicit continue.
+
+## Filming reminders
+
+Filming reminder persistence is separate from publishing calendar fields. The system stores date, time, timezone, filming setup, opening visual, on-screen text, notes, and reminder status.
+
+Ambiguous schedule language asks for missing detail instead of guessing.
+
+## Migration practice
+
+This repository's later production migrations use explicit one-off Render Shell scripts and intentionally do not update the legacy Drizzle journal. Content Agent schema is applied with:
+
+`node scripts/apply-0096-0097-content-agent.mjs`
+
+The runner is safe to re-run, verifies required columns and indexes, and fails closed on unexpected partial schema.
+
+## Release requirements
+
+The branch stays draft until end-to-end browser QA is complete and database migration behavior is verified on the target environment. The generic Instagram profile-preview test failure is pre-existing and should not be changed as part of Agent work unless causality is demonstrated.
+
+Known V1 limits are explicit:
+
+- new-idea generation is still page-managed, so a brand-new asynchronous generation cannot yet automatically continue into a later repurpose step in the same request
+- the existing social Remake chain is not yet durable across browser refresh
+- active mutation cancellation is not offered until the underlying workflows support safe cancellation
 
 ## Guardrails
 
@@ -93,3 +105,4 @@ The Agent should execute a bounded sequence of creator-level tools and stop if a
 - do not expose unsupported capabilities in the UI
 - do not let the classifier choose a script-required tool when there is no current script
 - do not silently invent schedule dates or times
+- do not show a completion receipt before the underlying workflow has actually completed
