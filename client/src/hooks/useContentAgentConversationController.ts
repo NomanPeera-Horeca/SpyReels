@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import {
   contentAgentActionForButton,
+  type ContentAgentExecutionContext,
   type ContentAgentExecutorDeps,
   type ContentAgentToolResult,
 } from "@shared/contentAgentExecutor";
@@ -20,12 +21,12 @@ import {
 import {
   useContentAgentExecutor,
   type ContentAgentButtonOptions,
-  type ContentAgentExecutionContext,
+  type ContentAgentRoutingContext,
 } from "@/hooks/useContentAgentExecutor";
 
 export type ContentAgentConversationControllerOptions = {
   deps: ContentAgentExecutorDeps;
-  context?: ContentAgentExecutionContext;
+  context?: ContentAgentRoutingContext;
   onActionResult?: (
     action: ContentAgentAction,
     result: ContentAgentToolResult
@@ -76,14 +77,15 @@ export function useContentAgentConversationController({
   }, [appendTurn, nextTurnId]);
 
   const runResolvedAction = useCallback(async (
-    action: ContentAgentAction
+    action: ContentAgentAction,
+    executionContext: ContentAgentExecutionContext = {}
   ): Promise<ContentAgentToolResult | null> => {
     const startedAt = Date.now();
     setWorking(true);
     setWorkingLabel(contentAgentWorkingLabel(action));
 
     try {
-      const result = await executeAction(action);
+      const result = await executeAction(action, executionContext);
       appendTurn(contentAgentResultTurn(nextTurnId(), action, result));
 
       if (result.status === "requires_input") {
@@ -122,7 +124,10 @@ export function useContentAgentConversationController({
 
     const pending = pendingActionRef.current;
     if (pending) {
-      return runResolvedAction(continueContentAgentAction(pending, trimmed));
+      return runResolvedAction(
+        continueContentAgentAction(pending, trimmed),
+        { inputText: trimmed }
+      );
     }
 
     setWorking(true);
@@ -133,7 +138,7 @@ export function useContentAgentConversationController({
       const action = await resolveMessage(trimmed, context);
       setWorking(false);
       setWorkingLabel(null);
-      return runResolvedAction(action);
+      return runResolvedAction(action, { inputText: trimmed });
     } catch (error) {
       const duration = Math.max(1, Math.round((Date.now() - routeStartedAt) / 1000));
       setWorkDurationSeconds(duration);
@@ -155,7 +160,9 @@ export function useContentAgentConversationController({
   ) => {
     if (working) return null;
     const action = contentAgentActionForButton(tool, options);
-    return runResolvedAction(action);
+    return runResolvedAction(action, {
+      inputText: options.inputText?.trim() || undefined,
+    });
   }, [runResolvedAction, working]);
 
   const clearConversation = useCallback(() => {
