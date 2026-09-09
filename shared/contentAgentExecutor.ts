@@ -55,13 +55,18 @@ export function assertContentAgentActionExecutable(action: ContentAgentAction): 
       "This action needs a current Reel or script."
     );
   }
+}
 
+function contentAgentPreflightResult(
+  action: ContentAgentAction
+): ContentAgentToolResult | null {
   if (action.tool === "remake_social_video" && !action.sourceUrl?.trim()) {
-    throw new ContentAgentExecutionError(
-      action.tool,
-      "I need a public Instagram, TikTok, or YouTube link to remake."
-    );
+    return {
+      status: "requires_input",
+      message: "Paste the Instagram, TikTok, or YouTube link you want me to remake.",
+    };
   }
+  return null;
 }
 
 /**
@@ -76,6 +81,9 @@ export async function executeContentAgentAction(
   deps: ContentAgentExecutorDeps
 ): Promise<ContentAgentToolResult> {
   assertContentAgentActionExecutable(action);
+
+  const preflight = contentAgentPreflightResult(action);
+  if (preflight) return preflight;
 
   switch (action.tool) {
     case "write_viral_script":
