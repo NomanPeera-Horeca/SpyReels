@@ -3,6 +3,7 @@ import { trpc } from "@/lib/trpc";
 import {
   contentAgentActionForButton,
   executeContentAgentAction,
+  type ContentAgentExecutionContext as ToolExecutionContext,
   type ContentAgentExecutorDeps,
   type ContentAgentToolResult,
 } from "@shared/contentAgentExecutor";
@@ -12,7 +13,7 @@ import type {
 } from "@shared/contentAgentTools";
 import type { CoachCapabilityId } from "@shared/studioCoachUi";
 
-export type ContentAgentExecutionContext = {
+export type ContentAgentRoutingContext = {
   activeScriptId?: number | null;
   attachedPlanCardId?: number | null;
   capabilityId?: CoachCapabilityId;
@@ -23,6 +24,7 @@ export type ContentAgentButtonOptions = {
   sourceUrl?: string | null;
   scheduleText?: string | null;
   refineInstruction?: string | null;
+  inputText?: string | null;
 };
 
 /**
@@ -37,8 +39,11 @@ export function useContentAgentExecutor(deps: ContentAgentExecutorDeps) {
   const resolveIntentMutation = trpc.studio.resolveIntent.useMutation();
 
   const executeAction = useCallback(
-    async (action: ContentAgentAction): Promise<ContentAgentToolResult> => {
-      return executeContentAgentAction(action, deps);
+    async (
+      action: ContentAgentAction,
+      executionContext: ToolExecutionContext = {}
+    ): Promise<ContentAgentToolResult> => {
+      return executeContentAgentAction(action, deps, executionContext);
     },
     [deps]
   );
@@ -46,7 +51,7 @@ export function useContentAgentExecutor(deps: ContentAgentExecutorDeps) {
   const resolveMessage = useCallback(
     async (
       message: string,
-      context: ContentAgentExecutionContext = {}
+      context: ContentAgentRoutingContext = {}
     ): Promise<ContentAgentAction> => {
       const trimmed = message.trim();
       if (!trimmed) {
@@ -67,10 +72,11 @@ export function useContentAgentExecutor(deps: ContentAgentExecutorDeps) {
   const executeMessage = useCallback(
     async (
       message: string,
-      context: ContentAgentExecutionContext = {}
+      context: ContentAgentRoutingContext = {}
     ): Promise<{ action: ContentAgentAction; result: ContentAgentToolResult }> => {
-      const action = await resolveMessage(message, context);
-      const result = await executeAction(action);
+      const trimmed = message.trim();
+      const action = await resolveMessage(trimmed, context);
+      const result = await executeAction(action, { inputText: trimmed });
       return { action, result };
     },
     [executeAction, resolveMessage]
@@ -82,7 +88,9 @@ export function useContentAgentExecutor(deps: ContentAgentExecutorDeps) {
       options: ContentAgentButtonOptions = {}
     ): Promise<{ action: ContentAgentAction; result: ContentAgentToolResult }> => {
       const action = contentAgentActionForButton(tool, options);
-      const result = await executeAction(action);
+      const result = await executeAction(action, {
+        inputText: options.inputText?.trim() || undefined,
+      });
       return { action, result };
     },
     [executeAction]
