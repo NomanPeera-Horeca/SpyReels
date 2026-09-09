@@ -9,6 +9,14 @@ import { carouselStudioRouter } from "./routers/carouselStudioRouter";
 import { videoBrollRouter } from "./routers/videoBrollRouter";
 import { brollLandingRouter } from "./routers/brollLandingRouter";
 import { watermarkJobsRouter } from "./routers/watermarkJobsRouter";
+import { activityRouter } from "./routers/activityRouter";
+import { authRouter } from "./routers/authRouter";
+import { billingRouter } from "./routers/billingRouter";
+import { tagsRouter } from "./routers/tagsRouter";
+import { googleDocsRouter } from "./routers/googleDocsRouter";
+import { preferencesRouter } from "./routers/preferencesRouter";
+import { telegramRouter } from "./routers/telegramRouter";
+import { libraryRouter } from "./routers/libraryRouter";
 import { viralPostsRouter } from "./viralPosts/router";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -1081,107 +1089,12 @@ export const appRouter = router({
 
   viralPosts: viralPostsRouter,
 
-  activity: router({
-    recordHeartbeat: protectedProcedure
-      .input(z.object({ seconds: z.number().min(1).max(120).default(60) }))
-      .mutation(async ({ ctx, input }) => {
-        const { addUserActiveSeconds } = await import("./userActivity");
-        await addUserActiveSeconds(ctx.user.id, input.seconds);
-        return { ok: true as const };
-      }),
-  }),
+  activity: activityRouter,
 
   // ── Billing & Subscription ──
-  billing: router({
-    subscription: protectedProcedure.query(async ({ ctx }) => {
-      const sub = await getUserSubscription(ctx.user.id);
-      const limits = getPlanLimits(sub.plan as PlanId);
-      const usage = await getMonthlyUsage(ctx.user.id);
-      return { ...sub, limits, usage };
-    }),
+  billing: billingRouter,
 
-    usage: protectedProcedure.query(async ({ ctx }) => {
-      const sub = await getUserSubscription(ctx.user.id);
-      const limits = getPlanLimits(sub.plan as PlanId);
-      const usage = await getMonthlyUsage(ctx.user.id);
-      return { limits, usage, plan: sub.plan };
-    }),
-
-    plans: publicProcedure.query(() => {
-      return Object.entries(PLANS).map(([id, plan]) => ({
-        planId: id,
-        ...plan,
-      }));
-    }),
-
-    checkout: protectedProcedure
-      .input(z.object({
-        planId: z.enum(["starter", "pro", "business", "agency"]),
-        interval: z.enum(["monthly", "yearly"]),
-        origin: z.string(),
-        referralId: z.string().optional(),
-      }))
-      .mutation(async ({ ctx, input }) => {
-        const url = await createCheckoutSession({
-          userId: ctx.user.id,
-          email: ctx.user.email || "",
-          name: ctx.user.name || "",
-          planId: input.planId as PlanId,
-          interval: input.interval as BillingInterval,
-          origin: input.origin,
-          referralId: input.referralId,
-        });
-        return { url };
-      }),
-
-    portal: protectedProcedure
-      .input(z.object({ origin: z.string() }))
-      .mutation(async ({ ctx, input }) => {
-        const url = await createPortalSession(ctx.user.id, input.origin);
-        return { url };
-      }),
-
-    checkLimit: protectedProcedure
-      .input(z.object({
-        action: z.enum([
-          "scrapeCount", "searchCount", "transcribeCount",
-          "recreateCount", "rewriteCount", "exportCount",
-          "brollGenerationCount",
-          "extensionSortCount", "extensionSaveCount",
-          "extensionTranscribeCount", "extensionRecreateCount",
-        ]),
-      }))
-      .query(async ({ ctx, input }) => {
-        return checkUsageLimit(ctx.user.id, input.action as any, ctx.user.openId, {
-          email: ctx.user.email,
-          role: ctx.user.role,
-        });
-      }),
-
-    trackUsage: protectedProcedure
-      .input(z.object({
-        action: z.enum([
-          "scrapeCount", "searchCount", "transcribeCount",
-          "recreateCount", "rewriteCount", "exportCount",
-          "brollGenerationCount",
-          "extensionSortCount", "extensionSaveCount",
-          "extensionTranscribeCount", "extensionRecreateCount",
-        ]),
-      }))
-      .mutation(async ({ ctx, input }) => {
-        await incrementUsage(ctx.user.id, input.action as any);
-        return { success: true };
-      }),
-  }),
-
-  auth: router({
-    me: publicProcedure.query((opts) => opts.ctx.user),
-    logout: publicProcedure.mutation(({ ctx }) => {
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.clearCookie(COOKIE_NAME, { ...cookieOptions, maxAge: -1 });
-      return { success: true } as const;
-    }),
-  }),
+  auth: authRouter,
 
   // ── Scrape Jobs ──
   scrape: router({
@@ -6393,201 +6306,13 @@ Rules:
   }),
 
   // ── Script Tags ──
-  tags: router({
-    /** List all tags for the user (creates defaults if needed) */
-    list: protectedProcedure.query(async ({ ctx }) => {
-      await ensureDefaultTags(ctx.workspaceId, ctx.user.id);
-      return getScriptTagsByWorkspace(ctx.workspaceId);
-    }),
-
-    /** Create a custom tag */
-    create: protectedProcedure
-      .input(z.object({ name: z.string().min(1), color: z.string().min(1) }))
-      .mutation(async ({ ctx, input }) => {
-        const id = await createScriptTag({
-          userId: ctx.user.id,
-          workspaceId: ctx.workspaceId,
-          name: input.name,
-          color: input.color,
-          isDefault: 0,
-          sortOrder: 99,
-        });
-        return { id };
-      }),
-
-    /** Update a tag */
-    update: protectedProcedure
-      .input(z.object({ id: z.number(), name: z.string().optional(), color: z.string().optional() }))
-      .mutation(async ({ ctx, input }) => {
-        await assertTagInWorkspace(input.id, ctx);
-        const updateData: Parameters<typeof updateScriptTag>[1] = {};
-        if (input.name) updateData.name = input.name;
-        if (input.color) updateData.color = input.color;
-        await updateScriptTag(input.id, updateData);
-        return { success: true };
-      }),
-
-    /** Delete a custom tag */
-    delete: protectedProcedure
-      .input(z.object({ id: z.number() }))
-      .mutation(async ({ ctx, input }) => {
-        await assertTagInWorkspace(input.id, ctx);
-        await deleteScriptTag(input.id);
-        return { success: true };
-      }),
-  }),
+  tags: tagsRouter,
 
   // ── Google Docs Export ──
-  googleDocs: router({
-    /** Check if Google Docs credentials are configured */
-    isConfigured: protectedProcedure.query(() => {
-      return { configured: isGoogleDocsConfigured() };
-    }),
-
-    /** Export a script to Google Docs */
-    exportScript: protectedProcedure
-      .input(z.object({
-        title: z.string().min(1),
-        content: z.string().min(1),
-        sourceHandle: z.string().nullable().optional(),
-        gradeLevel: z.string().nullable().optional(),
-        postDate: z.string().nullable().optional(),
-        wordCount: z.number().nullable().optional(),
-        notes: z.string().nullable().optional(),
-        shareWithEmail: z.string().email().optional(),
-      }))
-      .mutation(async ({ ctx, input }) => {
-        if (!isGoogleDocsConfigured()) {
-          throw new TRPCError({
-            code: "PRECONDITION_FAILED",
-            message: "Google credentials not configured. Please add GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_PRIVATE_KEY in Settings > Secrets.",
-          });
-        }
-
-        try {
-          const result = await exportToGoogleDocs(
-            {
-              title: input.title,
-              content: input.content,
-              sourceHandle: input.sourceHandle,
-              gradeLevel: input.gradeLevel,
-              postDate: input.postDate,
-              wordCount: input.wordCount,
-              notes: input.notes,
-            },
-            input.shareWithEmail || ctx.user.email || undefined
-          );
-
-          return {
-            documentUrl: result.documentUrl,
-            documentId: result.documentId,
-          };
-        } catch (err: unknown) {
-          const message = err instanceof Error ? err.message : "Failed to create Google Doc";
-          throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message });
-        }
-      }),
-  }),
+  googleDocs: googleDocsRouter,
 
   // ── User Preferences ──
-  preferences: router({
-    get: protectedProcedure.query(async ({ ctx }) => {
-      const prefs = await getUserPreferences(ctx.user.id);
-      return prefs || { timezone: "America/Chicago" };
-    }),
-    latestDiscoveryBusinessDescription: protectedProcedure.query(
-      async ({ ctx }) => {
-        const db = await getDb();
-        if (!db) return null;
-
-        const rows = await db
-          .select({
-            businessDescription: discoverySearches.businessDescription,
-          })
-          .from(discoverySearches)
-          .where(eq(discoverySearches.userId, ctx.user.id))
-          .orderBy(desc(discoverySearches.createdAt))
-          .limit(1);
-
-        const text = rows[0]?.businessDescription?.trim();
-        return text && text.length > 0 ? text : null;
-      }
-    ),
-    update: protectedProcedure
-      .input(z.object({ timezone: z.string().min(1).max(64) }))
-      .mutation(async ({ ctx, input }) => {
-        await upsertUserPreferences(ctx.user.id, { timezone: input.timezone });
-        return { success: true };
-      }),
-    updateProfile: protectedProcedure
-      .input(
-        z.object({
-          businessDescription: z.string().max(1000).nullable().optional(),
-          targetAudience: z.string().max(1000).nullable().optional(),
-        })
-      )
-      .mutation(async ({ ctx, input }) => {
-        const normalize = (
-          value: string | null | undefined
-        ): string | null | undefined => {
-          if (value === undefined) return undefined;
-          if (value === null) return null;
-          const trimmed = value.trim();
-          return trimmed.length > 0 ? trimmed : null;
-        };
-
-        const patch: Partial<Pick<User, "businessDescription" | "targetAudience">> =
-          {};
-        const businessDescription = normalize(input.businessDescription);
-        const targetAudience = normalize(input.targetAudience);
-        if (businessDescription !== undefined) {
-          patch.businessDescription = businessDescription;
-        }
-        if (targetAudience !== undefined) {
-          patch.targetAudience = targetAudience;
-        }
-        if (Object.keys(patch).length === 0) {
-          return { success: true as const };
-        }
-
-        await updateUserPersonalization(ctx.user.id, patch);
-
-        const state = await getOnboardingState(ctx.user.id);
-        const nextBusiness =
-          businessDescription !== undefined
-            ? businessDescription
-            : state?.businessDescription?.trim() ?? null;
-        const nextAudience =
-          targetAudience !== undefined
-            ? targetAudience
-            : state?.targetAudience?.trim() ?? null;
-
-        if (nextBusiness) {
-          const combined = [nextBusiness, nextAudience].filter(Boolean).join(" ");
-          const inferred = inferOnboardingSlugsFromDescription(combined);
-          const existing = state?.selectedNicheSlugs ?? [];
-          const merged = mergeInferredNicheSlugs(inferred, existing);
-          const changed =
-            merged.length !== existing.length ||
-            merged.some((slug, index) => slug !== existing[index]);
-          if (changed && merged.length > 0) {
-            const db = await getDb();
-            if (!db) {
-              throw new TRPCError({
-                code: "INTERNAL_SERVER_ERROR",
-                message: "Database unavailable",
-              });
-            }
-            await db
-              .update(users)
-              .set({ selectedNicheSlugs: merged })
-              .where(eq(users.id, ctx.user.id));
-          }
-        }
-
-        return { success: true as const };
-      }),
-  }),
+  preferences: preferencesRouter,
 
   // ── Onboarding state (first-run experience flags + flow) ──
   onboarding: router({
@@ -7024,70 +6749,7 @@ Rules:
   }),
 
   // ── Telegram Bot Connection ──
-  telegram: router({
-    /** Get current connection status */
-    status: protectedProcedure.query(async ({ ctx }) => {
-      const connection = await getTelegramConnectionByUserId(ctx.user.id);
-      const botInfo = await getTelegramBotInfo();
-      return {
-        connected: connection?.isConnected === 1,
-        telegramUsername: connection?.telegramUsername || null,
-        botUsername: botInfo?.username || null,
-        botName: botInfo?.name || null,
-      };
-    }),
-
-    /** Generate a new link code for connecting Telegram */
-    generateLinkCode: protectedProcedure.mutation(async ({ ctx }) => {
-      const code = crypto.randomBytes(3).toString("hex").toUpperCase().slice(0, 6);
-      const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
-      // Check if user already has a connection
-      const existing = await getTelegramConnectionByUserId(ctx.user.id);
-      if (existing) {
-        // Update existing connection with new code
-        await updateTelegramConnection(existing.id, {
-          linkCode: code,
-          linkCodeExpiresAt: expiresAt,
-          isConnected: 0,
-          telegramChatId: null,
-        });
-      } else {
-        await createTelegramConnection({
-          userId: ctx.user.id,
-          linkCode: code,
-          linkCodeExpiresAt: expiresAt,
-        });
-      }
-
-      const botInfo = await getTelegramBotInfo();
-      return {
-        code,
-        expiresAt: expiresAt.toISOString(),
-        botUsername: botInfo?.username || "SpyReelsBot",
-      };
-    }),
-
-    /** Disconnect Telegram */
-    disconnect: protectedProcedure.mutation(async ({ ctx }) => {
-      const connection = await getTelegramConnectionByUserId(ctx.user.id);
-      if (connection) {
-        await deleteTelegramConnection(connection.id);
-      }
-      return { success: true };
-    }),
-
-    /** Manually set up webhook (admin only) */
-    setupWebhook: protectedProcedure
-      .input(z.object({ baseUrl: z.string().url() }))
-      .mutation(async ({ ctx, input }) => {
-        if (ctx.user.role !== "admin" && ctx.user.openId !== process.env.OWNER_OPEN_ID) {
-          throw new TRPCError({ code: "FORBIDDEN" });
-        }
-        const success = await setupTelegramWebhook(input.baseUrl);
-        return { success };
-      }),
-  }),
+  telegram: telegramRouter,
 
   // ── Collected Reels (from Telegram bot, URL paste, etc.) ──
   collected: router({
@@ -7989,32 +7651,7 @@ Rules:
   }),
 
   // ── Library: Central hub for all transcripts & scripts ──
-  library: router({
-    transcripts: protectedProcedure
-      .input(z.object({
-        search: z.string().optional(),
-        source: z.enum(["scraped", "collected"]).optional(),
-        limit: z.number().min(1).max(100).default(50),
-        offset: z.number().min(0).default(0),
-      }).optional())
-      .query(async ({ ctx, input }) => {
-        const opts = input || {};
-        return getLibraryTranscripts(ctx.workspaceId, opts);
-      }),
-
-    scripts: protectedProcedure
-      .input(z.object({
-        search: z.string().optional(),
-        source: z.enum(["saved", "recreated", "idea"]).optional(),
-        status: z.string().optional(),
-        limit: z.number().min(1).max(100).default(50),
-        offset: z.number().min(0).default(0),
-      }).optional())
-      .query(async ({ ctx, input }) => {
-        const opts = input || {};
-        return getLibraryScripts(ctx.workspaceId, opts);
-      }),
-  }),
+  library: libraryRouter,
 
   // ── Brand Coach (AI viral-potential scoring) ──
   brandCoach: router({
