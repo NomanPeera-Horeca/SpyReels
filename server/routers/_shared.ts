@@ -1,3 +1,5 @@
+import { getOnboardingState, updateOnboardingState, getRecreatedScript, getScrapeJob } from "../db";
+import { getMonthlyUsage } from "../stripe/stripe-service";
 import type { Reel } from "../../drizzle/schema";
 import { classifyTranscript } from "../_core/classifyTranscript";
 import { analyzeHook } from "../analyzeHook";
@@ -260,5 +262,121 @@ export async function runFeaturedReelTranscription(reel: {
   } finally {
     releaseTranscriptionSlot();
   }
+}
+
+
+
+export async function isFirstRemakeUsageBypassEligible(
+  userId: number,
+  hasCompletedFirstSpy: boolean,
+  usageField: "transcribeCount" | "recreateCount"
+): Promise<boolean> {
+  if (hasCompletedFirstSpy) return false;
+  const usage = await getMonthlyUsage(userId);
+  const used = usage[usageField] ?? 0;
+  return used === 0;
+}
+
+
+export async function maybeMarkFirstSpyCompletedForUser(userId: number): Promise<void> {
+  const onboardingState = await getOnboardingState(userId);
+  if (!onboardingState) return;
+  if (onboardingState.hasCompletedFirstSpy) return;
+  await updateOnboardingState(userId, { hasCompletedFirstSpy: true });
+}
+
+
+export async function maybeMarkFirstSpyCompletedFromFeaturedScript(scriptId: number): Promise<void> {
+  try {
+    const script = await getRecreatedScript(scriptId);
+    if (!script?.featuredReelId) return;
+    await maybeMarkFirstSpyCompletedForUser(script.userId);
+  } catch (error) {
+    console.warn(
+      `[maybeMarkFirstSpyCompletedFromFeaturedScript] Non-fatal error for script ${scriptId}:`,
+      error
+    );
+  }
+}
+
+
+export async function maybeMarkFirstSpyCompleted(jobId: number): Promise<void> {
+  try {
+    const job = await getScrapeJob(jobId);
+    if (!job) return;
+    if (job.isDemo) return;
+    await maybeMarkFirstSpyCompletedForUser(job.userId);
+  } catch (error) {
+    console.warn(
+      `[maybeMarkFirstSpyCompleted] Non-fatal error for job ${jobId}:`,
+      error
+    );
+  }
+}
+
+
+export const PUBLIC_TIKTOK_DEMO_CACHE_TTL_MS = 10 * 60 * 1000;
+
+export const PUBLIC_TIKTOK_DEMO_EMPTY_CACHE_TTL_MS = 90 * 1000;
+
+export type PublicTikTokDemoPayload = {
+  handle: string;
+  totalVideoCount: number;
+  medianViewCount: number;
+  followerCount: number;
+  videos: {
+    id: string;
+    awemeId: string;
+    caption: string;
+    viewCount: number;
+    likeCount: number;
+    commentCount: number;
+    shareCount: number;
+    engagementRate: number;
+    thumbnailUrl: string;
+    durationSec: number | null;
+    postedAt: Date;
+    videoPageUrl: string;
+  }[];
+};
+
+export const publicTikTokDemoCache = new Map<
+  string,
+  { expiresAt: number; payload: PublicTikTokDemoPayload }
+>();
+
+export function emptyPublicTikTokDemoPayload(handle: string): PublicTikTokDemoPayload {
+  return {
+    handle,
+    totalVideoCount: 0,
+    medianViewCount: 0,
+    followerCount: 0,
+    videos: [],
+  };
+}
+
+
+export function readPublicTikTokDemoCache(handle: string): PublicTikTokDemoPayload | null {
+  const hit = publicTikTokDemoCache.get(handle);
+  if (!hit) return null;
+  if (Date.now() > hit.expiresAt) {
+    publicTikTokDemoCache.delete(handle);
+    return null;
+  }
+  return hit.payload;
+}
+
+
+export function writePublicTikTokDemoCache(
+  handle: string,
+  payload: PublicTikTokDemoPayload
+): void {
+  const empty = payload.videos.length === 0;
+  publicTikTokDemoCache.set(handle, {
+    expiresAt:
+      Date.now() +
+      (empty ? PUBLIC_TIKTOK_DEMO_EMPTY_CACHE_TTL_MS : PUBLIC_TIKTOK_DEMO_CACHE_TTL_MS),
+    payload,
+  });
 }
 
