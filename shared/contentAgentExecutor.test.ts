@@ -59,7 +59,21 @@ describe("Content Agent executor", () => {
     await executeContentAgentAction(action, d);
 
     expect(d[handler]).toHaveBeenCalledTimes(1);
-    expect(d[handler]).toHaveBeenCalledWith(action);
+    expect(d[handler]).toHaveBeenCalledWith(action, {});
+  });
+
+  it("preserves raw creator input for workflows that need the original message", async () => {
+    const d = deps();
+    const action: ContentAgentAction = {
+      tool: "convert_existing_script",
+      confidence: 96,
+      source: "rule",
+    };
+    const inputText = "This is the full pasted creator script that must survive intent routing.";
+
+    await executeContentAgentAction(action, d, { inputText });
+
+    expect(d.convertExistingScript).toHaveBeenCalledWith(action, { inputText });
   });
 
   it("blocks script-required tools without a current script", async () => {
