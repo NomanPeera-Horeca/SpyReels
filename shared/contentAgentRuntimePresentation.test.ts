@@ -24,6 +24,22 @@ describe("contentAgentRuntimePresentation", () => {
     expect(turn.detail).toBe("Restaurant pricing Reel");
   });
 
+  it("uses a truthful started receipt for a handoff action", () => {
+    const turn = contentAgentResultTurn(
+      "started",
+      {
+        tool: "create_carousel",
+        confidence: 100,
+        source: "rule",
+        scriptId: 12,
+      },
+      { status: "started" }
+    );
+
+    expect(turn.kind).toBe("action_receipt");
+    expect(turn.text).toBe("Opening Carousel Studio");
+  });
+
   it("turns missing input into a conversational clarification", () => {
     const turn = contentAgentResultTurn(
       "2",
