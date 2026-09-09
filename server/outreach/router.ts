@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { TRPCError } from "@trpc/server";
 import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
 import { z } from "zod";
+import { reportDirectAnthropicUsage } from "../_core/llmMeasured";
 import {
   outreachEmails,
   savedScripts,
@@ -201,6 +202,8 @@ async function generateDraftForUser(userId: number): Promise<{
       },
     ],
   });
+
+  reportDirectAnthropicUsage(response, "outreach_email_draft");
 
   const textBlock = response.content.find((block) => block.type === "text");
   if (!textBlock || textBlock.type !== "text") {

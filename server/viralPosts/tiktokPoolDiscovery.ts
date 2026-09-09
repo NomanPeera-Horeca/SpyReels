@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { reportDirectAnthropicUsage } from "../_core/llmMeasured";
 import {
   searchTikTokKeyword,
   searchTikTokTop,
@@ -111,6 +112,8 @@ Return {"queries":["..."]}.`,
         },
       ],
     });
+    reportDirectAnthropicUsage(response, "tiktok_pool_search_query_gen");
+
     const textBlock = response.content.find((block) => block.type === "text");
     const raw = textBlock && textBlock.type === "text" ? textBlock.text : "{}";
     const parsed = JSON.parse(raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "")) as {
