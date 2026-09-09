@@ -110,7 +110,7 @@ function jobStatusLabel(job: { status: string; failureReason?: string | null }):
     case "account_private":
       return "Account is private";
     case "instagram_rate_limited":
-      return "Instagram rate-limited, try again soon";
+      return "Instagram is temporarily unavailable, try again soon";
     case "account_too_large":
       return "Account too large to analyze";
     case "unknown":

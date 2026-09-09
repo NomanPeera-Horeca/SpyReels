@@ -4,6 +4,7 @@
  */
 
 import { MIN_SPY_DISPLAY_REELS } from "@shared/spyReelsLimits";
+import { normalizeInstagramHandle } from "@shared/instagramHandle";
 import { parseInstagramReelShortcode } from "./instagramUrl";
 
 const API_BASE = "https://api.scrapecreators.com";
@@ -246,6 +247,112 @@ export interface ProfileInfo {
   externalUrl: string;
 }
 
+export type InstagramResolutionMethod =
+  | "profile_handle"
+  | "native_search"
+  | "user_id";
+
+export interface InstagramIdentity extends ProfileInfo {
+  requestedHandle: string;
+  resolutionMethod: InstagramResolutionMethod;
+  fallbackUsed: boolean;
+  /** True only when profile/basic-profile has positive gating/restriction evidence. */
+  mediaRestricted: boolean;
+}
+
+export const INSTAGRAM_RESTRICTED_MEDIA_MESSAGE =
+  "Instagram is restricting access to this account's media. We found the creator, but can't retrieve their reels right now.";
+
+const MEDIA_RESTRICTION_TEXT =
+  /restrict|age.?gated|years old|log in|login|must be \d+/i;
+
+/** Confirmed: every supported resolution strategy failed to find this handle. */
+export class InstagramHandleNotFoundError extends Error {
+  readonly failureClass = "handle_not_found" as const;
+  constructor(handle: string) {
+    super(
+      `User "@${handle}" not found. Please check the username and try again.`
+    );
+    this.name = "InstagramHandleNotFoundError";
+  }
+}
+
+/** Transient ScrapeCreators/Instagram failure. Retryable; not proof the account is missing. */
+export class InstagramProviderError extends Error {
+  readonly failureClass = "provider_resolution_failed" as const;
+  readonly httpStatus: number | null;
+  constructor(
+    handle: string,
+    opts?: { httpStatus?: number | null; detail?: string }
+  ) {
+    super(
+      `Instagram could not resolve @${handle} right now. This is usually temporary. Please try again in a few minutes.`
+    );
+    this.name = "InstagramProviderError";
+    this.httpStatus = opts?.httpStatus ?? null;
+  }
+}
+
+export class InstagramPrivateAccountError extends Error {
+  readonly failureClass = "account_private" as const;
+  constructor(handle: string) {
+    super(
+      `The account @${handle} is private. Only public accounts can be analyzed.`
+    );
+    this.name = "InstagramPrivateAccountError";
+  }
+}
+
+/** Identity succeeded, but Instagram is gating the media grid. */
+export class InstagramRestrictedMediaError extends Error {
+  readonly failureClass = "media_restricted" as const;
+  constructor() {
+    super(INSTAGRAM_RESTRICTED_MEDIA_MESSAGE);
+    this.name = "InstagramRestrictedMediaError";
+  }
+}
+
+export function isInstagramProviderError(
+  error: unknown
+): error is InstagramProviderError {
+  return error instanceof InstagramProviderError;
+}
+
+export function isInstagramRestrictedMediaError(
+  error: unknown
+): error is InstagramRestrictedMediaError {
+  return error instanceof InstagramRestrictedMediaError;
+}
+
+/**
+ * Positive gating/restriction evidence from a profile or basic-profile payload.
+ * Empty reels alone are not enough.
+ */
+export function hasInstagramMediaRestriction(data: unknown): boolean {
+  if (!data || typeof data !== "object") return false;
+  const root = data as Record<string, unknown>;
+  const nested =
+    root.data && typeof root.data === "object"
+      ? (root.data as Record<string, unknown>)
+      : null;
+  const user =
+    nested && nested.user && typeof nested.user === "object"
+      ? (nested.user as Record<string, unknown>)
+      : root;
+
+  if (user.restricted_by_viewer === true) return true;
+
+  const gatingCandidates = [root.gating, user.gating];
+  for (const gating of gatingCandidates) {
+    if (!gating || typeof gating !== "object") continue;
+    const g = gating as Record<string, unknown>;
+    const title = typeof g.title === "string" ? g.title : "";
+    const description = typeof g.description === "string" ? g.description : "";
+    if (MEDIA_RESTRICTION_TEXT.test(`${title} ${description}`)) return true;
+  }
+  return false;
+}
+
 type VendorEnvelopeFailure = "rate_limit" | "not_found" | "private" | "generic";
 
 function readVendorEnvelope(data: unknown): {
@@ -302,106 +409,522 @@ function shouldRetryVendorFailure(kind: VendorEnvelopeFailure): boolean {
   return kind === "rate_limit" || kind === "generic";
 }
 
-export async function fetchProfile(handle: string): Promise<ProfileInfo> {
+type ProfileLookupResult =
+  | {
+      ok: true;
+      profile: ProfileInfo;
+      httpStatus: number;
+      mediaRestricted: boolean;
+    }
+  | {
+      ok: false;
+      kind: "not_found" | "private" | "provider";
+      httpStatus: number;
+      detail: string;
+    };
+
+function profileFromGraphUser(user: any, fallbackHandle: string): ProfileInfo {
+  return {
+    userId: String(user.id ?? ""),
+    username: user.username || fallbackHandle,
+    isPrivate: !!user.is_private,
+    followerCount: user.edge_followed_by?.count ?? 0,
+    fullName: user.full_name || "",
+    biography: user.biography || "",
+    profilePicUrl: user.profile_pic_url_hd || user.profile_pic_url || "",
+    postCount: user.edge_owner_to_timeline_media?.count ?? user.media_count ?? 0,
+    followingCount: user.edge_follow?.count ?? user.following_count ?? 0,
+    isVerified: !!user.is_verified,
+    category: user.category_name || user.category || "",
+    externalUrl: user.external_url || "",
+  };
+}
+
+function profileFromBasicProfile(data: any, fallbackHandle: string): ProfileInfo {
+  return {
+    userId: String(data?.id ?? data?.pk ?? ""),
+    username: data?.username || fallbackHandle,
+    isPrivate: !!data?.is_private,
+    followerCount: data?.follower_count ?? 0,
+    fullName: data?.full_name || "",
+    biography: data?.biography || "",
+    profilePicUrl:
+      data?.hd_profile_pic_url_info?.url || data?.profile_pic_url || "",
+    postCount: data?.media_count ?? 0,
+    followingCount: data?.following_count ?? 0,
+    isVerified: !!data?.is_verified,
+    category: data?.category || data?.category_name || "",
+    externalUrl: data?.external_url || "",
+  };
+}
+
+function extractNativeSearchUsers(data: unknown): Array<{
+  id: string;
+  username: string;
+  fullName: string;
+  profilePicUrl: string;
+  isVerified: boolean;
+}> {
+  if (!data || typeof data !== "object") return [];
+  const root = data as Record<string, unknown>;
+  const nested =
+    root.data && typeof root.data === "object"
+      ? (root.data as Record<string, unknown>)
+      : null;
+  const raw = Array.isArray(nested?.users)
+    ? nested.users
+    : Array.isArray(root.users)
+      ? root.users
+      : [];
+
+  const users: Array<{
+    id: string;
+    username: string;
+    fullName: string;
+    profilePicUrl: string;
+    isVerified: boolean;
+  }> = [];
+
+  for (const row of raw) {
+    if (!row || typeof row !== "object") continue;
+    const r = row as Record<string, unknown>;
+    const inner =
+      r.user && typeof r.user === "object"
+        ? (r.user as Record<string, unknown>)
+        : r;
+    const username = typeof inner.username === "string" ? inner.username : "";
+    const id = String(inner.id ?? inner.pk ?? r.id ?? r.pk ?? "");
+    if (!username || !id) continue;
+    users.push({
+      id,
+      username,
+      fullName: typeof inner.full_name === "string" ? inner.full_name : "",
+      profilePicUrl:
+        typeof inner.profile_pic_url === "string" ? inner.profile_pic_url : "",
+      isVerified: !!inner.is_verified,
+    });
+  }
+  return users;
+}
+
+/**
+ * Direct /v1/instagram/profile lookup by handle.
+ * 404 / vendor not_found is returned as `not_found` so callers can run the
+ * native-search recovery path. Rate limits and generic vendor flakes retry.
+ */
+async function lookupProfileByHandle(
+  handle: string
+): Promise<ProfileLookupResult> {
   const cleanHandle = handle.replace(/^@/, "").trim();
-  // ScrapeCreators occasionally responds with HTTP 200 plus an inline
-  // error envelope (e.g. `{error:"not_found", errorStatus:404,
-  // message:"Profile is restricted"}`) when one of their scraper accounts
-  // or proxies is blocked by Instagram for a given handle. The same call
-  // succeeds on a different attempt because they rotate accounts. Retry a
-  // moderate number of times before surfacing the error so verified public
-  // profiles don't get mislabelled as "not found".
-  //
-  // Observed base success rate for "hard" handles is ~1/6, so 5 attempts
-  // gets us to ~60% success per preview call. Backoff is short (600ms·N)
-  // because preview runs inline on handle change and a 30s spinner feels
-  // broken; the scrape worker can absorb extra latency separately by
-  // retrying the whole job if needed.
   const MAX_TRIES = 5;
   const BACKOFF_MS = 600;
+  let lastStatus = 0;
+  let lastDetail = "";
 
   for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
     const { status, data } = await scGet("/v1/instagram/profile", {
       handle: cleanHandle,
     });
+    lastStatus = status;
 
     if (status === 404) {
-      throw new Error(
-        `User "@${cleanHandle}" not found. Please check the username and try again.`
-      );
+      return {
+        ok: false,
+        kind: "not_found",
+        httpStatus: status,
+        detail: "http_404",
+      };
     }
     if (status === 429) {
       if (attempt < MAX_TRIES) {
         await sleep(2000 * attempt);
         continue;
       }
-      throw new Error(
-        `Instagram rate limit reached. Please wait a few minutes and try again.`
+      return {
+        ok: false,
+        kind: "provider",
+        httpStatus: status,
+        detail: "rate_limit",
+      };
+    }
+    if (status !== 200 || !data) {
+      lastDetail = `http_${status}`;
+      if (attempt < MAX_TRIES) {
+        await sleep(1000 * attempt);
+        continue;
+      }
+      return {
+        ok: false,
+        kind: "provider",
+        httpStatus: status,
+        detail: lastDetail,
+      };
+    }
+
+    const user = data?.data?.user;
+    if (user) {
+      return {
+        ok: true,
+        profile: profileFromGraphUser(user, cleanHandle),
+        httpStatus: status,
+        mediaRestricted: hasInstagramMediaRestriction(data),
+      };
+    }
+
+    const failureKind = classifyVendorEnvelopeFailure(data);
+    const { vendorError, vendorMsg } = readVendorEnvelope(data);
+    lastDetail = `${vendorError} ${vendorMsg}`.trim();
+
+    if (failureKind === "not_found") {
+      return {
+        ok: false,
+        kind: "not_found",
+        httpStatus: status,
+        detail: lastDetail || "vendor_not_found",
+      };
+    }
+    if (failureKind === "private") {
+      return {
+        ok: false,
+        kind: "private",
+        httpStatus: status,
+        detail: lastDetail || "private",
+      };
+    }
+    if (failureKind && shouldRetryVendorFailure(failureKind) && attempt < MAX_TRIES) {
+      console.warn(
+        `[Instagram] Vendor ${failureKind} envelope for @${cleanHandle} ` +
+          `(attempt ${attempt}/${MAX_TRIES}): ${lastDetail}`
       );
+      await sleep(BACKOFF_MS * attempt);
+      continue;
+    }
+    if (failureKind === "rate_limit") {
+      return {
+        ok: false,
+        kind: "provider",
+        httpStatus: status,
+        detail: lastDetail || "rate_limit",
+      };
+    }
+    return {
+      ok: false,
+      kind: "provider",
+      httpStatus: status,
+      detail: lastDetail || "missing_user",
+    };
+  }
+
+  return {
+    ok: false,
+    kind: "provider",
+    httpStatus: lastStatus,
+    detail: lastDetail || "exhausted_retries",
+  };
+}
+
+async function searchInstagramUsersNative(query: string): Promise<
+  | {
+      ok: true;
+      users: ReturnType<typeof extractNativeSearchUsers>;
+      httpStatus: number;
+    }
+  | {
+      ok: false;
+      kind: "provider";
+      httpStatus: number;
+      detail: string;
+    }
+> {
+  const MAX_TRIES = 3;
+  let lastStatus = 0;
+
+  for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
+    const { status, data } = await scGet("/v1/instagram/search", { query });
+    lastStatus = status;
+
+    if (status === 429) {
+      if (attempt < MAX_TRIES) {
+        await sleep(2000 * attempt);
+        continue;
+      }
+      return {
+        ok: false,
+        kind: "provider",
+        httpStatus: status,
+        detail: "search_rate_limit",
+      };
     }
     if (status !== 200 || !data) {
       if (attempt < MAX_TRIES) {
         await sleep(1000 * attempt);
         continue;
       }
-      throw new Error(`Failed to fetch profile for "@${cleanHandle}": HTTP ${status}`);
-    }
-
-    const user = data?.data?.user;
-    if (!user) {
-      const failureKind = classifyVendorEnvelopeFailure(data);
-      const { vendorError, vendorMsg } = readVendorEnvelope(data);
-
-      if (failureKind === "not_found") {
-        throw new Error(
-          `User "@${cleanHandle}" not found. Please check the username and try again.`
-        );
-      }
-      if (failureKind === "private") {
-        throw new Error(
-          `The account @${cleanHandle} is private. Only public accounts can be analyzed.`
-        );
-      }
-      if (failureKind && shouldRetryVendorFailure(failureKind) && attempt < MAX_TRIES) {
-        console.warn(
-          `[Instagram] Vendor ${failureKind} envelope for @${cleanHandle} ` +
-            `(attempt ${attempt}/${MAX_TRIES}): ${vendorError} ${vendorMsg}`.trim()
-        );
-        await sleep(BACKOFF_MS * attempt);
-        continue;
-      }
-      if (failureKind === "rate_limit") {
-        throw new Error(
-          `Instagram is temporarily rate limiting access to "@${cleanHandle}". ` +
-            `Please try again in a few minutes.`
-        );
-      }
-      if (failureKind === "generic") {
-        throw new Error(
-          `We couldn't load @${cleanHandle}'s profile right now. Please try again in a few minutes.`
-        );
-      }
-      throw new Error(`User "@${cleanHandle}" not found or the profile is not accessible.`);
+      return {
+        ok: false,
+        kind: "provider",
+        httpStatus: status,
+        detail: `search_http_${status}`,
+      };
     }
 
     return {
-      userId: String(user.id ?? ""),
-      username: user.username || cleanHandle,
-      isPrivate: !!user.is_private,
-      followerCount: user.edge_followed_by?.count ?? 0,
-      fullName: user.full_name || "",
-      biography: user.biography || "",
-      profilePicUrl: user.profile_pic_url_hd || user.profile_pic_url || "",
-      postCount: user.edge_owner_to_timeline_media?.count ?? user.media_count ?? 0,
-      followingCount: user.edge_follow?.count ?? user.following_count ?? 0,
-      isVerified: !!user.is_verified,
-      category: user.category_name || user.category || "",
-      externalUrl: user.external_url || "",
+      ok: true,
+      users: extractNativeSearchUsers(data),
+      httpStatus: status,
     };
   }
 
+  return {
+    ok: false,
+    kind: "provider",
+    httpStatus: lastStatus,
+    detail: "search_exhausted",
+  };
+}
+
+async function fetchProfileByUserId(
+  userId: string,
+  fallbackHandle: string
+): Promise<ProfileLookupResult> {
+  const { status, data } = await scGet("/v1/instagram/basic-profile", {
+    userId,
+  });
+
+  if (status === 404) {
+    return {
+      ok: false,
+      kind: "not_found",
+      httpStatus: status,
+      detail: "basic_profile_404",
+    };
+  }
+  if (status !== 200 || !data) {
+    return {
+      ok: false,
+      kind: "provider",
+      httpStatus: status,
+      detail: `basic_profile_http_${status}`,
+    };
+  }
+
+  const profile = profileFromBasicProfile(data, fallbackHandle);
+  if (!profile.userId) {
+    return {
+      ok: false,
+      kind: "provider",
+      httpStatus: status,
+      detail: "basic_profile_missing_id",
+    };
+  }
+  if (profile.isPrivate) {
+    return { ok: false, kind: "private", httpStatus: status, detail: "private" };
+  }
+  return {
+    ok: true,
+    profile,
+    httpStatus: status,
+    mediaRestricted: hasInstagramMediaRestriction(data),
+  };
+}
+
+function logIdentityResolution(args: {
+  requestedHandle: string;
+  method: InstagramResolutionMethod | "failed";
+  canonicalUsername?: string;
+  userId?: string;
+  fallbackUsed: boolean;
+  httpStatus: number | null;
+  failureClass?: string;
+}): void {
+  const handle = normalizeInstagramHandle(args.requestedHandle);
+  const parts = [
+    `requested=@${handle}`,
+    `method=${args.method}`,
+    `fallback=${args.fallbackUsed}`,
+    `httpStatus=${args.httpStatus ?? "n/a"}`,
+  ];
+  if (args.canonicalUsername) {
+    parts.push(`canonical=@${normalizeInstagramHandle(args.canonicalUsername)}`);
+  }
+  if (args.userId) parts.push(`userId=${args.userId}`);
+  if (args.failureClass) parts.push(`failure=${args.failureClass}`);
+  console.log(`[Instagram] identity ${parts.join(" ")}`);
+}
+
+/**
+ * Resolve a typed Instagram handle to a stable identity.
+ * Direct profile lookup first; native search only on 404 / not_found.
+ * Exact normalized username match required. Never guesses similar names.
+ */
+export async function resolveInstagramIdentity(
+  handle: string
+): Promise<InstagramIdentity> {
+  const requestedHandle = normalizeInstagramHandle(handle);
+  const direct = await lookupProfileByHandle(requestedHandle);
+
+  if (direct.ok) {
+    logIdentityResolution({
+      requestedHandle,
+      method: "profile_handle",
+      canonicalUsername: direct.profile.username,
+      userId: direct.profile.userId,
+      fallbackUsed: false,
+      httpStatus: direct.httpStatus,
+    });
+    return {
+      ...direct.profile,
+      requestedHandle,
+      resolutionMethod: "profile_handle",
+      fallbackUsed: false,
+      mediaRestricted: direct.mediaRestricted,
+    };
+  }
+
+  if (direct.kind === "private") {
+    logIdentityResolution({
+      requestedHandle,
+      method: "profile_handle",
+      fallbackUsed: false,
+      httpStatus: direct.httpStatus,
+      failureClass: "account_private",
+    });
+    throw new InstagramPrivateAccountError(requestedHandle);
+  }
+
+  if (direct.kind === "provider") {
+    logIdentityResolution({
+      requestedHandle,
+      method: "failed",
+      fallbackUsed: false,
+      httpStatus: direct.httpStatus,
+      failureClass: "provider_resolution_failed",
+    });
+    throw new InstagramProviderError(requestedHandle, {
+      httpStatus: direct.httpStatus,
+      detail: direct.detail,
+    });
+  }
+
+  const search = await searchInstagramUsersNative(requestedHandle);
+  if (!search.ok) {
+    logIdentityResolution({
+      requestedHandle,
+      method: "failed",
+      fallbackUsed: true,
+      httpStatus: search.httpStatus,
+      failureClass: "provider_resolution_failed",
+    });
+    throw new InstagramProviderError(requestedHandle, {
+      httpStatus: search.httpStatus,
+      detail: search.detail,
+    });
+  }
+
+  const exact = search.users.find(
+    (u) => normalizeInstagramHandle(u.username) === requestedHandle
+  );
+  if (!exact) {
+    logIdentityResolution({
+      requestedHandle,
+      method: "failed",
+      fallbackUsed: true,
+      httpStatus: search.httpStatus,
+      failureClass: "handle_not_found",
+    });
+    throw new InstagramHandleNotFoundError(requestedHandle);
+  }
+
+  const byId = await fetchProfileByUserId(exact.id, exact.username);
+  if (byId.ok) {
+    logIdentityResolution({
+      requestedHandle,
+      method: "native_search",
+      canonicalUsername: byId.profile.username,
+      userId: byId.profile.userId || exact.id,
+      fallbackUsed: true,
+      httpStatus: byId.httpStatus,
+    });
+    return {
+      ...byId.profile,
+      userId: byId.profile.userId || exact.id,
+      requestedHandle,
+      resolutionMethod: "native_search",
+      fallbackUsed: true,
+      mediaRestricted: byId.mediaRestricted,
+    };
+  }
+  if (byId.kind === "private") {
+    logIdentityResolution({
+      requestedHandle,
+      method: "native_search",
+      canonicalUsername: exact.username,
+      userId: exact.id,
+      fallbackUsed: true,
+      httpStatus: byId.httpStatus,
+      failureClass: "account_private",
+    });
+    throw new InstagramPrivateAccountError(
+      normalizeInstagramHandle(exact.username)
+    );
+  }
+
+  logIdentityResolution({
+    requestedHandle,
+    method: "native_search",
+    canonicalUsername: exact.username,
+    userId: exact.id,
+    fallbackUsed: true,
+    httpStatus: byId.httpStatus,
+  });
+  return {
+    userId: exact.id,
+    username: exact.username,
+    isPrivate: false,
+    followerCount: 0,
+    fullName: exact.fullName,
+    biography: "",
+    profilePicUrl: exact.profilePicUrl,
+    postCount: 0,
+    followingCount: 0,
+    isVerified: exact.isVerified,
+    category: "",
+    externalUrl: "",
+    requestedHandle,
+    resolutionMethod: "native_search",
+    fallbackUsed: true,
+    mediaRestricted: false,
+  };
+}
+
+export async function fetchProfile(handle: string): Promise<ProfileInfo> {
+  const cleanHandle = handle.replace(/^@/, "").trim();
+  const result = await lookupProfileByHandle(cleanHandle);
+
+  if (result.ok) return result.profile;
+  if (result.kind === "not_found") {
+    throw new Error(
+      `User "@${cleanHandle}" not found. Please check the username and try again.`
+    );
+  }
+  if (result.kind === "private") {
+    throw new Error(
+      `The account @${cleanHandle} is private. Only public accounts can be analyzed.`
+    );
+  }
+  if (result.httpStatus === 429 || result.detail === "rate_limit") {
+    throw new Error(
+      `Instagram is temporarily rate limiting access to "@${cleanHandle}". ` +
+        `Please try again in a few minutes.`
+    );
+  }
+  if (result.httpStatus && result.httpStatus !== 200) {
+    throw new Error(
+      `Failed to fetch profile for "@${cleanHandle}": HTTP ${result.httpStatus}`
+    );
+  }
   throw new Error(
-    `Failed to fetch profile for "@${cleanHandle}" after ${MAX_TRIES} attempts.`
+    `We couldn't load @${cleanHandle}'s profile right now. Please try again in a few minutes.`
   );
 }
 
@@ -415,15 +938,27 @@ interface ClipsPage {
   maxId: string | null;
 }
 
-async function fetchUserReelsPage(
-  handle: string,
+export function buildInstagramUserReelsQuery(
+  identity: { handle: string; userId?: string },
   maxId: string | null
-): Promise<ClipsPage> {
-  const cleanHandle = handle.replace(/^@/, "").trim();
-  const query: Record<string, string | undefined> = { handle: cleanHandle };
+): Record<string, string | undefined> {
+  const cleanHandle = identity.handle.replace(/^@/, "").trim();
+  const query: Record<string, string | undefined> = identity.userId
+    ? { user_id: identity.userId }
+    : { handle: cleanHandle };
   if (maxId) {
     query.max_id = maxId;
   }
+  return query;
+}
+
+async function fetchUserReelsPage(
+  identity: { handle: string; userId?: string },
+  maxId: string | null,
+  opts?: { emptyFirstPageTries?: number }
+): Promise<ClipsPage> {
+  const cleanHandle = identity.handle.replace(/^@/, "").trim();
+  const query = buildInstagramUserReelsQuery(identity, maxId);
 
   // The vendor flakes on user/reels in two ways:
   //   1. HTTP 404 with `{error:"not_found", message:"Profile is restricted"}`
@@ -438,7 +973,9 @@ async function fetchUserReelsPage(
   // background scrape worker (or admin search), so the longer total wait
   // is acceptable — much better than failing a scrape and burning a quota
   // slot.
-  const MAX_TRIES = maxId ? 1 : 8;
+  const MAX_TRIES = maxId
+    ? 1
+    : Math.max(1, opts?.emptyFirstPageTries ?? 8);
 
   for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
     let { status, data } = await scGet("/v1/instagram/user/reels", query);
@@ -618,6 +1155,8 @@ export interface ScrapeResult {
   mostRecentItemAt: Date | null;
   /** Count of reels inside the user-selected timeframe (excludes backfill). */
   reelsInWindow: number;
+  canonicalUsername: string;
+  instagramUserId: string;
 }
 
 export async function scrapeReels(
@@ -630,12 +1169,10 @@ export async function scrapeReels(
   const timeoutMs = options?.timeoutMs || 5 * 60 * 1000;
   const startTime = Date.now();
 
-  const profile = await fetchProfile(handle);
+  const profile = await resolveInstagramIdentity(handle);
 
   if (profile.isPrivate) {
-    throw new Error(
-      `The account @${profile.username} is private. Only public accounts can be scraped.`
-    );
+    throw new InstagramPrivateAccountError(profile.username);
   }
 
   const cutoffDate = new Date();
@@ -693,7 +1230,11 @@ export async function scrapeReels(
       await sleep(delay);
     }
 
-    const page = await fetchUserReelsPage(profile.username, maxId);
+    const page = await fetchUserReelsPage(
+      { handle: profile.username, userId: profile.userId || undefined },
+      maxId,
+      { emptyFirstPageTries: profile.mediaRestricted ? 1 : 8 }
+    );
 
     if (page.items.length === 0) {
       hasMore = false;
@@ -811,6 +1352,25 @@ export async function scrapeReels(
     `[Instagram] Scraped ${allReels.length} reels for @${profile.username} in ${elapsed}s (${pageCount} pages, ${seenShortcodes.size} total seen, ${profile.followerCount} followers${backfillNote}${stoppedReason ? `, stopped: ${stoppedReason}` : ""}${shapeWarning})`
   );
 
+  if (
+    allReels.length === 0 &&
+    seenShortcodes.size === 0 &&
+    !profile.isPrivate &&
+    profile.followerCount > 0
+  ) {
+    let mediaRestricted = profile.mediaRestricted;
+    if (!mediaRestricted && profile.userId) {
+      const extra = await fetchProfileByUserId(profile.userId, profile.username);
+      mediaRestricted = extra.ok && extra.mediaRestricted;
+    }
+    if (mediaRestricted) {
+      console.log(
+        `[Instagram] media restricted requested=@${normalizeInstagramHandle(profile.username)} userId=${profile.userId} followers=${profile.followerCount}`
+      );
+      throw new InstagramRestrictedMediaError();
+    }
+  }
+
   return {
     reels: allReels,
     followerCount: profile.followerCount,
@@ -818,6 +1378,8 @@ export async function scrapeReels(
     totalParsedItems: seenShortcodes.size,
     mostRecentItemAt,
     reelsInWindow: inWindowReels.length,
+    canonicalUsername: profile.username,
+    instagramUserId: profile.userId,
   };
 }
 
@@ -1492,12 +2054,10 @@ export async function searchReelsByHandle(
   maxResults: number = 50,
   onProgress?: (count: number) => void
 ): Promise<{ reels: SearchReelData[]; profile: ProfileInfo }> {
-  const profile = await fetchProfile(handle);
+  const profile = await resolveInstagramIdentity(handle);
 
   if (profile.isPrivate) {
-    throw new Error(
-      `The account @${profile.username} is private. Only public accounts can be searched.`
-    );
+    throw new InstagramPrivateAccountError(profile.username);
   }
 
   const allReels: SearchReelData[] = [];
@@ -1515,7 +2075,11 @@ export async function searchReelsByHandle(
       await sleep(350 + Math.random() * 400);
     }
 
-    const page = await fetchUserReelsPage(profile.username, maxId);
+    const page = await fetchUserReelsPage(
+      { handle: profile.username, userId: profile.userId || undefined },
+      maxId,
+      { emptyFirstPageTries: profile.mediaRestricted ? 1 : 8 }
+    );
 
     if (page.items.length === 0) break;
 

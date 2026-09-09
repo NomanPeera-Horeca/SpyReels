@@ -69,7 +69,12 @@ import {
   inferNicheFromText,
 } from "../shared/creatorContextInference";
 
-import { classifyScrapeFailureMessage } from "./scrapeFailureReason";
+import {
+  classifyScrapeFailureMessage,
+  classifyThrownInstagramError,
+  instagramFailureLogReason,
+  shouldRefundInstagramFailure,
+} from "./scrapeFailureReason";
 import {
   SCRAPE_JOB_STALE_MS,
   SCRAPE_JOB_ZOMBIE_MESSAGE,
@@ -290,6 +295,7 @@ import {
   scrapeReels,
   fetchReelByShortcode,
   fetchProfile,
+  resolveInstagramIdentity,
   searchReelsByKeyword,
   searchReelsByHandle,
   runWithScrapeCallContext,
@@ -1304,8 +1310,8 @@ export const appRouter = router({
       .input(z.object({ handle: z.string().min(1).max(128) }))
       .query(async ({ input }) => {
         try {
-          const profile = await fetchProfile(input.handle);
-          const cleanHandle = profile.username.replace(/^@/, "").trim().toLowerCase();
+          const profile = await resolveInstagramIdentity(input.handle);
+          const cleanHandle = normalizeInstagramHandle(profile.username);
           const proxiedPicUrl = await ensureProfilePicOnR2(
             cleanHandle,
             profile.profilePicUrl
@@ -4303,8 +4309,8 @@ Return JSON only:
       .input(z.object({ handle: z.string().min(1).max(128) }))
       .query(async ({ input }) => {
         try {
-          const profile = await fetchProfile(input.handle);
-          const cleanHandle = profile.username.replace(/^@/, "").trim().toLowerCase();
+          const profile = await resolveInstagramIdentity(input.handle);
+          const cleanHandle = normalizeInstagramHandle(profile.username);
           const proxiedPicUrl = await ensureProfilePicOnR2(
             cleanHandle,
             profile.profilePicUrl
@@ -6774,6 +6780,7 @@ async function runScrapeJobInner(
       totalParsedItems,
       mostRecentItemAt,
       reelsInWindow,
+      canonicalUsername,
     } = await runWithScrapeCallContext(
       { source: "scrape_job", jobId, handle: cleanHandleForLog },
       () =>
@@ -6825,7 +6832,26 @@ async function runScrapeJobInner(
       progressPercent: 85,
     });
 
-    const cleanHandle = handle.replace(/^@/, "").trim().toLowerCase();
+    const cleanHandle = normalizeInstagramHandle(canonicalUsername || handle);
+    if (cleanHandle && cleanHandle !== cleanHandleForLog) {
+      const currentJob = await getScrapeJob(jobId);
+      const siblings = currentJob
+        ? await getScrapeJobsByWorkspace(currentJob.workspaceId)
+        : [];
+      const handleTaken = siblings.some(
+        (j) =>
+          j.id !== jobId &&
+          j.handle.toLowerCase() === cleanHandle &&
+          (j.status === "completed" || j.status === "running")
+      );
+      if (handleTaken) {
+        console.warn(
+          `[runScrapeJob ${jobId}] skipped canonical handle update @${cleanHandleForLog} -> @${cleanHandle}: another Radar job already uses that handle`
+        );
+      } else {
+        await updateScrapeJob(jobId, { handle: cleanHandle });
+      }
+    }
     const proxiedPicUrl = await ensureProfilePicOnR2(
       cleanHandle,
       profilePicUrl
@@ -6989,9 +7015,12 @@ async function runScrapeJobInner(
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
-    const failureReason = classifyScrapeFailureMessage(message);
+    const failureReason =
+      classifyThrownInstagramError(error) ??
+      classifyScrapeFailureMessage(message);
+    const logReason = instagramFailureLogReason(error, failureReason);
     console.warn(
-      `[runScrapeJob ${jobId}] failed handle=@${handle.replace(/^@/, "").trim().toLowerCase()} reason=${failureReason}: ${message}`
+      `[runScrapeJob ${jobId}] failed handle=@${handle.replace(/^@/, "").trim().toLowerCase()} reason=${logReason}: ${message}`
     );
     // Failure preserves the last progressPercent the UI saw — just flip the
     // terminal flags so the client can show the error state.
@@ -7004,8 +7033,10 @@ async function runScrapeJobInner(
     // Refund vendor-side failures so quotas aren't burned on flakes the
     // user can't control. Keep the quota when the failure is the user's
     // input (handle_not_found, account_private, account_too_large).
-    if (failureReason === "instagram_rate_limited") {
-      await refundScrapeQuota(`exception:${failureReason}`);
+    // Restricted media is Instagram withholding content after we found the
+    // creator; refund so the user is not charged for an unusable result.
+    if (shouldRefundInstagramFailure(error, failureReason)) {
+      await refundScrapeQuota(`exception:${logReason}`);
     }
     // Schedule cleanup of the row ONLY when nothing useful was inserted.
     // If reels were already persisted before the exception, we must keep
@@ -7123,11 +7154,14 @@ async function runResyncJob(
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
+    const failureReason =
+      classifyThrownInstagramError(error) ??
+      classifyScrapeFailureMessage(message);
     await updateScrapeJob(jobId, {
       status: "failed",
       errorMessage: message,
       currentStep: "failed",
-      failureReason: classifyScrapeFailureMessage(message),
+      failureReason,
     });
   }
 }

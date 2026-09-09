@@ -118,7 +118,16 @@ vi.mock("./db", () => ({
 
 // Mock the instagram module
 vi.mock("./instagram", () => ({
-  scrapeReels: vi.fn().mockResolvedValue([]),
+  scrapeReels: vi.fn().mockResolvedValue({
+    reels: [],
+    followerCount: 0,
+    profilePicUrl: "",
+    totalParsedItems: 0,
+    mostRecentItemAt: null,
+    reelsInWindow: 0,
+    canonicalUsername: "testcreator",
+    instagramUserId: "12345",
+  }),
   fetchReelByShortcode: vi.fn().mockResolvedValue({
     videoUrl: "https://example.com/video.mp4",
     thumbnailUrl: "https://example.com/thumb.jpg",
@@ -147,6 +156,29 @@ vi.mock("./instagram", () => ({
     category: "Creator",
     externalUrl: null,
   }),
+  resolveInstagramIdentity: vi.fn().mockResolvedValue({
+    userId: "12345",
+    username: "testcreator",
+    isPrivate: false,
+    followerCount: 50000,
+    fullName: "Test Creator",
+    biography: "Content creator",
+    profilePicUrl: "https://example.com/pic.jpg",
+    postCount: 200,
+    followingCount: 100,
+    isVerified: false,
+    category: "Creator",
+    externalUrl: null,
+    requestedHandle: "testcreator",
+    resolutionMethod: "profile_handle",
+    fallbackUsed: false,
+  }),
+  InstagramHandleNotFoundError: class InstagramHandleNotFoundError extends Error {},
+  InstagramPrivateAccountError: class InstagramPrivateAccountError extends Error {},
+  InstagramProviderError: class InstagramProviderError extends Error {},
+  isInstagramProviderError: () => false,
+  isInstagramRestrictedMediaError: () => false,
+  runWithScrapeCallContext: vi.fn((_ctx: unknown, fn: () => unknown) => fn()),
   searchReelsByKeyword: vi.fn().mockResolvedValue([
     {
       shortcode: "KW_ABC",
@@ -921,8 +953,10 @@ describe("search.profilePreview", () => {
   }, 15000);
 
   it("returns error for non-existent handle", async () => {
-    const { fetchProfile } = await import("./instagram");
-    (fetchProfile as any).mockRejectedValueOnce(new Error("User not found"));
+    const { resolveInstagramIdentity } = await import("./instagram");
+    (resolveInstagramIdentity as any).mockRejectedValueOnce(
+      new Error("User not found")
+    );
 
     const ctx = createAuthContext();
     const caller = appRouter.createCaller(ctx);
