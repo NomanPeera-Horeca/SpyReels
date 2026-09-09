@@ -16,7 +16,10 @@ function bindings(): ContentAgentStudioBindings {
     convertExistingScript: vi.fn(async () => ({ id: 202, title: "Converted" })),
     openCarousel: vi.fn(async () => undefined),
     saveScript: vi.fn(async () => ({ savedScriptId: 303, title: "Saved Reel" })),
-    scheduleFilming: vi.fn(async () => ({ label: "Friday · 10:00 AM" })),
+    scheduleFilming: vi.fn(async () => ({
+      status: "completed" as const,
+      label: "Friday · 10:00 AM\nSetup: Office",
+    })),
     downloadScript: vi.fn(async () => undefined),
     inspectScriptHealth: vi.fn(async () => undefined),
   };
@@ -94,16 +97,38 @@ describe("createContentAgentStudioDeps", () => {
     const result = await executeContentAgentAction(
       action("schedule_filming", {
         scriptId: 42,
+        scheduleText: "Friday at 10am in my office",
+      }),
+      deps
+    );
+
+    expect(b.scheduleFilming).toHaveBeenCalledWith(42, "Friday at 10am in my office");
+    expect(result).toEqual({
+      status: "completed",
+      message: "Filming reminder set",
+      detail: "Friday · 10:00 AM\nSetup: Office",
+    });
+  });
+
+  it("keeps the same Agent action open when the real reminder needs filming setup", async () => {
+    const b = bindings();
+    b.scheduleFilming = vi.fn(async () => ({
+      status: "requires_input" as const,
+      question: "Where are you filming this one: green screen, room, studio, office, or outside?",
+    }));
+    const deps = createContentAgentStudioDeps(b);
+
+    const result = await executeContentAgentAction(
+      action("schedule_filming", {
+        scriptId: 42,
         scheduleText: "Friday at 10am",
       }),
       deps
     );
 
-    expect(b.scheduleFilming).toHaveBeenCalledWith(42, "Friday at 10am");
     expect(result).toEqual({
-      status: "completed",
-      message: "Filming reminder set",
-      detail: "Friday · 10:00 AM",
+      status: "requires_input",
+      message: "Where are you filming this one: green screen, room, studio, office, or outside?",
     });
   });
 
