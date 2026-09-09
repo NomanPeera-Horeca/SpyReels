@@ -92,7 +92,10 @@ describe("Carousel Studio access source contract", () => {
     join(here, "../../routers/carouselRemakeRouter.ts"),
     "utf8"
   );
-  const adminRouter = readFileSync(join(here, "../../routers.ts"), "utf8");
+  const adminRouter = readFileSync(
+    join(here, "../../routers/adminRouter.ts"),
+    "utf8"
+  );
   const studioApp = readFileSync(
     join(here, "../../../client/src/components/carousel-studio/CarouselStudioApp.tsx"),
     "utf8"
