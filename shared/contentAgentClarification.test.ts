@@ -16,8 +16,23 @@ describe("continueContentAgentAction", () => {
 
     expect(next.tool).toBe("schedule_filming");
     expect(next.scriptId).toBe(42);
-    expect(next.scheduleText).toBe("Friday at 10");
+    expect(next.scheduleText).toBe("schedule this Friday at 10");
     expect(next.confidence).toBe(100);
+  });
+
+  it("keeps date and time when a second clarification supplies filming setup", () => {
+    const action: ContentAgentAction = {
+      tool: "schedule_filming",
+      confidence: 100,
+      source: "rule",
+      scriptId: 42,
+      scheduleText: "schedule this Friday at 10 AM",
+    };
+
+    const next = continueContentAgentAction(action, "in my office");
+
+    expect(next.scheduleText).toBe("schedule this Friday at 10 AM in my office");
+    expect(next.scriptId).toBe(42);
   });
 
   it("keeps a missing Remake URL inside remake_social_video", () => {
