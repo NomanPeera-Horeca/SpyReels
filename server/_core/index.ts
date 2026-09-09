@@ -21,6 +21,7 @@ import { startScrapeJobZombieSweeper } from "../scrapeJobSweeper";
 import { startViralPostsPoolRefresher } from "../viralPosts/poolRefresh";
 import { registerPublicScriptShareRoutes } from "../publicScriptShareRoute";
 import { registerCarouselExportImageProxy } from "../carousel/exportImageProxyRoute";
+import { registerFilmingReminderRoutes } from "../filmingReminderRoute";
 import { localObjectStorageDir } from "../storage";
 import { BLOG_SLUG_REDIRECTS } from "@shared/blogRedirects";
 
@@ -104,6 +105,9 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
+  // Agent filming reminders use the authenticated workspace context and are
+  // intentionally separate from publishing calendar fields.
+  registerFilmingReminderRoutes(app);
   // Extension REST API (for Chrome extension)
   app.use("/api/extension", createExtensionRouter());
   app.use("/api/ext", createExtensionRouter());
