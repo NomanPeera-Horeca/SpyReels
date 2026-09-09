@@ -38,7 +38,10 @@ export type ContentAgentStudioBindings = {
   scheduleFilming: (
     scriptId: number,
     scheduleText: string
-  ) => Promise<{ label: string }>;
+  ) => Promise<
+    | { status: "completed"; label: string }
+    | { status: "requires_input"; question: string }
+  >;
   downloadScript: (scriptId: number) => Promise<void> | void;
   inspectScriptHealth: (scriptId: number) => Promise<void> | void;
 };
@@ -182,10 +185,18 @@ export function createContentAgentStudioDeps(
           message: "When do you want to film this Reel?",
         };
       }
+
       const scheduled = await bindings.scheduleFilming(
         currentScriptId(action),
         scheduleText
       );
+      if (scheduled.status === "requires_input") {
+        return {
+          status: "requires_input",
+          message: scheduled.question,
+        };
+      }
+
       return {
         status: "completed",
         message: "Filming reminder set",
