@@ -214,5 +214,14 @@ export function useAiCoachResultAgentController(
   return useContentAgentConversationController({
     deps,
     context: { activeScriptId: options.scriptId },
+    persistence: {
+      enabled: true,
+      restoreLatest: true,
+      artifact: {
+        kind: "reel",
+        id: options.scriptId,
+        title: options.title,
+      },
+    },
   });
 }
