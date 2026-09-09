@@ -15,6 +15,27 @@ export type ContentAgentRunStatus =
   | "failed"
   | "cancelled";
 
+async function assertOwnedRun(args: {
+  runId: string;
+  workspaceId: string;
+  userId: number;
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database unavailable");
+  const [run] = await db
+    .select({ id: contentAgentRuns.id })
+    .from(contentAgentRuns)
+    .where(
+      and(
+        eq(contentAgentRuns.id, args.runId),
+        eq(contentAgentRuns.workspaceId, args.workspaceId),
+        eq(contentAgentRuns.userId, args.userId)
+      )
+    )
+    .limit(1);
+  if (!run) throw new Error("Agent run not found");
+}
+
 export async function createContentAgentRun(args: {
   userId: number;
   workspaceId: string;
@@ -38,7 +59,13 @@ export async function createContentAgentRun(args: {
   const [run] = await db
     .select()
     .from(contentAgentRuns)
-    .where(and(eq(contentAgentRuns.id, id), eq(contentAgentRuns.workspaceId, args.workspaceId)))
+    .where(
+      and(
+        eq(contentAgentRuns.id, id),
+        eq(contentAgentRuns.workspaceId, args.workspaceId),
+        eq(contentAgentRuns.userId, args.userId)
+      )
+    )
     .limit(1);
   if (!run) throw new Error("Could not create Agent run");
   return run;
@@ -47,6 +74,7 @@ export async function createContentAgentRun(args: {
 export async function upsertContentAgentToolRun(args: {
   runId: string;
   workspaceId: string;
+  userId: number;
   stepIndex: number;
   tool: string;
   status: ContentAgentRunStatus;
@@ -56,6 +84,8 @@ export async function upsertContentAgentToolRun(args: {
 }): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
+  await assertOwnedRun(args);
+
   const terminal = ["completed", "failed", "cancelled"].includes(args.status);
   const values = {
     runId: args.runId,
@@ -86,12 +116,15 @@ export async function upsertContentAgentToolRun(args: {
 export async function updateContentAgentRun(args: {
   runId: string;
   workspaceId: string;
+  userId: number;
   status: ContentAgentRunStatus;
   pendingTool?: string | null;
   artifact?: { kind?: string | null; id?: number | null; title?: string | null } | null;
 }): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database unavailable");
+  await assertOwnedRun(args);
+
   const terminal = ["completed", "failed", "cancelled"].includes(args.status);
   await db
     .update(contentAgentRuns)
@@ -110,7 +143,8 @@ export async function updateContentAgentRun(args: {
     .where(
       and(
         eq(contentAgentRuns.id, args.runId),
-        eq(contentAgentRuns.workspaceId, args.workspaceId)
+        eq(contentAgentRuns.workspaceId, args.workspaceId),
+        eq(contentAgentRuns.userId, args.userId)
       )
     );
 }
@@ -118,6 +152,7 @@ export async function updateContentAgentRun(args: {
 export async function getContentAgentRun(args: {
   runId: string;
   workspaceId: string;
+  userId: number;
 }): Promise<{
   run: ContentAgentRunRecord;
   tools: ContentAgentToolRunRecord[];
@@ -130,7 +165,8 @@ export async function getContentAgentRun(args: {
     .where(
       and(
         eq(contentAgentRuns.id, args.runId),
-        eq(contentAgentRuns.workspaceId, args.workspaceId)
+        eq(contentAgentRuns.workspaceId, args.workspaceId),
+        eq(contentAgentRuns.userId, args.userId)
       )
     )
     .limit(1);
@@ -172,7 +208,12 @@ export async function getLatestContentAgentRun(args: {
   const tools = await db
     .select()
     .from(contentAgentToolRuns)
-    .where(eq(contentAgentToolRuns.runId, run.id))
+    .where(
+      and(
+        eq(contentAgentToolRuns.runId, run.id),
+        eq(contentAgentToolRuns.workspaceId, args.workspaceId)
+      )
+    )
     .orderBy(contentAgentToolRuns.stepIndex);
   return { run, tools };
 }
