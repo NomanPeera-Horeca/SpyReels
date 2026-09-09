@@ -28,9 +28,10 @@ export type ContentAgentButtonOptions = {
 /**
  * Shared client bridge for SpyReels Agent.
  *
- * Natural-language requests use the server intent resolver, then the same
- * creator-level executor as explicit UI buttons. This keeps chat and buttons
- * from drifting into separate product behavior.
+ * Natural-language requests and explicit UI buttons both become a
+ * ContentAgentAction, then enter the same creator-level executor. Exposing
+ * resolveMessage separately lets the conversation layer show truthful working
+ * copy only after the Agent knows which job it is about to run.
  */
 export function useContentAgentExecutor(deps: ContentAgentExecutorDeps) {
   const resolveIntentMutation = trpc.studio.resolveIntent.useMutation();
@@ -42,11 +43,11 @@ export function useContentAgentExecutor(deps: ContentAgentExecutorDeps) {
     [deps]
   );
 
-  const executeMessage = useCallback(
+  const resolveMessage = useCallback(
     async (
       message: string,
       context: ContentAgentExecutionContext = {}
-    ): Promise<{ action: ContentAgentAction; result: ContentAgentToolResult }> => {
+    ): Promise<ContentAgentAction> => {
       const trimmed = message.trim();
       if (!trimmed) {
         throw new Error("Tell Agent what you want to create or change.");
@@ -58,11 +59,21 @@ export function useContentAgentExecutor(deps: ContentAgentExecutorDeps) {
         activeScriptId: context.activeScriptId ?? undefined,
         attachedPlanCardId: context.attachedPlanCardId ?? undefined,
       });
-      const action = resolved as ContentAgentAction;
+      return resolved as ContentAgentAction;
+    },
+    [resolveIntentMutation]
+  );
+
+  const executeMessage = useCallback(
+    async (
+      message: string,
+      context: ContentAgentExecutionContext = {}
+    ): Promise<{ action: ContentAgentAction; result: ContentAgentToolResult }> => {
+      const action = await resolveMessage(message, context);
       const result = await executeAction(action);
       return { action, result };
     },
-    [executeAction, resolveIntentMutation]
+    [executeAction, resolveMessage]
   );
 
   const executeButton = useCallback(
@@ -78,6 +89,7 @@ export function useContentAgentExecutor(deps: ContentAgentExecutorDeps) {
   );
 
   return {
+    resolveMessage,
     executeAction,
     executeMessage,
     executeButton,
