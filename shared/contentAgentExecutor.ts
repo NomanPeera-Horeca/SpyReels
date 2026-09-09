@@ -23,18 +23,34 @@ export type ContentAgentToolResult = {
   artifact?: ContentAgentArtifactRef | null;
 };
 
+/**
+ * Payload that belongs to execution, not intent classification.
+ *
+ * Keeping the creator's original text here prevents a routing decision such as
+ * write_viral_script or convert_existing_script from losing the actual idea or
+ * pasted script after classification.
+ */
+export type ContentAgentExecutionContext = {
+  inputText?: string;
+};
+
+type ContentAgentToolHandler = (
+  action: ContentAgentAction,
+  context: ContentAgentExecutionContext
+) => Promise<ContentAgentToolResult>;
+
 export type ContentAgentExecutorDeps = {
-  writeViralScript: (action: ContentAgentAction) => Promise<ContentAgentToolResult>;
-  refineScript: (action: ContentAgentAction) => Promise<ContentAgentToolResult>;
-  generateHookIdeas: (action: ContentAgentAction) => Promise<ContentAgentToolResult>;
-  loadPlanCard: (action: ContentAgentAction) => Promise<ContentAgentToolResult>;
-  remakeSocialVideo: (action: ContentAgentAction) => Promise<ContentAgentToolResult>;
-  convertExistingScript: (action: ContentAgentAction) => Promise<ContentAgentToolResult>;
-  createCarousel: (action: ContentAgentAction) => Promise<ContentAgentToolResult>;
-  saveScript: (action: ContentAgentAction) => Promise<ContentAgentToolResult>;
-  scheduleFilming: (action: ContentAgentAction) => Promise<ContentAgentToolResult>;
-  downloadScript: (action: ContentAgentAction) => Promise<ContentAgentToolResult>;
-  inspectScriptHealth: (action: ContentAgentAction) => Promise<ContentAgentToolResult>;
+  writeViralScript: ContentAgentToolHandler;
+  refineScript: ContentAgentToolHandler;
+  generateHookIdeas: ContentAgentToolHandler;
+  loadPlanCard: ContentAgentToolHandler;
+  remakeSocialVideo: ContentAgentToolHandler;
+  convertExistingScript: ContentAgentToolHandler;
+  createCarousel: ContentAgentToolHandler;
+  saveScript: ContentAgentToolHandler;
+  scheduleFilming: ContentAgentToolHandler;
+  downloadScript: ContentAgentToolHandler;
+  inspectScriptHealth: ContentAgentToolHandler;
 };
 
 export class ContentAgentExecutionError extends Error {
@@ -78,7 +94,8 @@ function contentAgentPreflightResult(
  */
 export async function executeContentAgentAction(
   action: ContentAgentAction,
-  deps: ContentAgentExecutorDeps
+  deps: ContentAgentExecutorDeps,
+  context: ContentAgentExecutionContext = {}
 ): Promise<ContentAgentToolResult> {
   assertContentAgentActionExecutable(action);
 
@@ -87,27 +104,27 @@ export async function executeContentAgentAction(
 
   switch (action.tool) {
     case "write_viral_script":
-      return deps.writeViralScript(action);
+      return deps.writeViralScript(action, context);
     case "refine_script":
-      return deps.refineScript(action);
+      return deps.refineScript(action, context);
     case "generate_hook_ideas":
-      return deps.generateHookIdeas(action);
+      return deps.generateHookIdeas(action, context);
     case "load_plan_card":
-      return deps.loadPlanCard(action);
+      return deps.loadPlanCard(action, context);
     case "remake_social_video":
-      return deps.remakeSocialVideo(action);
+      return deps.remakeSocialVideo(action, context);
     case "convert_existing_script":
-      return deps.convertExistingScript(action);
+      return deps.convertExistingScript(action, context);
     case "create_carousel":
-      return deps.createCarousel(action);
+      return deps.createCarousel(action, context);
     case "save_script":
-      return deps.saveScript(action);
+      return deps.saveScript(action, context);
     case "schedule_filming":
-      return deps.scheduleFilming(action);
+      return deps.scheduleFilming(action, context);
     case "download_script":
-      return deps.downloadScript(action);
+      return deps.downloadScript(action, context);
     case "inspect_script_health":
-      return deps.inspectScriptHealth(action);
+      return deps.inspectScriptHealth(action, context);
   }
 }
 
