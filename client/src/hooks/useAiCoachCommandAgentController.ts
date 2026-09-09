@@ -15,7 +15,7 @@ export type AiCoachCommandAgentControllerOptions = {
   description: string;
   attachedPlanCardId?: number | null;
   onDescriptionChange: (value: string) => void;
-  onWriteIdea: () => void;
+  onWriteIdea: (idea: string) => void;
 };
 
 function started(message: string): ContentAgentToolResult {
@@ -43,8 +43,10 @@ export function useAiCoachCommandAgentController(
   const { startRemake, RemakeDialogs } = useLibraryRemakeChain();
 
   const deps = useMemo<ContentAgentExecutorDeps>(() => ({
-    async writeViralScript(_action: ContentAgentAction, _context: ContentAgentExecutionContext) {
-      options.onWriteIdea();
+    async writeViralScript(_action: ContentAgentAction, context: ContentAgentExecutionContext) {
+      const idea = context.inputText?.trim() || options.description.trim();
+      if (!idea) return unavailable("What do you want this Reel to be about?");
+      options.onWriteIdea(idea);
       return started("Writing your Reel");
     },
 
@@ -56,8 +58,10 @@ export function useAiCoachCommandAgentController(
       return unavailable("Open a Reel first, then ask Agent for hook options.");
     },
 
-    async loadPlanCard() {
-      options.onWriteIdea();
+    async loadPlanCard(_action, context) {
+      const idea = context.inputText?.trim() || options.description.trim();
+      if (!idea) return unavailable("Choose a plan idea first.");
+      options.onWriteIdea(idea);
       return started("Using your plan idea");
     },
 
