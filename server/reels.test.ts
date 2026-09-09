@@ -60,6 +60,9 @@ vi.mock("./db", () => ({
     },
   ]),
   insertReels: vi.fn().mockResolvedValue(undefined),
+  getSavedDiscoverReelsWithDetails: vi.fn().mockResolvedValue([]),
+  getSavedTiktokVideosWithDetails: vi.fn().mockResolvedValue([]),
+  getSavedYoutubeVideosWithDetails: vi.fn().mockResolvedValue([]),
   getReelsByJobId: vi.fn().mockResolvedValue([
     {
       id: 1,
@@ -294,7 +297,16 @@ vi.mock("./db", () => ({
 
 // Mock the instagram module
 vi.mock("./instagram", () => ({
-  scrapeReels: vi.fn().mockResolvedValue([]),
+  scrapeReels: vi.fn().mockResolvedValue({
+    reels: [],
+    followerCount: 0,
+    profilePicUrl: "",
+    totalParsedItems: 0,
+    mostRecentItemAt: null,
+    reelsInWindow: 0,
+    canonicalUsername: "owner",
+    instagramUserId: "12345",
+  }),
   fetchReelByShortcode: vi.fn().mockResolvedValue({
     videoUrl: "https://example.com/video.mp4",
     thumbnailUrl: "https://example.com/thumb.jpg",
@@ -313,6 +325,23 @@ vi.mock("./instagram", () => ({
     isVerified: true,
     category: "Software Company",
     externalUrl: "https://linktr.ee/ownerofficial",
+  }),
+  resolveInstagramIdentity: vi.fn().mockResolvedValue({
+    userId: "12345",
+    username: "owner",
+    isPrivate: false,
+    followerCount: 142000,
+    fullName: "Owner.com",
+    biography: "Grow your restaurant online",
+    profilePicUrl: "https://example.com/pic.jpg",
+    postCount: 618,
+    followingCount: 350,
+    isVerified: true,
+    category: "Software Company",
+    externalUrl: "https://linktr.ee/ownerofficial",
+    requestedHandle: "owner",
+    resolutionMethod: "profile_handle",
+    fallbackUsed: false,
   }),
 }));
 
@@ -749,8 +778,8 @@ describe("scrape.profilePreview", () => {
   }, 15000);
 
   it("returns error for non-existent handle", async () => {
-    const { fetchProfile } = await import("./instagram");
-    (fetchProfile as any).mockRejectedValueOnce(
+    const { resolveInstagramIdentity } = await import("./instagram");
+    (resolveInstagramIdentity as any).mockRejectedValueOnce(
       new Error('User "@nonexistent" not found.')
     );
 
