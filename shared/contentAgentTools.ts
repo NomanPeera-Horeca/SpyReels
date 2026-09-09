@@ -94,6 +94,8 @@ const DOWNLOAD_PATTERNS = /\b(download|export)\b/i;
 const SCHEDULE_PATTERNS = /\b(schedule|remind|reminder|film this|filming)\b/i;
 const CAROUSEL_PATTERNS = /\b(carousel|slides?)\b/i;
 const HEALTH_PATTERNS = /\b(script health|quality score|quality check|check this script)\b/i;
+const CLEAR_NEW_CONTENT_PATTERNS =
+  /\b(reel|video|shorts?|script|content|post|story|hook|tiktok|instagram|youtube|creator|client|customer|audience|followers?)\b/i;
 
 export type DetectedSocialSource = {
   url: string;
@@ -155,6 +157,13 @@ function normalizedRefineInstruction(message: string): string {
     return "Simplify the language. Use shorter sentences and easier words without removing the useful detail.";
   }
   return message;
+}
+
+function isClearNewContentIdea(message: string): boolean {
+  const trimmed = message.trim();
+  if (trimmed.length < 10) return false;
+  if (CLEAR_NEW_CONTENT_PATTERNS.test(trimmed)) return true;
+  return /\b(i want|i need|make|create|write|talk about|explain|teach|show)\b/i.test(trimmed) && trimmed.split(/\s+/).length >= 6;
 }
 
 export function resolveContentAgentIntentRules(
@@ -305,7 +314,7 @@ export function resolveContentAgentIntentRules(
 
   return {
     tool: "write_viral_script",
-    confidence: 68,
+    confidence: isClearNewContentIdea(message) ? 90 : 68,
     source: "rule",
     planCardId: input.attachedPlanCardId ?? undefined,
     assistantMessage: "Writing your viral script.",
