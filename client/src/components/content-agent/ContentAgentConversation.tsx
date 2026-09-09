@@ -20,12 +20,15 @@ type ContentAgentConversationProps = {
   workDurationSeconds?: number | null;
   working?: boolean;
   workingLabel?: string | null;
-  value: string;
-  onChange: (value: string) => void;
-  onSubmit: (value: string) => void;
+  value?: string;
+  onChange?: (value: string) => void;
+  onSubmit?: (value: string) => void;
+  /** Convenience for result-stage chat that wants this component to own input state. */
+  onSend?: (value: string) => void | Promise<unknown>;
   placeholder?: string;
   disabled?: boolean;
   footer?: ReactNode;
+  className?: string;
 };
 
 function AgentTurnView({ turn }: { turn: ContentAgentTurn }) {
@@ -44,7 +47,7 @@ function AgentTurnView({ turn }: { turn: ContentAgentTurn }) {
           <Check className="h-4 w-4 shrink-0 text-emerald-500" />
           <span>{turn.text}</span>
         </p>
-        {turn.detail ? <p className="mt-1.5 pl-6 text-xs leading-relaxed text-muted-foreground">{turn.detail}</p> : null}
+        {turn.detail ? <p className="mt-1.5 whitespace-pre-line pl-6 text-xs leading-relaxed text-muted-foreground">{turn.detail}</p> : null}
       </div>
     );
   }
@@ -129,10 +132,15 @@ export function ContentAgentConversation({
   value,
   onChange,
   onSubmit,
+  onSend,
   placeholder = "Ask Agent anything about this content...",
   disabled = false,
   footer,
+  className,
 }: ContentAgentConversationProps) {
+  const [localValue, setLocalValue] = useState("");
+  const controlled = value !== undefined;
+  const composerValue = controlled ? value : localValue;
   const contextLabel = useMemo(
     () => formatCurrentArtifactContext(artifactContext),
     [artifactContext]
@@ -142,14 +150,21 @@ export function ContentAgentConversation({
     [artifactContext]
   );
 
+  const changeValue = (next: string) => {
+    if (controlled) onChange?.(next);
+    else setLocalValue(next);
+  };
+
   const submit = () => {
-    const trimmed = value.trim();
+    const trimmed = composerValue.trim();
     if (!trimmed || disabled || working) return;
-    onSubmit(trimmed);
+    if (onSubmit) onSubmit(trimmed);
+    else if (onSend) void onSend(trimmed);
+    if (!controlled) setLocalValue("");
   };
 
   return (
-    <div className="mx-auto w-full max-w-[900px] px-4 pb-36 pt-7 sm:px-6">
+    <div className={cn("mx-auto w-full max-w-[900px] px-4 pb-36 pt-7 sm:px-6", className)}>
       <div className="space-y-5">
         {request?.trim() ? (
           <div className="ml-auto w-fit max-w-[82%] rounded-2xl rounded-br-md border border-violet-500/20 bg-violet-500/10 px-4 py-2.5 text-sm leading-relaxed text-foreground">
@@ -185,14 +200,15 @@ export function ContentAgentConversation({
         ) : null}
 
         <Textarea
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
+          value={composerValue}
+          onChange={(event) => changeValue(event.target.value)}
           onKeyDown={(event) => {
             if (event.key !== "Enter" || event.shiftKey || event.nativeEvent.isComposing) return;
             event.preventDefault();
             submit();
           }}
           placeholder={placeholder}
+          disabled={disabled}
           className="min-h-[72px] resize-none border-0 bg-transparent px-3 py-3 text-sm shadow-none focus-visible:ring-0"
         />
 
@@ -200,7 +216,7 @@ export function ContentAgentConversation({
           <button
             type="button"
             onClick={submit}
-            disabled={!value.trim() || disabled || working}
+            disabled={!composerValue.trim() || disabled || working}
             className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-violet-600 px-3 text-xs font-semibold text-white transition hover:bg-violet-700 disabled:opacity-40"
           >
             Send <Send className="h-3.5 w-3.5" />
