@@ -7,6 +7,7 @@ import type { TrpcContext } from "./context";
 import { assertAdminEmailUser } from "../middleware/requireAdmin";
 import { captureServerException } from "../analytics/posthogErrors";
 import { posthogDistinctIdForUser } from "../analytics/posthogServer";
+import { alertOwnerThrottled } from "../monitoring/alerts";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
@@ -25,6 +26,11 @@ const t = initTRPC.context<TrpcContext>().create({
         { trpcCode: error.code, message: shape.message ?? undefined },
         ctx?.user ? posthogDistinctIdForUser(ctx.user.id) : undefined
       );
+      alertOwnerThrottled({
+        kind: "trpc",
+        message: shape.message ?? "TRPC internal server error",
+        error: error.cause,
+      });
     }
 
     const friendly = formatTrpcValidationMessage(shape.message);

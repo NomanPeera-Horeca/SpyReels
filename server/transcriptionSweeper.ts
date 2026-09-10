@@ -1,6 +1,7 @@
 import { and, eq, isNotNull, isNull, lt, or } from "drizzle-orm";
 import { transcriptions } from "../drizzle/schema";
 import { getDb } from "./db";
+import { alertOwnerThrottled } from "./monitoring/alerts";
 
 const PROCESSING_STALE_MS = 10 * 60 * 1000;
 const ZOMBIE_MESSAGE = "Transcription timed out, please retry.";
@@ -37,6 +38,10 @@ export async function sweepZombieTranscriptions(): Promise<number> {
     console.log(
       `[transcriptionSweeper] marked ${rows.length} stale processing row(s) as failed`
     );
+    alertOwnerThrottled({
+      kind: "sweeper",
+      message: `${rows.length} stale transcription(s) auto-failed (process likely died mid-run)`,
+    });
   }
   return rows.length;
 }
@@ -44,7 +49,10 @@ export async function sweepZombieTranscriptions(): Promise<number> {
 export function startTranscriptionZombieSweeper(): void {
   const INTERVAL_MS = 2 * 60 * 1000;
   setInterval(() => {
-    sweepZombieTranscriptions().catch((e) => console.error("[transcriptionSweeper]", e));
+    sweepZombieTranscriptions().catch((e) => {
+      console.error("[transcriptionSweeper]", e);
+      alertOwnerThrottled({ kind: "sweeper", message: "transcriptionSweeper crashed", error: e });
+    });
   }, INTERVAL_MS);
   void sweepZombieTranscriptions();
 }

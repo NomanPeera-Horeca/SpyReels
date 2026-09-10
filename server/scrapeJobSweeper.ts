@@ -5,6 +5,7 @@ import {
   posthogDistinctIdForUser,
 } from "./analytics/posthogServer";
 import { getDb } from "./db";
+import { alertOwnerThrottled } from "./monitoring/alerts";
 
 export const SCRAPE_JOB_STALE_MS = 10 * 60 * 1000;
 export const SCRAPE_JOB_ZOMBIE_MESSAGE =
@@ -57,6 +58,10 @@ export async function sweepZombieScrapeJobs(): Promise<number> {
     console.log(
       `[scrapeJobSweeper] marked ${rows.length} stale running row(s) as failed`
     );
+    alertOwnerThrottled({
+      kind: "sweeper",
+      message: `${rows.length} stale scrape job(s) auto-failed (process likely died mid-run)`,
+    });
   }
   return rows.length;
 }
@@ -64,7 +69,10 @@ export async function sweepZombieScrapeJobs(): Promise<number> {
 export function startScrapeJobZombieSweeper(): void {
   const INTERVAL_MS = 2 * 60 * 1000;
   setInterval(() => {
-    sweepZombieScrapeJobs().catch((e) => console.error("[scrapeJobSweeper]", e));
+    sweepZombieScrapeJobs().catch((e) => {
+      console.error("[scrapeJobSweeper]", e);
+      alertOwnerThrottled({ kind: "sweeper", message: "scrapeJobSweeper crashed", error: e });
+    });
   }, INTERVAL_MS);
   void sweepZombieScrapeJobs();
 }

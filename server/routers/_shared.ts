@@ -9,6 +9,7 @@ import { isDurableReelVideoUrl } from "../reelVideoR2";
 import { acquireTranscriptionSlot, releaseTranscriptionSlot } from "../transcriptionSemaphore";
 import { not } from "drizzle-orm";
 import { mirrorReelThumbnailsBounded } from "../discovery/mediaMirror";
+import { alertOwnerThrottled } from "../monitoring/alerts";
 
 /**
  * First day of the next calendar month in UTC, as an ISO string.
@@ -179,6 +180,11 @@ export async function runTranscription(
     if (error instanceof Error && error.stack) {
       console.error(error.stack);
     }
+    alertOwnerThrottled({
+      kind: "transcribe",
+      message: `Transcription failed: ${message}`,
+      error,
+    });
     await updateTranscription(transcriptionId, {
       status: "failed",
       errorMessage: message,
@@ -256,6 +262,11 @@ export async function runFeaturedReelTranscription(reel: {
     if (error instanceof Error && error.stack) {
       console.error(error.stack);
     }
+    alertOwnerThrottled({
+      kind: "transcribe",
+      message: `Featured reel transcription failed: ${message}`,
+      error,
+    });
     await updateFeaturedReelTranscription(reel.id, {
       transcriptionStatus: "failed",
     });

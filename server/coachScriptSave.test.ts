@@ -21,9 +21,15 @@ describe("coachScriptSave", () => {
     const day3 = postDateFromPlanDay(3);
     const today = new Date();
     today.setHours(9, 0, 0, 0);
-    const expected = new Date(today);
-    expected.setDate(expected.getDate() + 2);
-    expect(day3.getDate()).toBe(expected.getDate());
+    const minExpected = new Date(today);
+    minExpected.setDate(minExpected.getDate() + 2);
+    // The function pushes weekend dates to the next weekday.
+    expect(day3.getDay()).not.toBe(0);
+    expect(day3.getDay()).not.toBe(6);
+    expect(day3.getTime()).toBeGreaterThanOrEqual(minExpected.getTime());
+    if (minExpected.getDay() !== 0 && minExpected.getDay() !== 6) {
+      expect(day3.getDate()).toBe(minExpected.getDate());
+    }
   });
 
   it("formatCoachSaveScheduleLabel includes day and time", () => {

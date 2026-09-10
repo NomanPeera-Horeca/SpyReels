@@ -19,6 +19,7 @@ import { startCollectedReelIngestSweeper } from "../collectedReelWorker";
 import { startTranscriptionZombieSweeper } from "../transcriptionSweeper";
 import { startScrapeJobZombieSweeper } from "../scrapeJobSweeper";
 import { startViralPostsPoolRefresher } from "../viralPosts/poolRefresh";
+import { expressAlertErrorHandler, alertOwnerThrottled } from "../monitoring/alerts";
 import { registerPublicScriptShareRoutes } from "../publicScriptShareRoute";
 import { registerCarouselExportImageProxy } from "../carousel/exportImageProxyRoute";
 import { localObjectStorageDir } from "../storage";
@@ -288,6 +289,8 @@ async function startServer() {
 
   // PostHog error handler must come AFTER all routes/middleware.
   registerPostHogExpressErrors(app);
+  // Owner alerting is independent of PostHog and always active.
+  app.use(expressAlertErrorHandler);
 
   const preferredPort = parseInt(process.env.PORT || "3000");
   const port = await findAvailablePort(preferredPort);
@@ -304,6 +307,11 @@ async function startServer() {
     startScrapeJobZombieSweeper();
     startViralPostsPoolRefresher();
 
+    alertOwnerThrottled({
+      kind: "startup",
+      message: `Server started on ${port} — error monitoring online`,
+    });
+
     // Set up Telegram webhook after server starts (non-blocking)
     if (process.env.NODE_ENV === "production") {
       setupTelegramWebhook("https://spyreels.ai").catch((err) => {
@@ -313,4 +321,7 @@ async function startServer() {
   });
 }
 
-startServer().catch(console.error);
+startServer().catch((err) => {
+  console.error(err);
+  alertOwnerThrottled({ kind: "boot", error: err });
+});

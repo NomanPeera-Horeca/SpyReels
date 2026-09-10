@@ -2,6 +2,7 @@ import {
   listStaleProcessingWatermarkJobs,
   markWatermarkJobFailed,
 } from "./db";
+import { alertOwnerThrottled } from "../monitoring/alerts";
 
 export const WATERMARK_JOB_STALE_MS = 10 * 60 * 1000;
 export const WATERMARK_JOB_ZOMBIE_MESSAGE =
@@ -21,6 +22,10 @@ export async function sweepZombieWatermarkJobs(): Promise<number> {
     console.log(
       `[watermarkSweeper] marked ${rows.length} stale processing row(s) as failed`
     );
+    alertOwnerThrottled({
+      kind: "sweeper",
+      message: `${rows.length} stale watermark job(s) auto-failed (render process likely died)`,
+    });
   }
   return rows.length;
 }

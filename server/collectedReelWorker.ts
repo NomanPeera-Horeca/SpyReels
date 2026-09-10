@@ -15,6 +15,7 @@ import { ensureReelThumbnailOnR2 } from "./reelThumbnailR2";
 import { ensureTiktokThumbnailOnR2 } from "./tiktokThumbnailR2";
 import { ensureReelVideoOnR2 } from "./reelVideoR2";
 import type { CollectedVideoPlatform } from "./socialVideoUrl";
+import { alertOwnerThrottled } from "./monitoring/alerts";
 
 export const COLLECTED_REEL_MAX_FETCH_ATTEMPTS = 24;
 
@@ -368,9 +369,10 @@ export async function sweepCollectedReelIngestQueue(batchSize = 8): Promise<numb
 export function startCollectedReelIngestSweeper(): void {
   const INTERVAL_MS = 90_000;
   setInterval(() => {
-    sweepCollectedReelIngestQueue().catch((e) =>
-      console.error("[collectedReelSweeper]", e)
-    );
+    sweepCollectedReelIngestQueue().catch((e) => {
+      console.error("[collectedReelSweeper]", e);
+      alertOwnerThrottled({ kind: "sweeper", message: "collectedReelSweeper crashed", error: e });
+    });
   }, INTERVAL_MS);
   void sweepCollectedReelIngestQueue();
 }

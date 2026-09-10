@@ -1,5 +1,6 @@
 import type { ErrorRequestHandler, Express } from "express";
 import { PostHog } from "posthog-node";
+import { alertOwnerThrottled } from "../monitoring/alerts";
 
 /**
  * PostHog Error Tracking from the server.
@@ -65,9 +66,11 @@ export function registerServerErrorMonitoring() {
   registered = true;
 
   process.on("uncaughtException", err => {
+    alertOwnerThrottled({ kind: "uncaughtException", error: err });
     void captureServerException(err, { kind: "uncaughtException" });
   });
   process.on("unhandledRejection", reason => {
+    alertOwnerThrottled({ kind: "unhandledRejection", error: reason });
     void captureServerException(reason, { kind: "unhandledRejection" });
   });
 }

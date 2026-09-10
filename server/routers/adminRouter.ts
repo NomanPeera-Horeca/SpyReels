@@ -8,6 +8,7 @@ import { trafficReportFiltersSchema, buildTrafficConversionReport } from "../adm
 import { panelUserFiltersSchema, buildPanelUserReport } from "../adminUserMetrics";
 import { getDb } from "../db";
 import { and, desc, asc, sql, isNotNull, or, eq, like, not } from "drizzle-orm";
+import { getAlertTelemetry } from "../monitoring/alerts";
 
 const panelUserSummaryFiltersSchema = panelUserFiltersSchema.omit({
   limit: true,
@@ -28,6 +29,8 @@ function inferPanelTestAccount(u: (typeof users.$inferSelect)): boolean {
 
 export const adminRouter = router({
     ping: adminPanelProcedure.query(() => ({ ok: true as const })),
+
+    monitoringStatus: adminPanelProcedure.query(() => getAlertTelemetry()),
 
     trafficConversionReport: adminPanelProcedure
       .input(trafficReportFiltersSchema.optional())
