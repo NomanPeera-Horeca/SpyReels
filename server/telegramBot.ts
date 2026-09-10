@@ -6,6 +6,7 @@
  */
 
 import { ENV } from "./_core/env";
+import type { User } from "../drizzle/schema";
 import {
   getTelegramConnectionByChatId,
   getTelegramConnectionByLinkCode,
@@ -317,6 +318,25 @@ export async function setupTelegramWebhook(baseUrl: string): Promise<boolean> {
 // ── Notify owner via Telegram ──
 
 /**
+ * Resolve the owner's user record: prefer `OWNER_OPEN_ID`, fall back to the
+ * `ADMIN_EMAIL` identity that owns the admin panel. Returns null when neither
+ * matches an existing user.
+ */
+async function getOwnerUser(): Promise<User | null> {
+  const { getUserByOpenId, getUserByEmail } = await import("./db");
+  if (ENV.ownerOpenId.trim()) {
+    const byOpenId = await getUserByOpenId(ENV.ownerOpenId);
+    if (byOpenId) return byOpenId;
+  }
+  const adminEmail = (process.env.ADMIN_EMAIL ?? "").trim().toLowerCase();
+  if (adminEmail) {
+    const byEmail = await getUserByEmail(adminEmail);
+    if (byEmail) return byEmail;
+  }
+  return null;
+}
+
+/**
  * Send a notification message to the owner's Telegram account.
  * Looks up the owner's Telegram chat ID from their connected account.
  * Falls back silently if owner hasn't connected Telegram.
@@ -327,8 +347,8 @@ export async function notifyOwnerViaTelegram(message: string): Promise<void> {
 
   try {
     // Find the owner's user record
-    const { getUserByOpenId, getTelegramConnectionByUserId } = await import("./db");
-    const ownerUser = await getUserByOpenId(ENV.ownerOpenId);
+    const { getTelegramConnectionByUserId } = await import("./db");
+    const ownerUser = await getOwnerUser();
     if (!ownerUser) {
       console.warn("[Telegram] Owner user not found, cannot send notification");
       return;
