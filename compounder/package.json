@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "check": "node --check server.js"
+    "start": "node seed-defaults.js && node server.js",
+    "check": "node --check server.js && node --check seed-defaults.js"
   },
   "dependencies": {
     "connect-pg-simple": "^10.0.0",
