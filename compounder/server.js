@@ -6,6 +6,7 @@ import pg from 'pg';
 import connectPgSimple from 'connect-pg-simple';
 import path from 'path';
 import crypto from 'crypto';
+import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
 
 const { Pool } = pg;
@@ -171,7 +172,6 @@ async function marketQuote(symbol) {
   if (!marketDataReady()) throw new Error('MARKET_DATA_NOT_CONFIGURED');
   const cleanSymbol = symbol.toUpperCase();
   const headers = alpacaHeaders();
-
   const end = new Date();
   const start = new Date(end);
   start.setUTCDate(start.getUTCDate() - 370);
@@ -190,7 +190,6 @@ async function marketQuote(symbol) {
     fetch(snapshotUrl, { headers }),
     fetch(barsUrl, { headers })
   ]);
-
   if (!snapshotRes.ok) throw new Error(`ALPACA_SNAPSHOT_${snapshotRes.status}`);
   if (!barsRes.ok) throw new Error(`ALPACA_BARS_${barsRes.status}`);
 
@@ -211,16 +210,39 @@ async function marketQuote(symbol) {
   const prevClose = Number(snapshot.prevDailyBar?.c ?? NaN);
   const changePct = Number.isFinite(prevClose) && prevClose !== 0 ? ((price - prevClose) / prevClose) * 100 : NaN;
 
-  return {
-    symbol: cleanSymbol,
-    name: found?.name || cleanSymbol,
-    price,
-    low52: low,
-    high52: high,
-    changePct,
-    sourceTimestamp: snapshot.latestTrade?.t || snapshot.minuteBar?.t || new Date().toISOString(),
-    source: 'alpaca-iex'
-  };
+  return { symbol: cleanSymbol, name: found?.name || cleanSymbol, price, low52: low, high52: high, changePct, sourceTimestamp: snapshot.latestTrade?.t || snapshot.minuteBar?.t || new Date().toISOString(), source: 'alpaca-iex' };
+}
+
+async function historicalYearlyPrices(symbol, years = 10) {
+  if (!marketDataReady()) throw new Error('MARKET_DATA_NOT_CONFIGURED');
+  const cleanSymbol = symbol.toUpperCase();
+  const end = new Date();
+  const start = new Date(end);
+  start.setUTCFullYear(start.getUTCFullYear() - Math.max(1, Math.min(15, years)));
+  const url = new URL(`/v2/stocks/${encodeURIComponent(cleanSymbol)}/bars`, ALPACA_DATA_BASE_URL);
+  url.searchParams.set('timeframe', '1Day');
+  url.searchParams.set('start', start.toISOString());
+  url.searchParams.set('end', end.toISOString());
+  url.searchParams.set('adjustment', 'all');
+  url.searchParams.set('feed', 'iex');
+  url.searchParams.set('limit', '10000');
+  const r = await fetch(url, { headers: alpacaHeaders() });
+  if (!r.ok) throw new Error(`ALPACA_HISTORY_${r.status}`);
+  const j = await r.json();
+  const bars = Array.isArray(j.bars) ? j.bars : [];
+  if (!bars.length) throw new Error('ALPACA_HISTORY_EMPTY');
+
+  const yearly = new Map();
+  for (const bar of bars) {
+    const d = new Date(bar.t);
+    if (Number.isNaN(d.getTime())) continue;
+    const y = d.getUTCFullYear();
+    const close = Number(bar.c);
+    if (!Number.isFinite(close)) continue;
+    const prev = yearly.get(y);
+    if (!prev || d > prev.date) yearly.set(y, { year:y, date:d, price:close });
+  }
+  return [...yearly.values()].sort((a,b)=>a.year-b.year).map(x=>({year:x.year,price:x.price,date:x.date.toISOString()}));
 }
 
 app.get('/api/stocks/search', requireAuth, async (req,res) => {
@@ -228,6 +250,14 @@ app.get('/api/stocks/search', requireAuth, async (req,res) => {
   if (!q) return res.json({ data:[] });
   try { res.json({ data: await marketSearch(q) }); }
   catch (e) { res.status(503).json({ error:e.message, data:[] }); }
+});
+
+app.get('/api/stocks/:symbol/history', requireAuth, async (req,res) => {
+  try {
+    const years = Number(req.query.years || 10);
+    const data = await historicalYearlyPrices(req.params.symbol, years);
+    res.json({ symbol:req.params.symbol.toUpperCase(), data, source:'alpaca-iex', requestedYears:years, availableYears:data.length });
+  } catch(e) { res.status(503).json({ error:e.message, data:[] }); }
 });
 
 app.get('/api/stocks/:symbol', requireAuth, async (req,res) => {
@@ -276,7 +306,71 @@ app.post('/api/admin/watchlist/:symbol/global', requireAuth, async (req,res) => 
   res.json({ ok:true });
 });
 
-app.use(express.static(path.join(__dirname,'public')));
-app.get('*', (_req,res) => res.sendFile(path.join(__dirname,'public','index.html')));
+const publicDir = path.join(__dirname,'public');
+app.use(express.static(publicDir,{index:false}));
+
+function enhancementScript(){
+  return `<nav class="pwa-nav" id="pwaNav"><button class="active" onclick="closeDetail()"><span class="nav-icon">⌂</span>Watchlist</button><button onclick="document.getElementById('q')?.focus()"><span class="nav-icon">＋</span>Add</button><button onclick="window.scrollTo({top:0,behavior:'smooth'})"><span class="nav-icon">↑</span>Top</button></nav>
+<script>
+(function(){
+  const chartHTML='<div class="card" id="historyCard"><div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-end;flex-wrap:wrap"><div><h2 style="margin:0">Price history</h2><div class="summaryLine" id="historySub">Year-end price, hover or drag to inspect</div></div><div class="tag unknown" id="historyRange">10Y</div></div><div style="position:relative;height:300px;margin-top:16px"><canvas id="historyChart" style="width:100%;height:100%;display:block"></canvas><div id="historyTip" style="display:none;position:absolute;pointer-events:none;background:#111;color:#fff;padding:8px 10px;border-radius:10px;font-size:12px;font-weight:800;transform:translate(-50%,-115%);white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.18)"></div></div><div class="sourceNote">Historical prices use adjusted Alpaca IEX data. If fewer than 10 years are available on the free feed, Compounder shows the years actually returned rather than inventing missing history.</div></div>';
+  const summary=document.querySelector('#detailView .summary');
+  if(summary) summary.insertAdjacentHTML('beforebegin',chartHTML);
+
+  const originalOpen=window.openDetail;
+  window.openDetail=async function(encoded){
+    await originalOpen(encoded);
+    try{const x=JSON.parse(encoded);loadHistory(x.symbol);}catch(e){}
+    document.querySelectorAll('#pwaNav button').forEach((b,i)=>b.classList.toggle('active',i===0));
+  };
+
+  async function loadHistory(symbol){
+    const sub=document.getElementById('historySub'); const range=document.getElementById('historyRange');
+    sub.textContent='Loading yearly prices…';
+    try{
+      const r=await fetch('/api/stocks/'+encodeURIComponent(symbol)+'/history?years=10');
+      const j=await r.json(); if(!r.ok||!j.data?.length) throw new Error(j.error||'No history');
+      sub.textContent='Year-end adjusted price · hover or drag to inspect';
+      range.textContent=j.availableYears+'Y available';
+      drawHistory(j.data);
+    }catch(e){ sub.textContent='Historical chart unavailable right now'; drawHistory([]); }
+  }
+
+  function drawHistory(data){
+    const c=document.getElementById('historyChart'); if(!c) return;
+    const box=c.getBoundingClientRect(); const dpr=Math.max(1,window.devicePixelRatio||1);
+    c.width=Math.round(box.width*dpr); c.height=Math.round(box.height*dpr);
+    const ctx=c.getContext('2d'); ctx.scale(dpr,dpr); const w=box.width,h=box.height;
+    ctx.clearRect(0,0,w,h); if(!data.length) return;
+    const pad={l:14,r:14,t:20,b:34}; const vals=data.map(d=>Number(d.price)); const min=Math.min(...vals),max=Math.max(...vals); const span=Math.max(1,max-min);
+    const pts=data.map((d,i)=>({x:pad.l+(i*(w-pad.l-pad.r)/Math.max(1,data.length-1)),y:pad.t+((max-Number(d.price))/span)*(h-pad.t-pad.b),...d}));
+    ctx.strokeStyle='#d7dce2';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pad.l,h-pad.b);ctx.lineTo(w-pad.r,h-pad.b);ctx.stroke();
+    const grad=ctx.createLinearGradient(0,pad.t,0,h-pad.b);grad.addColorStop(0,'rgba(17,19,24,.12)');grad.addColorStop(1,'rgba(17,19,24,0)');
+    ctx.beginPath();pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.lineTo(pts[pts.length-1].x,h-pad.b);ctx.lineTo(pts[0].x,h-pad.b);ctx.closePath();ctx.fillStyle=grad;ctx.fill();
+    ctx.beginPath();pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.strokeStyle='#111318';ctx.lineWidth=3;ctx.lineJoin='round';ctx.lineCap='round';ctx.stroke();
+    ctx.font='11px Inter,system-ui,sans-serif';ctx.fillStyle='#7a828d';ctx.textAlign='center';
+    pts.forEach((p,i)=>{if(data.length<=8||i===0||i===pts.length-1||i%2===0)ctx.fillText(String(p.year),p.x,h-10)});
+    c._pts=pts; c._render=()=>drawHistory(data);
+    if(!c._bound){
+      const inspect=(ev)=>{const rect=c.getBoundingClientRect();const clientX=ev.touches?.[0]?.clientX??ev.clientX;const x=clientX-rect.left;const pts=c._pts||[];if(!pts.length)return;let p=pts.reduce((a,b)=>Math.abs(b.x-x)<Math.abs(a.x-x)?b:a);c._render();const ctx=c.getContext('2d');const dpr=Math.max(1,window.devicePixelRatio||1);ctx.save();ctx.scale(dpr,dpr);ctx.strokeStyle='rgba(17,19,24,.18)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(p.x,18);ctx.lineTo(p.x,rect.height-34);ctx.stroke();ctx.fillStyle='#111318';ctx.beginPath();ctx.arc(p.x,p.y,5,0,Math.PI*2);ctx.fill();ctx.restore();const tip=document.getElementById('historyTip');tip.style.display='block';tip.style.left=p.x+'px';tip.style.top=p.y+'px';tip.textContent=p.year+' · $'+Number(p.price).toFixed(2);};
+      c.addEventListener('mousemove',inspect);c.addEventListener('touchstart',inspect,{passive:true});c.addEventListener('touchmove',inspect,{passive:true});c.addEventListener('mouseleave',()=>{document.getElementById('historyTip').style.display='none';c._render?.()});c._bound=true;
+      window.addEventListener('resize',()=>c._render?.());
+    }
+  }
+  if('serviceWorker' in navigator) window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));
+})();
+</script>`;
+}
+
+app.get('*', async (_req,res) => {
+  try {
+    let html = await fs.readFile(path.join(publicDir,'index.html'),'utf8');
+    html = html.replace('</head>', '<meta name="theme-color" content="#111318"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><meta name="apple-mobile-web-app-title" content="Compounder"><link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/compounder-icon.svg"><link rel="stylesheet" href="/mobile.css"></head>');
+    html = html.replace('</body>', enhancementScript() + '</body>');
+    res.type('html').send(html);
+  } catch (e) {
+    res.status(500).send('Compounder is updating.');
+  }
+});
 
 migrate().then(() => app.listen(PORT, () => console.log(`Compounder listening on ${PORT}`))).catch(err => { console.error(err); process.exit(1); });
