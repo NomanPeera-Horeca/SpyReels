@@ -14,8 +14,9 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 const DATABASE_URL = process.env.DATABASE_URL || '';
 const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || '').toLowerCase();
-const MARKET_DATA_API_KEY = process.env.MARKET_DATA_API_KEY || '';
-const MARKET_DATA_BASE_URL = process.env.MARKET_DATA_BASE_URL || 'https://api.twelvedata.com';
+const ALPACA_API_KEY = process.env.ALPACA_API_KEY || '';
+const ALPACA_SECRET_KEY = process.env.ALPACA_SECRET_KEY || '';
+const ALPACA_DATA_BASE_URL = process.env.ALPACA_DATA_BASE_URL || 'https://data.alpaca.markets';
 const APP_URL = process.env.APP_URL || `http://localhost:${PORT}`;
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(48).toString('hex');
 
@@ -113,42 +114,113 @@ app.use(passport.session());
 function authReady() {
   return Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET && pool);
 }
+function marketDataReady() {
+  return Boolean(ALPACA_API_KEY && ALPACA_SECRET_KEY);
+}
 function requireAuth(req, res, next) {
   if (!req.user) return res.status(401).json({ error: 'AUTH_REQUIRED' });
   next();
 }
 
-app.get('/health', (_req, res) => res.json({ ok: true, database: Boolean(pool), googleAuth: authReady(), marketData: Boolean(MARKET_DATA_API_KEY), now: new Date().toISOString() }));
-app.get('/api/config', (req, res) => res.json({ authReady: authReady(), marketDataReady: Boolean(MARKET_DATA_API_KEY), signedIn: Boolean(req.user), user: req.user ? { name:req.user.name,email:req.user.email,role:req.user.role } : null }));
+app.get('/health', (_req, res) => res.json({ ok: true, database: Boolean(pool), googleAuth: authReady(), marketData: marketDataReady(), marketDataProvider: marketDataReady() ? 'alpaca-iex' : null, now: new Date().toISOString() }));
+app.get('/api/config', (req, res) => res.json({ authReady: authReady(), marketDataReady: marketDataReady(), marketDataProvider: marketDataReady() ? 'Alpaca IEX' : null, signedIn: Boolean(req.user), user: req.user ? { name:req.user.name,email:req.user.email,role:req.user.role } : null }));
 app.get('/auth/google', (req, res, next) => authReady() ? passport.authenticate('google', { scope: ['profile','email'] })(req,res,next) : res.status(503).send('Google sign-in is being connected.'));
 app.get('/auth/google/callback', (req, res, next) => authReady() ? passport.authenticate('google', { failureRedirect: '/?auth=failed' })(req,res,()=>res.redirect('/')) : res.redirect('/'));
 app.post('/auth/logout', (req, res) => req.logout(() => { req.session.destroy(()=>res.json({ ok:true })); }));
 
-async function marketSearch(query) {
-  if (!MARKET_DATA_API_KEY) throw new Error('MARKET_DATA_NOT_CONFIGURED');
-  const url = new URL('/symbol_search', MARKET_DATA_BASE_URL);
-  url.searchParams.set('symbol', query);
-  url.searchParams.set('apikey', MARKET_DATA_API_KEY);
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`MARKET_SEARCH_${r.status}`);
+function alpacaHeaders() {
+  if (!marketDataReady()) throw new Error('MARKET_DATA_NOT_CONFIGURED');
+  return {
+    'APCA-API-KEY-ID': ALPACA_API_KEY,
+    'APCA-API-SECRET-KEY': ALPACA_SECRET_KEY
+  };
+}
+
+let secTickerCache = { loadedAt: 0, rows: [] };
+async function getSecTickers() {
+  const twelveHours = 12 * 60 * 60 * 1000;
+  if (secTickerCache.rows.length && Date.now() - secTickerCache.loadedAt < twelveHours) return secTickerCache.rows;
+  const r = await fetch('https://www.sec.gov/files/company_tickers.json', {
+    headers: { 'User-Agent': 'Compounder family investing app admin@agentzen.io' }
+  });
+  if (!r.ok) throw new Error(`SEC_TICKER_SEARCH_${r.status}`);
   const j = await r.json();
-  return (j.data || []).slice(0, 8).map(x => ({ symbol:x.symbol, name:x.instrument_name || x.name || x.symbol, exchange:x.exchange || null, country:x.country || null, type:x.instrument_type || null }));
+  const rows = Object.values(j).map(x => ({ symbol: String(x.ticker || '').toUpperCase(), name: x.title || x.ticker, cik: x.cik_str }));
+  secTickerCache = { loadedAt: Date.now(), rows };
+  return rows;
+}
+
+async function marketSearch(query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+  const rows = await getSecTickers();
+  const starts = [];
+  const contains = [];
+  for (const x of rows) {
+    const sym = x.symbol.toLowerCase();
+    const name = x.name.toLowerCase();
+    const item = { symbol:x.symbol, name:x.name, exchange:null, country:'US', type:'Common Stock' };
+    if (sym === q || name === q || sym.startsWith(q) || name.startsWith(q)) starts.push(item);
+    else if (sym.includes(q) || name.includes(q)) contains.push(item);
+    if (starts.length >= 8) break;
+  }
+  return [...starts, ...contains].slice(0, 8);
 }
 
 async function marketQuote(symbol) {
-  if (!MARKET_DATA_API_KEY) throw new Error('MARKET_DATA_NOT_CONFIGURED');
-  const url = new URL('/quote', MARKET_DATA_BASE_URL);
-  url.searchParams.set('symbol', symbol);
-  url.searchParams.set('apikey', MARKET_DATA_API_KEY);
-  const r = await fetch(url);
-  if (!r.ok) throw new Error(`MARKET_QUOTE_${r.status}`);
-  const j = await r.json();
-  const f = j.fifty_two_week || j['52_week'] || {};
-  const price = Number(j.close ?? j.price ?? j.last ?? NaN);
-  const low = Number(f.low ?? j.fifty_two_week_low ?? NaN);
-  const high = Number(f.high ?? j.fifty_two_week_high ?? NaN);
-  if (![price,low,high].every(Number.isFinite)) throw new Error('MARKET_DATA_INCOMPLETE');
-  return { symbol, name:j.name || symbol, price, low52:low, high52:high, changePct:Number(j.percent_change ?? NaN), sourceTimestamp:new Date().toISOString(), source:'twelvedata' };
+  if (!marketDataReady()) throw new Error('MARKET_DATA_NOT_CONFIGURED');
+  const cleanSymbol = symbol.toUpperCase();
+  const headers = alpacaHeaders();
+
+  const end = new Date();
+  const start = new Date(end);
+  start.setUTCDate(start.getUTCDate() - 370);
+
+  const snapshotUrl = new URL(`/v2/stocks/${encodeURIComponent(cleanSymbol)}/snapshot`, ALPACA_DATA_BASE_URL);
+  snapshotUrl.searchParams.set('feed', 'iex');
+  const barsUrl = new URL(`/v2/stocks/${encodeURIComponent(cleanSymbol)}/bars`, ALPACA_DATA_BASE_URL);
+  barsUrl.searchParams.set('timeframe', '1Day');
+  barsUrl.searchParams.set('start', start.toISOString());
+  barsUrl.searchParams.set('end', end.toISOString());
+  barsUrl.searchParams.set('adjustment', 'all');
+  barsUrl.searchParams.set('feed', 'iex');
+  barsUrl.searchParams.set('limit', '1000');
+
+  const [snapshotRes, barsRes] = await Promise.all([
+    fetch(snapshotUrl, { headers }),
+    fetch(barsUrl, { headers })
+  ]);
+
+  if (!snapshotRes.ok) throw new Error(`ALPACA_SNAPSHOT_${snapshotRes.status}`);
+  if (!barsRes.ok) throw new Error(`ALPACA_BARS_${barsRes.status}`);
+
+  const snapshot = await snapshotRes.json();
+  const barsJson = await barsRes.json();
+  const bars = Array.isArray(barsJson.bars) ? barsJson.bars : [];
+  if (!bars.length) throw new Error('ALPACA_52W_HISTORY_EMPTY');
+
+  const lows = bars.map(b => Number(b.l)).filter(Number.isFinite);
+  const highs = bars.map(b => Number(b.h)).filter(Number.isFinite);
+  const price = Number(snapshot.latestTrade?.p ?? snapshot.minuteBar?.c ?? snapshot.dailyBar?.c ?? NaN);
+  const low = Math.min(...lows);
+  const high = Math.max(...highs);
+  if (![price, low, high].every(Number.isFinite)) throw new Error('MARKET_DATA_INCOMPLETE');
+
+  const tickers = await getSecTickers();
+  const found = tickers.find(x => x.symbol === cleanSymbol);
+  const prevClose = Number(snapshot.prevDailyBar?.c ?? NaN);
+  const changePct = Number.isFinite(prevClose) && prevClose !== 0 ? ((price - prevClose) / prevClose) * 100 : NaN;
+
+  return {
+    symbol: cleanSymbol,
+    name: found?.name || cleanSymbol,
+    price,
+    low52: low,
+    high52: high,
+    changePct,
+    sourceTimestamp: snapshot.latestTrade?.t || snapshot.minuteBar?.t || new Date().toISOString(),
+    source: 'alpaca-iex'
+  };
 }
 
 app.get('/api/stocks/search', requireAuth, async (req,res) => {
@@ -163,7 +235,7 @@ app.get('/api/stocks/:symbol', requireAuth, async (req,res) => {
     const q = await marketQuote(req.params.symbol.toUpperCase());
     const distanceAboveLowPct = ((q.price - q.low52) / q.low52) * 100;
     const distanceBelowHighPct = ((q.high52 - q.price) / q.high52) * 100;
-    res.json({ ...q, distanceAboveLowPct, distanceBelowHighPct, freshness:'live' });
+    res.json({ ...q, distanceAboveLowPct, distanceBelowHighPct, freshness:'live-iex' });
   } catch(e) { res.status(503).json({ error:e.message, freshness:'unavailable' }); }
 });
 
