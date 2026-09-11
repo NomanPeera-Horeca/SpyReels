@@ -7,23 +7,28 @@ const ALPACA_API_KEY = process.env.ALPACA_API_KEY || '';
 const ALPACA_SECRET_KEY = process.env.ALPACA_SECRET_KEY || '';
 const ALPACA_DATA_BASE_URL = process.env.ALPACA_DATA_BASE_URL || 'https://data.alpaca.markets';
 
-// Strict default policy: only names currently verified as Shariah-compliant
-// under AAOIFI-style screening are seeded globally. Questionable/unknown names
-// are deliberately excluded until they can be re-verified.
+// Compounder Shariah policy:
+// - compliant: allowed and labelled Compliant
+// - questionable: allowed and clearly labelled Questionable
+// - unknown: allowed and clearly labelled Unknown, never presented as halal
+// - non-compliant: blocked from being added/investment lists
+// Status must be rechecked over time because financial ratios/business mix can change.
 const defaults = [
-  { symbol: 'SPUS', name: 'SP Funds S&P 500 Sharia Industry Exclusions ETF' },
-  { symbol: 'AVGO', name: 'Broadcom Inc.' },
-  { symbol: 'MA', name: 'Mastercard Inc.' },
-  { symbol: 'ANET', name: 'Arista Networks Inc.' },
-  { symbol: 'PANW', name: 'Palo Alto Networks Inc.' },
-  { symbol: 'NVDA', name: 'NVIDIA Corp.' },
-  { symbol: 'NOW', name: 'ServiceNow Inc.' }
+  { symbol: 'SPUS', name: 'SP Funds S&P 500 Sharia Industry Exclusions ETF', shariahStatus: 'compliant' },
+  { symbol: 'MSFT', name: 'Microsoft Corp.', shariahStatus: 'questionable' },
+  { symbol: 'GOOGL', name: 'Alphabet Inc.', shariahStatus: 'questionable' },
+  { symbol: 'META', name: 'Meta Platforms Inc.', shariahStatus: 'questionable' },
+  { symbol: 'AVGO', name: 'Broadcom Inc.', shariahStatus: 'compliant' },
+  { symbol: 'MA', name: 'Mastercard Inc.', shariahStatus: 'compliant' },
+  { symbol: 'ANET', name: 'Arista Networks Inc.', shariahStatus: 'compliant' },
+  { symbol: 'PANW', name: 'Palo Alto Networks Inc.', shariahStatus: 'compliant' },
+  { symbol: 'NVDA', name: 'NVIDIA Corp.', shariahStatus: 'compliant' },
+  { symbol: 'AMZN', name: 'Amazon.com Inc.', shariahStatus: 'questionable' },
+  { symbol: 'NOW', name: 'ServiceNow Inc.', shariahStatus: 'compliant' }
 ];
 
-// These were previously seeded but are not part of the strict halal default set.
-// SPY is a conventional S&P 500 fund. MSFT, GOOGL, META and AMZN are currently
-// treated as questionable by the screening source used for this release.
-const removeFromGlobal = ['SPY', 'MSFT', 'GOOGL', 'META', 'AMZN'];
+// Conventional SPY is intentionally not seeded because it is not a Shariah-screened S&P 500 fund.
+const removeFromGlobal = ['SPY'];
 
 if (!DATABASE_URL || !ADMIN_EMAIL) {
   console.log('Compounder defaults: DATABASE_URL or ADMIN_EMAIL missing, skipping seed.');
@@ -92,7 +97,6 @@ async function run() {
   }
   const adminId = adminResult.rows[0].id;
 
-  // Remove only the admin's global seed entries. Private user watchlists are not touched.
   if (removeFromGlobal.length) {
     await pool.query(
       `delete from watchlist_items w
@@ -129,7 +133,7 @@ async function run() {
           [securityId, q.price, q.low52, q.high52, q.sourceTimestamp]
         );
       }
-      console.log(`Compounder defaults: seeded halal default ${item.symbol}`);
+      console.log(`Compounder defaults: seeded ${item.symbol} (${item.shariahStatus})`);
     } catch (err) {
       console.warn(`Compounder defaults: failed ${item.symbol}: ${err.message}`);
     }
