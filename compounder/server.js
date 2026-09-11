@@ -5,6 +5,7 @@ import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import pg from 'pg';
 import connectPgSimple from 'connect-pg-simple';
 import path from 'path';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 
 const { Pool } = pg;
@@ -16,6 +17,11 @@ const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || '').toLowerCase();
 const MARKET_DATA_API_KEY = process.env.MARKET_DATA_API_KEY || '';
 const MARKET_DATA_BASE_URL = process.env.MARKET_DATA_BASE_URL || 'https://api.twelvedata.com';
 const APP_URL = process.env.APP_URL || `http://localhost:${PORT}`;
+const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(48).toString('hex');
+
+if (!process.env.SESSION_SECRET && process.env.NODE_ENV === 'production') {
+  console.warn('SESSION_SECRET is not configured; sessions will reset whenever the service restarts.');
+}
 
 const pool = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL, ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false }) : null;
 
@@ -66,7 +72,7 @@ app.use(express.json());
 app.set('trust proxy', 1);
 app.use(session({
   store: pool ? new PgSession({ pool, createTableIfMissing: true }) : undefined,
-  secret: process.env.SESSION_SECRET || 'compounder-dev-only-change-me',
+  secret: SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   cookie: { secure: process.env.NODE_ENV === 'production', httpOnly: true, sameSite: 'lax', maxAge: 1000 * 60 * 60 * 24 * 30 }
