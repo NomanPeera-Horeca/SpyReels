@@ -7,19 +7,23 @@ const ALPACA_API_KEY = process.env.ALPACA_API_KEY || '';
 const ALPACA_SECRET_KEY = process.env.ALPACA_SECRET_KEY || '';
 const ALPACA_DATA_BASE_URL = process.env.ALPACA_DATA_BASE_URL || 'https://data.alpaca.markets';
 
+// Strict default policy: only names currently verified as Shariah-compliant
+// under AAOIFI-style screening are seeded globally. Questionable/unknown names
+// are deliberately excluded until they can be re-verified.
 const defaults = [
-  { symbol: 'SPY', name: 'S&P 500 (SPY)' },
-  { symbol: 'MSFT', name: 'Microsoft Corp.' },
-  { symbol: 'GOOGL', name: 'Alphabet Inc.' },
-  { symbol: 'META', name: 'Meta Platforms Inc.' },
+  { symbol: 'SPUS', name: 'SP Funds S&P 500 Sharia Industry Exclusions ETF' },
   { symbol: 'AVGO', name: 'Broadcom Inc.' },
   { symbol: 'MA', name: 'Mastercard Inc.' },
   { symbol: 'ANET', name: 'Arista Networks Inc.' },
   { symbol: 'PANW', name: 'Palo Alto Networks Inc.' },
   { symbol: 'NVDA', name: 'NVIDIA Corp.' },
-  { symbol: 'AMZN', name: 'Amazon.com Inc.' },
   { symbol: 'NOW', name: 'ServiceNow Inc.' }
 ];
+
+// These were previously seeded but are not part of the strict halal default set.
+// SPY is a conventional S&P 500 fund. MSFT, GOOGL, META and AMZN are currently
+// treated as questionable by the screening source used for this release.
+const removeFromGlobal = ['SPY', 'MSFT', 'GOOGL', 'META', 'AMZN'];
 
 if (!DATABASE_URL || !ADMIN_EMAIL) {
   console.log('Compounder defaults: DATABASE_URL or ADMIN_EMAIL missing, skipping seed.');
@@ -88,6 +92,19 @@ async function run() {
   }
   const adminId = adminResult.rows[0].id;
 
+  // Remove only the admin's global seed entries. Private user watchlists are not touched.
+  if (removeFromGlobal.length) {
+    await pool.query(
+      `delete from watchlist_items w
+       using securities s
+       where w.security_id=s.id
+         and w.user_id=$1
+         and w.visibility='global'
+         and s.symbol = any($2::text[])`,
+      [adminId, removeFromGlobal]
+    );
+  }
+
   for (const item of defaults) {
     try {
       const sec = await pool.query(
@@ -112,7 +129,7 @@ async function run() {
           [securityId, q.price, q.low52, q.high52, q.sourceTimestamp]
         );
       }
-      console.log(`Compounder defaults: seeded ${item.symbol}`);
+      console.log(`Compounder defaults: seeded halal default ${item.symbol}`);
     } catch (err) {
       console.warn(`Compounder defaults: failed ${item.symbol}: ${err.message}`);
     }
