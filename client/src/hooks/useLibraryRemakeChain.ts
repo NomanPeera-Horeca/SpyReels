@@ -127,6 +127,7 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
         remakeKey: key,
         scriptId,
         reelId,
+        source,
       });
       setWorkspaceOpen(true);
     },
@@ -614,6 +615,10 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
       onOpenChange: setWorkspaceOpen,
       target: workspaceTarget,
       remakeState: workspaceRemakeState,
+      onRetryRemake:
+        workspaceTarget?.source != null
+          ? () => retryRemake(workspaceTarget.source!)
+          : undefined,
       onOpenTeleprompter: (reelId: number, scriptId: number) => {
         onOpenTeleprompterRef.current?.(reelId, scriptId);
       },
