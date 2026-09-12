@@ -6,13 +6,14 @@ import {
 } from "@/components/RemakeWorkspaceDialogAgenticV2";
 import { TeleprompterMode } from "@/pages/TeleprompterMode";
 import { trpc } from "@/lib/trpc";
+import {
+  REMAKE_WORKSPACE_BODY_ATTR,
+  REMAKE_WORKSPACE_OPEN_EVENT,
+} from "@/lib/remakeWorkspaceEvents";
 
 export type { RemakeWorkspaceTarget };
 
 type Props = ComponentProps<typeof RemakeWorkspaceDialogAgenticV2>;
-
-export const REMAKE_WORKSPACE_OPEN_EVENT = "spyreels:remake-workspace-open";
-export const REMAKE_WORKSPACE_BODY_ATTR = "data-spyreels-remake-workspace-open";
 
 export function RemakeWorkspaceDialog(props: Props) {
   const [teleprompterScriptId, setTeleprompterScriptId] = useState<number | null>(null);
