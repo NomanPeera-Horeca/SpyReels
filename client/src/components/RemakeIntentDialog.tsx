@@ -113,6 +113,7 @@ export function RemakeIntentDialog({
           {mode === "custom" ? (
             <textarea
               autoFocus
+              maxLength={2000}
               value={angle}
               onChange={(event) => setAngle(event.target.value)}
               placeholder='Example: Use this 4-box structure for "How to write a restaurant menu"'
