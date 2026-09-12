@@ -53,6 +53,46 @@ type ScheduleResolution =
   | { ok: true; date: Date; time: string; label: string }
   | { ok: false; question: string };
 
+type CaptionStyle =
+  | "educational"
+  | "storytelling"
+  | "curiosity"
+  | "bold"
+  | "relatable"
+  | "cta"
+  | "question";
+type CaptionLength = "auto" | "short" | "medium" | "long";
+
+const CAPTION_STYLES: CaptionStyle[] = [
+  "educational",
+  "storytelling",
+  "curiosity",
+  "bold",
+  "relatable",
+  "cta",
+  "question",
+];
+
+const CAPTION_LENGTHS: CaptionLength[] = ["auto", "short", "medium", "long"];
+
+function isCaptionStyle(value: string | null | undefined): value is CaptionStyle {
+  return Boolean(value && CAPTION_STYLES.includes(value as CaptionStyle));
+}
+
+function parseSavedHashtags(value: string | null | undefined): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((tag) => String(tag ?? "").replace(/^#/, "").trim())
+      .filter(Boolean)
+      .slice(0, 5);
+  } catch {
+    return [];
+  }
+}
+
 export type RemakeWorkspaceTarget = {
   scriptId: number | null;
   reelId: number | null;
@@ -199,6 +239,10 @@ export function RemakeWorkspaceDialog({
   const [script, setScript] = useState("");
   const [caption, setCaption] = useState("");
   const [captionOpen, setCaptionOpen] = useState(false);
+  const [captionStyle, setCaptionStyle] = useState<CaptionStyle>("educational");
+  const [captionLength, setCaptionLength] = useState<CaptionLength>("auto");
+  const [captionHashtags, setCaptionHashtags] = useState<string[]>([]);
+  const [captionError, setCaptionError] = useState<string | null>(null);
   const [turns, setTurns] = useState<AgentTurn[]>([]);
   const [agentInput, setAgentInput] = useState("");
   const [agentBusy, setAgentBusy] = useState(false);
@@ -313,6 +357,10 @@ export function RemakeWorkspaceDialog({
     setScript("");
     setCaption("");
     setCaptionOpen(false);
+    setCaptionStyle("educational");
+    setCaptionLength("auto");
+    setCaptionHashtags([]);
+    setCaptionError(null);
     setTurns([]);
     setAgentInput("");
     setAgentBusy(false);
@@ -336,6 +384,7 @@ export function RemakeWorkspaceDialog({
     if (previewSeed && scriptId == null) {
       setScript(previewSeed.script);
       setCaption(previewSeed.caption);
+      setCaptionHashtags([]);
       lastSaved.current = { script: previewSeed.script, caption: previewSeed.caption };
       setSaveState("idle");
       return;
@@ -345,16 +394,24 @@ export function RemakeWorkspaceDialog({
     if (!content.trim() || hydratedId.current === scriptId) return;
 
     hydratedId.current = scriptId;
-    const generatedCaption = (scriptQuery.data as { generatedCaption?: string | null }).generatedCaption?.trim() || "";
+    const captionMeta = scriptQuery.data as {
+      generatedCaption?: string | null;
+      generatedHashtags?: string | null;
+      captionStyle?: string | null;
+      postDate?: string | Date | null;
+      postTime?: string | null;
+    };
+    const generatedCaption = captionMeta.generatedCaption?.trim() || "";
     setScript(content);
     setCaption(generatedCaption);
+    setCaptionHashtags(parseSavedHashtags(captionMeta.generatedHashtags));
+    if (isCaptionStyle(captionMeta.captionStyle)) setCaptionStyle(captionMeta.captionStyle);
     lastSaved.current = { script: content, caption: generatedCaption };
     setSaveState("saved");
 
-    const existing = scriptQuery.data as { postDate?: string | Date | null; postTime?: string | null };
-    if (existing.postDate) {
-      const date = new Date(existing.postDate);
-      const time = existing.postTime || "12:00";
+    if (captionMeta.postDate) {
+      const date = new Date(captionMeta.postDate);
+      const time = captionMeta.postTime || "12:00";
       if (!Number.isNaN(date.getTime())) {
         setScheduleDate(toLocalYmd(date));
         setScheduleTime(time);
@@ -446,6 +503,105 @@ export function RemakeWorkspaceDialog({
     await scheduleAt(result.date, result.time, result.label);
   }, [addTurn, scheduleAt]);
 
+  const generatePublishingCaption = useCallback(async (
+    options?: { style?: CaptionStyle; length?: CaptionLength }
+  ) => {
+    if (scriptId == null || !script.trim() || generateCaption.isPending) return;
+    const nextStyle = options?.style ?? captionStyle;
+    const nextLength = options?.length ?? captionLength;
+    setCaptionError(null);
+    try {
+      const generated = await generateCaption.mutateAsync({
+        scriptId,
+        content: script,
+        style: nextStyle,
+        captionLength: nextLength,
+        targetAudience: onboardingQuery.data?.targetAudience ?? undefined,
+      });
+      const tags = (generated.hashtags ?? [])
+        .map((tag: string) => tag.replace(/^#/, "").trim())
+        .filter(Boolean)
+        .slice(0, 5);
+      setCaption(generated.caption);
+      setCaptionHashtags(tags);
+      setCaptionStyle(nextStyle);
+      setCaptionLength(nextLength);
+      setCaptionOpen(true);
+      lastSaved.current = { script, caption: generated.caption };
+      setSaveState("saved");
+      void utils.scripts.get.invalidate({ id: scriptId });
+      void utils.scripts.list.invalidate();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not generate caption";
+      setCaptionError(message);
+    }
+  }, [
+    captionLength,
+    captionStyle,
+    generateCaption,
+    onboardingQuery.data?.targetAudience,
+    script,
+    scriptId,
+    utils.scripts.get,
+    utils.scripts.list,
+  ]);
+
+  const refreshCaptionHashtags = useCallback(async () => {
+    if (scriptId == null || !script.trim() || generateCaption.isPending || updateMutation.isPending) return;
+    if (!caption.trim()) {
+      await generatePublishingCaption();
+      return;
+    }
+    setCaptionError(null);
+    try {
+      const generated = await generateCaption.mutateAsync({
+        scriptId,
+        content: script,
+        style: captionStyle,
+        captionLength,
+        targetAudience: onboardingQuery.data?.targetAudience ?? undefined,
+      });
+      const tags = (generated.hashtags ?? [])
+        .map((tag: string) => tag.replace(/^#/, "").trim())
+        .filter(Boolean)
+        .slice(0, 5);
+      await updateMutation.mutateAsync({
+        id: scriptId,
+        generatedCaption: caption,
+        generatedHashtags: JSON.stringify(tags),
+        captionStyle,
+      });
+      setCaptionHashtags(tags);
+      lastSaved.current = { script, caption };
+      setSaveState("saved");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not refresh hashtags";
+      setCaptionError(message);
+    }
+  }, [
+    caption,
+    captionLength,
+    captionStyle,
+    generateCaption,
+    generatePublishingCaption,
+    onboardingQuery.data?.targetAudience,
+    script,
+    scriptId,
+    updateMutation,
+  ]);
+
+  const copyPublishingCaption = useCallback(async () => {
+    const tags = captionHashtags.map((tag) => `#${tag.replace(/^#/, "")}`).join(" ");
+    const text = [caption.trim(), tags].filter(Boolean).join("\n\n");
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Caption copied");
+    } catch {
+      toast.error("Could not copy caption");
+    }
+  }, [caption, captionHashtags]);
+
   const runAgent = useCallback(async (
     raw: string,
     options?: { ignoreSelection?: boolean; captionOnly?: boolean }
@@ -472,9 +628,11 @@ export function RemakeWorkspaceDialog({
 
     const selected = options?.ignoreSelection ? null : selection;
     const captionOnly = options?.captionOnly || (/\b(caption|hashtag)\b/.test(lower) && !/\b(script|hook|spoken)\b/.test(lower));
+    const hashtagsOnly = captionOnly && Boolean(caption.trim()) && /\b(add|refresh|update|new)\b.*\bhashtags?\b/.test(lower) && !/\brewrite\b.*\bcaption\b/.test(lower);
     const before = { script, caption };
     setAgentBusy(true);
     setSaveState("saving");
+    setCaptionError(null);
 
     try {
       let nextScript = script;
@@ -500,18 +658,45 @@ export function RemakeWorkspaceDialog({
           nextScript = stronger.content;
         }
       } else {
+        let requestedStyle = captionStyle;
+        let requestedLength = captionLength;
+        if (/\bstory|storytelling\b/.test(lower)) requestedStyle = "storytelling";
+        else if (/\bcuriosity\b/.test(lower)) requestedStyle = "curiosity";
+        else if (/\bbold|contrarian\b/.test(lower)) requestedStyle = "bold";
+        else if (/\brelatable|casual\b/.test(lower)) requestedStyle = "relatable";
+        else if (/\bcta|call to action\b/.test(lower)) requestedStyle = "cta";
+        else if (/\bquestion\b/.test(lower)) requestedStyle = "question";
+        else if (/\beducational|value\b/.test(lower)) requestedStyle = "educational";
+
+        if (/\bshorter|short caption\b/.test(lower)) requestedLength = "short";
+        else if (/\blonger|long caption\b/.test(lower)) requestedLength = "long";
+
         const generated = await generateCaption.mutateAsync({
           scriptId,
           content: script,
-          style: "educational",
-          captionLength: "medium",
+          style: requestedStyle,
+          captionLength: requestedLength,
           targetAudience: onboardingQuery.data?.targetAudience ?? undefined,
         });
-        nextCaption = generated.caption;
-        if (/hashtag/.test(lower) && generated.hashtags?.length) {
-          nextCaption = `${generated.caption}\n\n${generated.hashtags
-            .map((tag: string) => (tag.startsWith("#") ? tag : `#${tag}`))
-            .join(" ")}`;
+        const tags = (generated.hashtags ?? [])
+          .map((tag: string) => tag.replace(/^#/, "").trim())
+          .filter(Boolean)
+          .slice(0, 5);
+
+        setCaptionStyle(requestedStyle);
+        setCaptionLength(requestedLength);
+        setCaptionHashtags(tags);
+
+        if (hashtagsOnly) {
+          await updateMutation.mutateAsync({
+            id: scriptId,
+            generatedCaption: caption,
+            generatedHashtags: JSON.stringify(tags),
+            captionStyle: requestedStyle,
+          });
+          nextCaption = caption;
+        } else {
+          nextCaption = generated.caption;
         }
       }
 
@@ -521,6 +706,20 @@ export function RemakeWorkspaceDialog({
       setSelection(null);
       if (captionOnly) setCaptionOpen(true);
       setTab("script");
+
+      if (captionOnly) {
+        lastSaved.current = { script: nextScript, caption: nextCaption };
+        setSaveState("saved");
+        void utils.scripts.get.invalidate({ id: scriptId });
+        void utils.scripts.list.invalidate();
+        addTurn({
+          role: "agent",
+          kind: "action",
+          text: hashtagsOnly ? "Hashtags refreshed" : "Caption updated",
+          detail: "Your publishing text is saved.",
+        });
+        return;
+      }
 
       const saved = await persist(
         nextScript,
@@ -540,6 +739,9 @@ export function RemakeWorkspaceDialog({
       });
     } catch (error) {
       setSaveState(script.trim() ? "saved" : "idle");
+      if (captionOnly) {
+        setCaptionError(error instanceof Error ? error.message : "Could not update caption");
+      }
       addTurn({
         role: "agent",
         kind: "text",
@@ -553,6 +755,8 @@ export function RemakeWorkspaceDialog({
     agentBusy,
     aiRewrite,
     caption,
+    captionLength,
+    captionStyle,
     generateCaption,
     grammar,
     onboardingQuery.data?.targetAudience,
@@ -562,6 +766,9 @@ export function RemakeWorkspaceDialog({
     script,
     scriptId,
     selection,
+    updateMutation,
+    utils.scripts.get,
+    utils.scripts.list,
   ]);
 
   const matchStockBroll = useCallback(async () => {
@@ -798,16 +1005,118 @@ export function RemakeWorkspaceDialog({
 
                         <div className="mt-5 overflow-hidden rounded-xl border border-[#332e45] bg-[#191620]">
                           <button type="button" onClick={() => setCaptionOpen((value) => !value)} className="flex w-full items-center justify-between px-4 py-3 text-left">
-                            <div><strong className="text-sm text-white">Caption</strong><p className="mt-0.5 text-[11px] text-[#7f788d]">Secondary publishing text</p></div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <strong className="text-sm text-white">Caption</strong>
+                                {caption.trim() ? <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">Ready</span> : null}
+                              </div>
+                              <p className="mt-0.5 text-[11px] text-[#7f788d]">Publishing text and hashtags, generated from this script</p>
+                            </div>
                             {captionOpen ? <ChevronUp className="h-4 w-4 text-[#8d8599]" /> : <ChevronDown className="h-4 w-4 text-[#8d8599]" />}
                           </button>
                           {captionOpen ? (
                             <div className="border-t border-[#302b40] p-3">
-                              <textarea value={caption} onChange={(event) => setCaption(event.target.value)} placeholder="Write a caption, or ask Agent to create one..." className="min-h-[120px] w-full resize-y rounded-xl border border-[#332e45] bg-[#15121c] px-4 py-3 text-sm leading-6 text-white outline-none focus:border-violet-500/45" />
-                              <div className="mt-2 flex gap-2">
-                                <button type="button" onClick={() => void runAgent("Rewrite the caption", { captionOnly: true, ignoreSelection: true })} className="rounded-lg bg-violet-500/10 px-3 py-1.5 text-[11px] font-semibold text-violet-300">Rewrite</button>
-                                <button type="button" onClick={() => void runAgent("Add 3 hashtags to the caption", { captionOnly: true, ignoreSelection: true })} className="rounded-lg border border-[#332e45] px-3 py-1.5 text-[11px] font-semibold text-[#9f98ac]">Add hashtags</button>
+                              <div className="mb-3 flex flex-wrap items-end gap-2">
+                                <label className="min-w-[150px] flex-1 text-[10px] font-semibold uppercase tracking-wide text-[#746d82]">
+                                  Style
+                                  <select
+                                    value={captionStyle}
+                                    disabled={generateCaption.isPending || agentBusy}
+                                    onChange={(event) => setCaptionStyle(event.target.value as CaptionStyle)}
+                                    className="mt-1 h-9 w-full rounded-lg border border-[#332e45] bg-[#15121c] px-2.5 text-xs font-medium capitalize text-[#d6d0df] outline-none focus:border-violet-500/45"
+                                  >
+                                    {CAPTION_STYLES.map((style) => (
+                                      <option key={style} value={style}>{style === "cta" ? "CTA" : style[0].toUpperCase() + style.slice(1)}</option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label className="min-w-[130px] flex-1 text-[10px] font-semibold uppercase tracking-wide text-[#746d82]">
+                                  Length
+                                  <select
+                                    value={captionLength}
+                                    disabled={generateCaption.isPending || agentBusy}
+                                    onChange={(event) => setCaptionLength(event.target.value as CaptionLength)}
+                                    className="mt-1 h-9 w-full rounded-lg border border-[#332e45] bg-[#15121c] px-2.5 text-xs font-medium text-[#d6d0df] outline-none focus:border-violet-500/45"
+                                  >
+                                    {CAPTION_LENGTHS.map((length) => (
+                                      <option key={length} value={length}>{length[0].toUpperCase() + length.slice(1)}</option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <button
+                                  type="button"
+                                  disabled={scriptId == null || !script.trim() || generateCaption.isPending || agentBusy}
+                                  onClick={() => void generatePublishingCaption()}
+                                  className="inline-flex h-9 min-w-[120px] items-center justify-center gap-2 rounded-lg bg-violet-600 px-3 text-xs font-bold text-white hover:bg-violet-500 disabled:opacity-40"
+                                >
+                                  {generateCaption.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+                                  {generateCaption.isPending ? "Generating..." : caption.trim() ? "Regenerate" : "Generate caption"}
+                                </button>
                               </div>
+
+                              <textarea
+                                value={caption}
+                                onChange={(event) => {
+                                  setCaption(event.target.value);
+                                  setCaptionError(null);
+                                }}
+                                placeholder="Generate a caption from your script, or write your own..."
+                                className="min-h-[150px] w-full resize-y rounded-xl border border-[#332e45] bg-[#15121c] px-4 py-3 text-sm leading-6 text-white outline-none focus:border-violet-500/45"
+                              />
+
+                              {captionHashtags.length > 0 ? (
+                                <div className="mt-3 rounded-xl border border-[#2e293d] bg-[#15121c] p-3">
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[#746d82]">Hashtags</span>
+                                    <button
+                                      type="button"
+                                      disabled={generateCaption.isPending || updateMutation.isPending || agentBusy}
+                                      onClick={() => void refreshCaptionHashtags()}
+                                      className="text-[11px] font-semibold text-violet-300 hover:text-white disabled:opacity-40"
+                                    >
+                                      Refresh hashtags
+                                    </button>
+                                  </div>
+                                  <div className="mt-2 flex flex-wrap gap-1.5">
+                                    {captionHashtags.map((tag) => (
+                                      <span key={tag} className="rounded-full border border-violet-500/20 bg-violet-500/10 px-2.5 py-1 text-[11px] font-medium text-violet-200">#{tag.replace(/^#/, "")}</span>
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : caption.trim() ? (
+                                <button
+                                  type="button"
+                                  disabled={generateCaption.isPending || updateMutation.isPending || agentBusy}
+                                  onClick={() => void refreshCaptionHashtags()}
+                                  className="mt-2 text-[11px] font-semibold text-violet-300 hover:text-white disabled:opacity-40"
+                                >
+                                  Generate hashtags
+                                </button>
+                              ) : null}
+
+                              {captionError ? (
+                                <p className="mt-2 rounded-lg border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-[11px] text-rose-300">{captionError}</p>
+                              ) : null}
+
+                              {caption.trim() ? (
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  <button
+                                    type="button"
+                                    disabled={generateCaption.isPending || agentBusy}
+                                    onClick={() => void generatePublishingCaption({ length: "short" })}
+                                    className="rounded-lg border border-[#332e45] px-3 py-1.5 text-[11px] font-semibold text-[#aaa3b8] hover:text-white disabled:opacity-40"
+                                  >
+                                    Make shorter
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => void copyPublishingCaption()}
+                                    className="rounded-lg border border-[#332e45] px-3 py-1.5 text-[11px] font-semibold text-[#aaa3b8] hover:text-white"
+                                  >
+                                    Copy caption
+                                  </button>
+                                </div>
+                              ) : null}
                             </div>
                           ) : null}
                         </div>
