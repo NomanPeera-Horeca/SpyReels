@@ -14,7 +14,30 @@ import { fetchYouTubeTranscript } from "../youtube";
 import { or, and, not, eq } from "drizzle-orm";
 import { isFirstRemakeUsageBypassEligible } from "./_shared";
 
+function sourcePlatformFromUrl(url: string | null | undefined): "instagram" | "tiktok" | "youtube" {
+  const value = String(url ?? "").toLowerCase();
+  if (value.includes("tiktok.com")) return "tiktok";
+  if (value.includes("youtube.com") || value.includes("youtu.be")) return "youtube";
+  return "instagram";
+}
 
+const sourceReferenceInput = z
+  .object({
+    reelId: z.number().optional(),
+    featuredReelId: z.number().optional(),
+    tiktokVideoId: z.number().optional(),
+    youtubeVideoId: z.number().optional(),
+  })
+  .refine(
+    (d) =>
+      [d.reelId, d.featuredReelId, d.tiktokVideoId, d.youtubeVideoId].filter(
+        (id) => id != null
+      ).length === 1,
+    {
+      message:
+        "Provide exactly one of reelId, featuredReelId, tiktokVideoId, or youtubeVideoId",
+    }
+  );
 
 export const transcribeRouter = router({
     start: protectedProcedure
@@ -441,5 +464,113 @@ export const transcribeRouter = router({
                 ? await getTranscriptionByYoutubeVideoId(input.youtubeVideoId)
                 : await getTranscriptionByReelId(input.reelId!);
         return transcription || null;
+      }),
+
+    /**
+     * Read-only reference payload for the Remake workspace Source drawer.
+     * This never starts a scrape/transcription or increments usage. It only
+     * exposes source metadata plus an already-cached transcript.
+     */
+    sourceReference: protectedProcedure
+      .input(sourceReferenceInput)
+      .query(async ({ ctx, input }) => {
+        if (input.featuredReelId != null) {
+          const reel = await getFeaturedReelById(input.featuredReelId);
+          if (!reel) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Source Reel not found" });
+          }
+          const transcription = await getTranscriptionByFeaturedReelId(reel.id);
+          return {
+            platform: "instagram" as const,
+            creator: null,
+            title: reel.caption ?? null,
+            durationSec: reel.duration ?? null,
+            originalUrl: reel.reelShortcode
+              ? `https://www.instagram.com/reel/${encodeURIComponent(reel.reelShortcode)}/`
+              : null,
+            transcript: transcription?.transcript ?? null,
+            segments: transcription?.segments ?? null,
+            transcriptionStatus: transcription?.status ?? reel.transcriptionStatus ?? null,
+          };
+        }
+
+        if (input.tiktokVideoId != null) {
+          const db = await getDb();
+          if (!db) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Database not available",
+            });
+          }
+          const rows = await db
+            .select()
+            .from(tiktokVideos)
+            .where(eq(tiktokVideos.id, input.tiktokVideoId))
+            .limit(1);
+          const video = rows[0];
+          if (!video) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Source video not found" });
+          }
+          if (video.workspaceId !== ctx.workspaceId) {
+            throw new TRPCError({ code: "FORBIDDEN" });
+          }
+          const transcription = await getTranscriptionByTiktokVideoId(video.id);
+          return {
+            platform: "tiktok" as const,
+            creator: video.ownerUsername ?? null,
+            title: video.caption ?? null,
+            durationSec: video.durationSec ?? null,
+            originalUrl: video.videoPageUrl || null,
+            transcript: transcription?.transcript ?? null,
+            segments: transcription?.segments ?? null,
+            transcriptionStatus: transcription?.status ?? null,
+          };
+        }
+
+        if (input.youtubeVideoId != null) {
+          const db = await getDb();
+          if (!db) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Database not available",
+            });
+          }
+          const rows = await db
+            .select()
+            .from(youtubeVideos)
+            .where(eq(youtubeVideos.id, input.youtubeVideoId))
+            .limit(1);
+          const video = rows[0];
+          if (!video) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Source video not found" });
+          }
+          if (video.workspaceId !== ctx.workspaceId) {
+            throw new TRPCError({ code: "FORBIDDEN" });
+          }
+          const transcription = await getTranscriptionByYoutubeVideoId(video.id);
+          return {
+            platform: "youtube" as const,
+            creator: video.ownerHandle ?? null,
+            title: video.title ?? video.description ?? null,
+            durationSec: video.durationSec ?? null,
+            originalUrl: video.videoPageUrl || null,
+            transcript: transcription?.transcript ?? null,
+            segments: transcription?.segments ?? null,
+            transcriptionStatus: transcription?.status ?? null,
+          };
+        }
+
+        const reel = await assertUserScrapeReelInWorkspace(input.reelId!, ctx);
+        const transcription = await getTranscriptionByReelId(reel.id);
+        return {
+          platform: sourcePlatformFromUrl(reel.reelUrl),
+          creator: reel.ownerUsername ?? null,
+          title: reel.caption ?? null,
+          durationSec: reel.duration ?? null,
+          originalUrl: reel.reelUrl || null,
+          transcript: transcription?.transcript ?? null,
+          segments: transcription?.segments ?? null,
+          transcriptionStatus: transcription?.status ?? null,
+        };
       }),
 });
