@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import {
   Dialog,
   DialogContent,
@@ -13,6 +13,10 @@ import {
 import { Film, Eye, Heart, MessageCircle, TrendingUp, Clock } from "lucide-react";
 import { V13ReelClassificationBadges } from "@/components/V13ReelClassificationBadges";
 import { ReelDialogVideo } from "@/components/ReelDialogVideo";
+import {
+  REMAKE_WORKSPACE_BODY_ATTR,
+  REMAKE_WORKSPACE_OPEN_EVENT,
+} from "@/components/RemakeWorkspaceDialog";
 
 export type GridReelWorkflowPreview = {
   id: number;
@@ -59,8 +63,29 @@ export function GridReelWorkflowDialog({
   userTimezone,
   children,
 }: GridReelWorkflowDialogProps) {
+  const remakeWorkspaceActive =
+    typeof document !== "undefined" &&
+    document.body.getAttribute(REMAKE_WORKSPACE_BODY_ATTR) === "true";
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const closeForRemakeWorkspace = () => {
+      if (open) onOpenChange(false);
+    };
+
+    window.addEventListener(REMAKE_WORKSPACE_OPEN_EVENT, closeForRemakeWorkspace);
+    return () => {
+      window.removeEventListener(REMAKE_WORKSPACE_OPEN_EVENT, closeForRemakeWorkspace);
+    };
+  }, [onOpenChange, open]);
+
+  useEffect(() => {
+    if (open && remakeWorkspaceActive) onOpenChange(false);
+  }, [onOpenChange, open, remakeWorkspaceActive]);
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open && !remakeWorkspaceActive} onOpenChange={onOpenChange}>
       <DialogContent
         showCloseButton
         className="flex max-h-[min(90vh,880px)] max-w-[calc(100%-1.5rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl"
