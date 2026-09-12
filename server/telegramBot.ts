@@ -14,8 +14,8 @@ import {
 } from "./db";
 import { ingestCollectedReelByShortcode } from "./collectedReelIngest";
 import {
-  extractAllCollectedVideoUrls,
-  parseCollectedVideoUrl,
+  extractAllCollectedVideoUrlsAsync,
+  type ParsedCollectedVideoUrl,
 } from "./socialVideoUrl";
 
 const TELEGRAM_API = "https://api.telegram.org/bot";
@@ -46,27 +46,36 @@ async function sendMessage(chatId: string, text: string, parseMode: string = "HT
 
 // ── Combine message text for URL parsing ──
 
-/** Combine message text, caption, and link entities (share-to-Telegram). */
-function messageTextForUrlParsing(message: {
+type TelegramLinkEntity = {
+  type: string;
+  offset: number;
+  length: number;
+  url?: string;
+};
+
+export type TelegramVideoMessage = {
   text?: string;
   caption?: string;
-  entities?: Array<{ type: string; offset: number; length: number; url?: string }>;
-  caption_entities?: Array<{ type: string; offset: number; length: number; url?: string }>;
-}): string {
+  entities?: TelegramLinkEntity[];
+  caption_entities?: TelegramLinkEntity[];
+};
+
+/** Combine message text, caption, and link entities (share-to-Telegram). */
+export function messageTextForUrlParsing(message: TelegramVideoMessage): string {
   const parts: string[] = [];
   if (message.text?.trim()) parts.push(message.text.trim());
   if (message.caption?.trim()) parts.push(message.caption.trim());
 
   const addEntities = (
-    entities: typeof message.entities,
+    entities: TelegramLinkEntity[] | undefined,
     source: string | undefined
   ) => {
     if (!entities?.length || !source) return;
-    for (const e of entities) {
-      if (e.type === "text_link" && e.url) {
-        parts.push(e.url);
-      } else if (e.type === "url") {
-        parts.push(source.substring(e.offset, e.offset + e.length));
+    for (const entity of entities) {
+      if (entity.type === "text_link" && entity.url) {
+        parts.push(entity.url);
+      } else if (entity.type === "url") {
+        parts.push(source.substring(entity.offset, entity.offset + entity.length));
       }
     }
   };
@@ -74,6 +83,17 @@ function messageTextForUrlParsing(message: {
   addEntities(message.entities, message.text);
   addEntities(message.caption_entities, message.caption);
   return parts.join("\n");
+}
+
+/**
+ * One canonical extraction path for Telegram shares. This intentionally uses
+ * the async social parser so TikTok vm/vt links are expanded even in messages
+ * that also contain immediately parseable Instagram or YouTube URLs.
+ */
+export async function extractTelegramCollectedVideos(
+  message: TelegramVideoMessage
+): Promise<ParsedCollectedVideoUrl[]> {
+  return extractAllCollectedVideoUrlsAsync(messageTextForUrlParsing(message));
 }
 
 // ── Handle incoming Telegram messages ──
@@ -90,13 +110,13 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
   if (text === "/start") {
     await sendMessage(chatId,
       `🔍 <b>Welcome to SpyReels Bot!</b>\n\n` +
-      `I help you collect Instagram Reels for transcription and AI script generation.\n\n` +
+      `I help you collect Instagram Reels, TikToks, and YouTube videos for transcription and AI script generation.\n\n` +
       `<b>How to connect:</b>\n` +
       `1. Go to <a href="https://spyreels.ai/settings">spyreels.ai/settings</a>\n` +
       `2. Click "Connect Telegram"\n` +
       `3. Copy your 6-digit link code\n` +
       `4. Send it here\n\n` +
-      `Once connected, just share any Instagram Reel link here and it will appear in your SpyReels dashboard! 🚀`
+      `Once connected, share an Instagram, TikTok, or YouTube link here and it will appear in your SpyReels dashboard! 🚀`
     );
     return;
   }
@@ -110,8 +130,8 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
       `/status - Check connection status\n` +
       `/disconnect - Disconnect your account\n\n` +
       `<b>How to use:</b>\n` +
-      `Just share any Instagram Reel link and I'll save it to your SpyReels dashboard.\n\n` +
-      `<b>From Instagram mobile:</b>\n` +
+      `Share an Instagram Reel, TikTok, or YouTube link and I'll save it to your SpyReels dashboard.\n\n` +
+      `<b>From a mobile app:</b>\n` +
       `Tap Share → Share to Telegram → Select SpyReels Bot → Send\n\n` +
       `You can also paste multiple URLs in one message!`
     );
@@ -123,7 +143,7 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
     const connection = await getTelegramConnectionByChatId(chatId);
     if (connection) {
       await sendMessage(chatId,
-        `✅ <b>Connected!</b>\n\nYour Telegram is linked to your SpyReels account. Share any Instagram Reel link and I'll save it for you.`
+        `✅ <b>Connected!</b>\n\nYour Telegram is linked to your SpyReels account. Share an Instagram, TikTok, or YouTube link and I'll save it for you.`
       );
     } else {
       await sendMessage(chatId,
@@ -172,7 +192,7 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
     await sendMessage(chatId,
       `✅ <b>Connected successfully!</b>\n\n` +
       `Your Telegram is now linked to SpyReels. 🎉\n\n` +
-      `Share Instagram Reel, TikTok, or YouTube Shorts links here and they will appear in your <b>Collected Reels</b> tab.\n\n` +
+      `Share Instagram Reel, TikTok, or YouTube links here and they will appear in your <b>Collected Reels</b> tab.\n\n` +
       `<b>Quick tip:</b> On mobile, tap Share → Telegram → Select this chat → Send!`
     );
     return;
@@ -198,36 +218,18 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
     return;
   }
 
-  // Extract Instagram / TikTok / YouTube URLs (resolve short TikTok links)
-  let parsedVideos = extractAllCollectedVideoUrls(text);
-  if (parsedVideos.length === 0) {
-    const candidates = text.match(/https?:\/\/[^\s<>"')\]]+/gi) ?? [];
-    for (const raw of candidates) {
-      const cleaned = raw.replace(/[.,;:!?)]+$/, "");
-      const parsed = await parseCollectedVideoUrl(cleaned);
-      if (parsed) parsedVideos.push(parsed);
-    }
-  }
-
-  // Dedupe
-  const seen = new Set<string>();
-  parsedVideos = parsedVideos.filter((v) => {
-    const key = `${v.platform}:${v.externalId}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const parsedVideos = await extractTelegramCollectedVideos(message);
 
   if (parsedVideos.length === 0) {
     await sendMessage(chatId,
       `I didn't find any video links in your message. 🤔\n\n` +
-      `Share an Instagram Reel, TikTok, or YouTube Shorts link.\n\n` +
+      `Share an Instagram Reel, TikTok, or YouTube link.\n\n` +
       `Or share directly from the app!`
     );
     return;
   }
 
-  // Process each video
+  // Process each video through the existing shared Collected Reels ingest path.
   const userId = connection.userId;
   let saved = 0;
   let retried = 0;
@@ -346,7 +348,6 @@ export async function notifyOwnerViaTelegram(message: string): Promise<void> {
   if (!token) return;
 
   try {
-    // Find the owner's user record
     const { getTelegramConnectionByUserId } = await import("./db");
     const ownerUser = await getOwnerUser();
     if (!ownerUser) {
@@ -354,7 +355,6 @@ export async function notifyOwnerViaTelegram(message: string): Promise<void> {
       return;
     }
 
-    // Find the owner's Telegram connection
     const connection = await getTelegramConnectionByUserId(ownerUser.id);
     if (!connection || !connection.telegramChatId) {
       console.warn("[Telegram] Owner has no Telegram connection, skipping notification");
