@@ -15,16 +15,24 @@ export type ParsedCollectedVideoUrl = {
   canonicalUrl: string;
 };
 
+export type CollectedVideoUrlParseOptions = {
+  /** Test seam for TikTok vm/vt and /t/ redirect expansion. */
+  resolveRedirect?: (rawUrl: string) => Promise<string>;
+};
+
 const TIKTOK_VIDEO_RE =
   /(?:https?:\/\/)?(?:www\.|m\.)?tiktok\.com\/@[^/?#\s]+\/video\/(\d+)/i;
 const TIKTOK_SHORT_RE =
   /(?:https?:\/\/)?(?:vm|vt)\.tiktok\.com\/([A-Za-z0-9]+)/i;
 const YOUTUBE_SHORTS_RE =
-  /(?:https?:\/\/)?(?:www\.|m\.)?youtube\.com\/shorts\/([A-Za-z0-9_-]{6,})/i;
+  /(?:https?:\/\/)?(?:www\.|m\.|music\.)?youtube\.com\/shorts\/([A-Za-z0-9_-]{6,})/i;
 const YOUTUBE_WATCH_RE =
-  /(?:https?:\/\/)?(?:www\.|m\.)?youtube\.com\/watch\?(?:[^#\s]*&)?v=([A-Za-z0-9_-]{6,})/i;
+  /(?:https?:\/\/)?(?:www\.|m\.|music\.)?youtube\.com\/watch\?(?:[^#\s]*&)?v=([A-Za-z0-9_-]{6,})/i;
+const YOUTUBE_LIVE_RE =
+  /(?:https?:\/\/)?(?:www\.|m\.)?youtube\.com\/live\/([A-Za-z0-9_-]{6,})/i;
 const YOUTUBE_BE_RE =
   /(?:https?:\/\/)?youtu\.be\/([A-Za-z0-9_-]{6,})/i;
+const HTTP_URL_RE = /https?:\/\/[^\s<>"')\]]+/gi;
 
 async function resolveRedirectUrl(rawUrl: string): Promise<string> {
   const trimmed = rawUrl.trim();
@@ -45,6 +53,14 @@ async function resolveRedirectUrl(rawUrl: string): Promise<string> {
   } catch {
     return trimmed;
   }
+}
+
+function cleanCandidateUrl(raw: string): string {
+  return raw.trim().replace(/[.,;:!?)]+$/, "");
+}
+
+function candidateUrls(text: string): string[] {
+  return text.match(HTTP_URL_RE)?.map(cleanCandidateUrl).filter(Boolean) ?? [];
 }
 
 function parseTikTok(input: string): ParsedCollectedVideoUrl | null {
@@ -71,8 +87,10 @@ function parseYouTube(input: string): ParsedCollectedVideoUrl | null {
       canonicalUrl: `https://www.youtube.com/shorts/${shortsId}`,
     };
   }
+
   const id =
     input.match(YOUTUBE_WATCH_RE)?.[1] ||
+    input.match(YOUTUBE_LIVE_RE)?.[1] ||
     input.match(YOUTUBE_BE_RE)?.[1] ||
     null;
   if (!id) return null;
@@ -93,7 +111,7 @@ function parseInstagram(input: string): ParsedCollectedVideoUrl | null {
   };
 }
 
-/** Sync parse for known long-form URLs (no short-link expand). */
+/** Sync parse for known long-form URLs (no short-link expansion). */
 export function parseCollectedVideoUrlSync(
   input: string
 ): ParsedCollectedVideoUrl | null {
@@ -103,11 +121,12 @@ export function parseCollectedVideoUrlSync(
 }
 
 /**
- * Parse a pasted or Telegram-shared URL. Resolves TikTok short links (vm/vt)
- * via redirect before extracting the aweme id.
+ * Parse a pasted or Telegram-shared URL. TikTok short links are resolved before
+ * extracting the video id. Instagram and YouTube stay on the fast sync path.
  */
 export async function parseCollectedVideoUrl(
-  input: string
+  input: string,
+  options: CollectedVideoUrlParseOptions = {}
 ): Promise<ParsedCollectedVideoUrl | null> {
   const s = input.trim();
   if (!s) return null;
@@ -116,7 +135,8 @@ export async function parseCollectedVideoUrl(
   if (direct) return direct;
 
   if (TIKTOK_SHORT_RE.test(s) || /tiktok\.com\/t\//i.test(s)) {
-    const resolved = await resolveRedirectUrl(s);
+    const resolver = options.resolveRedirect ?? resolveRedirectUrl;
+    const resolved = await resolver(s);
     return parseTikTok(resolved) || parseCollectedVideoUrlSync(resolved);
   }
 
@@ -127,13 +147,8 @@ export function extractAllCollectedVideoUrls(text: string): ParsedCollectedVideo
   const found: ParsedCollectedVideoUrl[] = [];
   const seen = new Set<string>();
 
-  const candidates = text.match(
-    /https?:\/\/[^\s<>"')\]]+/gi
-  ) ?? [];
-
-  for (const raw of candidates) {
-    const cleaned = raw.replace(/[.,;:!?)]+$/, "");
-    const parsed = parseCollectedVideoUrlSync(cleaned);
+  for (const raw of candidateUrls(text)) {
+    const parsed = parseCollectedVideoUrlSync(raw);
     if (!parsed) continue;
     const key = `${parsed.platform}:${parsed.externalId}`;
     if (seen.has(key)) continue;
@@ -141,7 +156,36 @@ export function extractAllCollectedVideoUrls(text: string): ParsedCollectedVideo
     found.push(parsed);
   }
 
-  // Bare Instagram shortcodes still supported for Telegram paste quirks
+  // Bare Instagram shortcodes still supported for Telegram paste quirks.
+  if (found.length === 0) {
+    const ig = parseInstagram(text.trim());
+    if (ig) found.push(ig);
+  }
+
+  return found;
+}
+
+/**
+ * Async multi-platform extractor for Telegram and other share surfaces.
+ * Every candidate is passed through the canonical parser, so TikTok short links
+ * work even when the same message also contains Instagram or YouTube links.
+ */
+export async function extractAllCollectedVideoUrlsAsync(
+  text: string,
+  options: CollectedVideoUrlParseOptions = {}
+): Promise<ParsedCollectedVideoUrl[]> {
+  const found: ParsedCollectedVideoUrl[] = [];
+  const seen = new Set<string>();
+
+  for (const raw of candidateUrls(text)) {
+    const parsed = await parseCollectedVideoUrl(raw, options);
+    if (!parsed) continue;
+    const key = `${parsed.platform}:${parsed.externalId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    found.push(parsed);
+  }
+
   if (found.length === 0) {
     const ig = parseInstagram(text.trim());
     if (ig) found.push(ig);
