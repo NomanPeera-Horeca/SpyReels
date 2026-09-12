@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node seed-defaults.js && node server.js",
-    "check": "node --check server.js && node --check research-engine.js && node --check seed-defaults.js"
+    "start": "node prepare-ui.js && node seed-defaults.js && node server.js",
+    "check": "node --check server.js && node --check research-engine.js && node --check seed-defaults.js && node --check prepare-ui.js && node --check public/monthly-chart.js"
   },
   "dependencies": {
     "connect-pg-simple": "^10.0.0",
