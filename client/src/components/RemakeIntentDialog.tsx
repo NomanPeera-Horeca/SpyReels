@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Loader2, Sparkles, X } from "lucide-react";
+import { Check, Loader2, Sparkles, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +30,7 @@ export function RemakeIntentDialog({
   }, [open]);
 
   const canSubmit = mode != null && (mode !== "custom" || angle.trim().length > 0);
+  const sourceReady = progressPercent >= 64;
 
   return (
     <Dialog
@@ -121,8 +122,16 @@ export function RemakeIntentDialog({
 
           <div className="flex items-center justify-between gap-3 pt-2">
             <div className="inline-flex min-w-0 items-center gap-2 text-[11px] text-[#8f879f]">
-              <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-violet-400" />
-              <span className="truncate">Transcribing source in background · {Math.max(0, Math.min(99, progressPercent))}%</span>
+              {sourceReady ? (
+                <Check className="h-3.5 w-3.5 shrink-0 text-emerald-400" />
+              ) : (
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-violet-400" />
+              )}
+              <span className="truncate">
+                {sourceReady
+                  ? "Source ready. Pick a direction to continue."
+                  : `Transcribing source in background · ${Math.max(0, Math.min(63, progressPercent))}%`}
+              </span>
             </div>
             <button
               type="button"
