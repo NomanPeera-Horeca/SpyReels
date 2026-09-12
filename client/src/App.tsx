@@ -62,6 +62,7 @@ const SavedReels = lazyWithRetry(() => import("./pages/SavedReels"));
 const ViralPosts = lazyWithRetry(() => import("./pages/ViralPosts"));
 const MyScripts = lazyWithRetry(() => import("./pages/MyScripts"));
 const ScriptEditor = lazyWithRetry(() => import("./pages/ScriptEditor"));
+const RemakeScriptWorkspace = lazyWithRetry(() => import("./pages/RemakeScriptWorkspace"));
 const Settings = lazyWithRetry(() => import("./pages/Settings"));
 const WorkspaceSettings = lazyWithRetry(() => import("./pages/WorkspaceSettings"));
 const Pricing = lazyWithRetry(() => import("./pages/Pricing"));
@@ -145,6 +146,7 @@ function MobileCreateRouter() {
             <Route path="/plan" component={ThirtyDayPlan} />
             <Route path="/studio" component={AiCoach} />
             <Route path="/scripts" component={MyScripts} />
+            <Route path="/scripts/:id/remake" component={RemakeScriptWorkspace} />
             <Route path="/scripts/:id" component={ScriptEditor} />
             <Route path="/ideas">{() => <Redirect to="/studio" />}</Route>
             <Route path="/more" component={MobileMore} />
@@ -188,6 +190,7 @@ function DesktopDashboardRouter() {
           <Route path="/viral-posts" component={ViralPosts} />
           <Route path="/saved" component={SavedReels} />
           <Route path="/scripts" component={MyScripts} />
+          <Route path="/scripts/:id/remake" component={RemakeScriptWorkspace} />
           <Route path="/scripts/:id" component={ScriptEditor} />
           <Route path="/collected" component={CollectedReels} />
           <Route path="/ideas">{() => <Redirect to="/studio" />}</Route>
