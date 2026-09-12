@@ -25,6 +25,8 @@ export function buildRecreateTopicPrompt(args: {
   businessDescription?: string | null;
 }): string {
   const angle = args.angle.trim();
+  if (angle === "SAME_TOPIC") return "SAME_TOPIC";
+
   const aud = args.targetAudience?.trim();
   const biz = args.businessDescription?.trim();
 
