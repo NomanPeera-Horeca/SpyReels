@@ -4,12 +4,11 @@ import {
   Check,
   ChevronDown,
   ChevronUp,
+  FileText,
   History,
   Loader2,
-  Mic,
   Play,
   RotateCcw,
-  Scissors,
   Send,
   Sparkles,
   Wand2,
@@ -25,8 +24,12 @@ import {
 } from "@/components/ui/dialog";
 import { AgentProgressPanel } from "@/components/AgentProgressPanel";
 import { BrollBeatsView } from "@/components/BrollResultsPanel";
+import { RemakeSourceDrawer } from "@/components/RemakeSourceDrawer";
 import { trpc } from "@/lib/trpc";
-import type { LibraryRemakeState } from "@/lib/libraryRemakeChainCore";
+import type {
+  LibraryRemakeSource,
+  LibraryRemakeState,
+} from "@/lib/libraryRemakeChainCore";
 import type { AgentProgressStep } from "@shared/agentProgress";
 import type { SuggestBrollResult } from "@shared/broll";
 import {
@@ -54,6 +57,7 @@ export type RemakeWorkspaceTarget = {
   scriptId: number | null;
   reelId: number | null;
   remakeKey: string;
+  source: LibraryRemakeSource | null;
 };
 
 type Props = {
@@ -61,6 +65,7 @@ type Props = {
   onOpenChange: (open: boolean) => void;
   target: RemakeWorkspaceTarget | null;
   remakeState: LibraryRemakeState | null;
+  onRetryRemake?: () => void;
   onOpenTeleprompter?: (reelId: number, scriptId: number) => void;
   previewSeed?: { script: string; caption: string };
 };
@@ -177,6 +182,7 @@ export function RemakeWorkspaceDialog({
   onOpenChange,
   target,
   remakeState,
+  onRetryRemake,
   onOpenTeleprompter,
   previewSeed,
 }: Props) {
@@ -199,8 +205,9 @@ export function RemakeWorkspaceDialog({
   const [scheduleMode, setScheduleMode] = useState(false);
   const [selection, setSelection] = useState<SelectedText | null>(null);
   const [undo, setUndo] = useState<{ script: string; caption: string } | null>(null);
-  const [saveState, setSaveState] = useState<"saved" | "saving" | "unsaved">("saved");
+  const [saveState, setSaveState] = useState<"idle" | "saved" | "saving" | "unsaved">("idle");
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [sourceOpen, setSourceOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
   const [scheduleDate, setScheduleDate] = useState("");
   const [scheduleTime, setScheduleTime] = useState("12:00");
@@ -253,6 +260,7 @@ export function RemakeWorkspaceDialog({
   }, [scriptsListQuery.data, scriptId]);
 
   const isGenerating = remakeState?.stage === "transcribing" || remakeState?.stage === "generating";
+  const initialGenerationError = remakeState?.stage === "error" && !script.trim();
   const progress = Math.max(0, Math.min(100, remakeState?.progressPercent ?? 0));
   const generationSteps = useMemo<AgentProgressStep[]>(() => {
     const status = (start: number, end: number): AgentProgressStep["status"] => progress >= end ? "done" : progress >= start ? "active" : "pending";
@@ -312,8 +320,9 @@ export function RemakeWorkspaceDialog({
     setSelection(null);
     setUndo(null);
     setBroll(null);
+    setSourceOpen(false);
     setScheduledLabel(null);
-    setSaveState("saved");
+    setSaveState("idle");
   }, [open, target?.remakeKey]);
 
   useEffect(() => {
@@ -328,6 +337,7 @@ export function RemakeWorkspaceDialog({
       setScript(previewSeed.script);
       setCaption(previewSeed.caption);
       lastSaved.current = { script: previewSeed.script, caption: previewSeed.caption };
+      setSaveState("idle");
       return;
     }
     if (scriptId == null || !scriptQuery.data) return;
@@ -376,6 +386,7 @@ export function RemakeWorkspaceDialog({
       const saved = await persist(script, caption, "manual_edit", "Remake workspace close");
       if (!saved) return;
     }
+    setSourceOpen(false);
     onOpenChange(false);
   }, [caption, isPreview, onOpenChange, persist, script, scriptId]);
 
@@ -528,7 +539,7 @@ export function RemakeWorkspaceDialog({
         chips: response.chips,
       });
     } catch (error) {
-      setSaveState("saved");
+      setSaveState(script.trim() ? "saved" : "idle");
       addTurn({
         role: "agent",
         kind: "text",
@@ -598,13 +609,6 @@ export function RemakeWorkspaceDialog({
     await scheduleAt(date, scheduleTime, formatSchedulePostButtonSubtitle(date, scheduleTime));
   }, [scheduleAt, scheduleDate, scheduleTime]);
 
-  const quickActions: Array<{ label: string; prompt: string; icon: typeof Scissors }> = [
-    { label: "Shorter", prompt: "Make it 30% shorter while keeping the main point", icon: Scissors },
-    { label: "Stronger hook", prompt: "Make the hook stronger", icon: Wand2 },
-    { label: "Easier to say", prompt: "Make it easier to say out loud with shorter sentences and natural rhythm", icon: Mic },
-    { label: "More casual", prompt: "Make it more casual and natural to say on camera", icon: Sparkles },
-  ];
-
   return (
     <>
       <Dialog open={open} onOpenChange={(next) => { if (!next) void closeWorkspace(); }}>
@@ -640,6 +644,15 @@ export function RemakeWorkspaceDialog({
             </nav>
 
             <div className="flex items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={target?.source == null && target?.reelId == null}
+                onClick={() => setSourceOpen((value) => !value)}
+                className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${sourceOpen ? "border-violet-500/40 bg-violet-500/10 text-violet-200" : "border-[#342f46] bg-[#211d2d] text-[#b7b0c7] hover:text-white"}`}
+                title="View the original transcript"
+              >
+                <FileText className="h-4 w-4" /> Source
+              </button>
               <button type="button" onClick={() => setHistoryOpen(true)} className="inline-flex items-center gap-2 rounded-lg border border-[#342f46] bg-[#211d2d] px-3 py-2 text-xs font-semibold text-[#b7b0c7] hover:text-white">
                 <History className="h-4 w-4" /> History <span className="text-[#827b92]">{versions.length}</span>
               </button>
@@ -652,33 +665,12 @@ export function RemakeWorkspaceDialog({
           <div className="grid min-h-0 flex-1 grid-cols-[330px_minmax(0,1fr)]">
             <aside className="flex min-h-0 flex-col border-r border-[#2d2940] bg-[#191620]">
               <div className="min-h-0 flex-1 overflow-y-auto p-4">
-                <div className="mb-4 flex items-start gap-3">
+                <div className="mb-4 flex items-center gap-3">
                   <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-violet-500/10 text-violet-400"><Sparkles className="h-4 w-4" /></span>
-                  <div>
-                    <h3 className="text-sm font-bold text-white">SpyReels Agent</h3>
-                    <p className="mt-0.5 text-xs leading-relaxed text-[#8f879f]">Tell me what to change. I work directly on the live result on the right.</p>
-                  </div>
+                  <h3 className="text-sm font-bold text-white">SpyReels Agent</h3>
                 </div>
 
-                {turns.length === 0 ? (
-                  <div className="space-y-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-[#777083]">Improve</p>
-                    <div className="grid grid-cols-2 gap-2">
-                      {quickActions.map(({ label, prompt, icon: Icon }) => (
-                        <button
-                          key={label}
-                          type="button"
-                          disabled={agentBusy || isGenerating || !script.trim()}
-                          onClick={() => { setSelection(null); void runAgent(prompt, { ignoreSelection: true }); }}
-                          className="flex min-h-[76px] flex-col items-start gap-2 rounded-xl border border-[#302b40] bg-[#211d2b] p-3 text-left text-xs font-semibold text-[#c5bed2] transition hover:border-violet-500/40 hover:bg-[#252031] disabled:opacity-40"
-                        >
-                          <Icon className="h-4 w-4 text-violet-400" />
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ) : (
+                {turns.length > 0 ? (
                   <div className="space-y-3">
                     {turns.map((turn) => turn.role === "user" ? (
                       <div key={turn.id} className="ml-auto max-w-[88%] rounded-2xl rounded-br-md border border-violet-500/20 bg-violet-500/10 px-3 py-2.5 text-sm text-[#f5f2fa]">{turn.text}</div>
@@ -699,7 +691,7 @@ export function RemakeWorkspaceDialog({
                     ))}
                     {agentBusy ? <div className="flex items-center gap-2 text-sm text-[#928aa3]"><Loader2 className="h-4 w-4 animate-spin text-violet-400" /> Agent is working...</div> : null}
                   </div>
-                )}
+                ) : null}
               </div>
 
               <div className="border-t border-[#2d2940] p-3">
@@ -721,7 +713,7 @@ export function RemakeWorkspaceDialog({
                       event.preventDefault();
                       void runAgent(agentInput);
                     }}
-                    placeholder={scheduleMode ? "Tell Agent when you want to film it..." : selection ? "What should I change in this selection?" : "Ask SpyReels to change anything..."}
+                    placeholder={scheduleMode ? "Tell Agent when you want to film it..." : selection ? "What should I change in this selection?" : "Ask SpyReels to improve this script..."}
                     className="min-h-[62px] w-full resize-none bg-transparent px-1 py-1 text-sm text-white outline-none placeholder:text-[#6f687d]"
                   />
                   <div className="flex items-center justify-between gap-2 pt-1">
@@ -732,134 +724,163 @@ export function RemakeWorkspaceDialog({
               </div>
             </aside>
 
-            <main className="min-h-0 min-w-0 bg-[#1c1926]">
-              {tab === "script" ? (
-                isGenerating && !script.trim() ? (
-                  <div className="h-full overflow-y-auto">
-                    <AgentProgressPanel steps={generationSteps} headline="Creating your remake" subheadline="SpyReels is working through the source, your profile, and the final script." />
+            <main className="relative min-h-0 min-w-0 overflow-hidden bg-[#1c1926]">
+              <div className={`h-full min-w-0 transition-[padding] duration-200 ${sourceOpen ? "pr-[360px]" : ""}`}>
+                {tab === "script" ? (
+                  isGenerating && !script.trim() ? (
+                    <div className="h-full overflow-y-auto">
+                      <AgentProgressPanel steps={generationSteps} headline="Creating your remake" subheadline="SpyReels is working through the source, your profile, and the final script." />
+                    </div>
+                  ) : initialGenerationError ? (
+                    <div className="flex h-full items-center justify-center overflow-y-auto px-8 py-10">
+                      <div className="max-w-md text-center">
+                        <div className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-rose-500/10 text-rose-300">!</div>
+                        <h3 className="mt-4 text-base font-bold text-white">We couldn't create this remake</h3>
+                        <p className="mt-2 text-sm leading-relaxed text-[#91899f]">
+                          {remakeState?.errorMessage?.trim() || "The remake did not finish. Try again, or open Source to work from the original transcript."}
+                        </p>
+                        <div className="mt-5 flex items-center justify-center gap-2">
+                          {onRetryRemake ? (
+                            <button type="button" onClick={onRetryRemake} className="rounded-lg bg-violet-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-violet-500">Try again</button>
+                          ) : null}
+                          <button type="button" onClick={() => setSourceOpen(true)} className="rounded-lg border border-[#393349] bg-[#24202e] px-4 py-2.5 text-xs font-semibold text-[#c5bed2] hover:text-white">View source</button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="h-full overflow-y-auto px-7 py-6">
+                      <div className="mx-auto max-w-[760px]">
+                        <div className="mb-4 flex items-start justify-between gap-4">
+                          <div>
+                            <div className="flex items-center gap-2"><h3 className="text-base font-bold text-white">Video script</h3>{script.trim() ? <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">Draft</span> : null}</div>
+                            <p className="mt-1 text-xs text-[#8f879f]">What you will say on camera</p>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={scriptId == null || target?.reelId == null}
+                            onClick={() => {
+                              if (scriptId == null || target?.reelId == null) return;
+                              onOpenTeleprompter?.(target.reelId, scriptId);
+                            }}
+                            className="inline-flex items-center gap-2 rounded-lg border border-[#393349] bg-[#24202e] px-3 py-2 text-xs font-semibold text-[#c5bed2] hover:text-white disabled:opacity-40"
+                          ><Play className="h-3.5 w-3.5" /> Open teleprompter</button>
+                        </div>
+
+                        <div className="relative">
+                          {selection ? (
+                            <div className="absolute right-3 top-3 z-10 flex items-center gap-2 rounded-lg border border-violet-500/25 bg-[#211d2b]/95 px-2.5 py-1.5 text-[11px] shadow-lg backdrop-blur">
+                              <span className="max-w-[210px] truncate text-[#bcb5c9]">“{selection.text}”</span>
+                              <button type="button" onClick={() => window.setTimeout(() => composerRef.current?.focus(), 0)} className="font-semibold text-violet-300 hover:text-white">Ask Agent</button>
+                              <button type="button" onClick={() => setSelection(null)} className="text-[#847d91] hover:text-white"><X className="h-3 w-3" /></button>
+                            </div>
+                          ) : null}
+                          <textarea
+                            value={script}
+                            disabled={isGenerating && !script}
+                            onSelect={(event) => {
+                              const start = event.currentTarget.selectionStart;
+                              const end = event.currentTarget.selectionEnd;
+                              if (start === end) return;
+                              const text = event.currentTarget.value.slice(start, end).trim();
+                              if (text.length >= 2) setSelection({ start, end, text });
+                            }}
+                            onChange={(event) => { setScript(event.target.value); setSelection(null); }}
+                            placeholder="Your remake script will appear here..."
+                            className="min-h-[390px] w-full resize-y rounded-2xl border border-[#332e45] bg-[#17141f] px-5 py-5 text-[15px] leading-7 text-[#f3eff8] outline-none transition focus:border-violet-500/45"
+                          />
+                        </div>
+
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <button type="button" disabled={agentBusy || !script.trim()} onClick={() => { setSelection(null); void runAgent("Improve this Reel script in my voice", { ignoreSelection: true }); }} className="rounded-lg bg-violet-500/10 px-3 py-2 text-xs font-semibold text-violet-300 hover:bg-violet-500/15">Improve script</button>
+                          <button type="button" disabled={agentBusy || !script.trim()} onClick={() => { setSelection(null); void runAgent("Fix the grammar", { ignoreSelection: true }); }} className="rounded-lg border border-[#332e45] px-3 py-2 text-xs font-semibold text-[#aaa3b8] hover:text-white">Fix grammar</button>
+                          <button type="button" disabled={agentBusy || !script.trim()} onClick={() => { setSelection(null); void runAgent("Make it 30% shorter while keeping the main point", { ignoreSelection: true }); }} className="rounded-lg border border-[#332e45] px-3 py-2 text-xs font-semibold text-[#aaa3b8] hover:text-white">Make shorter</button>
+                        </div>
+
+                        <div className="mt-5 overflow-hidden rounded-xl border border-[#332e45] bg-[#191620]">
+                          <button type="button" onClick={() => setCaptionOpen((value) => !value)} className="flex w-full items-center justify-between px-4 py-3 text-left">
+                            <div><strong className="text-sm text-white">Caption</strong><p className="mt-0.5 text-[11px] text-[#7f788d]">Secondary publishing text</p></div>
+                            {captionOpen ? <ChevronUp className="h-4 w-4 text-[#8d8599]" /> : <ChevronDown className="h-4 w-4 text-[#8d8599]" />}
+                          </button>
+                          {captionOpen ? (
+                            <div className="border-t border-[#302b40] p-3">
+                              <textarea value={caption} onChange={(event) => setCaption(event.target.value)} placeholder="Write a caption, or ask Agent to create one..." className="min-h-[120px] w-full resize-y rounded-xl border border-[#332e45] bg-[#15121c] px-4 py-3 text-sm leading-6 text-white outline-none focus:border-violet-500/45" />
+                              <div className="mt-2 flex gap-2">
+                                <button type="button" onClick={() => void runAgent("Rewrite the caption", { captionOnly: true, ignoreSelection: true })} className="rounded-lg bg-violet-500/10 px-3 py-1.5 text-[11px] font-semibold text-violet-300">Rewrite</button>
+                                <button type="button" onClick={() => void runAgent("Add 3 hashtags to the caption", { captionOnly: true, ignoreSelection: true })} className="rounded-lg border border-[#332e45] px-3 py-1.5 text-[11px] font-semibold text-[#9f98ac]">Add hashtags</button>
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                ) : null}
+
+                {tab === "visuals" ? (
+                  <div className="h-full overflow-y-auto px-7 py-6">
+                    <div className="mx-auto max-w-[820px]">
+                      <div className="mb-5 flex items-start justify-between gap-4">
+                        <div>
+                          <h3 className="text-base font-bold text-white">Recommended B-roll</h3>
+                          <p className="mt-1 max-w-lg text-xs leading-relaxed text-[#8f879f]">Match real stock clips to the moments that benefit from B-roll, then keep or regenerate the clips you want.</p>
+                        </div>
+                        <button type="button" disabled={!script.trim() || suggestBroll.isPending} onClick={() => void matchStockBroll()} className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40">
+                          {suggestBroll.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                          {suggestBroll.isPending ? "Matching..." : broll ? "Match again" : "Find stock clips"}
+                        </button>
+                      </div>
+
+                      {!broll ? (
+                        <div className="rounded-2xl border border-[#332e45] bg-[#191620] px-6 py-10 text-center">
+                          <div className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-violet-500/10 text-violet-300"><Sparkles className="h-5 w-5" /></div>
+                          <h4 className="mt-4 text-sm font-bold text-white">Match visuals to your script</h4>
+                          <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-[#8f879f]">SpyReels will find real stock clips for the moments that benefit from B-roll. You can keep the rest as talking head.</p>
+                          <button type="button" disabled={!script.trim() || suggestBroll.isPending} onClick={() => void matchStockBroll()} className="mt-5 inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-40"><Wand2 className="h-4 w-4" /> Find stock clips</button>
+                        </div>
+                      ) : (
+                        <div className="rounded-2xl border border-[#332e45] bg-[#17141f] p-3"><BrollBeatsView result={broll} /></div>
+                      )}
+                    </div>
                   </div>
-                ) : (
+                ) : null}
+
+                {tab === "preview" ? (
                   <div className="h-full overflow-y-auto px-7 py-6">
                     <div className="mx-auto max-w-[760px]">
-                      <div className="mb-4 flex items-start justify-between gap-4">
-                        <div>
-                          <div className="flex items-center gap-2"><h3 className="text-base font-bold text-white">Video script</h3>{script.trim() ? <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">Draft</span> : null}</div>
-                          <p className="mt-1 text-xs text-[#8f879f]">What you will say on camera</p>
+                      <div className="mb-5"><h3 className="text-base font-bold text-white">Opening frame preview</h3><p className="mt-1 text-xs text-[#8f879f]">A simple check of what viewers may see on frame 0 before you film.</p></div>
+                      <div className="flex justify-center">
+                        <div className="relative aspect-[9/16] w-[300px] overflow-hidden rounded-[28px] border border-[#3a3450] bg-gradient-to-br from-violet-700 via-[#3b2858] to-[#121018] shadow-2xl">
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-black/20" />
+                          <div className="absolute left-5 top-5 text-xs font-semibold text-white/90">@you</div>
+                          <div className="absolute inset-x-5 bottom-20 rounded-xl bg-black/20 p-3 text-[20px] font-bold leading-tight text-white backdrop-blur-sm">{firstHookLine(script)}</div>
+                          <div className="absolute inset-x-5 bottom-8 h-1 overflow-hidden rounded-full bg-white/25"><span className="block h-full w-[24%] rounded-full bg-white" /></div>
                         </div>
-                        <button
-                          type="button"
-                          disabled={scriptId == null || target?.reelId == null}
-                          onClick={() => {
-                            if (scriptId == null || target?.reelId == null) return;
-                            onOpenTeleprompter?.(target.reelId, scriptId);
-                          }}
-                          className="inline-flex items-center gap-2 rounded-lg border border-[#393349] bg-[#24202e] px-3 py-2 text-xs font-semibold text-[#c5bed2] hover:text-white disabled:opacity-40"
-                        ><Play className="h-3.5 w-3.5" /> Open teleprompter</button>
                       </div>
-
-                      <div className="relative">
-                        {selection ? (
-                          <div className="absolute right-3 top-3 z-10 flex items-center gap-2 rounded-lg border border-violet-500/25 bg-[#211d2b]/95 px-2.5 py-1.5 text-[11px] shadow-lg backdrop-blur">
-                            <span className="max-w-[210px] truncate text-[#bcb5c9]">“{selection.text}”</span>
-                            <button type="button" onClick={() => window.setTimeout(() => composerRef.current?.focus(), 0)} className="font-semibold text-violet-300 hover:text-white">Ask Agent</button>
-                            <button type="button" onClick={() => setSelection(null)} className="text-[#847d91] hover:text-white"><X className="h-3 w-3" /></button>
-                          </div>
-                        ) : null}
-                        <textarea
-                          value={script}
-                          disabled={isGenerating && !script}
-                          onSelect={(event) => {
-                            const start = event.currentTarget.selectionStart;
-                            const end = event.currentTarget.selectionEnd;
-                            if (start === end) return;
-                            const text = event.currentTarget.value.slice(start, end).trim();
-                            if (text.length >= 2) setSelection({ start, end, text });
-                          }}
-                          onChange={(event) => { setScript(event.target.value); setSelection(null); }}
-                          placeholder="Your remake script will appear here..."
-                          className="min-h-[390px] w-full resize-y rounded-2xl border border-[#332e45] bg-[#17141f] px-5 py-5 text-[15px] leading-7 text-[#f3eff8] outline-none transition focus:border-violet-500/45"
-                        />
-                      </div>
-
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <button type="button" disabled={agentBusy || !script.trim()} onClick={() => { setSelection(null); void runAgent("Improve this Reel script in my voice", { ignoreSelection: true }); }} className="rounded-lg bg-violet-500/10 px-3 py-2 text-xs font-semibold text-violet-300 hover:bg-violet-500/15">Improve script</button>
-                        <button type="button" disabled={agentBusy || !script.trim()} onClick={() => { setSelection(null); void runAgent("Fix the grammar", { ignoreSelection: true }); }} className="rounded-lg border border-[#332e45] px-3 py-2 text-xs font-semibold text-[#aaa3b8] hover:text-white">Fix grammar</button>
-                        <button type="button" disabled={agentBusy || !script.trim()} onClick={() => { setSelection(null); void runAgent("Make it 30% shorter while keeping the main point", { ignoreSelection: true }); }} className="rounded-lg border border-[#332e45] px-3 py-2 text-xs font-semibold text-[#aaa3b8] hover:text-white">Make shorter</button>
-                      </div>
-
-                      <div className="mt-5 overflow-hidden rounded-xl border border-[#332e45] bg-[#191620]">
-                        <button type="button" onClick={() => setCaptionOpen((value) => !value)} className="flex w-full items-center justify-between px-4 py-3 text-left">
-                          <div><strong className="text-sm text-white">Caption</strong><p className="mt-0.5 text-[11px] text-[#7f788d]">Secondary publishing text</p></div>
-                          {captionOpen ? <ChevronUp className="h-4 w-4 text-[#8d8599]" /> : <ChevronDown className="h-4 w-4 text-[#8d8599]" />}
-                        </button>
-                        {captionOpen ? (
-                          <div className="border-t border-[#302b40] p-3">
-                            <textarea value={caption} onChange={(event) => setCaption(event.target.value)} placeholder="Write a caption, or ask Agent to create one..." className="min-h-[120px] w-full resize-y rounded-xl border border-[#332e45] bg-[#15121c] px-4 py-3 text-sm leading-6 text-white outline-none focus:border-violet-500/45" />
-                            <div className="mt-2 flex gap-2">
-                              <button type="button" onClick={() => void runAgent("Rewrite the caption", { captionOnly: true, ignoreSelection: true })} className="rounded-lg bg-violet-500/10 px-3 py-1.5 text-[11px] font-semibold text-violet-300">Rewrite</button>
-                              <button type="button" onClick={() => void runAgent("Add 3 hashtags to the caption", { captionOnly: true, ignoreSelection: true })} className="rounded-lg border border-[#332e45] px-3 py-1.5 text-[11px] font-semibold text-[#9f98ac]">Add hashtags</button>
-                            </div>
-                          </div>
-                        ) : null}
-                      </div>
+                      {caption.trim() ? <div className="mx-auto mt-5 max-w-[520px] rounded-xl border border-[#332e45] bg-[#191620] p-4 text-xs leading-relaxed text-[#aaa3b8]">{caption}</div> : null}
                     </div>
                   </div>
-                )
-              ) : null}
+                ) : null}
+              </div>
 
-              {tab === "visuals" ? (
-                <div className="h-full overflow-y-auto px-7 py-6">
-                  <div className="mx-auto max-w-[820px]">
-                    <div className="mb-5 flex items-start justify-between gap-4">
-                      <div>
-                        <h3 className="text-base font-bold text-white">Recommended B-roll</h3>
-                        <p className="mt-1 max-w-lg text-xs leading-relaxed text-[#8f879f]">Match real stock clips to the moments that benefit from B-roll, then keep or regenerate the clips you want.</p>
-                      </div>
-                      <button type="button" disabled={!script.trim() || suggestBroll.isPending} onClick={() => void matchStockBroll()} className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40">
-                        {suggestBroll.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
-                        {suggestBroll.isPending ? "Matching..." : broll ? "Match again" : "Find stock clips"}
-                      </button>
-                    </div>
-
-                    {!broll ? (
-                      <div className="rounded-2xl border border-[#332e45] bg-[#191620] px-6 py-10 text-center">
-                        <div className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-violet-500/10 text-violet-300"><Sparkles className="h-5 w-5" /></div>
-                        <h4 className="mt-4 text-sm font-bold text-white">Match visuals to your script</h4>
-                        <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-[#8f879f]">SpyReels will find real stock clips for the moments that benefit from B-roll. You can keep the rest as talking head.</p>
-                        <button type="button" disabled={!script.trim() || suggestBroll.isPending} onClick={() => void matchStockBroll()} className="mt-5 inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-40"><Wand2 className="h-4 w-4" /> Find stock clips</button>
-                      </div>
-                    ) : (
-                      <div className="rounded-2xl border border-[#332e45] bg-[#17141f] p-3"><BrollBeatsView result={broll} /></div>
-                    )}
-                  </div>
-                </div>
-              ) : null}
-
-              {tab === "preview" ? (
-                <div className="h-full overflow-y-auto px-7 py-6">
-                  <div className="mx-auto max-w-[760px]">
-                    <div className="mb-5"><h3 className="text-base font-bold text-white">Opening frame preview</h3><p className="mt-1 text-xs text-[#8f879f]">A simple check of what viewers may see on frame 0 before you film.</p></div>
-                    <div className="flex justify-center">
-                      <div className="relative aspect-[9/16] w-[300px] overflow-hidden rounded-[28px] border border-[#3a3450] bg-gradient-to-br from-violet-700 via-[#3b2858] to-[#121018] shadow-2xl">
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-black/20" />
-                        <div className="absolute left-5 top-5 text-xs font-semibold text-white/90">@you</div>
-                        <div className="absolute inset-x-5 bottom-20 rounded-xl bg-black/20 p-3 text-[20px] font-bold leading-tight text-white backdrop-blur-sm">{firstHookLine(script)}</div>
-                        <div className="absolute inset-x-5 bottom-8 h-1 overflow-hidden rounded-full bg-white/25"><span className="block h-full w-[24%] rounded-full bg-white" /></div>
-                      </div>
-                    </div>
-                    {caption.trim() ? <div className="mx-auto mt-5 max-w-[520px] rounded-xl border border-[#332e45] bg-[#191620] p-4 text-xs leading-relaxed text-[#aaa3b8]">{caption}</div> : null}
-                  </div>
-                </div>
-              ) : null}
+              <RemakeSourceDrawer
+                open={sourceOpen}
+                onClose={() => setSourceOpen(false)}
+                source={target?.source ?? null}
+                reelId={target?.reelId ?? null}
+              />
             </main>
           </div>
 
           <footer className="flex items-center justify-between border-t border-[#2d2940] bg-[#1b1824] px-5 py-3">
-            <div className="inline-flex items-center gap-2 text-xs text-[#8e879b]">
-              {saveState === "saving" ? <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-400" /> : <Check className="h-3.5 w-3.5 text-emerald-400" />}
-              {saveState === "saving" ? "Saving..." : saveState === "unsaved" ? "Saving automatically..." : "Saved"}
+            <div className="inline-flex min-h-[18px] items-center gap-2 text-xs text-[#8e879b]">
+              {!isGenerating && !initialGenerationError && script.trim() && saveState !== "idle" ? (
+                <>
+                  {saveState === "saving" ? <Loader2 className="h-3.5 w-3.5 animate-spin text-violet-400" /> : <Check className="h-3.5 w-3.5 text-emerald-400" />}
+                  {saveState === "saving" ? "Saving..." : saveState === "unsaved" ? "Saving automatically..." : "Saved"}
+                </>
+              ) : null}
             </div>
-            <button type="button" disabled={isGenerating || !script.trim() || updateMutation.isPending} onClick={openSchedule} className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-violet-500 disabled:opacity-40">
+            <button type="button" disabled={isGenerating || initialGenerationError || !script.trim() || updateMutation.isPending} onClick={openSchedule} className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-violet-500 disabled:opacity-40">
               <CalendarDays className="h-4 w-4" />{scheduledLabel ? `Scheduled · ${scheduledLabel}` : "Schedule"}
             </button>
           </footer>
