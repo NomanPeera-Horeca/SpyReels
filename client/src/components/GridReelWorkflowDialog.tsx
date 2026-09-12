@@ -16,7 +16,7 @@ import { ReelDialogVideo } from "@/components/ReelDialogVideo";
 import {
   REMAKE_WORKSPACE_BODY_ATTR,
   REMAKE_WORKSPACE_OPEN_EVENT,
-} from "@/components/RemakeWorkspaceDialog";
+} from "@/lib/remakeWorkspaceEvents";
 
 export type GridReelWorkflowPreview = {
   id: number;
