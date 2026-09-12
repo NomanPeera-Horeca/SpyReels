@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node seed-defaults.js && node server.js",
-    "check": "node --check server.js && node --check seed-defaults.js"
+    "check": "node --check server.js && node --check research-engine.js && node --check seed-defaults.js"
   },
   "dependencies": {
     "connect-pg-simple": "^10.0.0",
