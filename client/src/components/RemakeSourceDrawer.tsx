@@ -94,7 +94,7 @@ export function RemakeSourceDrawer({ open, onClose, source, reelId }: Props) {
   };
 
   return (
-    <aside className="absolute inset-y-0 right-0 z-30 flex w-[min(360px,88%)] flex-col border-l border-[#332e45] bg-[#15121d] shadow-[-18px_0_50px_rgba(0,0,0,0.28)]">
+    <aside className="absolute inset-y-0 right-0 z-30 flex w-[360px] max-w-[88%] flex-col border-l border-[#332e45] bg-[#15121d] shadow-[-18px_0_50px_rgba(0,0,0,0.28)]">
       <div className="border-b border-[#302b40] px-4 py-4">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
