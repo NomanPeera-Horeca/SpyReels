@@ -8,6 +8,7 @@ import {
   type LibraryRemakeState,
 } from "@/lib/libraryRemakeChainCore";
 import type { ReelClassificationLike } from "@/lib/remakeability";
+import type { RemakeIntentMedia } from "@/lib/remakeIntent";
 
 type RecreateBatchEntry = { latestScriptId: number; status: string };
 
@@ -44,6 +45,7 @@ export function buildLibraryOneClickRemake(args: {
   idleNotRemakeable: boolean;
   classificationReason?: string | null;
   classification: ReelClassificationLike;
+  media?: RemakeIntentMedia;
   batchRecreateSt: RecreateStripState;
   batchEntry: RecreateBatchEntry | undefined;
   hookState: LibraryRemakeState;
@@ -59,6 +61,7 @@ export function buildLibraryOneClickRemake(args: {
   const startOpts: StartRemakeOptions = {
     alreadyTranscribed: args.alreadyTranscribed,
     classification: args.classification,
+    media: args.media,
     ...(args.librarySource.source === "user" && args.jobId != null
       ? { jobId: args.jobId }
       : {}),
