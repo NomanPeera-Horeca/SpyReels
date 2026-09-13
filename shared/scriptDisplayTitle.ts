@@ -3,7 +3,7 @@ const GENERIC_SCRIPT_TITLES = [
   /^ai script$/i,
   /^generated script$/i,
   /^untitled script$/i,
-  /^remake:\s*make it for me\b/i,
+  /^remake:\s*/i,
 ];
 
 const SKIP_OPENERS = new Set([
