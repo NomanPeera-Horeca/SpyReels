@@ -13,6 +13,7 @@ import { enrichScriptsWithSendMeta, sendScriptToWorkspace } from "../scriptsSend
 import { toSourceReel } from "../sourceReel";
 import { checkUsageLimit, incrementUsage } from "../stripe/stripe-service";
 import { withAiFormattingRules } from "../utils/aiFormattingRules";
+import { deriveScriptTitle } from "@shared/scriptTitle";
 import { and, or, not, like } from "drizzle-orm";
 
 /**
@@ -22,9 +23,7 @@ import { and, or, not, like } from "drizzle-orm";
  * date-only strings to keep the date stable across timezones.
  */
 function parseDateSafe(dateStr: string): Date {
-  // If it's already a full ISO string (has T), parse as-is
   if (dateStr.includes("T")) return new Date(dateStr);
-  // Date-only string: append noon to avoid timezone day-shift
   return new Date(dateStr + "T12:00:00");
 }
 
@@ -38,8 +37,8 @@ export const scriptsRouter = router({
         content: z.string().min(1),
         sourceHandle: z.string().optional(),
         gradeLevel: z.string().optional(),
-        postDate: z.string().optional(), // ISO date string
-        postTime: z.string().optional(), // HH:MM format
+        postDate: z.string().optional(),
+        postTime: z.string().optional(),
         notes: z.string().optional(),
         tagIds: z.array(z.number()).optional(),
         status: z.enum(["draft", "approved"]).optional(),
@@ -63,7 +62,6 @@ export const scriptsRouter = router({
           notes: input.notes ?? null,
           status: input.status ?? "draft",
         });
-        // Create initial version
         await createScriptVersion({
           scriptId,
           content: input.content,
@@ -71,7 +69,6 @@ export const scriptsRouter = router({
           changeType: "initial",
           changeDescription: "Initial script saved",
         });
-        // Assign tags
         if (input.tagIds && input.tagIds.length > 0) {
           for (const tagId of input.tagIds) {
             await assignTagToScript(scriptId, tagId);
@@ -89,9 +86,7 @@ export const scriptsRouter = router({
     ensureFromRecreate: protectedProcedure
       .input(
         z.object({
-          /** recreated_scripts.id from recreate.generate / checkBatch */
           recreatedScriptId: z.number().optional(),
-          /** saved_scripts.id if caller already has a library script */
           savedScriptId: z.number().optional(),
         }).refine(
           (d) =>
@@ -122,7 +117,6 @@ export const scriptsRouter = router({
             ctx
           );
         } catch {
-          // Caller may already hold a saved_scripts id (post-promote reopen).
           await assertScriptInWorkspace(recreatedScriptId, ctx);
           return { id: recreatedScriptId, created: false as const };
         }
@@ -141,11 +135,10 @@ export const scriptsRouter = router({
         }
 
         await ensureDefaultTags(ctx.workspaceId, ctx.user.id);
-        const topic = String(recreated.topic ?? "").trim();
-        const titleBase =
-          topic && topic !== "SAME_TOPIC" && topic !== "Personalized"
-            ? `Remake: ${topic.slice(0, 60)}`
-            : "Remake script";
+        const titleBase = deriveScriptTitle({
+          content,
+          topic: String(recreated.topic ?? "").trim(),
+        });
         const wordCount = content.split(/\s+/).filter(Boolean).length;
         const scriptId = await createSavedScript({
           userId: ctx.user.id,
@@ -248,7 +241,6 @@ export const scriptsRouter = router({
         if (input.content !== undefined) {
           updateData.content = input.content;
           updateData.wordCount = input.content.trim().split(/\s+/).length;
-          // Create a new version
           const versionNum = await getLatestVersionNumber(input.id);
           await createScriptVersion({
             scriptId: input.id,
@@ -262,7 +254,6 @@ export const scriptsRouter = router({
         return { success: true };
       }),
 
-    /** Delete a script */
     delete: protectedProcedure
       .input(z.object({ id: z.number() }))
       .mutation(async ({ ctx, input }) => {
@@ -271,7 +262,6 @@ export const scriptsRouter = router({
         return { success: true };
       }),
 
-    /** Assign/remove tags */
     assignTag: protectedProcedure
       .input(z.object({ scriptId: z.number(), tagId: z.number() }))
       .mutation(async ({ ctx, input }) => {
@@ -318,13 +308,11 @@ export const scriptsRouter = router({
         return { success: true, count: input.scriptIds.length };
       }),
 
-    /** AI Grammar Check - fix spelling, grammar, sentence structure */
     grammarCheck: protectedProcedure
       .input(
         z.object({
           scriptId: z.number(),
           content: z.string(),
-          /** When false, return corrected text without writing My Scripts (Remake Apply flow). */
           persist: z.boolean().optional().default(true),
         })
       )
@@ -358,14 +346,12 @@ export const scriptsRouter = router({
         return { content: corrected };
       }),
 
-    /** AI Rewrite - rewrite the script with AI while keeping the same structure */
     aiRewrite: protectedProcedure
       .input(
         z.object({
           scriptId: z.number(),
           content: z.string(),
-          instruction: z.string().optional(), // optional custom instruction
-          /** When false, return rewrite without writing My Scripts (Remake Apply flow). */
+          instruction: z.string().optional(),
           persist: z.boolean().optional().default(true),
         })
       )
@@ -379,14 +365,7 @@ export const scriptsRouter = router({
             {
               role: "system",
               content: withAiFormattingRules(
-                `You rewrite short-form spoken video scripts (Instagram Reels, TikTok, YouTube Shorts).
-
-Rules:
-- Follow the rewrite request exactly
-- Keep the same topic and core points
-- Change wording, sentence openings, and rhythm so the result is clearly different from the input
-- Never return the original script unchanged or with only tiny edits
-- Return ONLY the rewritten script text, no quotes, labels, or preamble`
+                `You rewrite short-form spoken video scripts (Instagram Reels, TikTok, YouTube Shorts).\n\nRules:\n- Follow the rewrite request exactly\n- Keep the same topic and core points\n- Change wording, sentence openings, and rhythm so the result is clearly different from the input\n- Never return the original script unchanged or with only tiny edits\n- Return ONLY the rewritten script text, no quotes, labels, or preamble`
               ),
             },
             {
@@ -406,7 +385,7 @@ Rules:
               {
                 role: "system",
                 content: withAiFormattingRules(
-                  `You rewrite spoken short-form video scripts. The previous attempt copied the input. This time you MUST produce a clearly different rewrite that still covers the same points. Change at least half of the sentence openings. Return ONLY the new script text.`
+                  "You rewrite spoken short-form video scripts. The previous attempt copied the input. This time you MUST produce a clearly different rewrite that still covers the same points. Change at least half of the sentence openings. Return ONLY the new script text."
                 ),
               },
               {
@@ -433,7 +412,6 @@ Rules:
         return { content: rewritten };
       }),
 
-    /** Phrase Swapper - swap key phrases with creative alternatives */
     phraseSwap: protectedProcedure
       .input(z.object({ scriptId: z.number(), content: z.string() }))
       .mutation(async ({ ctx, input }) => {
@@ -463,7 +441,6 @@ Rules:
         return { content: swapped };
       }),
 
-    /** Simplifier - make script more conversational and easy to understand */
     simplify: protectedProcedure
       .input(z.object({ scriptId: z.number(), content: z.string() }))
       .mutation(async ({ ctx, input }) => {
@@ -493,7 +470,6 @@ Rules:
         return { content: simplified };
       }),
 
-    /** Grade Level - rewrite at a specific tone/level */
     adjustTone: protectedProcedure
       .input(z.object({
         scriptId: z.number(),
@@ -534,7 +510,6 @@ Rules:
         return { content: adjusted };
       }),
 
-    /** Make Shorter - condense script to fit a target duration */
     makeShorter: protectedProcedure
       .input(z.object({
         scriptId: z.number(),
@@ -543,7 +518,6 @@ Rules:
       }))
       .mutation(async ({ ctx, input }) => {
         await assertScriptInWorkspace(input.scriptId, ctx);
-        // Average speaking rate: ~3 words per second
         const targetWords = Math.round(input.targetSeconds * 3);
         const response = await invokeLLM({
           messages: [
@@ -570,7 +544,6 @@ Rules:
         return { content: shortened };
       }),
 
-    /** Rewrite Selected Lines - rewrite only the highlighted portion */
     rewriteSelection: protectedProcedure
       .input(z.object({
         scriptId: z.number(),
@@ -596,7 +569,6 @@ Rules:
           ],
         });
         const rewrittenSelection = (response.choices[0]?.message?.content as string) || input.selectedText;
-        // Replace the selected text in the full content
         const newContent = input.fullContent.replace(input.selectedText, rewrittenSelection);
         const wordCount = newContent.trim().split(/\s+/).length;
         const versionNum = await getLatestVersionNumber(input.scriptId);
@@ -611,7 +583,6 @@ Rules:
         return { content: newContent, rewrittenPart: rewrittenSelection };
       }),
 
-    /** Rewrite with Angle - rewrite the entire script with a specific angle/idea */
     rewriteWithAngle: protectedProcedure
       .input(z.object({
         scriptId: z.number(),
@@ -645,7 +616,6 @@ Rules:
         return { content: rewritten };
       }),
 
-    /** Generate an SEO-optimized Instagram caption with 5 strategic hashtags */
     generateCaption: protectedProcedure
       .input(z.object({
         scriptId: z.number(),
@@ -658,7 +628,6 @@ Rules:
       }))
       .mutation(async ({ ctx, input }) => {
         await assertScriptInWorkspace(input.scriptId, ctx);
-
         let result;
         try {
           result = await generateSeoInstagramCaption({
@@ -676,13 +645,11 @@ Rules:
             message: "Caption generation failed",
           });
         }
-
         await updateSavedScript(input.scriptId, {
           generatedCaption: result.caption,
           generatedHashtags: JSON.stringify(result.hashtags),
           captionStyle: result.style,
         } as any);
-
         return {
           caption: result.caption,
           hashtags: result.hashtags,
@@ -692,7 +659,6 @@ Rules:
         };
       }),
 
-    /** Get version history for a script */
     versions: protectedProcedure
       .input(z.object({ scriptId: z.number() }))
       .query(async ({ ctx, input }) => {
@@ -700,7 +666,6 @@ Rules:
         return getScriptVersions(input.scriptId);
       }),
 
-    /** Restore a specific version */
     restoreVersion: protectedProcedure
       .input(z.object({ scriptId: z.number(), versionId: z.number() }))
       .mutation(async ({ ctx, input }) => {
@@ -721,7 +686,6 @@ Rules:
         return { content: version.content };
       }),
 
-    /** Copy a script into another workspace the user belongs to */
     sendToWorkspace: protectedProcedure
       .input(
         z.object({
@@ -752,12 +716,6 @@ Rules:
         return getShareLinkInfoForScript(ctx, input.scriptId);
       }),
 
-    /**
-     * Suggest Pexels B-roll clips for a script.
-     * One LLM beat-split call, then one Pexels video search per beat with in-job URL dedupe.
-     * Gated by brollGenerationCount (generation runs only, not clip downloads).
-     * When scriptId is present, upserts the result into broll_generations.
-     */
     suggestBroll: protectedProcedure
       .input(
         z.object({
@@ -771,7 +729,6 @@ Rules:
         if (input.scriptId != null) {
           await assertScriptInWorkspace(input.scriptId, ctx);
         }
-
         const usageCheck = await checkUsageLimit(
           ctx.user.id,
           "brollGenerationCount",
@@ -784,15 +741,11 @@ Rules:
             message: `You have reached your monthly B-roll generation limit (${usageCheck.used}/${usageCheck.limit}). Upgrade to ${usageCheck.planRequired || "a higher plan"} for more.`,
           });
         }
-
         const result = await suggestBrollForScript({
           content: input.content,
           niche: input.niche,
           clipsPerBeat: input.clipsPerBeat,
         });
-
-        // Persist for library / ScriptEditor flows that have a saved script.
-        // Paste-only (no scriptId) skips persist; result still returned.
         if (input.scriptId != null) {
           await upsertBrollGeneration({
             userId: ctx.user.id,
@@ -801,18 +754,10 @@ Rules:
             result,
           });
         }
-
-        // Count successful generation runs only (not per-clip downloads).
         await incrementUsage(ctx.user.id, "brollGenerationCount");
         return result;
       }),
 
-    /**
-     * Re-search Pexels for a single beat (no LLM split, no full suggestBroll).
-     * Product decision: does NOT increment brollGenerationCount (cheaper op;
-     * currently unlimited per-beat re-search; can add a light limit later).
-     * When scriptId + beatIndex are set, patches that beat's clips in broll_generations.
-     */
     regenerateBrollBeat: protectedProcedure
       .input(
         z.object({
@@ -831,8 +776,6 @@ Rules:
         if (input.scriptId != null) {
           await assertScriptInWorkspace(input.scriptId, ctx);
         }
-
-        // Intentionally no checkUsageLimit / incrementUsage for brollGenerationCount.
         const result = await regenerateBrollBeat({
           searchQuery: input.searchQuery,
           visualSummary: input.visualSummary,
@@ -842,11 +785,7 @@ Rules:
           clipsPerBeat: input.clipsPerBeat,
           userContext: input.userContext,
         });
-
-        if (
-          input.scriptId != null &&
-          input.beatIndex != null
-        ) {
+        if (input.scriptId != null && input.beatIndex != null) {
           await updateBrollGenerationBeatClips({
             scriptId: input.scriptId,
             workspaceId: ctx.workspaceId,
@@ -854,14 +793,9 @@ Rules:
             clips: result.clips,
           });
         }
-
         return result;
       }),
 
-    /**
-     * Load persisted B-roll for a saved script (no usage increment).
-     * Returns null when no generation has been saved yet.
-     */
     getBrollGeneration: protectedProcedure
       .input(z.object({ scriptId: z.number().int().positive() }))
       .query(async ({ ctx, input }) => {
@@ -878,9 +812,6 @@ Rules:
         };
       }),
 
-    /**
-     * Lightweight list of scriptIds in the workspace that have saved B-roll.
-     */
     listScriptIdsWithBroll: protectedProcedure.query(async ({ ctx }) => {
       return listBrollScriptIds(ctx.workspaceId);
     }),
