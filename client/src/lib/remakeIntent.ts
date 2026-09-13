@@ -14,6 +14,20 @@ export type RemakeIntentMedia = {
   durationSec?: number | null;
 };
 
+let pendingRemakeIntentMedia: RemakeIntentMedia | null = null;
+
+export function setPendingRemakeIntentMedia(media: RemakeIntentMedia | null | undefined) {
+  pendingRemakeIntentMedia = media ?? null;
+}
+
+export function getPendingRemakeIntentMedia(): RemakeIntentMedia | null {
+  return pendingRemakeIntentMedia;
+}
+
+export function clearPendingRemakeIntentMedia() {
+  pendingRemakeIntentMedia = null;
+}
+
 export function remakeIntentToTopic(intent: RemakeIntent): string {
   if (intent.mode === "niche") return "";
   if (intent.mode === "same_topic") return "SAME_TOPIC";
