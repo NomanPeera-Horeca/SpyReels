@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { users, workspaceMembers, workspaces } from "../drizzle/schema";
 import type { SavedScript, ScriptTag } from "../drizzle/schema";
+import { scriptDisplayTitle } from "../shared/scriptDisplayTitle";
 import {
   assignTagToScript,
   createSavedScript,
@@ -43,6 +44,7 @@ export async function enrichScriptsWithSendMeta<T extends SavedScript>(
   if (!db) {
     return scripts.map(s => ({
       ...s,
+      title: scriptDisplayTitle(s.title, s.content),
       sentFromWorkspaceName: null,
       sentByUserName: null,
     }));
@@ -82,6 +84,7 @@ export async function enrichScriptsWithSendMeta<T extends SavedScript>(
 
   return scripts.map(script => ({
     ...script,
+    title: scriptDisplayTitle(script.title, script.content),
     sentFromWorkspaceName: script.sourceWorkspaceId
       ? workspaceNameById.get(script.sourceWorkspaceId) ?? null
       : null,
