@@ -3,6 +3,42 @@ export type RemakeIntent =
   | { mode: "same_topic" }
   | { mode: "custom"; angle: string };
 
+export type RemakeIntentMedia = {
+  thumbnailUrl?: string | null;
+  videoUrl?: string | null;
+  shortcode?: string | null;
+  reelId?: number | null;
+  platform?: "instagram" | "tiktok" | "youtube";
+  videoPageUrl?: string | null;
+  originalUrl?: string | null;
+  durationSec?: number | null;
+};
+
+type PendingRemakeIntentMedia = {
+  media: RemakeIntentMedia;
+  capturedAt: number;
+};
+
+const REMAKE_MEDIA_TTL_MS = 5_000;
+let pendingRemakeIntentMedia: PendingRemakeIntentMedia | null = null;
+
+export function setPendingRemakeIntentMedia(media: RemakeIntentMedia | null | undefined) {
+  pendingRemakeIntentMedia = media ? { media, capturedAt: Date.now() } : null;
+}
+
+export function getPendingRemakeIntentMedia(): RemakeIntentMedia | null {
+  if (!pendingRemakeIntentMedia) return null;
+  if (Date.now() - pendingRemakeIntentMedia.capturedAt > REMAKE_MEDIA_TTL_MS) {
+    pendingRemakeIntentMedia = null;
+    return null;
+  }
+  return pendingRemakeIntentMedia.media;
+}
+
+export function clearPendingRemakeIntentMedia() {
+  pendingRemakeIntentMedia = null;
+}
+
 export function remakeIntentToTopic(intent: RemakeIntent): string {
   if (intent.mode === "niche") return "";
   if (intent.mode === "same_topic") return "SAME_TOPIC";

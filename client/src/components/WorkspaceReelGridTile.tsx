@@ -4,6 +4,7 @@ import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
 import { ReelGridThumbnail } from "@/components/ReelGridThumbnail";
 import { cn } from "@/lib/utils";
 import { formatWorkspaceReelDuration } from "@/lib/workspaceReelGridLayout";
+import { setPendingRemakeIntentMedia } from "@/lib/remakeIntent";
 
 export type WorkspaceReelGridTileProps = {
   className?: string;
@@ -84,6 +85,19 @@ export function WorkspaceReelGridTile({
       return;
     }
     onMediaClick?.();
+  };
+
+  const primeRemakeSourceMedia = () => {
+    setPendingRemakeIntentMedia({
+      thumbnailUrl: thumbnailUrl ?? null,
+      videoUrl: videoUrl ?? null,
+      shortcode: shortcode ?? null,
+      reelId: reelId ?? null,
+      platform: mediaPlatform,
+      videoPageUrl: reelUrl ?? null,
+      originalUrl: reelUrl ?? null,
+      durationSec: duration ?? null,
+    });
   };
 
   return (
@@ -202,7 +216,10 @@ export function WorkspaceReelGridTile({
         </div>
         <div
           className="relative z-20 mt-auto min-h-10 shrink-0 pt-2"
-          onPointerDown={(e) => e.stopPropagation()}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            primeRemakeSourceMedia();
+          }}
           onClick={(e) => e.stopPropagation()}
         >
           {actions}
