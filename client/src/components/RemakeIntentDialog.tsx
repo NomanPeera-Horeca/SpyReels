@@ -203,30 +203,32 @@ export function RemakeIntentDialog({
               </div>
 
               <div className="mt-5 space-y-3">
-                <button
-                  type="button"
-                  onClick={() => setMode("custom")}
-                  className={`w-full rounded-2xl border p-4 text-left transition ${
+                <div
+                  className={`w-full rounded-2xl border p-4 transition ${
                     mode === "custom"
                       ? "border-violet-500/70 bg-violet-500/[0.08] shadow-[0_0_0_1px_rgba(139,92,246,0.08)]"
                       : "border-[#332e45] bg-[#191620] hover:border-[#4a4262]"
                   }`}
                 >
-                  <div className="flex items-start gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setMode("custom")}
+                    className="flex w-full items-start gap-3 text-left"
+                  >
                     <span className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-violet-500/10 text-violet-300">
                       <Lightbulb className="h-5 w-5" />
                     </span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-2">
+                    <span className="min-w-0 flex-1">
+                      <span className="flex flex-wrap items-center gap-2">
                         <strong className="text-sm text-white">Use my idea</strong>
                         <span className="rounded-full bg-violet-500/15 px-2 py-0.5 text-[10px] font-semibold text-violet-200">
                           Recommended
                         </span>
-                      </div>
+                      </span>
                       <span className="mt-1 block text-xs leading-5 text-[#91899f]">
                         Keep what made this Reel work, but make it about your idea.
                       </span>
-                    </div>
+                    </span>
                     <span
                       className={`mt-1 h-4 w-4 shrink-0 rounded-full border ${
                         mode === "custom"
@@ -234,10 +236,10 @@ export function RemakeIntentDialog({
                           : "border-[#514a61]"
                       }`}
                     />
-                  </div>
+                  </button>
 
                   {mode === "custom" ? (
-                    <div className="mt-4 pl-12" onClick={(event) => event.stopPropagation()}>
+                    <div className="mt-4 pl-12">
                       <textarea
                         autoFocus
                         maxLength={2000}
@@ -257,7 +259,7 @@ export function RemakeIntentDialog({
                       </div>
                     </div>
                   ) : null}
-                </button>
+                </div>
 
                 <button
                   type="button"
