@@ -1,1973 +1,610 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { trpc } from "@/lib/trpc";
-import { usePostHog } from "@posthog/react";
-import { useAppBack } from "@/hooks/useAppBack";
-import { useRoute, useLocation, useSearch } from "wouter";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useRoute, useSearch } from "wouter";
 import {
   ArrowLeft,
-  Save,
-  CheckCircle2,
-  Clock,
-  SpellCheck,
-  Sparkles,
-  History,
-  Tag,
-  Calendar,
-  Copy,
-  Monitor,
-  RotateCcw,
-  Loader2,
-  X,
-  Plus,
-  ChevronDown,
-  Shuffle,
-  Zap,
-  Mic,
-  Timer,
-  Scissors,
-  Palette,
-  Lightbulb,
-  Type,
-  Wand2,
-  Hash,
-  MessageSquare,
-  RefreshCw,
-  Maximize2,
-  Pencil,
   Check,
+  Copy,
+  Edit3,
+  FileText,
+  Loader2,
+  MessageSquareSparkles,
+  Play,
+  RotateCcw,
+  Scissors,
   Send,
-  Link2,
-  Clapperboard,
+  Sparkles,
+  Wand2,
+  X,
 } from "lucide-react";
-import { openSendToWorkspaceModal } from "@/components/SendToWorkspaceModal";
-import { openShareLinkModal } from "@/components/ShareLinkModal";
-import { SentFromBadge } from "@/components/SentFromBadge";
-import { BrollResultsPanel } from "@/components/BrollResultsPanel";
+import { toast } from "sonner";
+
+import { trpc } from "@/lib/trpc";
+import { useAppBack } from "@/hooks/useAppBack";
+import { parseScriptsTagFilter, scriptsListPath } from "@/lib/scriptsListPath";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-  DropdownMenuLabel,
-} from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { toast } from "sonner";
-import { TeleprompterMode } from "./TeleprompterMode";
-import { ScriptExport } from "@/components/ScriptExport";
 import { ShareScript } from "@/components/ShareScript";
-import { PostDateTimePicker } from "@/components/PostDateTimePicker";
-import { ScriptEditorSourceReel } from "@/components/ScriptEditorSourceReel";
-import {
-  baselineFromEditorState,
-  baselineFromScript,
-  isScriptEditorDirty,
-  isStatusOnlyScriptUpdate,
-  type ScriptEditorBaseline,
-} from "@/lib/scriptEditorBaseline";
-import { shouldAutoOpenFilm } from "@shared/scriptFilm";
-import { parseScriptsTagFilter, scriptsListPath } from "@/lib/scriptsListPath";
+import { openSendToWorkspaceModal } from "@/components/SendToWorkspaceModal";
+import { TeleprompterMode } from "./TeleprompterMode";
 
-/** Parse a date string/Date to a Date object for the calendar picker */
-function parseDateValue(
-  val: string | Date | null | undefined
-): Date | undefined {
-  if (!val) return undefined;
-  const d = typeof val === "string" ? new Date(val) : val;
-  return isNaN(d.getTime()) ? undefined : d;
+const SELECTION_MIN_LENGTH = 6;
+
+type AiScope = "whole" | "selection";
+
+type UndoSnapshot = {
+  content: string;
+  label: string;
+} | null;
+
+function formatDate(value: Date | string | null | undefined) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
-type ActiveTool = null | "rewrite" | "angle" | "selection";
+function scriptTypeLabel(recreatedScriptId: number | null | undefined) {
+  return recreatedScriptId != null ? "Remake" : "Script";
+}
 
 export default function ScriptEditor() {
   const [, params] = useRoute("/scripts/:id");
   const [, navigate] = useLocation();
   const searchString = useSearch();
-  const scriptsBackPath = useMemo(
+  const scriptId = params?.id ? Number.parseInt(params.id, 10) : null;
+  const backPath = useMemo(
     () => scriptsListPath(parseScriptsTagFilter(searchString)),
     [searchString]
   );
-  const handleBack = useAppBack(scriptsBackPath);
-  const scriptId = params?.id ? parseInt(params.id) : null;
-
-  const [editedContent, setEditedContent] = useState("");
-  const [editedTitle, setEditedTitle] = useState("");
-  const [editedNotes, setEditedNotes] = useState("");
-  const [postDate, setPostDate] = useState<Date | undefined>(undefined);
-  const [postTime, setPostTime] = useState("09:00");
-  const [savedBaseline, setSavedBaseline] = useState<ScriptEditorBaseline | null>(null);
-  const [showTeleprompter, setShowTeleprompter] = useState(false);
-  const filmAutoOpenRef = useRef(false);
-  const editorReadyCapturedRef = useRef<number | null>(null);
-  const saveSilentRef = useRef(false);
-  const AUTOSAVE_DELAY_MS = 2500;
-  const [activeTab, setActiveTab] = useState<"edit" | "versions">("edit");
-
-  // AI tool states
-  const [activeTool, setActiveTool] = useState<ActiveTool>(null);
-  const [toolInput, setToolInput] = useState("");
-  const [selectedText, setSelectedText] = useState("");
-  const [selectionInstruction, setSelectionInstruction] = useState("");
-  const [pendingSelection, setPendingSelection] = useState<string | null>(null);
-  const [showSelectionPopup, setShowSelectionPopup] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  // Caption generator states
-  const [captionStyle, setCaptionStyle] = useState<string>("educational");
-  const [captionLength, setCaptionLength] = useState<string>("auto");
-  const [captionNiche, setCaptionNiche] = useState("");
-  const [captionBrandTag, setCaptionBrandTag] = useState("");
-  const [generatedCaption, setGeneratedCaption] = useState<string | null>(null);
-  const [generatedHashtags, setGeneratedHashtags] = useState<string[]>([]);
-  const [captionMeta, setCaptionMeta] = useState<{
-    primaryKeyword?: string;
-    hookType?: string;
-  }>({});
-  const [captionDialogOpen, setCaptionDialogOpen] = useState(false);
-  const [brollOpen, setBrollOpen] = useState(false);
-  const [isEditingCaption, setIsEditingCaption] = useState(false);
-  const [editableCaption, setEditableCaption] = useState("");
-  const [editableHashtags, setEditableHashtags] = useState("");
+  const handleBack = useAppBack(backPath);
+  const utils = trpc.useUtils();
 
   const scriptQuery = trpc.scripts.get.useQuery(
     { id: scriptId! },
-    { enabled: !!scriptId }
+    { enabled: scriptId != null && Number.isFinite(scriptId) }
   );
-  const tagsQuery = trpc.tags.list.useQuery();
-  const utils = trpc.useUtils();
 
   const script = scriptQuery.data;
-  const sourceReel = script?.sourceReel ?? null;
-  const showSourceReel = Boolean(script?.reelId && sourceReel);
-
-  const isDirty = isScriptEditorDirty(savedBaseline, {
-    editedContent,
-    editedTitle,
-    editedNotes,
-    postDate,
-    postTime,
-  });
-
-  const handleBackWithGuard = useCallback(() => {
-    if (isDirty) {
-      const leave = window.confirm(
-        "You have unsaved changes. Leave this page? Your latest edits may not be saved yet."
-      );
-      if (!leave) return;
-    }
-    handleBack();
-  }, [handleBack, isDirty]);
+  const [content, setContent] = useState("");
+  const [title, setTitle] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
+  const [editStartContent, setEditStartContent] = useState("");
+  const [editStartTitle, setEditStartTitle] = useState("");
+  const [showTeleprompter, setShowTeleprompter] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiScope, setAiScope] = useState<AiScope>("whole");
+  const [selectedText, setSelectedText] = useState("");
+  const [selectionBarOpen, setSelectionBarOpen] = useState(false);
+  const [undoSnapshot, setUndoSnapshot] = useState<UndoSnapshot>(null);
+  const [lastAiMessage, setLastAiMessage] = useState<string | null>(null);
+  const scriptReadRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!script) return;
-    const baseline = baselineFromScript({
-      content: script.content,
-      title: script.title,
-      notes: script.notes,
-      postDate: script.postDate,
-      postTime: (script as { postTime?: string | null }).postTime,
-    });
-    setSavedBaseline(baseline);
-    setEditedContent(baseline.content);
-    setEditedTitle(baseline.title);
-    setEditedNotes(baseline.notes);
-    setPostDate(
-      baseline.postDateKey ? new Date(`${baseline.postDateKey}T12:00:00.000Z`) : undefined
-    );
-    setPostTime(baseline.postTime);
-    setPendingSelection(null);
-    if ((script as { generatedCaption?: string }).generatedCaption) {
-      setGeneratedCaption((script as { generatedCaption: string }).generatedCaption);
-    }
-    if ((script as { generatedHashtags?: string }).generatedHashtags) {
-      try {
-        setGeneratedHashtags(JSON.parse((script as { generatedHashtags: string }).generatedHashtags));
-      } catch {
-        /* ignore */
-      }
-    }
-    if ((script as { captionStyle?: string }).captionStyle) {
-      setCaptionStyle((script as { captionStyle: string }).captionStyle);
-    }
+    setContent(script.content ?? "");
+    setTitle(script.title ?? "");
+    setEditStartContent(script.content ?? "");
+    setEditStartTitle(script.title ?? "");
+    setSelectedText("");
+    setSelectionBarOpen(false);
+    setUndoSnapshot(null);
   }, [script?.id]);
 
-  useEffect(() => {
-    filmAutoOpenRef.current = false;
-  }, [scriptId]);
+  const invalidateScript = useCallback(async () => {
+    if (!scriptId) return;
+    await Promise.all([
+      utils.scripts.get.invalidate({ id: scriptId }),
+      utils.scripts.list.invalidate(),
+    ]);
+  }, [scriptId, utils]);
 
-  useEffect(() => {
-    if (!script || !editedContent.trim() || filmAutoOpenRef.current) return;
-    if (!shouldAutoOpenFilm(searchString)) return;
-    filmAutoOpenRef.current = true;
-    setShowTeleprompter(true);
-    if (scriptId) {
-      navigate(`/scripts/${scriptId}`, { replace: true });
-    }
-  }, [script, editedContent, searchString, scriptId, navigate]);
-
-  const posthog = usePostHog();
-
-  const syncBaselineContent = useCallback((content: string) => {
-    setSavedBaseline((prev) => (prev ? { ...prev, content } : prev));
-  }, []);
-
-  // --- Mutations ---
   const updateMutation = trpc.scripts.update.useMutation({
-    onSuccess: (_data, variables) => {
-      if (!isStatusOnlyScriptUpdate(variables)) {
-        const silent = saveSilentRef.current;
-        saveSilentRef.current = false;
-        posthog?.capture(silent ? "script_autosaved" : "script_saved", {
-          script_id: scriptId,
-        });
-        setSavedBaseline({
-          content: variables.content ?? "",
-          title: variables.title ?? "",
-          notes: variables.notes ?? "",
-          postDateKey: variables.postDate ? variables.postDate.slice(0, 10) : null,
-          postTime: variables.postTime ?? "09:00",
-        });
-        if (!silent) {
-          toast.success("Script saved");
-        }
-      }
-      utils.scripts.get.invalidate({ id: scriptId! });
-      utils.scripts.list.invalidate();
+    onSuccess: async () => {
+      await invalidateScript();
     },
-    onError: (_err, variables) => {
-      if (!isStatusOnlyScriptUpdate(variables)) {
-        const silent = saveSilentRef.current;
-        saveSilentRef.current = false;
-        if (!silent) {
-          toast.error("Could not save script. Try again.");
-        }
-      }
-    },
+    onError: (error) => toast.error(error.message || "Could not save script"),
   });
 
-  const grammarMutation = trpc.scripts.grammarCheck.useMutation({
-    onSuccess: data => {
-      setEditedContent(data.content);
-      syncBaselineContent(data.content);
-      utils.scripts.get.invalidate({ id: scriptId! });
-      toast.success("Grammar corrected and saved");
+  const aiRewriteMutation = trpc.scripts.aiRewrite.useMutation({
+    onSuccess: async (data) => {
+      setContent(data.content);
+      setEditStartContent(data.content);
+      setLastAiMessage("Updated the live script. Undo is available if you want the previous version back.");
+      setSelectedText("");
+      setSelectionBarOpen(false);
+      await invalidateScript();
     },
-    onError: () => toast.error("Grammar check failed"),
+    onError: (error) => toast.error(error.message || "AI edit failed"),
   });
 
-  const rewriteMutation = trpc.scripts.aiRewrite.useMutation({
-    onSuccess: data => {
-      setEditedContent(data.content);
-      syncBaselineContent(data.content);
-      setActiveTool(null);
-      setToolInput("");
-      utils.scripts.get.invalidate({ id: scriptId! });
-      toast.success("Script rewritten and saved");
+  const selectionMutation = trpc.scripts.rewriteSelection.useMutation({
+    onSuccess: async (data) => {
+      setContent(data.content);
+      setEditStartContent(data.content);
+      setLastAiMessage("Updated only the selected text. The rest of your script stayed unchanged.");
+      setSelectedText("");
+      setSelectionBarOpen(false);
+      await invalidateScript();
     },
-    onError: () => toast.error("Rewrite failed"),
+    onError: (error) => toast.error(error.message || "AI edit failed"),
   });
 
-  const phraseSwapMutation = trpc.scripts.phraseSwap.useMutation({
-    onSuccess: data => {
-      setEditedContent(data.content);
-      syncBaselineContent(data.content);
-      utils.scripts.get.invalidate({ id: scriptId! });
-      toast.success("Phrases swapped and saved");
+  const shortenMutation = trpc.scripts.makeShorter.useMutation({
+    onSuccess: async (data) => {
+      setContent(data.content);
+      setEditStartContent(data.content);
+      setLastAiMessage("Shortened the live script for a 45 second delivery.");
+      await invalidateScript();
     },
-    onError: () => toast.error("Phrase swap failed"),
+    onError: (error) => toast.error(error.message || "Could not shorten script"),
   });
 
   const simplifyMutation = trpc.scripts.simplify.useMutation({
-    onSuccess: data => {
-      setEditedContent(data.content);
-      syncBaselineContent(data.content);
-      utils.scripts.get.invalidate({ id: scriptId! });
-      toast.success("Script simplified and saved");
+    onSuccess: async (data) => {
+      setContent(data.content);
+      setEditStartContent(data.content);
+      setLastAiMessage("Made the live script easier to say on camera.");
+      await invalidateScript();
     },
-    onError: () => toast.error("Simplify failed"),
+    onError: (error) => toast.error(error.message || "Could not simplify script"),
   });
 
-  const adjustToneMutation = trpc.scripts.adjustTone.useMutation({
-    onSuccess: data => {
-      setEditedContent(data.content);
-      syncBaselineContent(data.content);
-      utils.scripts.get.invalidate({ id: scriptId! });
-      toast.success("Tone adjusted and saved");
-    },
-    onError: () => toast.error("Tone adjustment failed"),
-  });
+  const aiPending =
+    aiRewriteMutation.isPending ||
+    selectionMutation.isPending ||
+    shortenMutation.isPending ||
+    simplifyMutation.isPending;
 
-  const makeShorterMutation = trpc.scripts.makeShorter.useMutation({
-    onSuccess: data => {
-      setEditedContent(data.content);
-      syncBaselineContent(data.content);
-      utils.scripts.get.invalidate({ id: scriptId! });
-      toast.success("Script shortened and saved");
-    },
-    onError: () => toast.error("Shortening failed"),
-  });
-
-  const rewriteSelectionMutation = trpc.scripts.rewriteSelection.useMutation({
-    onSuccess: data => {
-      setEditedContent(data.content);
-      syncBaselineContent(data.content);
-      setShowSelectionPopup(false);
-      setPendingSelection(null);
-      setSelectedText("");
-      setSelectionInstruction("");
-      utils.scripts.get.invalidate({ id: scriptId! });
-      toast.success("Selection rewritten and saved");
-    },
-    onError: () => toast.error("Selection rewrite failed"),
-  });
-
-  const rewriteWithAngleMutation = trpc.scripts.rewriteWithAngle.useMutation({
-    onSuccess: data => {
-      setEditedContent(data.content);
-      syncBaselineContent(data.content);
-      setActiveTool(null);
-      setToolInput("");
-      utils.scripts.get.invalidate({ id: scriptId! });
-      toast.success("Script rewritten with new angle and saved");
-    },
-    onError: () => toast.error("Angle rewrite failed"),
-  });
-
-  const captionMutation = trpc.scripts.generateCaption.useMutation({
-    onSuccess: data => {
-      setGeneratedCaption(data.caption);
-      setGeneratedHashtags(data.hashtags);
-      setCaptionMeta({
-        primaryKeyword: data.primaryKeyword,
-        hookType: data.hookType,
-      });
-      utils.scripts.get.invalidate({ id: scriptId! });
-      toast.success("Caption generated!");
-    },
-    onError: () => toast.error("Caption generation failed"),
-  });
-
-  const restoreVersionMutation = trpc.scripts.restoreVersion.useMutation({
-    onSuccess: data => {
-      setEditedContent(data.content);
-      syncBaselineContent(data.content);
-      utils.scripts.get.invalidate({ id: scriptId! });
-      toast.success("Version restored");
-    },
-  });
-
-  const assignTagMutation = trpc.scripts.assignTag.useMutation({
-    onSuccess: () => utils.scripts.get.invalidate({ id: scriptId! }),
-  });
-
-  const removeTagMutation = trpc.scripts.removeTag.useMutation({
-    onSuccess: () => utils.scripts.get.invalidate({ id: scriptId! }),
-  });
-
-  // --- Handlers ---
-  const handleSave = useCallback(
-    (options?: { silent?: boolean }) => {
-      if (!scriptId) return;
-      saveSilentRef.current = options?.silent ?? false;
-      updateMutation.mutate({
-        id: scriptId,
-        title: editedTitle,
-        content: editedContent,
-        notes: editedNotes || null,
-        postDate: postDate ? postDate.toISOString() : null,
-        postTime: postTime || null,
-        changeType: "manual_edit",
-        changeDescription: options?.silent ? "Autosave" : "Manual edit",
-      });
-    },
-    [scriptId, editedTitle, editedContent, editedNotes, postDate, postTime, updateMutation]
+  const wordCount = useMemo(
+    () => content.trim().split(/\s+/).filter(Boolean).length,
+    [content]
   );
+  const durationSeconds = Math.max(1, Math.round(wordCount / 3));
+  const scheduledDate = formatDate(script?.postDate);
 
-  const handleSaveClick = useCallback(() => {
-    if (updateMutation.isPending) return;
-    if (!isDirty) {
-      toast.message("No changes to save");
+  const dirty = isEditing && (content !== editStartContent || title !== editStartTitle);
+
+  const startEditing = () => {
+    setEditStartContent(content);
+    setEditStartTitle(title);
+    setIsEditing(true);
+    setSelectionBarOpen(false);
+  };
+
+  const cancelEditing = () => {
+    setContent(editStartContent);
+    setTitle(editStartTitle);
+    setIsEditing(false);
+  };
+
+  const saveEditing = () => {
+    if (!scriptId) return;
+    const titleChanged = title !== editStartTitle;
+    const contentChanged = content !== editStartContent;
+    if (!titleChanged && !contentChanged) {
+      setIsEditing(false);
       return;
     }
-    handleSave({ silent: false });
-  }, [updateMutation.isPending, isDirty, handleSave]);
 
-  const saveStatus: "saved" | "unsaved" | "saving" | "error" =
-    updateMutation.isPending
-      ? "saving"
-      : updateMutation.isError && isDirty
-        ? "error"
-        : isDirty
-          ? "unsaved"
-          : "saved";
-
-  useEffect(() => {
-    if (!isDirty) return;
-    const onBeforeUnload = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = "";
-    };
-    window.addEventListener("beforeunload", onBeforeUnload);
-    return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [isDirty]);
-
-  useEffect(() => {
-    const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
-        e.preventDefault();
-        handleSaveClick();
+    updateMutation.mutate(
+      {
+        id: scriptId,
+        ...(titleChanged ? { title: title.trim() || editStartTitle } : {}),
+        ...(contentChanged
+          ? {
+              content,
+              changeType: "manual_edit" as const,
+              changeDescription: "Manual edit from Script Reader",
+            }
+          : {}),
+      },
+      {
+        onSuccess: () => {
+          setEditStartTitle(title.trim() || editStartTitle);
+          setEditStartContent(content);
+          setIsEditing(false);
+          toast.success("Changes saved");
+        },
       }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [handleSaveClick]);
-
-  const handleApprove = () => {
-    if (!scriptId) return;
-    updateMutation.mutate({
-      id: scriptId,
-      status: script?.status === "approved" ? "draft" : "approved",
-    });
-  };
-
-  const handleTextSelect = () => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    if (start !== end) {
-      const selected = editedContent.substring(start, end);
-      if (selected.trim().length > 5) {
-        setPendingSelection(selected);
-        return;
-      }
-    }
-    setPendingSelection(null);
-  };
-
-  const openSelectionRewrite = () => {
-    if (!pendingSelection) return;
-    setSelectedText(pendingSelection);
-    setShowSelectionPopup(true);
-  };
-
-  const activeAiMutation = grammarMutation.isPending
-    ? "grammar"
-    : rewriteMutation.isPending
-      ? "rewrite"
-      : phraseSwapMutation.isPending
-        ? "phrase_swap"
-        : simplifyMutation.isPending
-          ? "simplify"
-          : adjustToneMutation.isPending
-            ? "adjust_tone"
-            : makeShorterMutation.isPending
-              ? "make_shorter"
-              : rewriteSelectionMutation.isPending
-                ? "rewrite_selection"
-                : rewriteWithAngleMutation.isPending
-                  ? "rewrite_angle"
-                  : null;
-
-  const isAnyMutationPending = activeAiMutation !== null;
-
-  const AI_MUTATION_TIMEOUT_MS = 90_000;
-
-  useEffect(() => {
-    if (!isDirty || !scriptId || isAnyMutationPending || updateMutation.isPending) return;
-    const timeoutId = window.setTimeout(() => {
-      handleSave({ silent: true });
-    }, AUTOSAVE_DELAY_MS);
-    return () => window.clearTimeout(timeoutId);
-  }, [
-    editedContent,
-    editedTitle,
-    editedNotes,
-    postDate,
-    postTime,
-    isDirty,
-    scriptId,
-    isAnyMutationPending,
-    updateMutation.isPending,
-    handleSave,
-  ]);
-
-  useEffect(() => {
-    if (!script?.id || scriptQuery.isLoading) return;
-    if (editorReadyCapturedRef.current === script.id) return;
-    editorReadyCapturedRef.current = script.id;
-    posthog?.capture("script_editor_ready", { script_id: script.id });
-  }, [script?.id, scriptQuery.isLoading, posthog]);
-
-  useEffect(() => {
-    if (!isAnyMutationPending || !scriptId || !activeAiMutation) return;
-    posthog?.capture("script_editor_ai_started", {
-      script_id: scriptId,
-      tool: activeAiMutation,
-    });
-    const timeoutId = window.setTimeout(() => {
-      posthog?.capture("script_editor_mutation_timeout", {
-        script_id: scriptId,
-        tool: activeAiMutation,
-      });
-      toast.message(
-        "AI is still working. You can keep typing; we'll update the script when it finishes."
-      );
-    }, AI_MUTATION_TIMEOUT_MS);
-    return () => window.clearTimeout(timeoutId);
-  }, [isAnyMutationPending, activeAiMutation, scriptId, posthog]);
-
-  const wordCount = editedContent.trim().split(/\s+/).filter(Boolean).length;
-  const estimatedDuration = Math.round(wordCount / 3);
-
-  const assignedTagIds = new Set(script?.tags?.map(t => t.id) || []);
-  const availableTags =
-    tagsQuery.data?.filter(t => !assignedTagIds.has(t.id)) || [];
-
-  if (!scriptId) {
-    return (
-      <div className="p-6 text-center text-muted-foreground">
-        Script not found
-      </div>
     );
+  };
+
+  const safeBack = () => {
+    if (dirty && !window.confirm("Leave without saving your script changes?")) return;
+    handleBack();
+  };
+
+  const openAi = (scope: AiScope = "whole") => {
+    if (scope === "selection" && !selectedText.trim()) return;
+    setAiScope(scope);
+    setAiOpen(true);
+    setSelectionBarOpen(false);
+  };
+
+  const captureSelection = () => {
+    if (isEditing) return;
+    const selection = window.getSelection();
+    const text = selection?.toString().trim() ?? "";
+    if (text.length < SELECTION_MIN_LENGTH) {
+      setSelectedText("");
+      setSelectionBarOpen(false);
+      return;
+    }
+    const container = scriptReadRef.current;
+    const anchor = selection?.anchorNode;
+    const focus = selection?.focusNode;
+    if (!container || !anchor || !focus || !container.contains(anchor) || !container.contains(focus)) {
+      setSelectedText("");
+      setSelectionBarOpen(false);
+      return;
+    }
+    setSelectedText(text);
+    setAiScope("selection");
+    setSelectionBarOpen(true);
+  };
+
+  const rememberUndo = (label: string) => {
+    setUndoSnapshot({ content, label });
+  };
+
+  const runWholeAi = (instruction: string) => {
+    if (!scriptId || aiPending) return;
+    rememberUndo(instruction);
+    setLastAiMessage(null);
+    aiRewriteMutation.mutate({ scriptId, content, instruction });
+  };
+
+  const runSelectionAi = (instruction: string) => {
+    if (!scriptId || !selectedText || aiPending) return;
+    rememberUndo(instruction);
+    setLastAiMessage(null);
+    selectionMutation.mutate({
+      scriptId,
+      fullContent: content,
+      selectedText,
+      instruction,
+    });
+  };
+
+  const sendAiPrompt = () => {
+    const prompt = aiPrompt.trim();
+    if (!prompt) return;
+    setAiPrompt("");
+    if (aiScope === "selection" && selectedText.trim()) {
+      runSelectionAi(prompt);
+      return;
+    }
+    runWholeAi(prompt);
+  };
+
+  const quickShorter = () => {
+    if (selectedText) {
+      runSelectionAi("Make this selected text shorter and easier to say while keeping the same meaning.");
+    } else if (scriptId && !aiPending) {
+      rememberUndo("Shorten to 45 seconds");
+      shortenMutation.mutate({ scriptId, content, targetSeconds: 45 });
+    }
+  };
+
+  const quickEasier = () => {
+    if (selectedText) {
+      runSelectionAi("Make this selected text easier and more natural to say on camera while keeping the meaning.");
+    } else if (scriptId && !aiPending) {
+      rememberUndo("Make easier to say");
+      simplifyMutation.mutate({ scriptId, content });
+    }
+  };
+
+  const undoAi = () => {
+    if (!scriptId || !undoSnapshot || updateMutation.isPending) return;
+    const previous = undoSnapshot;
+    updateMutation.mutate(
+      {
+        id: scriptId,
+        content: previous.content,
+        changeType: "manual_edit",
+        changeDescription: `Undo AI edit: ${previous.label}`,
+      },
+      {
+        onSuccess: () => {
+          setContent(previous.content);
+          setEditStartContent(previous.content);
+          setUndoSnapshot(null);
+          setLastAiMessage("Restored the previous script version.");
+          toast.success("AI edit undone");
+        },
+      }
+    );
+  };
+
+  if (!scriptId || !Number.isFinite(scriptId)) {
+    return <div className="p-6 text-center text-muted-foreground">Script not found</div>;
   }
 
   if (scriptQuery.isLoading) {
     return (
-      <div className="p-6 flex items-center justify-center">
-        <Loader2 className="w-6 h-6 animate-spin" />
+      <div className="min-h-[50vh] flex items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
       </div>
     );
   }
 
   if (!script) {
-    return (
-      <div className="p-6 text-center text-muted-foreground">
-        Script not found
-      </div>
-    );
+    return <div className="p-6 text-center text-muted-foreground">Script not found</div>;
   }
 
   return (
-    <TooltipProvider delayDuration={300}>
-      <div className="h-full flex flex-col">
-        {/* Top Bar */}
-        <div className="border-b px-2 sm:px-4 py-2 sm:py-3 flex items-center justify-between gap-2 sm:gap-3 shrink-0">
-          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleBackWithGuard}
-            >
-              <ArrowLeft className="w-4 h-4" />
+    <div className="relative min-h-full bg-background">
+      <div className="mx-auto w-full max-w-[1320px] px-3 py-4 sm:px-6 sm:py-6">
+        <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={safeBack} className="shrink-0">
+              <ArrowLeft className="h-4 w-4" />
+              <span className="hidden sm:inline ml-1">My Scripts</span>
             </Button>
-            <input
-              value={editedTitle}
-              onChange={e => setEditedTitle(e.target.value)}
-              className="text-lg font-semibold bg-transparent border-none outline-none flex-1 min-w-0"
-              placeholder="Script title..."
-            />
-            {script.status === "approved" ? (
-              <Badge className="bg-green-600 text-white shrink-0">
-                Approved
-              </Badge>
-            ) : (
-              <Badge variant="secondary" className="shrink-0">
-                Draft
-              </Badge>
-            )}
-            {script.sourceWorkspaceId &&
-            script.sentFromWorkspaceName &&
-            script.sentByUserName ? (
-              <SentFromBadge
-                workspaceName={script.sentFromWorkspaceName}
-                senderName={script.sentByUserName}
-                sentAt={script.sentAt}
-              />
-            ) : null}
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-muted-foreground">Script Reader</p>
+              <p className="truncate text-sm text-muted-foreground">Read first, edit or ask AI when you need to.</p>
+            </div>
           </div>
-          <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-            {saveStatus === "saving" ? (
-              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground font-medium">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Saving...
-              </span>
-            ) : saveStatus === "saved" ? (
-              <span className="text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                Saved
-              </span>
-            ) : saveStatus === "error" ? (
-              <span className="text-xs text-destructive font-medium">Save failed</span>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {isEditing ? (
+              <>
+                <Button variant="outline" size="sm" onClick={cancelEditing} disabled={updateMutation.isPending}>
+                  <X className="h-3.5 w-3.5 mr-1.5" />
+                  Cancel
+                </Button>
+                <Button size="sm" onClick={saveEditing} disabled={updateMutation.isPending || !dirty}>
+                  {updateMutation.isPending ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Check className="h-3.5 w-3.5 mr-1.5" />}
+                  Save changes
+                </Button>
+              </>
             ) : (
-              <span className="text-xs text-amber-500 font-medium">Unsaved changes</span>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleSaveClick}
-              disabled={updateMutation.isPending || !isDirty}
-            >
-              <Save className="w-3.5 h-3.5 sm:mr-1.5" />
-              <span className="hidden sm:inline">Save</span>
-            </Button>
-            <Button
-              variant={script.status === "approved" ? "secondary" : "default"}
-              size="sm"
-              onClick={handleApprove}
-            >
-              <CheckCircle2 className="w-3.5 h-3.5 sm:mr-1.5" />
-              <span className="hidden sm:inline">
-                {script.status === "approved" ? "Unapprove" : "Approve"}
-              </span>
-            </Button>
-            {script.coachScriptId != null && script.coachScriptId > 0 ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigate(`/studio?script=${script.coachScriptId}`)}
-              >
-                <Wand2 className="w-3.5 h-3.5 sm:mr-1.5" />
-                <span className="hidden sm:inline">Open in Studio</span>
+              <Button variant="outline" size="sm" onClick={startEditing}>
+                <Edit3 className="h-3.5 w-3.5 mr-1.5" />
+                Edit
               </Button>
-            ) : null}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                openShareLinkModal({
-                  scriptId: script.id,
-                  scriptTitle: editedTitle || script.title,
-                })
-              }
-            >
-              <Link2 className="w-3.5 h-3.5 sm:mr-1.5" />
-              <span className="hidden sm:inline">Share link</span>
+            )}
+            <Button variant="outline" size="sm" onClick={() => openAi("whole")}>
+              <MessageSquareSparkles className="h-3.5 w-3.5 mr-1.5" />
+              Ask SpyReels
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() =>
-                openSendToWorkspaceModal({
-                  scriptId: script.id,
-                  scriptTitle: editedTitle || script.title,
-                })
-              }
-            >
-              <Send className="w-3.5 h-3.5 sm:mr-1.5" />
-              <span className="hidden sm:inline">Send to workspace...</span>
+            <Button variant="outline" size="sm" onClick={() => navigator.clipboard.writeText(content).then(() => toast.success("Copied"))}>
+              <Copy className="h-3.5 w-3.5 mr-1.5" />
+              <span className="hidden sm:inline">Copy</span>
             </Button>
-            <ShareScript
-              title={editedTitle}
-              content={editedContent}
-              variant="button"
-              size="sm"
-            />
+            <div className="hidden sm:block">
+              <ShareScript title={title} content={content} variant="button" size="sm" />
+            </div>
+            <Button size="sm" onClick={() => setShowTeleprompter(true)} className="shadow-sm">
+              <Play className="h-3.5 w-3.5 mr-1.5" />
+              Start filming
+            </Button>
           </div>
         </div>
 
-        {/* Main Content */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Editor Panel */}
-          <div className="flex-1 flex flex-col overflow-hidden">
-            {showSourceReel && sourceReel ? (
-              <div className="lg:hidden border-b shrink-0 p-3">
-                <ScriptEditorSourceReel sourceReel={sourceReel} />
-              </div>
-            ) : null}
-
-            {/* AI Editing Toolbar */}
-            <div className="px-2 sm:px-4 py-2 border-b shrink-0">
-              <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
-                {/* Grammar Check */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        if (!scriptId) return;
-                        grammarMutation.mutate({
-                          scriptId,
-                          content: editedContent,
-                        });
-                      }}
-                      disabled={isAnyMutationPending}
-                      className="gap-1.5 h-8"
-                    >
-                      {grammarMutation.isPending ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <SpellCheck className="w-3.5 h-3.5" />
-                      )}
-                      <span className="hidden sm:inline">Grammar</span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Fix spelling & grammar errors</TooltipContent>
-                </Tooltip>
-
-                {/* B-Roll suggestions */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setBrollOpen(true)}
-                      disabled={!editedContent.trim()}
-                      className="gap-1.5 h-8"
-                    >
-                      <Clapperboard className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">B-Roll</span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    Find Pexels B-roll clips for this script
-                  </TooltipContent>
-                </Tooltip>
-
-                {/* Phrase Swapper */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        if (!scriptId) return;
-                        phraseSwapMutation.mutate({
-                          scriptId,
-                          content: editedContent,
-                        });
-                      }}
-                      disabled={isAnyMutationPending}
-                      className="gap-1.5 h-8"
-                    >
-                      {phraseSwapMutation.isPending ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Shuffle className="w-3.5 h-3.5" />
-                      )}
-                      <span className="hidden sm:inline">Swap Phrases</span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    Swap key phrases with fresh, punchy alternatives
-                  </TooltipContent>
-                </Tooltip>
-
-                {/* Simplifier */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        if (!scriptId) return;
-                        simplifyMutation.mutate({
-                          scriptId,
-                          content: editedContent,
-                        });
-                      }}
-                      disabled={isAnyMutationPending}
-                      className="gap-1.5 h-8"
-                    >
-                      {simplifyMutation.isPending ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      ) : (
-                        <Zap className="w-3.5 h-3.5" />
-                      )}
-                      <span className="hidden sm:inline">Simplify</span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    Simplify language: make it conversational
-                  </TooltipContent>
-                </Tooltip>
-
-                {/* Tone / Grade Level */}
-                <DropdownMenu>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={isAnyMutationPending}
-                          className="gap-1.5 h-8"
-                        >
-                          {adjustToneMutation.isPending ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <Palette className="w-3.5 h-3.5" />
-                          )}
-                          <span className="hidden sm:inline">Tone</span>
-                          <ChevronDown className="w-3 h-3" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      Change the tone & style of your script
-                    </TooltipContent>
-                  </Tooltip>
-                  <DropdownMenuContent align="start">
-                    <DropdownMenuLabel className="text-xs">
-                      Adjust Tone
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={() =>
-                        scriptId &&
-                        adjustToneMutation.mutate({
-                          scriptId,
-                          content: editedContent,
-                          tone: "casual",
-                        })
-                      }
-                    >
-                      <span className="mr-2">😎</span> Casual & Friendly
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() =>
-                        scriptId &&
-                        adjustToneMutation.mutate({
-                          scriptId,
-                          content: editedContent,
-                          tone: "professional",
-                        })
-                      }
-                    >
-                      <span className="mr-2">💼</span> Professional
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() =>
-                        scriptId &&
-                        adjustToneMutation.mutate({
-                          scriptId,
-                          content: editedContent,
-                          tone: "academic",
-                        })
-                      }
-                    >
-                      <span className="mr-2">🎓</span> Educational / TED Talk
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() =>
-                        scriptId &&
-                        adjustToneMutation.mutate({
-                          scriptId,
-                          content: editedContent,
-                          tone: "gen_z",
-                        })
-                      }
-                    >
-                      <span className="mr-2">🔥</span> Gen Z / TikTok Vibes
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() =>
-                        scriptId &&
-                        adjustToneMutation.mutate({
-                          scriptId,
-                          content: editedContent,
-                          tone: "storyteller",
-                        })
-                      }
-                    >
-                      <span className="mr-2">📖</span> Storyteller
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
-                {/* Make Shorter */}
-                <DropdownMenu>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={isAnyMutationPending}
-                          className="gap-1.5 h-8"
-                        >
-                          {makeShorterMutation.isPending ? (
-                            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                          ) : (
-                            <Scissors className="w-3.5 h-3.5" />
-                          )}
-                          <span className="hidden sm:inline">Shorten</span>
-                          <ChevronDown className="w-3 h-3" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      Condense script to fit a target duration
-                    </TooltipContent>
-                  </Tooltip>
-                  <DropdownMenuContent align="start">
-                    <DropdownMenuLabel className="text-xs">
-                      Target Duration
-                    </DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={() =>
-                        scriptId &&
-                        makeShorterMutation.mutate({
-                          scriptId,
-                          content: editedContent,
-                          targetSeconds: 30,
-                        })
-                      }
-                    >
-                      <Timer className="w-3.5 h-3.5 mr-2" /> 30 seconds (~90
-                      words)
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() =>
-                        scriptId &&
-                        makeShorterMutation.mutate({
-                          scriptId,
-                          content: editedContent,
-                          targetSeconds: 45,
-                        })
-                      }
-                    >
-                      <Timer className="w-3.5 h-3.5 mr-2" /> 45 seconds (~135
-                      words)
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() =>
-                        scriptId &&
-                        makeShorterMutation.mutate({
-                          scriptId,
-                          content: editedContent,
-                          targetSeconds: 60,
-                        })
-                      }
-                    >
-                      <Timer className="w-3.5 h-3.5 mr-2" /> 60 seconds (~180
-                      words)
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() =>
-                        scriptId &&
-                        makeShorterMutation.mutate({
-                          scriptId,
-                          content: editedContent,
-                          targetSeconds: 90,
-                        })
-                      }
-                    >
-                      <Timer className="w-3.5 h-3.5 mr-2" /> 90 seconds (~270
-                      words)
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-
-                <div className="w-px h-5 bg-border mx-0.5 hidden sm:block" />
-
-                {/* Rewrite with AI (custom instruction) */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant={activeTool === "rewrite" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => {
-                        setActiveTool(
-                          activeTool === "rewrite" ? null : "rewrite"
-                        );
-                        setToolInput("");
-                      }}
-                      disabled={
-                        isAnyMutationPending && activeTool !== "rewrite"
-                      }
-                      className="gap-1.5 h-8"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">Rewrite</span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    Rewrite with custom instructions
-                  </TooltipContent>
-                </Tooltip>
-
-                {/* Rewrite with Angle */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant={activeTool === "angle" ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => {
-                        setActiveTool(activeTool === "angle" ? null : "angle");
-                        setToolInput("");
-                      }}
-                      disabled={isAnyMutationPending && activeTool !== "angle"}
-                      className="gap-1.5 h-8"
-                    >
-                      <Lightbulb className="w-3.5 h-3.5" />
-                      <span className="hidden sm:inline">New Angle</span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    Rewrite from a completely new angle or perspective
-                  </TooltipContent>
-                </Tooltip>
-
-                <div className="flex-1" />
-
-                {/* Utility buttons */}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowTeleprompter(true)}
-                      className="gap-1.5 h-8"
-                    >
-                      <Monitor className="w-3.5 h-3.5" />
-                      <span className="hidden md:inline">Teleprompter</span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    Practice reading with teleprompter
-                  </TooltipContent>
-                </Tooltip>
-
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        navigator.clipboard.writeText(editedContent);
-                        toast.success("Copied to clipboard");
-                      }}
-                      className="gap-1.5 h-8"
-                    >
-                      <Copy className="w-3.5 h-3.5" />
-                      <span className="hidden md:inline">Copy</span>
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Copy script to clipboard</TooltipContent>
-                </Tooltip>
-
-                <ScriptExport
-                  title={editedTitle}
-                  content={editedContent}
-                  sourceHandle={script.sourceHandle}
-                  gradeLevel={script.gradeLevel}
-                  postDate={script.postDate}
-                  wordCount={wordCount}
-                  notes={editedNotes}
-                />
-
-                <Button
-                  variant={activeTab === "versions" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() =>
-                    setActiveTab(activeTab === "versions" ? "edit" : "versions")
-                  }
-                  className="gap-1.5 h-8"
-                >
-                  <History className="w-3.5 h-3.5" />
-                  <span className="hidden md:inline">Versions</span>
-                  <span className="text-[10px]">
-                    ({script.versions?.length || 0})
-                  </span>
-                </Button>
-              </div>
-
-              {/* Expandable input for Rewrite / Angle tools */}
-              {activeTool === "rewrite" && (
-                <div className="flex items-center gap-2 mt-2 animate-in slide-in-from-top-1 duration-200">
-                  <Sparkles className="w-4 h-4 text-purple-400 shrink-0" />
-                  <Input
-                    placeholder="How should I rewrite? (e.g., 'more casual', 'add humor', 'make it controversial')..."
-                    value={toolInput}
-                    onChange={e => setToolInput(e.target.value)}
-                    className="h-8 text-sm flex-1"
-                    autoFocus
-                    onKeyDown={e => {
-                      if (e.key === "Enter" && scriptId) {
-                        rewriteMutation.mutate({
-                          scriptId,
-                          content: editedContent,
-                          instruction: toolInput || undefined,
-                        });
-                      }
-                      if (e.key === "Escape") {
-                        setActiveTool(null);
-                        setToolInput("");
-                      }
-                    }}
-                  />
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      if (!scriptId) return;
-                      rewriteMutation.mutate({
-                        scriptId,
-                        content: editedContent,
-                        instruction: toolInput || undefined,
-                      });
-                    }}
-                    disabled={rewriteMutation.isPending}
-                    className="h-8"
-                  >
-                    {rewriteMutation.isPending ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
-                    ) : (
-                      <Wand2 className="w-3.5 h-3.5 mr-1.5" />
-                    )}
-                    Rewrite
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8"
-                    onClick={() => {
-                      setActiveTool(null);
-                      setToolInput("");
-                    }}
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-              )}
-
-              {activeTool === "angle" && (
-                <div className="flex items-center gap-2 mt-2 animate-in slide-in-from-top-1 duration-200">
-                  <Lightbulb className="w-4 h-4 text-yellow-400 shrink-0" />
-                  <Input
-                    placeholder="What angle? (e.g., 'from a beginner's perspective', 'as a controversial take', 'personal story')..."
-                    value={toolInput}
-                    onChange={e => setToolInput(e.target.value)}
-                    className="h-8 text-sm flex-1"
-                    autoFocus
-                    onKeyDown={e => {
-                      if (e.key === "Enter" && scriptId && toolInput.trim()) {
-                        rewriteWithAngleMutation.mutate({
-                          scriptId,
-                          content: editedContent,
-                          angle: toolInput,
-                        });
-                      }
-                      if (e.key === "Escape") {
-                        setActiveTool(null);
-                        setToolInput("");
-                      }
-                    }}
-                  />
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      if (!scriptId || !toolInput.trim()) return;
-                      rewriteWithAngleMutation.mutate({
-                        scriptId,
-                        content: editedContent,
-                        angle: toolInput,
-                      });
-                    }}
-                    disabled={
-                      rewriteWithAngleMutation.isPending || !toolInput.trim()
-                    }
-                    className="h-8"
-                  >
-                    {rewriteWithAngleMutation.isPending ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
-                    ) : (
-                      <Lightbulb className="w-3.5 h-3.5 mr-1.5" />
-                    )}
-                    Apply Angle
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8"
-                    onClick={() => {
-                      setActiveTool(null);
-                      setToolInput("");
-                    }}
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            {isAnyMutationPending && (
-              <div className="px-4 py-2 bg-purple-500/15 border-b border-purple-500/25 flex items-center gap-2 text-xs text-purple-700 dark:text-purple-300 shrink-0">
-                <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-                <span>
-                  AI is updating your script ({activeAiMutation?.replace(/_/g, " ")}). You can
-                  keep typing; changes apply when AI finishes.
-                </span>
-              </div>
-            )}
-
-            {activeTab === "edit" ? (
-              /* Editor */
-              <div className="relative flex-1 overflow-y-auto p-4">
-                <Textarea
-                  ref={textareaRef}
-                  value={editedContent}
-                  onChange={e => setEditedContent(e.target.value)}
-                  onMouseUp={handleTextSelect}
-                  onKeyUp={e => {
-                    if (e.shiftKey) handleTextSelect();
-                  }}
-                  className="min-h-[500px] text-base leading-relaxed resize-none border-none focus-visible:ring-0 p-0 bg-transparent"
-                  placeholder="Start writing your script..."
-                />
-                {pendingSelection && !showSelectionPopup && !isAnyMutationPending ? (
-                  <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-primary/20 bg-primary/5 p-2">
-                    <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                      Selected: &ldquo;{pendingSelection.slice(0, 72)}
-                      {pendingSelection.length > 72 ? "..." : ""}&rdquo;
-                    </span>
-                    <Button type="button" size="sm" className="h-7 text-xs" onClick={openSelectionRewrite}>
-                      <Wand2 className="mr-1 h-3 w-3" />
-                      Rewrite selection
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => setPendingSelection(null)}
-                    >
-                      Dismiss
-                    </Button>
-                  </div>
-                ) : null}
-                {!pendingSelection && !showSelectionPopup && !isAnyMutationPending ? (
-                  <p className="text-[11px] text-muted-foreground/50 mt-2">
-                    Tip: Select text, then click Rewrite selection to edit just that part
-                  </p>
-                ) : null}
-              </div>
-            ) : (
-              /* Version History */
-              <div className="flex-1 overflow-y-auto p-4">
-                <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-                  <History className="w-4 h-4" />
-                  Version History
-                </h3>
-                <div className="space-y-3">
-                  {script.versions?.map(version => (
-                    <div
-                      key={version.id}
-                      className="border rounded-lg p-3 hover:border-primary/50 transition-colors"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <Badge variant="outline" className="text-[10px]">
-                            v{version.versionNumber}
-                          </Badge>
-                          <Badge variant="secondary" className="text-[10px]">
-                            {version.changeType === "initial"
-                              ? "Initial"
-                              : version.changeType === "manual_edit"
-                                ? "Manual Edit"
-                                : version.changeType === "ai_rewrite"
-                                  ? "AI Rewrite"
-                                  : "Grammar Fix"}
-                          </Badge>
-                          <span className="text-[11px] text-muted-foreground">
-                            {new Date(version.createdAt).toLocaleString()}
-                          </span>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs gap-1"
-                          onClick={() =>
-                            restoreVersionMutation.mutate({
-                              scriptId: scriptId!,
-                              versionId: version.id,
-                            })
-                          }
-                          disabled={restoreVersionMutation.isPending}
-                        >
-                          <RotateCcw className="w-3 h-3" />
-                          Restore
-                        </Button>
-                      </div>
-                      {version.changeDescription && (
-                        <p className="text-xs text-muted-foreground mb-2">
-                          {version.changeDescription}
-                        </p>
-                      )}
-                      <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
-                        {version.content.slice(0, 300)}
-                        {version.content.length > 300 ? "..." : ""}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Footer Stats */}
-            <div className="border-t px-4 py-2 flex items-center gap-4 text-xs text-muted-foreground shrink-0 flex-wrap">
-              <span className="font-medium">{wordCount} words</span>
-              <span>~{estimatedDuration}s at avg speed</span>
-              {script.gradeLevel && <span>Grade {script.gradeLevel}</span>}
-              {script.sourceHandle && <span>from @{script.sourceHandle}</span>}
-            </div>
-          </div>
-
-          {/* Right Sidebar */}
-          <div className="w-64 border-l shrink-0 overflow-y-auto p-4 space-y-5 hidden lg:block">
-            {/* Tags */}
-            <div>
-              <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2 flex items-center gap-1.5">
-                <Tag className="w-3 h-3" />
-                Tags
-              </h4>
-              <div className="flex flex-wrap gap-1.5 mb-2">
-                {script.tags?.map(tag => (
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+          <section className="rounded-2xl border border-border/70 bg-card/70 shadow-sm overflow-hidden">
+            <div className="p-4 sm:p-6">
+              <div className="mb-4 flex flex-wrap items-center gap-2">
+                <Badge variant="secondary">{scriptTypeLabel(script.recreatedScriptId)}</Badge>
+                {script.tags?.map((tag) => (
                   <span
                     key={tag.id}
-                    className="px-2 py-0.5 rounded-full text-[10px] font-medium flex items-center gap-1 group/tag"
-                    style={{
-                      backgroundColor: `${tag.color}20`,
-                      color: tag.color,
-                    }}
+                    className="rounded-full px-2.5 py-1 text-[11px] font-medium"
+                    style={{ backgroundColor: `${tag.color}20`, color: tag.color }}
                   >
                     {tag.name}
-                    <button
-                      onClick={() =>
-                        removeTagMutation.mutate({
-                          scriptId: scriptId!,
-                          tagId: tag.id,
-                        })
-                      }
-                      className="opacity-0 group-hover/tag:opacity-100 transition-opacity"
-                    >
-                      <X className="w-2.5 h-2.5" />
-                    </button>
                   </span>
                 ))}
+                <Badge className={script.status === "approved" ? "bg-emerald-600 text-white" : ""} variant={script.status === "approved" ? "default" : "outline"}>
+                  {script.status === "approved" ? "Approved" : "Draft"}
+                </Badge>
               </div>
-              {availableTags.length > 0 && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full text-xs gap-1 h-7"
-                    >
-                      <Plus className="w-3 h-3" />
-                      Add Tag
-                      <ChevronDown className="w-3 h-3" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    {availableTags.map(tag => (
-                      <DropdownMenuItem
-                        key={tag.id}
-                        onClick={() =>
-                          assignTagMutation.mutate({
-                            scriptId: scriptId!,
-                            tagId: tag.id,
-                          })
-                        }
-                      >
-                        <span
-                          className="w-2.5 h-2.5 rounded-full mr-2"
-                          style={{ backgroundColor: tag.color }}
-                        />
-                        {tag.name}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
-            </div>
 
-            {/* Post Date + Time */}
-            <div>
-              <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2 flex items-center gap-1.5">
-                <Calendar className="w-3 h-3" />
-                Post Date
-              </h4>
-              <PostDateTimePicker
-                date={postDate}
-                onDateChange={setPostDate}
-                time={postTime}
-                onTimeChange={setPostTime}
-                timezone={Intl.DateTimeFormat().resolvedOptions().timeZone}
-                compact
-              />
-            </div>
-
-            {/* Notes */}
-            <div>
-              <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">
-                Notes
-              </h4>
-              <Textarea
-                value={editedNotes}
-                onChange={e => setEditedNotes(e.target.value)}
-                placeholder="Add notes about this script..."
-                className="text-xs min-h-[80px] resize-none"
-              />
-            </div>
-
-            {/* Caption & Hashtags Generator */}
-            <div>
-              <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2 flex items-center gap-1.5">
-                <MessageSquare className="w-3 h-3" />
-                Caption & Hashtags
-              </h4>
-
-              {/* Style selector */}
-              <select
-                value={captionStyle}
-                onChange={e => setCaptionStyle(e.target.value)}
-                className="w-full text-xs rounded-md border bg-background px-2 py-1.5 mb-2"
-              >
-                <option value="educational">Educational / Value</option>
-                <option value="storytelling">Storytelling</option>
-                <option value="question">Question-Based</option>
-                <option value="cta">CTA-Focused</option>
-                <option value="curiosity">Curiosity Gap</option>
-                <option value="bold">Bold / Controversial</option>
-                <option value="relatable">Relatable / Funny</option>
-              </select>
-
-              {/* Length selector */}
-              <select
-                value={captionLength}
-                onChange={e => setCaptionLength(e.target.value)}
-                className="w-full text-xs rounded-md border bg-background px-2 py-1.5 mb-2"
-              >
-                <option value="auto">Auto (adapts to script length)</option>
-                <option value="short">Short (5-7 lines)</option>
-                <option value="medium">Medium (8-12 lines)</option>
-                <option value="long">Long (13+ lines)</option>
-              </select>
-
-              {/* Niche input */}
-              <Input
-                value={captionNiche}
-                onChange={e => setCaptionNiche(e.target.value)}
-                placeholder="Your niche (e.g., fitness, marketing)"
-                className="text-xs h-7 mb-2"
-              />
-
-              {/* Brand hashtag */}
-              <Input
-                value={captionBrandTag}
-                onChange={e => setCaptionBrandTag(e.target.value)}
-                placeholder="Brand hashtag (optional)"
-                className="text-xs h-7 mb-2"
-              />
-
-              {/* Generate button - purple */}
-              <Button
-                size="sm"
-                className="w-full text-xs gap-1.5 h-8 mb-3 bg-purple-600 hover:bg-purple-700 text-white"
-                onClick={() => {
-                  if (!scriptId) return;
-                  captionMutation.mutate({
-                    scriptId,
-                    content: editedContent,
-                    style: captionStyle as any,
-                    captionLength: captionLength as any,
-                    niche: captionNiche || undefined,
-                    brandHashtag: captionBrandTag || undefined,
-                  });
-                }}
-                disabled={captionMutation.isPending || !editedContent.trim()}
-              >
-                {captionMutation.isPending ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : generatedCaption ? (
-                  <RefreshCw className="w-3.5 h-3.5" />
-                ) : (
-                  <Sparkles className="w-3.5 h-3.5" />
-                )}
-                {captionMutation.isPending
-                  ? "Generating..."
-                  : generatedCaption
-                    ? "Regenerate Caption"
-                    : "Generate Caption & Hashtags"}
-              </Button>
-
-              {/* Generated caption display */}
-              {generatedCaption && (
-                <div className="space-y-2">
-                  {/* Caption header with actions */}
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-semibold uppercase text-muted-foreground">
-                      Caption
-                    </span>
-                    <div className="flex items-center gap-1">
-                      <button
-                        className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5 transition-colors"
-                        title="Edit caption"
-                        onClick={() => {
-                          setIsEditingCaption(true);
-                          setEditableCaption(generatedCaption);
-                          setEditableHashtags(
-                            generatedHashtags.map(t => `#${t}`).join(" ")
-                          );
-                        }}
-                      >
-                        <Pencil className="w-3 h-3" />
-                      </button>
-                      <button
-                        className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5 transition-colors"
-                        title="Expand"
-                        onClick={() => {
-                          setEditableCaption(generatedCaption);
-                          setEditableHashtags(
-                            generatedHashtags.map(t => `#${t}`).join(" ")
-                          );
-                          setCaptionDialogOpen(true);
-                        }}
-                      >
-                        <Maximize2 className="w-3 h-3" />
-                      </button>
-                      <button
-                        className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-0.5 transition-colors"
-                        onClick={async () => {
-                          try {
-                            await navigator.clipboard.writeText(
-                              generatedCaption
-                            );
-                            toast.success("Caption copied!");
-                          } catch {
-                            const ta = document.createElement("textarea");
-                            ta.value = generatedCaption;
-                            ta.style.position = "fixed";
-                            ta.style.left = "-9999px";
-                            document.body.appendChild(ta);
-                            ta.select();
-                            document.execCommand("copy");
-                            document.body.removeChild(ta);
-                            toast.success("Caption copied!");
-                          }
-                        }}
-                      >
-                        <Copy className="w-3 h-3" />
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Caption text - inline editable */}
-                  {isEditingCaption ? (
-                    <div className="space-y-2">
-                      <textarea
-                        value={editableCaption}
-                        onChange={e => setEditableCaption(e.target.value)}
-                        className="w-full text-xs bg-muted/50 rounded-lg p-2.5 min-h-[120px] leading-relaxed border border-purple-500/30 focus:outline-none focus:border-purple-500 resize-y"
-                      />
-                      <div>
-                        <span className="text-[10px] font-semibold uppercase text-muted-foreground mb-1 block">
-                          Hashtags
-                        </span>
-                        <input
-                          value={editableHashtags}
-                          onChange={e => setEditableHashtags(e.target.value)}
-                          className="w-full text-xs bg-muted/50 rounded-md p-2 border border-purple-500/30 focus:outline-none focus:border-purple-500"
-                          placeholder="#tag1 #tag2 #tag3"
-                        />
-                      </div>
-                      <div className="flex gap-1.5">
-                        <Button
-                          size="sm"
-                          className="flex-1 text-xs h-7 gap-1 bg-purple-600 hover:bg-purple-700 text-white"
-                          onClick={() => {
-                            setGeneratedCaption(editableCaption);
-                            const tags = editableHashtags
-                              .split(/\s+/)
-                              .map(t => t.replace(/^#/, ""))
-                              .filter(Boolean);
-                            setGeneratedHashtags(tags);
-                            setIsEditingCaption(false);
-                            // Save to DB
-                            if (scriptId) {
-                              updateMutation.mutate({
-                                id: scriptId,
-                                content: editedContent,
-                                generatedCaption: editableCaption,
-                                generatedHashtags: JSON.stringify(tags),
-                              });
-                            }
-                            toast.success("Caption & hashtags saved!");
-                          }}
-                        >
-                          <Check className="w-3 h-3" /> Save
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-xs h-7"
-                          onClick={() => setIsEditingCaption(false)}
-                        >
-                          Cancel
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-xs bg-muted/50 rounded-lg p-2.5 max-h-40 overflow-y-auto leading-relaxed border whitespace-pre-line">
-                      {generatedCaption}
-                    </div>
-                  )}
-
-                  {/* Hashtags (non-edit mode) */}
-                  {!isEditingCaption && generatedHashtags.length > 0 && (
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[10px] font-semibold uppercase text-muted-foreground">
-                          Hashtags ({generatedHashtags.length})
-                        </span>
-                        <button
-                          className="text-[10px] text-purple-400 hover:text-purple-300 flex items-center gap-0.5 transition-colors"
-                          onClick={async () => {
-                            const hashtagStr = generatedHashtags
-                              .map(t => `#${t}`)
-                              .join(" ");
-                            try {
-                              await navigator.clipboard.writeText(hashtagStr);
-                              toast.success("Hashtags copied!");
-                            } catch {
-                              const ta = document.createElement("textarea");
-                              ta.value = hashtagStr;
-                              ta.style.position = "fixed";
-                              ta.style.left = "-9999px";
-                              document.body.appendChild(ta);
-                              ta.select();
-                              document.execCommand("copy");
-                              document.body.removeChild(ta);
-                              toast.success("Hashtags copied!");
-                            }
-                          }}
-                        >
-                          <Copy className="w-3 h-3" />
-                        </button>
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {generatedHashtags.map((tag, i) => (
-                          <span
-                            key={i}
-                            className="px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-500/15 text-blue-400"
-                          >
-                            #{tag}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Copy all button */}
-                  {!isEditingCaption && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full text-xs gap-1.5 h-7"
-                      onClick={async () => {
-                        const hashtagStr = generatedHashtags
-                          .map(t => `#${t}`)
-                          .join(" ");
-                        const full = `${generatedCaption}\n\n${hashtagStr}`;
-                        try {
-                          await navigator.clipboard.writeText(full);
-                          toast.success("Caption + hashtags copied!");
-                        } catch {
-                          const ta = document.createElement("textarea");
-                          ta.value = full;
-                          ta.style.position = "fixed";
-                          ta.style.left = "-9999px";
-                          document.body.appendChild(ta);
-                          ta.select();
-                          document.execCommand("copy");
-                          document.body.removeChild(ta);
-                          toast.success("Caption + hashtags copied!");
-                        }
-                      }}
-                    >
-                      <Copy className="w-3 h-3" />
-                      Copy Caption + Hashtags
-                    </Button>
-                  )}
-
-                  {/* Meta info */}
-                  {!isEditingCaption &&
-                    (captionMeta.primaryKeyword || captionMeta.hookType) && (
-                      <div className="text-[10px] text-muted-foreground space-y-0.5 pt-1 border-t">
-                        {captionMeta.hookType && (
-                          <div>Hook: {captionMeta.hookType}</div>
-                        )}
-                        {captionMeta.primaryKeyword && (
-                          <div>SEO keyword: {captionMeta.primaryKeyword}</div>
-                        )}
-                      </div>
-                    )}
-                </div>
-              )}
-            </div>
-
-            {/* Timing */}
-            <div>
-              <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2 flex items-center gap-1.5">
-                <Clock className="w-3 h-3" />
-                Estimated Duration
-              </h4>
-              <div className="space-y-1 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Slow (2.5 w/s)</span>
-                  <span>{Math.round(wordCount / 2.5)}s</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Average (3 w/s)</span>
-                  <span>{Math.round(wordCount / 3)}s</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Fast (3.5 w/s)</span>
-                  <span>{Math.round(wordCount / 3.5)}s</span>
-                </div>
-              </div>
-            </div>
-
-            {showSourceReel && sourceReel ? (
-              <div className="hidden lg:block">
-                <ScriptEditorSourceReel sourceReel={sourceReel} />
-              </div>
-            ) : null}
-
-            {/* Original Script */}
-            {script.originalContent &&
-              script.originalContent !== script.content && (
-                <div>
-                  <h4 className="text-xs font-semibold uppercase text-muted-foreground mb-2">
-                    Original AI Script
-                  </h4>
-                  <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2 max-h-32 overflow-y-auto leading-relaxed">
-                    {script.originalContent.slice(0, 500)}
-                    {script.originalContent.length > 500 ? "..." : ""}
-                  </div>
-                </div>
-              )}
-          </div>
-        </div>
-
-        {/* Selection Rewrite Dialog */}
-        <Dialog open={showSelectionPopup} onOpenChange={setShowSelectionPopup}>
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Type className="w-5 h-5 text-purple-400" />
-                Rewrite Selected Text
-              </DialogTitle>
-              <DialogDescription>
-                Rewrite just the highlighted portion of your script
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                  Selected text:
-                </label>
-                <div className="text-sm bg-muted/50 rounded-lg p-3 max-h-32 overflow-y-auto leading-relaxed border">
-                  "{selectedText}"
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">
-                  How should I rewrite it?
-                </label>
+              {isEditing ? (
                 <Input
-                  placeholder="e.g., 'make it punchier', 'add a question', 'more emotional'..."
-                  value={selectionInstruction}
-                  onChange={e => setSelectionInstruction(e.target.value)}
-                  autoFocus
-                  onKeyDown={e => {
-                    if (e.key === "Enter" && scriptId) {
-                      rewriteSelectionMutation.mutate({
-                        scriptId,
-                        fullContent: editedContent,
-                        selectedText,
-                        instruction: selectionInstruction || undefined,
-                      });
+                  value={title}
+                  onChange={(event) => setTitle(event.target.value)}
+                  className="mb-4 h-auto border-primary/30 bg-background/50 px-3 py-2 text-2xl sm:text-3xl font-bold tracking-tight"
+                  aria-label="Script title"
+                />
+              ) : (
+                <h1 className="mb-3 max-w-3xl text-3xl font-bold tracking-tight sm:text-4xl">{title}</h1>
+              )}
+
+              <div className="mb-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                <span>{wordCount} words</span>
+                <span>About {durationSeconds}s</span>
+                {scheduledDate ? <span>Scheduled {scheduledDate}</span> : null}
+                {script.sourceHandle ? <span>Source @{script.sourceHandle}</span> : null}
+              </div>
+
+              {isEditing ? (
+                <>
+                  <Textarea
+                    value={content}
+                    onChange={(event) => setContent(event.target.value)}
+                    className="min-h-[520px] resize-y border-primary/40 bg-background/40 p-4 text-base leading-8 focus-visible:ring-primary/30 sm:text-lg"
+                    placeholder="Write your script..."
+                  />
+                  <p className="mt-2 text-xs text-muted-foreground">You are editing the same saved script. Save changes when you are done.</p>
+                </>
+              ) : (
+                <div className="relative">
+                  <div
+                    ref={scriptReadRef}
+                    onMouseUp={captureSelection}
+                    onTouchEnd={() => window.setTimeout(captureSelection, 50)}
+                    className="min-h-[480px] whitespace-pre-wrap rounded-xl border border-border/60 bg-background/25 p-4 text-base leading-8 selection:bg-primary/25 sm:p-5 sm:text-lg"
+                  >
+                    {content}
+                  </div>
+                  {selectionBarOpen ? (
+                    <div className="sticky bottom-3 mx-auto mt-3 flex w-fit max-w-full flex-wrap items-center justify-center gap-1 rounded-xl border border-primary/30 bg-popover/95 p-1.5 shadow-2xl backdrop-blur">
+                      <span className="max-w-[220px] truncate px-2 text-xs text-muted-foreground">Selected: {selectedText}</span>
+                      <Button variant="ghost" size="sm" className="h-8" onClick={quickShorter} disabled={aiPending}>
+                        <Scissors className="h-3.5 w-3.5 mr-1" /> Shorter
+                      </Button>
+                      <Button variant="ghost" size="sm" className="h-8" onClick={() => runSelectionAi("Make this selected text punchier and more engaging while keeping the same meaning.")} disabled={aiPending}>
+                        <Sparkles className="h-3.5 w-3.5 mr-1" /> Punchier
+                      </Button>
+                      <Button size="sm" className="h-8" onClick={() => openAi("selection")} disabled={aiPending}>
+                        Ask AI
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border/60 px-4 py-3 sm:px-6">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <FileText className="h-3.5 w-3.5" />
+                One live script, version history stays attached to this record.
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  openSendToWorkspaceModal({ scriptId: script.id, scriptTitle: title })
+                }
+              >
+                <Send className="h-3.5 w-3.5 mr-1.5" />
+                Send to workspace
+              </Button>
+            </div>
+          </section>
+
+          <aside className="space-y-4">
+            <div className="rounded-2xl border border-border/70 bg-card/70 p-4 shadow-sm">
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Script details</p>
+              <DetailRow label="Type" value={scriptTypeLabel(script.recreatedScriptId)} />
+              <DetailRow label="Status" value={script.status === "approved" ? "Approved" : "Draft"} />
+              <DetailRow label="Length" value={`${wordCount} words`} />
+              <DetailRow label="Speaking time" value={`About ${durationSeconds}s`} />
+              <DetailRow label="Schedule" value={scheduledDate ?? "Not scheduled"} last />
+            </div>
+
+            <div className="rounded-2xl border border-border/70 bg-card/70 p-4 shadow-sm">
+              <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">Quick AI edits</p>
+              <div className="grid gap-2">
+                <Button variant="outline" className="justify-start" onClick={() => runWholeAi("Make the hook stronger and more scroll-stopping. Keep the same topic and factual claims.")} disabled={aiPending}>
+                  <Wand2 className="h-4 w-4 mr-2" /> Stronger hook
+                </Button>
+                <Button variant="outline" className="justify-start" onClick={quickEasier} disabled={aiPending}>
+                  <Sparkles className="h-4 w-4 mr-2" /> Easier to say
+                </Button>
+                <Button variant="outline" className="justify-start" onClick={quickShorter} disabled={aiPending}>
+                  <Scissors className="h-4 w-4 mr-2" /> Cut to 45 sec
+                </Button>
+              </div>
+            </div>
+
+            <Button className="w-full" size="lg" onClick={() => setShowTeleprompter(true)}>
+              <Play className="h-4 w-4 mr-2" /> Start filming
+            </Button>
+          </aside>
+        </div>
+      </div>
+
+      {aiOpen ? (
+        <>
+          <button
+            aria-label="Close Ask SpyReels"
+            className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[1px]"
+            onClick={() => setAiOpen(false)}
+          />
+          <aside className="fixed bottom-0 left-0 right-0 z-50 flex max-h-[72vh] flex-col rounded-t-2xl border border-border bg-card shadow-2xl sm:left-auto sm:top-0 sm:h-screen sm:max-h-none sm:w-[390px] sm:rounded-none sm:rounded-l-2xl">
+            <div className="flex items-start justify-between gap-3 border-b border-border/60 p-4">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">Existing script AI, reused</p>
+                <h2 className="mt-1 text-xl font-bold">Ask SpyReels</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {aiScope === "selection" ? "Editing only your selected text." : "Editing the whole live script."}
+                </p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setAiOpen(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4">
+              {aiScope === "selection" && selectedText ? (
+                <div className="mb-3 rounded-xl border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">Selected:</span> {selectedText}
+                </div>
+              ) : null}
+
+              <div className="rounded-xl border border-border/70 bg-muted/20 p-3 text-sm leading-6">
+                Tell me what to change. I will update this same script and keep the change in its existing version history.
+              </div>
+
+              {lastAiMessage ? (
+                <div className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-100">
+                  <div className="flex items-start gap-2">
+                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
+                    <span>{lastAiMessage}</span>
+                  </div>
+                  {undoSnapshot ? (
+                    <Button variant="ghost" size="sm" className="mt-2 h-8 text-emerald-200 hover:text-emerald-100" onClick={undoAi} disabled={updateMutation.isPending}>
+                      <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Undo AI edit
+                    </Button>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" onClick={() => aiScope === "selection" ? runSelectionAi("Make this sound more natural and conversational on camera.") : runWholeAi("Make this sound more natural and conversational on camera.")} disabled={aiPending}>More natural</Button>
+                <Button variant="outline" size="sm" onClick={() => aiScope === "selection" ? runSelectionAi("Make this hook or selected wording stronger and more engaging.") : runWholeAi("Make the hook stronger and more engaging while keeping the same topic.")} disabled={aiPending}>Stronger hook</Button>
+                <Button variant="outline" size="sm" onClick={quickEasier} disabled={aiPending}>Easier to say</Button>
+                <Button variant="outline" size="sm" onClick={quickShorter} disabled={aiPending}>Shorter</Button>
+              </div>
+            </div>
+
+            <div className="border-t border-border/60 p-3 sm:p-4">
+              <div className="flex gap-2">
+                <Input
+                  value={aiPrompt}
+                  onChange={(event) => setAiPrompt(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" && !event.shiftKey) {
+                      event.preventDefault();
+                      sendAiPrompt();
                     }
                   }}
+                  placeholder={aiScope === "selection" ? "What should I change in this selection?" : "Ask SpyReels to improve this script..."}
+                  disabled={aiPending}
                 />
+                <Button onClick={sendAiPrompt} disabled={!aiPrompt.trim() || aiPending}>
+                  {aiPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                </Button>
               </div>
             </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowSelectionPopup(false);
-                  setPendingSelection(null);
-                  setSelectedText("");
-                  setSelectionInstruction("");
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => {
-                  if (!scriptId) return;
-                  rewriteSelectionMutation.mutate({
-                    scriptId,
-                    fullContent: editedContent,
-                    selectedText,
-                    instruction: selectionInstruction || undefined,
-                  });
-                }}
-                disabled={rewriteSelectionMutation.isPending}
-              >
-                {rewriteSelectionMutation.isPending ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
-                ) : (
-                  <Wand2 className="w-3.5 h-3.5 mr-1.5" />
-                )}
-                Rewrite Selection
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+          </aside>
+        </>
+      ) : null}
 
-        {/* Caption Pop-out Dialog */}
-        <Dialog open={captionDialogOpen} onOpenChange={setCaptionDialogOpen}>
-          <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <MessageSquare className="w-5 h-5 text-purple-400" />
-                Caption & Hashtags
-              </DialogTitle>
-              <DialogDescription>
-                Edit your caption and hashtags, then save or copy.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              {/* Editable caption */}
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-                  Caption
-                </label>
-                <textarea
-                  value={editableCaption}
-                  onChange={e => setEditableCaption(e.target.value)}
-                  className="w-full text-sm bg-muted/50 rounded-lg p-3 min-h-[200px] leading-relaxed border focus:outline-none focus:border-purple-500 resize-y"
-                />
-              </div>
+      {showTeleprompter ? (
+        <TeleprompterMode script={content} onClose={() => setShowTeleprompter(false)} />
+      ) : null}
+    </div>
+  );
+}
 
-              {/* Editable hashtags */}
-              <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1.5 block">
-                  Hashtags
-                </label>
-                <input
-                  value={editableHashtags}
-                  onChange={e => setEditableHashtags(e.target.value)}
-                  className="w-full text-sm bg-muted/50 rounded-lg p-3 border focus:outline-none focus:border-purple-500"
-                  placeholder="#tag1 #tag2 #tag3 #tag4 #tag5"
-                />
-              </div>
-
-              {/* Meta info */}
-              {(captionMeta.primaryKeyword || captionMeta.hookType) && (
-                <div className="text-xs text-muted-foreground space-y-0.5 pt-2 border-t">
-                  {captionMeta.hookType && (
-                    <div>Hook type: {captionMeta.hookType}</div>
-                  )}
-                  {captionMeta.primaryKeyword && (
-                    <div>SEO keyword: {captionMeta.primaryKeyword}</div>
-                  )}
-                </div>
-              )}
-            </div>
-            <DialogFooter className="flex gap-2 sm:gap-2">
-              <Button
-                variant="outline"
-                onClick={async () => {
-                  const hashtagStr = editableHashtags.trim();
-                  const full = `${editableCaption}\n\n${hashtagStr}`;
-                  try {
-                    await navigator.clipboard.writeText(full);
-                    toast.success("Caption + hashtags copied!");
-                  } catch {
-                    const ta = document.createElement("textarea");
-                    ta.value = full;
-                    ta.style.position = "fixed";
-                    ta.style.left = "-9999px";
-                    document.body.appendChild(ta);
-                    ta.select();
-                    document.execCommand("copy");
-                    document.body.removeChild(ta);
-                    toast.success("Caption + hashtags copied!");
-                  }
-                }}
-              >
-                <Copy className="w-3.5 h-3.5 mr-1.5" />
-                Copy All
-              </Button>
-              <Button
-                className="bg-purple-600 hover:bg-purple-700 text-white"
-                onClick={() => {
-                  setGeneratedCaption(editableCaption);
-                  const tags = editableHashtags
-                    .split(/\s+/)
-                    .map(t => t.replace(/^#/, ""))
-                    .filter(Boolean);
-                  setGeneratedHashtags(tags);
-                  // Save to DB
-                  if (scriptId) {
-                    updateMutation.mutate({
-                      id: scriptId,
-                      content: editedContent,
-                      generatedCaption: editableCaption,
-                      generatedHashtags: JSON.stringify(tags),
-                    });
-                  }
-                  setCaptionDialogOpen(false);
-                  toast.success("Caption & hashtags saved!");
-                }}
-              >
-                <Check className="w-3.5 h-3.5 mr-1.5" />
-                Save Changes
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-
-        <BrollResultsPanel
-          open={brollOpen}
-          onOpenChange={setBrollOpen}
-          content={editedContent}
-          scriptId={scriptId ?? undefined}
-          title={editedTitle || undefined}
-          autoGenerate
-        />
-
-        {/* Teleprompter */}
-        {showTeleprompter && (
-          <TeleprompterMode
-            script={editedContent}
-            onClose={() => setShowTeleprompter(false)}
-          />
-        )}
-      </div>
-    </TooltipProvider>
+function DetailRow({ label, value, last = false }: { label: string; value: string; last?: boolean }) {
+  return (
+    <div className={`flex items-center justify-between gap-3 py-2.5 text-sm ${last ? "" : "border-b border-border/50"}`}>
+      <span className="text-muted-foreground">{label}</span>
+      <span className="text-right font-medium">{value}</span>
+    </div>
   );
 }
