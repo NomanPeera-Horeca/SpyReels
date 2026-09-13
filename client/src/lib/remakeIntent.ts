@@ -14,14 +14,25 @@ export type RemakeIntentMedia = {
   durationSec?: number | null;
 };
 
-let pendingRemakeIntentMedia: RemakeIntentMedia | null = null;
+type PendingRemakeIntentMedia = {
+  media: RemakeIntentMedia;
+  capturedAt: number;
+};
+
+const REMAKE_MEDIA_TTL_MS = 5_000;
+let pendingRemakeIntentMedia: PendingRemakeIntentMedia | null = null;
 
 export function setPendingRemakeIntentMedia(media: RemakeIntentMedia | null | undefined) {
-  pendingRemakeIntentMedia = media ?? null;
+  pendingRemakeIntentMedia = media ? { media, capturedAt: Date.now() } : null;
 }
 
 export function getPendingRemakeIntentMedia(): RemakeIntentMedia | null {
-  return pendingRemakeIntentMedia;
+  if (!pendingRemakeIntentMedia) return null;
+  if (Date.now() - pendingRemakeIntentMedia.capturedAt > REMAKE_MEDIA_TTL_MS) {
+    pendingRemakeIntentMedia = null;
+    return null;
+  }
+  return pendingRemakeIntentMedia.media;
 }
 
 export function clearPendingRemakeIntentMedia() {
