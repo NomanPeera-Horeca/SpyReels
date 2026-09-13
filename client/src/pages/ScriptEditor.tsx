@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useLocation, useRoute, useSearch } from "wouter";
+import { useRoute, useSearch } from "wouter";
 import {
   ArrowLeft,
   Check,
@@ -7,7 +7,7 @@ import {
   Edit3,
   FileText,
   Loader2,
-  MessageSquareSparkles,
+  MessageSquare,
   Play,
   RotateCcw,
   Scissors,
@@ -32,11 +32,7 @@ import { TeleprompterMode } from "./TeleprompterMode";
 const SELECTION_MIN_LENGTH = 6;
 
 type AiScope = "whole" | "selection";
-
-type UndoSnapshot = {
-  content: string;
-  label: string;
-} | null;
+type UndoSnapshot = { content: string; label: string } | null;
 
 function formatDate(value: Date | string | null | undefined) {
   if (!value) return null;
@@ -55,7 +51,6 @@ function scriptTypeLabel(recreatedScriptId: number | null | undefined) {
 
 export default function ScriptEditor() {
   const [, params] = useRoute("/scripts/:id");
-  const [, navigate] = useLocation();
   const searchString = useSearch();
   const scriptId = params?.id ? Number.parseInt(params.id, 10) : null;
   const backPath = useMemo(
@@ -106,9 +101,7 @@ export default function ScriptEditor() {
   }, [scriptId, utils]);
 
   const updateMutation = trpc.scripts.update.useMutation({
-    onSuccess: async () => {
-      await invalidateScript();
-    },
+    onSuccess: async () => invalidateScript(),
     onError: (error) => toast.error(error.message || "Could not save script"),
   });
 
@@ -168,7 +161,6 @@ export default function ScriptEditor() {
   );
   const durationSeconds = Math.max(1, Math.round(wordCount / 3));
   const scheduledDate = formatDate(script?.postDate);
-
   const dirty = isEditing && (content !== editStartContent || title !== editStartTitle);
 
   const startEditing = () => {
@@ -186,7 +178,8 @@ export default function ScriptEditor() {
 
   const saveEditing = () => {
     if (!scriptId) return;
-    const titleChanged = title !== editStartTitle;
+    const nextTitle = title.trim() || editStartTitle;
+    const titleChanged = nextTitle !== editStartTitle;
     const contentChanged = content !== editStartContent;
     if (!titleChanged && !contentChanged) {
       setIsEditing(false);
@@ -196,7 +189,7 @@ export default function ScriptEditor() {
     updateMutation.mutate(
       {
         id: scriptId,
-        ...(titleChanged ? { title: title.trim() || editStartTitle } : {}),
+        ...(titleChanged ? { title: nextTitle } : {}),
         ...(contentChanged
           ? {
               content,
@@ -207,7 +200,8 @@ export default function ScriptEditor() {
       },
       {
         onSuccess: () => {
-          setEditStartTitle(title.trim() || editStartTitle);
+          setTitle(nextTitle);
+          setEditStartTitle(nextTitle);
           setEditStartContent(content);
           setIsEditing(false);
           toast.success("Changes saved");
@@ -250,9 +244,7 @@ export default function ScriptEditor() {
     setSelectionBarOpen(true);
   };
 
-  const rememberUndo = (label: string) => {
-    setUndoSnapshot({ content, label });
-  };
+  const rememberUndo = (label: string) => setUndoSnapshot({ content, label });
 
   const runWholeAi = (instruction: string) => {
     if (!scriptId || aiPending) return;
@@ -279,9 +271,9 @@ export default function ScriptEditor() {
     setAiPrompt("");
     if (aiScope === "selection" && selectedText.trim()) {
       runSelectionAi(prompt);
-      return;
+    } else {
+      runWholeAi(prompt);
     }
-    runWholeAi(prompt);
   };
 
   const quickShorter = () => {
@@ -374,7 +366,7 @@ export default function ScriptEditor() {
               </Button>
             )}
             <Button variant="outline" size="sm" onClick={() => openAi("whole")}>
-              <MessageSquareSparkles className="h-3.5 w-3.5 mr-1.5" />
+              <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
               Ask SpyReels
             </Button>
             <Button variant="outline" size="sm" onClick={() => navigator.clipboard.writeText(content).then(() => toast.success("Copied"))}>
@@ -474,9 +466,7 @@ export default function ScriptEditor() {
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() =>
-                  openSendToWorkspaceModal({ scriptId: script.id, scriptTitle: title })
-                }
+                onClick={() => openSendToWorkspaceModal({ scriptId: script.id, scriptTitle: title })}
               >
                 <Send className="h-3.5 w-3.5 mr-1.5" />
                 Send to workspace
@@ -518,23 +508,15 @@ export default function ScriptEditor() {
 
       {aiOpen ? (
         <>
-          <button
-            aria-label="Close Ask SpyReels"
-            className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[1px]"
-            onClick={() => setAiOpen(false)}
-          />
+          <button aria-label="Close Ask SpyReels" className="fixed inset-0 z-40 bg-black/45 backdrop-blur-[1px]" onClick={() => setAiOpen(false)} />
           <aside className="fixed bottom-0 left-0 right-0 z-50 flex max-h-[72vh] flex-col rounded-t-2xl border border-border bg-card shadow-2xl sm:left-auto sm:top-0 sm:h-screen sm:max-h-none sm:w-[390px] sm:rounded-none sm:rounded-l-2xl">
             <div className="flex items-start justify-between gap-3 border-b border-border/60 p-4">
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary">Existing script AI, reused</p>
                 <h2 className="mt-1 text-xl font-bold">Ask SpyReels</h2>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {aiScope === "selection" ? "Editing only your selected text." : "Editing the whole live script."}
-                </p>
+                <p className="mt-1 text-xs text-muted-foreground">{aiScope === "selection" ? "Editing only your selected text." : "Editing the whole live script."}</p>
               </div>
-              <Button variant="ghost" size="sm" onClick={() => setAiOpen(false)}>
-                <X className="h-4 w-4" />
-              </Button>
+              <Button variant="ghost" size="sm" onClick={() => setAiOpen(false)}><X className="h-4 w-4" /></Button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4">
@@ -549,13 +531,13 @@ export default function ScriptEditor() {
               </div>
 
               {lastAiMessage ? (
-                <div className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm text-emerald-100">
+                <div className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm">
                   <div className="flex items-start gap-2">
                     <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />
                     <span>{lastAiMessage}</span>
                   </div>
                   {undoSnapshot ? (
-                    <Button variant="ghost" size="sm" className="mt-2 h-8 text-emerald-200 hover:text-emerald-100" onClick={undoAi} disabled={updateMutation.isPending}>
+                    <Button variant="ghost" size="sm" className="mt-2 h-8" onClick={undoAi} disabled={updateMutation.isPending}>
                       <RotateCcw className="h-3.5 w-3.5 mr-1.5" /> Undo AI edit
                     </Button>
                   ) : null}
@@ -593,9 +575,7 @@ export default function ScriptEditor() {
         </>
       ) : null}
 
-      {showTeleprompter ? (
-        <TeleprompterMode script={content} onClose={() => setShowTeleprompter(false)} />
-      ) : null}
+      {showTeleprompter ? <TeleprompterMode script={content} onClose={() => setShowTeleprompter(false)} /> : null}
     </div>
   );
 }
