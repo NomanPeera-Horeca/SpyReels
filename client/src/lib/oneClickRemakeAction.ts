@@ -8,10 +8,6 @@ import {
   type LibraryRemakeState,
 } from "@/lib/libraryRemakeChainCore";
 import type { ReelClassificationLike } from "@/lib/remakeability";
-import {
-  setPendingRemakeIntentMedia,
-  type RemakeIntentMedia,
-} from "@/lib/remakeIntent";
 
 type RecreateBatchEntry = { latestScriptId: number; status: string };
 
@@ -48,7 +44,6 @@ export function buildLibraryOneClickRemake(args: {
   idleNotRemakeable: boolean;
   classificationReason?: string | null;
   classification: ReelClassificationLike;
-  media?: RemakeIntentMedia;
   batchRecreateSt: RecreateStripState;
   batchEntry: RecreateBatchEntry | undefined;
   hookState: LibraryRemakeState;
@@ -73,7 +68,6 @@ export function buildLibraryOneClickRemake(args: {
       ? { jobId: args.jobId }
       : undefined;
   const { hookState, librarySource } = args;
-  const primeMedia = () => setPendingRemakeIntentMedia(args.media);
 
   if (hookState.stage === "transcribing" || hookState.stage === "generating") {
     return {
@@ -117,10 +111,7 @@ export function buildLibraryOneClickRemake(args: {
     return {
       label: LIBRARY_REMAKE_CTA_LABEL,
       tooltip: hookState.errorMessage?.trim() || "Last remake failed. Tap to try again.",
-      onClick: () => {
-        primeMedia();
-        void args.retryRemake(librarySource, startOpts);
-      },
+      onClick: () => void args.retryRemake(librarySource, startOpts),
     };
   }
 
@@ -169,9 +160,6 @@ export function buildLibraryOneClickRemake(args: {
   }
   return {
     label: LIBRARY_REMAKE_CTA_LABEL,
-    onClick: () => {
-      primeMedia();
-      void args.startRemake(librarySource, startOpts);
-    },
+    onClick: () => void args.startRemake(librarySource, startOpts),
   };
 }
