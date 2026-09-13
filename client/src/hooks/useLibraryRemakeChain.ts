@@ -20,11 +20,17 @@ import {
 import { trpc } from "@/lib/trpc";
 import { formatIdeaScriptErrorForUser } from "@shared/ideaScriptErrors";
 import { OnboardingVoiceGateDialog } from "@/components/OnboardingVoiceGateDialog";
+import { RemakeIntentDialog } from "@/components/RemakeIntentDialog";
 import {
   RemakeWorkspaceDialog,
   type RemakeWorkspaceTarget,
 } from "@/components/RemakeWorkspaceDialog";
 import type { OpenRemakeWorkspaceArgs } from "@/lib/oneClickRemakeAction";
+import {
+  isValidRemakeIntent,
+  remakeIntentToTopic,
+  type RemakeIntent,
+} from "@/lib/remakeIntent";
 
 export type LibrarySaveState = "idle" | "saved" | "error";
 
@@ -66,8 +72,7 @@ function resolveOpenReelId(
 export type UseLibraryRemakeChainOptions = {
   /**
    * Fired when a reel's remake stage changes. Parents use this for
-   * surface-specific cache refresh (e.g. Dashboard invalidates reels.list
-   * after transcribe completes) without baking query keys into the hook.
+   * surface-specific cache refresh without baking query keys into the hook.
    */
   onStageChange?: (
     source: LibraryRemakeSource,
@@ -84,6 +89,7 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
   onStageChangeRef.current = options.onStageChange;
   const onOpenTeleprompterRef = useRef(options.onOpenTeleprompter);
   onOpenTeleprompterRef.current = options.onOpenTeleprompter;
+
   const onboardingStateQuery = trpc.onboarding.getState.useQuery(undefined, {
     staleTime: 60_000,
     refetchOnWindowFocus: false,
@@ -98,9 +104,12 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
   const [saveStateByKey, setSaveStateByKey] = useState<Record<string, LibrarySaveState>>({});
   const [voiceGateOpen, setVoiceGateOpen] = useState(false);
   const [workspaceOpen, setWorkspaceOpen] = useState(false);
-  const [workspaceTarget, setWorkspaceTarget] = useState<RemakeWorkspaceTarget | null>(
-    null
-  );
+  const [workspaceTarget, setWorkspaceTarget] = useState<RemakeWorkspaceTarget | null>(null);
+  const [intentPrompt, setIntentPrompt] = useState<{
+    source: LibraryRemakeSource;
+    key: string;
+  } | null>(null);
+
   const pendingRemakeRef = useRef<{
     source: LibraryRemakeSource;
     opts?: StartRemakeOptions;
@@ -111,6 +120,7 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
   const cancelledRef = useRef<Set<string>>(new Set());
   const workspaceKeyRef = useRef<string | null>(null);
   const stateByKeyRef = useRef(stateByKey);
+  const intentByKeyRef = useRef<Map<string, RemakeIntent>>(new Map());
   stateByKeyRef.current = stateByKey;
 
   const openWorkspaceForSource = useCallback(
@@ -164,7 +174,10 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
           setStateByKey((prev) => ({
             ...prev,
             [key]: {
-              ...(prev[key] ?? { stage: "ready" as LibraryRemakeStage, progressPercent: 100 }),
+              ...(prev[key] ?? {
+                stage: "ready" as LibraryRemakeStage,
+                progressPercent: 100,
+              }),
               stage: "ready",
               progressPercent: 100,
               scriptId: savedId,
@@ -188,8 +201,6 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
     if (!state) return;
     setWorkspaceTarget((prev) => {
       if (!prev || prev.remakeKey !== key) return prev;
-      // Do not attach scriptId while generate is still writing. The scripts row
-      // exists early with empty content; hydrating then locks an empty editor.
       const nextScript =
         state.stage === "transcribing" || state.stage === "generating"
           ? null
@@ -209,7 +220,10 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
       setStateByKey((prev) => {
         const prevStage = prev[key]?.stage ?? ("idle" as LibraryRemakeStage);
         const nextState: LibraryRemakeState = {
-          ...(prev[key] ?? { stage: "idle" as LibraryRemakeStage, progressPercent: 0 }),
+          ...(prev[key] ?? {
+            stage: "idle" as LibraryRemakeStage,
+            progressPercent: 0,
+          }),
           ...patch,
         };
         if (prevStage !== patch.stage) {
@@ -225,7 +239,11 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
     (source: LibraryRemakeSource, message: string) => {
       const key = libraryRemakeKey(source);
       runningRef.current.delete(key);
-      patchState(source, { stage: "error", progressPercent: 0, errorMessage: message });
+      patchState(source, {
+        stage: "error",
+        progressPercent: 0,
+        errorMessage: message,
+      });
       toast.error(message);
     },
     [patchState]
@@ -242,6 +260,15 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
     [trpcUtils]
   );
 
+  const waitForIntent = useCallback(async (key: string): Promise<RemakeIntent | null> => {
+    while (!cancelledRef.current.has(key)) {
+      const intent = intentByKeyRef.current.get(key);
+      if (intent && isValidRemakeIntent(intent)) return intent;
+      await sleep(100);
+    }
+    return null;
+  }, []);
+
   const runChain = useCallback(
     async (source: LibraryRemakeSource, opts: StartRemakeOptions = {}) => {
       const key = libraryRemakeKey(source);
@@ -250,7 +277,12 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
       runningRef.current.add(key);
       cancelledRef.current.delete(key);
 
-      openWorkspaceForSource(source);
+      const existingIntent = intentByKeyRef.current.get(key);
+      if (existingIntent) {
+        openWorkspaceForSource(source);
+      } else {
+        setIntentPrompt({ source, key });
+      }
 
       const classification = opts.classification;
       let reelId: number | undefined =
@@ -263,146 +295,143 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
         source.source === "featured" ? source.featuredReelId : undefined;
 
       try {
+        patchState(source, {
+          stage: "transcribing",
+          progressPercent: opts.alreadyTranscribed ? 60 : 25,
+          ...resolveLibraryIds(source, reelId),
+        });
+
         if (opts.alreadyTranscribed) {
-          // Parent vouches transcription is done: one fetch, no poll loop.
           const statusInput = transcribeStatusInput(source, reelId, featuredReelId);
           await assertLibraryTranscriptionReadyOnce(fetchTranscribeStatus, statusInput);
           if (cancelledRef.current.has(key)) return;
-        } else {
+        } else if (source.source === "collected") {
+          const result = await collectedTranscribeMutation.mutateAsync({
+            collectedReelId: source.collectedReelId,
+          });
+          if (cancelledRef.current.has(key)) return;
+          reelId = result.reelId;
           patchState(source, {
             stage: "transcribing",
             progressPercent: 25,
             ...resolveLibraryIds(source, reelId),
           });
-
-          if (source.source === "collected") {
-            const result = await collectedTranscribeMutation.mutateAsync({
-              collectedReelId: source.collectedReelId,
-            });
-            if (cancelledRef.current.has(key)) return;
-            reelId = result.reelId;
-            patchState(source, {
-              stage: "transcribing",
-              progressPercent: 25,
-              ...resolveLibraryIds(source, reelId),
-            });
-            if (result.status !== "completed") {
-              await waitForLibraryTranscriptionReady(
-                fetchTranscribeStatus,
-                { reelId: result.reelId },
-                {
-                  isCancelled: () => cancelledRef.current.has(key),
-                  onAttempt: (attempt) =>
-                    patchState(source, {
-                      stage: "transcribing",
-                      progressPercent: libraryEasedPercent(
-                        "transcribing",
-                        attempt,
-                        LIBRARY_TRANSCRIBE_MAX
-                      ),
-                      reelId: result.reelId,
-                      collectedReelId: source.collectedReelId,
-                    }),
-                }
-              );
-            }
-          } else if (source.source === "featured") {
-            const result = await transcribeStartMutation.mutateAsync({
-              featuredReelId: source.featuredReelId,
-            });
-            if (cancelledRef.current.has(key)) return;
-            if (result.status !== "completed") {
-              await waitForLibraryTranscriptionReady(
-                fetchTranscribeStatus,
-                { featuredReelId: source.featuredReelId },
-                {
-                  isCancelled: () => cancelledRef.current.has(key),
-                  onAttempt: (attempt) =>
-                    patchState(source, {
-                      stage: "transcribing",
-                      progressPercent: libraryEasedPercent(
-                        "transcribing",
-                        attempt,
-                        LIBRARY_TRANSCRIBE_MAX
-                      ),
-                      featuredReelId: source.featuredReelId,
-                    }),
-                }
-              );
-            }
-          } else if (source.source === "tiktok") {
-            const result = await transcribeStartMutation.mutateAsync({
-              tiktokVideoId: source.tiktokVideoId,
-            });
-            if (cancelledRef.current.has(key)) return;
-            if (result.status !== "completed") {
-              await waitForLibraryTranscriptionReady(
-                fetchTranscribeStatus,
-                { tiktokVideoId: source.tiktokVideoId },
-                {
-                  isCancelled: () => cancelledRef.current.has(key),
-                  onAttempt: (attempt) =>
-                    patchState(source, {
-                      stage: "transcribing",
-                      progressPercent: libraryEasedPercent(
-                        "transcribing",
-                        attempt,
-                        LIBRARY_TRANSCRIBE_MAX
-                      ),
-                      tiktokVideoId: source.tiktokVideoId,
-                    }),
-                }
-              );
-            }
-          } else if (source.source === "youtube") {
-            const result = await transcribeStartMutation.mutateAsync({
-              youtubeVideoId: source.youtubeVideoId,
-            });
-            if (cancelledRef.current.has(key)) return;
-            if (result.status !== "completed") {
-              await waitForLibraryTranscriptionReady(
-                fetchTranscribeStatus,
-                { youtubeVideoId: source.youtubeVideoId },
-                {
-                  isCancelled: () => cancelledRef.current.has(key),
-                  onAttempt: (attempt) =>
-                    patchState(source, {
-                      stage: "transcribing",
-                      progressPercent: libraryEasedPercent(
-                        "transcribing",
-                        attempt,
-                        LIBRARY_TRANSCRIBE_MAX
-                      ),
-                      youtubeVideoId: source.youtubeVideoId,
-                    }),
-                }
-              );
-            }
-          } else {
-            const result = await transcribeStartMutation.mutateAsync({
-              reelId: source.reelId,
-            });
-            if (cancelledRef.current.has(key)) return;
-            reelId = source.reelId;
-            if (result.status !== "completed") {
-              await waitForLibraryTranscriptionReady(
-                fetchTranscribeStatus,
-                { reelId: source.reelId },
-                {
-                  isCancelled: () => cancelledRef.current.has(key),
-                  onAttempt: (attempt) =>
-                    patchState(source, {
-                      stage: "transcribing",
-                      progressPercent: libraryEasedPercent(
-                        "transcribing",
-                        attempt,
-                        LIBRARY_TRANSCRIBE_MAX
-                      ),
-                      reelId: source.reelId,
-                    }),
-                }
-              );
-            }
+          if (result.status !== "completed") {
+            await waitForLibraryTranscriptionReady(
+              fetchTranscribeStatus,
+              { reelId: result.reelId },
+              {
+                isCancelled: () => cancelledRef.current.has(key),
+                onAttempt: (attempt) =>
+                  patchState(source, {
+                    stage: "transcribing",
+                    progressPercent: libraryEasedPercent(
+                      "transcribing",
+                      attempt,
+                      LIBRARY_TRANSCRIBE_MAX
+                    ),
+                    reelId: result.reelId,
+                    collectedReelId: source.collectedReelId,
+                  }),
+              }
+            );
+          }
+        } else if (source.source === "featured") {
+          const result = await transcribeStartMutation.mutateAsync({
+            featuredReelId: source.featuredReelId,
+          });
+          if (cancelledRef.current.has(key)) return;
+          if (result.status !== "completed") {
+            await waitForLibraryTranscriptionReady(
+              fetchTranscribeStatus,
+              { featuredReelId: source.featuredReelId },
+              {
+                isCancelled: () => cancelledRef.current.has(key),
+                onAttempt: (attempt) =>
+                  patchState(source, {
+                    stage: "transcribing",
+                    progressPercent: libraryEasedPercent(
+                      "transcribing",
+                      attempt,
+                      LIBRARY_TRANSCRIBE_MAX
+                    ),
+                    featuredReelId: source.featuredReelId,
+                  }),
+              }
+            );
+          }
+        } else if (source.source === "tiktok") {
+          const result = await transcribeStartMutation.mutateAsync({
+            tiktokVideoId: source.tiktokVideoId,
+          });
+          if (cancelledRef.current.has(key)) return;
+          if (result.status !== "completed") {
+            await waitForLibraryTranscriptionReady(
+              fetchTranscribeStatus,
+              { tiktokVideoId: source.tiktokVideoId },
+              {
+                isCancelled: () => cancelledRef.current.has(key),
+                onAttempt: (attempt) =>
+                  patchState(source, {
+                    stage: "transcribing",
+                    progressPercent: libraryEasedPercent(
+                      "transcribing",
+                      attempt,
+                      LIBRARY_TRANSCRIBE_MAX
+                    ),
+                    tiktokVideoId: source.tiktokVideoId,
+                  }),
+              }
+            );
+          }
+        } else if (source.source === "youtube") {
+          const result = await transcribeStartMutation.mutateAsync({
+            youtubeVideoId: source.youtubeVideoId,
+          });
+          if (cancelledRef.current.has(key)) return;
+          if (result.status !== "completed") {
+            await waitForLibraryTranscriptionReady(
+              fetchTranscribeStatus,
+              { youtubeVideoId: source.youtubeVideoId },
+              {
+                isCancelled: () => cancelledRef.current.has(key),
+                onAttempt: (attempt) =>
+                  patchState(source, {
+                    stage: "transcribing",
+                    progressPercent: libraryEasedPercent(
+                      "transcribing",
+                      attempt,
+                      LIBRARY_TRANSCRIBE_MAX
+                    ),
+                    youtubeVideoId: source.youtubeVideoId,
+                  }),
+              }
+            );
+          }
+        } else {
+          const result = await transcribeStartMutation.mutateAsync({
+            reelId: source.reelId,
+          });
+          if (cancelledRef.current.has(key)) return;
+          reelId = source.reelId;
+          if (result.status !== "completed") {
+            await waitForLibraryTranscriptionReady(
+              fetchTranscribeStatus,
+              { reelId: source.reelId },
+              {
+                isCancelled: () => cancelledRef.current.has(key),
+                onAttempt: (attempt) =>
+                  patchState(source, {
+                    stage: "transcribing",
+                    progressPercent: libraryEasedPercent(
+                      "transcribing",
+                      attempt,
+                      LIBRARY_TRANSCRIBE_MAX
+                    ),
+                    reelId: source.reelId,
+                  }),
+              }
+            );
           }
         }
 
@@ -419,6 +448,7 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
 
         if (!gate.proceed) {
           runningRef.current.delete(key);
+          setIntentPrompt((current) => (current?.key === key ? null : current));
           patchState(source, {
             stage: "inspiration",
             progressPercent: 100,
@@ -434,33 +464,46 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
         }
 
         patchState(source, {
+          stage: "transcribing",
+          progressPercent: 64,
+          ...resolveLibraryIds(source, reelId),
+        });
+
+        const intent = intentByKeyRef.current.get(key) ?? (await waitForIntent(key));
+        if (!intent || cancelledRef.current.has(key)) return;
+
+        setIntentPrompt((current) => (current?.key === key ? null : current));
+        openWorkspaceForSource(source, { reelId: reelId ?? null });
+
+        patchState(source, {
           stage: "generating",
           progressPercent: 65,
           ...resolveLibraryIds(source, reelId),
         });
 
+        const topic = remakeIntentToTopic(intent);
         const generateInput =
           source.source === "featured"
             ? {
                 featuredReelId: source.featuredReelId,
-                topic: "",
+                topic,
                 gradeLevel: "auto" as const,
               }
             : source.source === "tiktok"
               ? {
                   tiktokVideoId: source.tiktokVideoId,
-                  topic: "",
+                  topic,
                   gradeLevel: "auto" as const,
                 }
               : source.source === "youtube"
                 ? {
                     youtubeVideoId: source.youtubeVideoId,
-                    topic: "",
+                    topic,
                     gradeLevel: "auto" as const,
                   }
                 : {
                     reelId: reelId!,
-                    topic: "",
+                    topic,
                     gradeLevel: "auto" as const,
                   };
 
@@ -475,8 +518,11 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
           if (cancelledRef.current.has(key)) return;
           patchState(source, {
             stage: "generating",
-            progressPercent: libraryEasedPercent("generating", attempt, LIBRARY_GENERATE_MAX),
-            // Keep recreate id off the workspace until we promote to saved_scripts.
+            progressPercent: libraryEasedPercent(
+              "generating",
+              attempt,
+              LIBRARY_GENERATE_MAX
+            ),
             ...resolveLibraryIds(source, reelId),
           });
 
@@ -520,7 +566,9 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
         });
       } catch (err) {
         if (cancelledRef.current.has(key)) return;
+        setIntentPrompt((current) => (current?.key === key ? null : current));
         failRemake(source, formatIdeaScriptErrorForUser(err, "remake"));
+        openWorkspaceForSource(source, { reelId: reelId ?? null });
       }
     },
     [
@@ -533,14 +581,53 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
       patchState,
       transcribeStartMutation,
       trpcUtils,
+      waitForIntent,
     ]
   );
+
+  const submitRemakeIntent = useCallback(
+    (intent: RemakeIntent) => {
+      const prompt = intentPrompt;
+      if (!prompt || !isValidRemakeIntent(intent)) return;
+      intentByKeyRef.current.set(prompt.key, intent);
+      setIntentPrompt(null);
+      const current = stateByKeyRef.current[prompt.key];
+      openWorkspaceForSource(prompt.source, {
+        scriptId: null,
+        reelId: current?.reelId ?? null,
+      });
+    },
+    [intentPrompt, openWorkspaceForSource]
+  );
+
+  const cancelRemakeIntent = useCallback(() => {
+    const prompt = intentPrompt;
+    if (!prompt) return;
+    cancelledRef.current.add(prompt.key);
+    runningRef.current.delete(prompt.key);
+    intentByKeyRef.current.delete(prompt.key);
+    patchState(prompt.source, { stage: "idle", progressPercent: 0 });
+    setIntentPrompt(null);
+  }, [intentPrompt, patchState]);
 
   const startRemake = useCallback(
     (source: LibraryRemakeSource, opts?: StartRemakeOptions) => {
       const key = libraryRemakeKey(source);
       const current = stateByKey[key];
-      if (current?.stage === "transcribing" || current?.stage === "generating") {
+
+      if (current?.stage === "transcribing") {
+        if (intentByKeyRef.current.has(key)) {
+          openWorkspaceForSource(source, {
+            scriptId: null,
+            reelId: current.reelId ?? null,
+          });
+        } else {
+          setIntentPrompt({ source, key });
+        }
+        return;
+      }
+
+      if (current?.stage === "generating") {
         openWorkspaceForSource(source, {
           scriptId: null,
           reelId: current.reelId ?? null,
@@ -605,11 +692,19 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
     workspaceTarget != null
       ? stateByKey[workspaceTarget.remakeKey] ?? null
       : null;
+  const intentPromptState =
+    intentPrompt != null ? stateByKey[intentPrompt.key] ?? null : null;
 
   const RemakeDialogs = createElement(
     Fragment,
     null,
     VoiceGateDialog,
+    createElement(RemakeIntentDialog, {
+      open: intentPrompt != null,
+      progressPercent: intentPromptState?.progressPercent ?? 0,
+      onSubmit: submitRemakeIntent,
+      onCancel: cancelRemakeIntent,
+    }),
     createElement(RemakeWorkspaceDialog, {
       open: workspaceOpen,
       onOpenChange: setWorkspaceOpen,
@@ -713,8 +808,8 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
 
   useEffect(() => {
     return () => {
-      for (const k of runningRef.current) {
-        cancelledRef.current.add(k);
+      for (const key of runningRef.current) {
+        cancelledRef.current.add(key);
       }
       runningRef.current.clear();
     };
