@@ -1,10 +1,8 @@
 import { useEffect, useState } from "react";
 import {
-  Check,
+  ExternalLink,
   FileText,
   Lightbulb,
-  Loader2,
-  Play,
   Sparkles,
   Target,
   X,
@@ -16,7 +14,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import type { RemakeIntent } from "@/lib/remakeIntent";
+import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
+import { ReelGridThumbnail } from "@/components/ReelGridThumbnail";
+import {
+  clearPendingRemakeIntentMedia,
+  getPendingRemakeIntentMedia,
+  type RemakeIntent,
+  type RemakeIntentMedia,
+} from "@/lib/remakeIntent";
 
 export function RemakeIntentDialog({
   open,
@@ -31,30 +36,51 @@ export function RemakeIntentDialog({
 }) {
   const [mode, setMode] = useState<RemakeIntent["mode"]>("custom");
   const [angle, setAngle] = useState("");
+  const [media, setMedia] = useState<RemakeIntentMedia | null>(null);
+
+  // Transcription still runs in the background. It is intentionally not exposed
+  // here because the creator only needs to decide what they want to make.
+  void progressPercent;
 
   useEffect(() => {
     if (!open) return;
     setMode("custom");
     setAngle("");
+    setMedia(getPendingRemakeIntentMedia());
   }, [open]);
 
   const canSubmit = mode !== "custom" || angle.trim().length > 0;
-  const sourceReady = progressPercent >= 64;
-  const visibleProgress = sourceReady
-    ? 100
-    : Math.max(4, Math.min(63, Math.round(progressPercent)));
 
   const submit = () => {
-    if (mode === "niche") onSubmit({ mode: "niche" });
-    else if (mode === "same_topic") onSubmit({ mode: "same_topic" });
-    else if (angle.trim()) onSubmit({ mode: "custom", angle: angle.trim() });
+    let intent: RemakeIntent | null = null;
+    if (mode === "niche") intent = { mode: "niche" };
+    else if (mode === "same_topic") intent = { mode: "same_topic" };
+    else if (angle.trim()) intent = { mode: "custom", angle: angle.trim() };
+    if (!intent) return;
+    clearPendingRemakeIntentMedia();
+    onSubmit(intent);
   };
+
+  const cancel = () => {
+    clearPendingRemakeIntentMedia();
+    onCancel();
+  };
+
+  const platform = media?.platform ?? "instagram";
+  const originalUrl = media?.originalUrl?.trim() || media?.videoPageUrl?.trim() || "";
+  const hasSourceMedia = Boolean(
+    media &&
+      ((media.thumbnailUrl ?? "").trim() ||
+        (media.videoUrl ?? "").trim() ||
+        (media.shortcode ?? "").trim() ||
+        originalUrl)
+  );
 
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next) onCancel();
+        if (!next) cancel();
       }}
     >
       <DialogContent
@@ -63,9 +89,7 @@ export function RemakeIntentDialog({
       >
         <DialogHeader className="sr-only">
           <DialogTitle>Choose how to remake this Reel</DialogTitle>
-          <DialogDescription>
-            SpyReels is transcribing the source while you choose the direction.
-          </DialogDescription>
+          <DialogDescription>Choose the direction for your Remake.</DialogDescription>
         </DialogHeader>
 
         <header className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 border-b border-[#2d2940] bg-[#1b1824] px-5 py-3">
@@ -85,40 +109,32 @@ export function RemakeIntentDialog({
             className="flex gap-1 rounded-xl border border-[#332e45] bg-[#15121d] p-1"
             aria-label="Remake setup"
           >
-            <button
-              type="button"
-              className="rounded-lg bg-[#302a42] px-4 py-2 text-[13px] font-semibold text-white"
-            >
+            <button type="button" className="rounded-lg bg-[#302a42] px-4 py-2 text-[13px] font-semibold text-white">
               Script
             </button>
-            <button
-              type="button"
-              disabled
-              className="rounded-lg px-4 py-2 text-[13px] font-semibold text-[#655f70]"
-            >
+            <button type="button" disabled className="rounded-lg px-4 py-2 text-[13px] font-semibold text-[#655f70]">
               Visuals
             </button>
-            <button
-              type="button"
-              disabled
-              className="rounded-lg px-4 py-2 text-[13px] font-semibold text-[#655f70]"
-            >
+            <button type="button" disabled className="rounded-lg px-4 py-2 text-[13px] font-semibold text-[#655f70]">
               Preview
             </button>
           </nav>
 
           <div className="flex items-center justify-end gap-2">
-            <button
-              type="button"
-              disabled
-              className="inline-flex items-center gap-2 rounded-lg border border-[#342f46] bg-[#211d2d] px-3 py-2 text-xs font-semibold text-[#6f687c]"
-            >
-              <FileText className="h-4 w-4" /> Source
-            </button>
+            {originalUrl ? (
+              <a
+                href={originalUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-lg border border-[#342f46] bg-[#211d2d] px-3 py-2 text-xs font-semibold text-[#b7b0c7] hover:text-white"
+              >
+                <ExternalLink className="h-4 w-4" /> Open original
+              </a>
+            ) : null}
             <button
               type="button"
               aria-label="Cancel remake"
-              onClick={onCancel}
+              onClick={cancel}
               className="grid h-9 w-9 place-items-center rounded-lg text-[#928aa3] hover:bg-[#292437] hover:text-white"
             >
               <X className="h-4 w-4" />
@@ -127,73 +143,71 @@ export function RemakeIntentDialog({
         </header>
 
         <div className="grid min-h-0 flex-1 grid-cols-[330px_minmax(0,1fr)]">
-          <aside className="min-h-0 border-r border-[#2d2940] bg-[#191620] p-5">
+          <aside className="min-h-0 overflow-y-auto border-r border-[#2d2940] bg-[#191620] p-5">
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#777083]">
               Original Reel
             </p>
 
-            <div className="mt-4 overflow-hidden rounded-2xl border border-[#332e45] bg-[#121018]">
-              <div className="relative flex aspect-[4/5] items-center justify-center overflow-hidden bg-[radial-gradient(circle_at_50%_25%,rgba(124,58,237,0.20),transparent_38%),linear-gradient(180deg,#191523,#0d0b12)]">
-                <div className="absolute left-4 top-4 rounded-full border border-violet-400/20 bg-violet-500/10 px-2.5 py-1 text-[10px] font-semibold text-violet-200">
-                  Source Reel
-                </div>
-                <div className="text-center">
-                  <span className="mx-auto grid h-14 w-14 place-items-center rounded-full border border-white/15 bg-black/30 text-white shadow-xl backdrop-blur">
-                    <Play className="ml-0.5 h-5 w-5 fill-current" />
-                  </span>
-                  <p className="mt-4 text-sm font-semibold text-white">Original stays unchanged</p>
-                  <p className="mx-auto mt-1 max-w-[220px] text-xs leading-5 text-[#8f879f]">
-                    SpyReels is reading the hook, structure, pacing, and message in the background.
-                  </p>
-                </div>
-              </div>
-
-              <div className="border-t border-[#2d2940] p-4">
-                <div className="flex items-center justify-between gap-3 text-xs">
-                  <span className="text-[#8f879f]">Source analysis</span>
-                  <span className="font-semibold text-violet-300">
-                    {sourceReady ? "Ready" : `${Math.max(0, Math.min(63, Math.round(progressPercent)))}%`}
-                  </span>
-                </div>
-                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#2b2638]">
-                  <div
-                    className="h-full rounded-full bg-violet-500 transition-[width] duration-500"
-                    style={{ width: `${visibleProgress}%` }}
+            <div className="mt-4 overflow-hidden rounded-2xl border border-[#332e45] bg-black shadow-[0_16px_40px_rgba(0,0,0,0.24)]">
+              <div className="relative aspect-[9/14] overflow-hidden bg-black">
+                {hasSourceMedia && platform !== "youtube" ? (
+                  <DashboardReelGridMedia
+                    className="h-full w-full"
+                    thumbnailUrl={media?.thumbnailUrl}
+                    videoUrl={media?.videoUrl}
+                    shortcode={media?.shortcode}
+                    reelId={platform === "instagram" ? media?.reelId ?? undefined : undefined}
+                    platform={platform === "tiktok" ? "tiktok" : "instagram"}
+                    videoPageUrl={media?.videoPageUrl ?? media?.originalUrl}
+                    fallbackLabel="Source Reel"
                   />
-                </div>
+                ) : hasSourceMedia && media?.thumbnailUrl ? (
+                  <a
+                    href={originalUrl || undefined}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="group relative block h-full w-full"
+                    aria-label="Open original Reel"
+                  >
+                    <ReelGridThumbnail
+                      className="h-full w-full"
+                      thumbnailUrl={media.thumbnailUrl}
+                      width={360}
+                      height={560}
+                    />
+                    <span className="absolute left-1/2 top-1/2 grid h-14 w-14 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-white/30 bg-black/60 text-white shadow-xl backdrop-blur group-hover:bg-black/75">
+                      <ExternalLink className="h-5 w-5" />
+                    </span>
+                  </a>
+                ) : (
+                  <div className="flex h-full items-center justify-center px-6 text-center">
+                    <div>
+                      <FileText className="mx-auto h-8 w-8 text-[#615a70]" />
+                      <p className="mt-3 text-sm font-semibold text-[#b7b0c7]">Source preview unavailable</p>
+                      {originalUrl ? (
+                        <a
+                          href={originalUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-violet-300 hover:text-violet-200"
+                        >
+                          Open original <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
+
+            <p className="mt-3 text-xs leading-5 text-[#827b92]">
+              Watch the original again while you decide how you want to use the idea.
+            </p>
           </aside>
 
-          <main className="min-h-0 overflow-y-auto bg-[#1c1926] px-7 py-6">
+          <main className="min-h-0 overflow-y-auto bg-[#1c1926] px-7 py-7">
             <div className="mx-auto max-w-[760px]">
-              <div className="rounded-2xl border border-violet-500/20 bg-violet-500/[0.06] px-4 py-3.5">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    {sourceReady ? (
-                      <Check className="h-4 w-4 shrink-0 text-emerald-400" />
-                    ) : (
-                      <Loader2 className="h-4 w-4 shrink-0 animate-spin text-violet-400" />
-                    )}
-                    <span className="truncate text-sm font-semibold text-violet-100">
-                      {sourceReady
-                        ? "Source ready"
-                        : `Transcribing source... ${Math.max(0, Math.min(63, Math.round(progressPercent)))}%`}
-                    </span>
-                  </div>
-                  <span className="hidden text-[11px] text-[#8f879f] sm:block">
-                    This runs in the background while you set the direction.
-                  </span>
-                </div>
-                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-violet-950/60">
-                  <div
-                    className="h-full rounded-full bg-violet-500 transition-[width] duration-500"
-                    style={{ width: `${visibleProgress}%` }}
-                  />
-                </div>
-              </div>
-
-              <div className="mt-7">
+              <div>
                 <h2 className="text-2xl font-bold tracking-tight text-white">
                   How do you want to use this Reel?
                 </h2>
@@ -202,7 +216,7 @@ export function RemakeIntentDialog({
                 </p>
               </div>
 
-              <div className="mt-5 space-y-3">
+              <div className="mt-6 space-y-3">
                 <div
                   className={`w-full rounded-2xl border p-4 transition ${
                     mode === "custom"
@@ -324,11 +338,6 @@ export function RemakeIntentDialog({
               >
                 <Sparkles className="h-4 w-4" /> Create remake
               </button>
-              <p className="mt-2.5 text-center text-[11px] text-[#777083]">
-                {sourceReady
-                  ? "Your source is ready. Generation starts as soon as you choose a direction."
-                  : "Generation starts as soon as your direction and the transcript are ready."}
-              </p>
             </div>
           </main>
         </div>
