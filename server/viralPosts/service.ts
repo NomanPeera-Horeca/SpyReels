@@ -30,7 +30,7 @@ import {
   VIRAL_POOL_DEFAULTS,
   VIRAL_SEED_POOL_PILLAR,
 } from "./constants";
-import { DAILY_PICK_MIN_FINAL_SCORE, selectDiverseFeed } from "./diversity";
+import { selectTieredDailyFeed } from "./diversity";
 import {
   isAnyViralPostsPlatformEnabled,
   isViralPostsInstagramEnabled,
@@ -283,6 +283,11 @@ function scoreAndSelect(
     dismissed: Set<number>;
     recentlyShown: Set<number>;
     personalization?: ViralPersonalizationSignals;
+    logContext?: {
+      userId: number;
+      feedId: number;
+      phase: "initial" | "upgrade";
+    };
   }
 ) {
   const bySource = new Map(
@@ -329,17 +334,63 @@ function scoreAndSelect(
     })
     .filter((x): x is NonNullable<typeof x> => Boolean(x));
 
-  const selected = selectDiverseFeed(
+  const selection = selectTieredDailyFeed(
     diversityInput.map((d) => d.diversity),
     {
       min: VIRAL_DAILY_FEED_MIN,
       max: VIRAL_DAILY_FEED_MAX,
-      minFinalScore: DAILY_PICK_MIN_FINAL_SCORE,
     }
   );
 
+  if (opts.logContext) {
+    const platformCounts = diversityInput.reduce<Record<string, number>>(
+      (counts, item) => {
+        const platform = item.diversity.platform || "unknown";
+        counts[platform] = (counts[platform] ?? 0) + 1;
+        return counts;
+      },
+      {}
+    );
+    const hiddenCount = diversityInput.filter((item) => item.diversity.hidden).length;
+    const dismissedCount = diversityInput.filter(
+      (item) => item.diversity.recentlyDismissed
+    ).length;
+    const recentlyShownCount = diversityInput.filter(
+      (item) => item.diversity.recentlyShown
+    ).length;
+    const completeCoreMetrics = diversityInput.filter(
+      (item) =>
+        item.scored.availability.hasViews &&
+        item.scored.availability.hasPublishedAt
+    ).length;
+    const missingFollowers = diversityInput.filter(
+      (item) => !item.scored.availability.hasFollowers
+    ).length;
+
+    console.info("[viralPosts] ranking_funnel", {
+      ...opts.logContext,
+      candidateUniverse: diversityInput.length,
+      finiteScoreCount: selection.finiteScoreCount,
+      strongEligibleCount: selection.strongEligibleCount,
+      atOrAboveFallbackFloorCount: selection.fallbackEligibleCount,
+      hiddenCount,
+      dismissedCount,
+      recentlyShownCount,
+      completeCoreMetrics,
+      missingFollowers,
+      platformCounts,
+      scoreP50: selection.scoreDistribution.p50,
+      scoreP75: selection.scoreDistribution.p75,
+      scoreP90: selection.scoreDistribution.p90,
+      scoreMax: selection.scoreDistribution.max,
+      selectedStrong: selection.strongSelectedCount,
+      selectedFallback: selection.fallbackSelectedCount,
+      selectedTotal: selection.selected.length,
+    });
+  }
+
   const byId = new Map(diversityInput.map((d) => [d.row.id, d]));
-  return selected
+  return selection.selected
     .map((s) => byId.get(s.candidateId))
     .filter((x): x is NonNullable<typeof x> => Boolean(x));
 }
@@ -439,6 +490,24 @@ async function loadTodayCandidateUniverse(args: {
     personalization,
     personalCandidateCount,
   };
+}
+
+function scheduleDailyFeedRecovery(
+  pools: Array<{ id: number; platform: string | null }>
+): boolean {
+  const tiktokPools = pools.filter((pool) => pool.platform === "tiktok");
+  const instagramPools = pools.filter((pool) => pool.platform === "instagram");
+  const toRefresh = [...instagramPools.slice(0, 2), ...tiktokPools].slice(0, 4);
+  if (!toRefresh[0]) return false;
+
+  // Force only one highest-priority pool so a genuinely fresh-but-low-quality
+  // reservoir can discover new supply. Remaining pools respect freshness and
+  // budget guards, while the DB lease prevents duplicate provider work.
+  schedulePoolRefresh(toRefresh[0].id, true);
+  for (const pool of toRefresh.slice(1)) {
+    schedulePoolRefresh(pool.id, false);
+  }
+  return true;
 }
 
 export async function getOrCreateDailyFeed(args: {
@@ -559,6 +628,11 @@ export async function getOrCreateDailyFeed(args: {
       dismissed,
       recentlyShown,
       personalization: universe.personalization,
+      logContext: {
+        userId: args.userId,
+        feedId: feed.id,
+        phase: "initial",
+      },
     });
 
     const pillarRanked = diversifyByPillar(
@@ -572,19 +646,9 @@ export async function getOrCreateDailyFeed(args: {
     picked = pillarRanked as typeof picked;
 
     const enough = picked.length >= VIRAL_DAILY_FEED_MIN;
-    let poolRefreshStarted = false;
-    if (!enough) {
-      const seedPools = pools.filter((p) => p.platform === "tiktok");
-      const igPools = pools.filter((p) => p.platform === "instagram");
-      const toRefresh = [...igPools.slice(0, 2), ...seedPools].slice(0, 4);
-      if (toRefresh[0]) {
-        schedulePoolRefresh(toRefresh[0].id, true);
-        poolRefreshStarted = true;
-        for (const p of toRefresh.slice(1)) {
-          schedulePoolRefresh(p.id, false);
-        }
-      }
-    }
+    const poolRefreshStarted = !enough
+      ? scheduleDailyFeedRecovery(pools)
+      : false;
 
     await repo.insertFeedItems(
       picked.map((p, index) => ({
@@ -606,11 +670,7 @@ export async function getOrCreateDailyFeed(args: {
       workspaceId,
     });
 
-    const status = !enough
-      ? picked.length === 0
-        ? "refreshing"
-        : "refreshing"
-      : "ready";
+    const status = !enough ? "refreshing" : "ready";
     const generationReason = enough
       ? "pool_assembly"
       : "cold_start_pool_refresh";
@@ -618,10 +678,7 @@ export async function getOrCreateDailyFeed(args: {
     const [, saved, mirroredVideos] = await Promise.all([
       repo.updateDailyFeedStatus({
         feedId: feed.id,
-        status:
-          status === "refreshing" && picked.length === 0
-            ? "refreshing"
-            : status,
+        status,
         generationReason,
         errorMessage:
           picked.length === 0
@@ -926,10 +983,6 @@ async function tryUpgradeRefreshingFeed(args: {
     pillars,
     poolIds: pools.map((p) => p.id),
   });
-  if (universe.rows.length < VIRAL_DAILY_FEED_MIN) {
-    if (pools[0]) schedulePoolRefresh(pools[0].id, false);
-    return null;
-  }
 
   const hidden = await repo.getHiddenCreatorKeys(args.userId);
   const dismissed = await repo.getRecentlyDismissedCandidateIds(args.userId);
@@ -939,6 +992,11 @@ async function tryUpgradeRefreshingFeed(args: {
     dismissed,
     recentlyShown,
     personalization: universe.personalization,
+    logContext: {
+      userId: args.userId,
+      feedId: args.feed.id,
+      phase: "upgrade",
+    },
   });
   const pillarRanked = diversifyByPillar(
     picked.map((p) => ({
@@ -949,7 +1007,18 @@ async function tryUpgradeRefreshingFeed(args: {
     { max: VIRAL_DAILY_FEED_MAX, minPillars: 2 }
   );
   picked = pillarRanked as typeof picked;
-  if (picked.length < VIRAL_DAILY_FEED_MIN) return null;
+  if (picked.length < VIRAL_DAILY_FEED_MIN) {
+    const poolRefreshStarted = scheduleDailyFeedRecovery(pools);
+    console.warn("[viralPosts] daily_feed_recovery_requested", {
+      userId: args.userId,
+      feedId: args.feed.id,
+      rawCandidateCount: universe.rows.length,
+      selectedAfterRanking: picked.length,
+      poolRefreshStarted,
+      reason: "eligible_feed_below_minimum",
+    });
+    return null;
+  }
 
   await repo.replaceFeedItems(
     args.feed.id,

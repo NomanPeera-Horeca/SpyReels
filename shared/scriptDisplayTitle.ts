@@ -25,7 +25,6 @@ const SMALL_WORDS = new Set([
   "for",
   "from",
   "in",
-  "into",
   "of",
   "on",
   "or",
@@ -56,6 +55,11 @@ function titleCase(value: string): string {
       if (!bare) return word;
       const lower = bare.toLowerCase();
       if (index > 0 && SMALL_WORDS.has(lower)) return word.replace(bare, lower);
+
+      // Preserve deliberate internal capitalization in names/brands such as
+      // Chick-fil-A instead of flattening it to Chick-fil-a.
+      if (/[A-Z]/.test(bare.slice(1))) return word;
+
       const cased = lower.charAt(0).toUpperCase() + lower.slice(1);
       return word.replace(bare, cased);
     })
