@@ -4,7 +4,7 @@ import {
   RemakeWorkspaceDialog as RemakeWorkspaceDialogAgenticV2,
   type RemakeWorkspaceTarget,
 } from "@/components/RemakeWorkspaceDialogAgenticV2";
-import { TeleprompterMode } from "@/pages/TeleprompterMode";
+import { ExclusiveTeleprompterSurface } from "@/components/ExclusiveTeleprompterSurface";
 import { trpc } from "@/lib/trpc";
 import {
   REMAKE_WORKSPACE_BODY_ATTR,
@@ -24,6 +24,7 @@ export function RemakeWorkspaceDialog(props: Props) {
       enabled: props.open && teleprompterScriptId != null,
       staleTime: 0,
       retry: false,
+      refetchOnWindowFocus: false,
     }
   );
 
@@ -61,8 +62,9 @@ export function RemakeWorkspaceDialog(props: Props) {
           setTeleprompterScriptId(scriptId);
         }}
       />
+
       {teleprompterScriptId != null && teleprompterScript ? (
-        <TeleprompterMode
+        <ExclusiveTeleprompterSurface
           script={teleprompterScript}
           onClose={() => setTeleprompterScriptId(null)}
         />
