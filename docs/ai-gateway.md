@@ -148,7 +148,7 @@ Migration `drizzle/0096_ai_gateway_oauth.sql` creates:
 
 Raw authorization codes and refresh tokens are never stored. Only SHA-256 hashes are persisted.
 
-## Feature flag and environment
+## Feature flag and production environment
 
 The transport is registered only when:
 
@@ -156,17 +156,17 @@ The transport is registered only when:
 SPYREELS_AI_GATEWAY_ENABLED=true
 ```
 
-The default is off. Merging the code without enabling the flag does not expose OAuth, MCP, REST, or OpenAPI endpoints.
-
-Required before enabling:
+The real SpyReels Render service is now prepared with:
 
 ```text
-SPYREELS_AI_GATEWAY_ENABLED=true
-SPYREELS_AI_OAUTH_JWT_SECRET=<dedicated random secret, at least 32 characters>
+SPYREELS_AI_OAUTH_JWT_SECRET=<dedicated high-entropy secret stored only in Render>
 SPYREELS_AI_OAUTH_ISSUER=https://spyreels.ai
+SPYREELS_AI_GATEWAY_ENABLED=false
 ```
 
-`SPYREELS_AI_OAUTH_JWT_SECRET` must be separate from the existing browser-session `JWT_SECRET`.
+The OAuth signing secret is separate from the existing browser-session `JWT_SECRET`. Its raw value is intentionally not committed to GitHub or written into the distribution runbook.
+
+The gateway remains OFF. Preparing these variables does not expose the gateway while the feature flag is false.
 
 ## Browser login handoff
 
@@ -230,7 +230,7 @@ Validated checkpoints include:
 
 See `docs/ai-gateway-validation.md` for exact evidence.
 
-The production gateway itself remains intentionally disabled. The remaining release work is final test/review, secret/issuer configuration, exact platform client/callback registration where required, and private ChatGPT/Claude connection tests after explicit activation approval.
+The production gateway itself remains intentionally disabled. Production secret and issuer configuration are now prepared. The remaining release work is current-branch CI/review, merge/deploy approval, exact platform client/callback registration where required, and private ChatGPT/Claude connection tests.
 
 ## ChatGPT and Claude distribution
 
