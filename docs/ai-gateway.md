@@ -76,6 +76,24 @@ https://spyreels.ai/api/ai/mcp
 
 All MCP calls require a SpyReels OAuth bearer token with `spyreels:read`.
 
+## REST / OpenAPI transport
+
+The same canonical tool executor is also available through a small REST surface for non-MCP hosts and partner integrations. This transport does not contain separate business logic.
+
+Endpoints:
+
+```text
+GET  https://spyreels.ai/api/ai/openapi.json
+GET  https://spyreels.ai/api/ai/v1/tools
+POST https://spyreels.ai/api/ai/v1/tools/find_creator
+POST https://spyreels.ai/api/ai/v1/tools/find_top_content
+POST https://spyreels.ai/api/ai/v1/tools/get_usage
+```
+
+The OpenAPI document is public discovery metadata. Tool listing and tool execution require a SpyReels OAuth bearer token with `spyreels:read`.
+
+REST responses preserve the gateway's stable execution envelope, request id, source attribution, and external error codes. MCP and REST both call `executeSpyReelsAiTool(...)`, so plan limits and business behavior stay identical across hosts.
+
 ## OAuth authorization server
 
 External AI clients must never reuse the SpyReels browser session cookie as an API credential.
@@ -135,7 +153,7 @@ The transport is registered only when:
 SPYREELS_AI_GATEWAY_ENABLED=true
 ```
 
-The default is off. Merging the code without enabling the flag does not expose OAuth or MCP endpoints.
+The default is off. Merging the code without enabling the flag does not expose OAuth, MCP, REST, or OpenAPI endpoints.
 
 Required before enabling:
 
@@ -162,6 +180,7 @@ The following external protocol endpoints are exempt from cookie CSRF checks bec
 - `/api/ai/oauth/token`
 - `/api/ai/oauth/revoke`
 - `/api/ai/mcp`
+- `/api/ai/v1/*`
 
 ## Attribution and observability
 
@@ -184,11 +203,11 @@ Server analytics can report product activity by ChatGPT, Claude, Copilot, Gemini
 3. Keep `SPYREELS_AI_GATEWAY_ENABLED` off until schema migration and validation are complete.
 4. Do not deploy or merge without explicit approval.
 5. Reuse existing SpyReels services and entitlements instead of parallel business logic.
-6. Add platform-specific distribution metadata only after the canonical OAuth + MCP path works independently.
+6. Add platform-specific distribution metadata only after the canonical OAuth + MCP + REST/OpenAPI paths validate independently.
 7. Never put browser cookie secrets, Stripe identifiers, provider API keys, or database credentials into AI-host credentials.
 
 ## Current validation status
 
 The implementation is still a release candidate, not production-enabled. GitHub-hosted CI has recently failed before executing any steps because no runner was assigned (`runner_id: 0`, empty runner name, zero steps). Treat that as infrastructure failure, not as a passing or failing code result.
 
-Before enabling the flag, we still require a real typecheck/test run plus an end-to-end OAuth + MCP smoke test against an isolated environment.
+Before enabling the flag, we still require a real typecheck/test run plus an end-to-end OAuth + MCP + REST smoke test against an isolated environment.
