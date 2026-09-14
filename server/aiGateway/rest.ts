@@ -39,7 +39,15 @@ async function requireReadAccess(req: Request, res: Response) {
       sendAiGatewayBearerChallenge(res, error);
       return null;
     }
-    throw error;
+    console.error(
+      "[ai-gateway] REST authentication failed",
+      error instanceof Error ? error.message : String(error)
+    );
+    res.status(500).json({
+      error: "internal_error",
+      message: "SpyReels could not authenticate this request.",
+    });
+    return null;
   }
 }
 
