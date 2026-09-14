@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { AgentProgressPanel } from "@/components/AgentProgressPanel";
 import { BrollBeatsView } from "@/components/BrollResultsPanel";
+import { Frame0TextPreview } from "@/components/Frame0TextPreview";
 import { RemakeSourceDrawer } from "@/components/RemakeSourceDrawer";
 import { trpc } from "@/lib/trpc";
 import type {
@@ -109,14 +110,6 @@ type Props = {
   onOpenTeleprompter?: (reelId: number, scriptId: number) => void;
   previewSeed?: { script: string; caption: string };
 };
-
-function firstHookLine(script: string): string {
-  const line = script
-    .split(/\n+/)
-    .map((value) => value.trim())
-    .find(Boolean);
-  return (line || "Your hook will show here").replace(/^\[.*?\]\s*/, "").slice(0, 110);
-}
 
 function normalized(value: string): string {
   return value.replace(/\s+/g, " ").trim().toLowerCase();
@@ -1153,22 +1146,7 @@ export function RemakeWorkspaceDialog({
                   </div>
                 ) : null}
 
-                {tab === "preview" ? (
-                  <div className="h-full overflow-y-auto px-7 py-6">
-                    <div className="mx-auto max-w-[760px]">
-                      <div className="mb-5"><h3 className="text-base font-bold text-white">Opening frame preview</h3><p className="mt-1 text-xs text-[#8f879f]">A simple check of what viewers may see on frame 0 before you film.</p></div>
-                      <div className="flex justify-center">
-                        <div className="relative aspect-[9/16] w-[300px] overflow-hidden rounded-[28px] border border-[#3a3450] bg-gradient-to-br from-violet-700 via-[#3b2858] to-[#121018] shadow-2xl">
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-black/20" />
-                          <div className="absolute left-5 top-5 text-xs font-semibold text-white/90">@you</div>
-                          <div className="absolute inset-x-5 bottom-20 rounded-xl bg-black/20 p-3 text-[20px] font-bold leading-tight text-white backdrop-blur-sm">{firstHookLine(script)}</div>
-                          <div className="absolute inset-x-5 bottom-8 h-1 overflow-hidden rounded-full bg-white/25"><span className="block h-full w-[24%] rounded-full bg-white" /></div>
-                        </div>
-                      </div>
-                      {caption.trim() ? <div className="mx-auto mt-5 max-w-[520px] rounded-xl border border-[#332e45] bg-[#191620] p-4 text-xs leading-relaxed text-[#aaa3b8]">{caption}</div> : null}
-                    </div>
-                  </div>
-                ) : null}
+                {tab === "preview" ? <Frame0TextPreview script={script} /> : null}
               </div>
 
               <RemakeSourceDrawer
