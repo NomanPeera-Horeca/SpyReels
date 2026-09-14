@@ -61,7 +61,7 @@ export default function DevRemakeWorkspacePreview() {
       <RemakeWorkspaceDialog
         open={open}
         onOpenChange={setOpen}
-        target={{ scriptId: null, reelId: null, remakeKey: "dev-preview" }}
+        target={{ scriptId: null, reelId: null, remakeKey: "dev-preview", source: null }}
         remakeState={{ stage: "ready", progressPercent: 100 }}
         previewSeed={{ script: PREVIEW_SCRIPT, caption: PREVIEW_CAPTION }}
       />
