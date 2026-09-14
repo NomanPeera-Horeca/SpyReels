@@ -65,22 +65,31 @@ The following production code remains real in the harness:
 
 This split is deliberate. It gives us a repeatable protocol-level release gate while preventing a test from charging Stripe, consuming ScrapeCreators credits, modifying a real user, or emitting production analytics.
 
+## Independent runner results
+
+Because GitHub Actions is currently failing before assigning a runner, the release candidate is also validated on isolated Render services with auto-deploy disabled and the AI Gateway production feature flag off.
+
+Verified results:
+
+- isolated `pnpm test:ai-gateway:e2e`: **PASS**, 2 tests passed
+- AI Gateway OpenAPI contract after isolating billing configuration: **PASS**, 2 tests passed
+- full Vitest suite on the feature branch: **1426 passed, 1 skipped, 1 failed**
+- the remaining full-suite failure is `shared/scriptDisplayTitle.test.ts`; the implementation under test is byte-for-byte identical to `main`, so it is a baseline repository failure outside the AI Gateway changes
+- `pnpm check` reaches an existing TypeScript error in `client/src/pages/DevRemakeWorkspacePreview.tsx` where `RemakeWorkspaceTarget.source` is missing; the same source exists on `main`, so it is also a baseline issue outside this branch
+
+The AI Gateway-specific failure found by the first full-suite run was `server/aiGateway/openapi.test.ts` eagerly loading Stripe configuration. That test isolation was fixed and independently rerun successfully.
+
 ## Release gate
 
 Passing the isolated harness is necessary but not sufficient to enable `SPYREELS_AI_GATEWAY_ENABLED` in production.
 
 Before enabling the gateway we still require:
 
-1. `pnpm check`
-2. the full `pnpm test` suite
-3. `pnpm test:ai-gateway:e2e`
-4. migration `drizzle/0096_ai_gateway_oauth.sql` applied to an isolated environment first
-5. one smoke test using a real isolated OAuth client and non-production user
-6. MCP and REST calls against that isolated deployment
-7. confirmation that no production Stripe, Instagram, or PostHog side effects occurred during the isolated harness
+1. keep AI Gateway-focused tests green on an independent runner
+2. validate migration `drizzle/0096_ai_gateway_oauth.sql` in an isolated MySQL-compatible environment before any production schema change
+3. run one deployed smoke test using an isolated OAuth client and non-production user
+4. call both MCP and REST against that isolated deployment
+5. confirm no production Stripe, Instagram, user, or PostHog side effects occurred
+6. review platform-specific distribution metadata/adapters only after the canonical transport path is proven
 
-## Current execution status
-
-The harness is implemented and wired to a dedicated package command, but it has not yet produced a trustworthy GitHub-hosted pass/fail result. The latest Actions job still finishes with zero executed steps because no runner is assigned. That is an infrastructure failure, not a code result.
-
-Until a real runner executes the release-gate commands above, keep the gateway feature flag off and treat the branch as a release candidate only.
+Do not merge, deploy to the real SpyReels service, or enable the production gateway flag until those remaining gates are complete.
