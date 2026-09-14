@@ -13,7 +13,7 @@ function client(overrides: Partial<ResolvedAiOAuthClient> = {}): ResolvedAiOAuth
     clientName: "Test client",
     source: "api",
     redirectUris: ["https://client.example/callback"],
-    allowedScopes: ["spyreels:read"],
+    allowedScopes: ["spyreels:read", "offline_access"],
     isPublic: true,
     clientSecretHash: null,
     registrationKind: "database",
@@ -25,13 +25,21 @@ describe("AI Gateway OAuth client validation", () => {
   it("requires an exact redirect URI match", () => {
     const value = client();
     expect(validateAiOAuthRedirectUri(value, "https://client.example/callback")).toBe(true);
+    expect(normalizeRequestedScopes(value, "spyreels:read")).toEqual(["spyreels:read"]);
     expect(validateAiOAuthRedirectUri(value, "https://client.example/callback?next=1")).toBe(false);
     expect(validateAiOAuthRedirectUri(value, "https://evil.example/callback")).toBe(false);
   });
 
+  it("accepts the refresh continuity scope without widening SpyReels permissions", () => {
+    const value = client();
+    expect(normalizeRequestedScopes(value, "spyreels:read offline_access")).toEqual([
+      "spyreels:read",
+      "offline_access",
+    ]);
+  });
+
   it("rejects scopes outside the registered client scope", () => {
     const value = client();
-    expect(normalizeRequestedScopes(value, "spyreels:read")).toEqual(["spyreels:read"]);
     expect(normalizeRequestedScopes(value, "spyreels:write")).toBeNull();
   });
 
