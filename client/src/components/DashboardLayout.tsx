@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { isAdminPanelClient } from "@/admin/isAdminClient";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -136,7 +137,7 @@ type SidebarNavSection = {
   items: SidebarNavItem[];
 };
 
-function buildNavSections(): SidebarNavSection[] {
+function buildNavSections(isAdmin: boolean): SidebarNavSection[] {
   return [
     {
       id: "create",
@@ -145,10 +146,19 @@ function buildNavSections(): SidebarNavSection[] {
         { icon: Sparkles, label: "Agent", path: "/studio", badge: "new", featured: true },
         { icon: CalendarDays, label: "30-Day Plan", path: "/plan" },
         // { icon: Lightbulb, label: "Idea to Script", path: "/ideas" },
-        { icon: Images, label: "Carousels", path: "/carousels", badge: "new" },
-        { icon: Clapperboard, label: "B-Roll Library", path: "/broll-library", badge: "new" },
+        ...(isAdmin
+          ? [
+              { icon: Images, label: "Carousels", path: "/carousels", badge: "new" as const },
+              {
+                icon: Clapperboard,
+                label: "B-Roll Library",
+                path: "/broll-library",
+                badge: "new" as const,
+              },
+            ]
+          : []),
         { icon: FileText, label: "My Scripts", path: "/scripts" },
-        { icon: ClipboardPaste, label: "Paste Script", path: "/paste" },
+        { icon: ClipboardPaste, label: "Write Your Script", path: "/paste" },
       ],
     },
     {
@@ -340,6 +350,7 @@ function DashboardLayoutContent({
   setSidebarWidth,
 }: DashboardLayoutContentProps) {
   const { user, logout } = useAuth();
+  const isAdmin = isAdminPanelClient(user);
   useActivityHeartbeat(Boolean(user));
   const [location, setLocation] = useLocation();
   const searchString = useSearch();
@@ -351,7 +362,7 @@ function DashboardLayoutContent({
   const sidebarRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
   const { themePreference, setThemePreference, switchable } = useTheme();
-  const navSections = buildNavSections();
+  const navSections = buildNavSections(isAdmin);
   const flatNavItems = navSections.flatMap((section) => section.items);
 
   const onboardingStateQuery = trpc.onboarding.getState.useQuery(undefined, {
@@ -503,7 +514,7 @@ function DashboardLayoutContent({
                   ))}
                 </Fragment>
               ))}
-              {user?.email === import.meta.env.VITE_ADMIN_EMAIL ? (
+              {isAdmin ? (
                 <>
                   <div className="px-3 pt-4 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider group-data-[collapsible=icon]:hidden">
                     Admin
