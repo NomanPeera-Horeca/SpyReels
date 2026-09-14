@@ -69,3 +69,5 @@ try {
 } finally {
   await connection.end();
 }
+
+await import("./ensure-complimentary-access-schema.mjs");
