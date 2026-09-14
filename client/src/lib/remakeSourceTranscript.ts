@@ -1,7 +1,36 @@
+import type { LibraryRemakeSource } from "@/lib/libraryRemakeChainCore";
+
 export type RemakeSourceTranscriptSegment = {
   startSeconds: number;
   text: string;
 };
+
+export type RemakeSourceReferenceInput =
+  | { reelId: number }
+  | { featuredReelId: number }
+  | { tiktokVideoId: number }
+  | { youtubeVideoId: number };
+
+export function remakeSourceReferenceInput(
+  source: LibraryRemakeSource | null,
+  reelId: number | null
+): RemakeSourceReferenceInput | null {
+  if (!source) return reelId != null ? { reelId } : null;
+  if (source.source === "featured") {
+    return { featuredReelId: source.featuredReelId };
+  }
+  if (source.source === "tiktok") {
+    return { tiktokVideoId: source.tiktokVideoId };
+  }
+  if (source.source === "youtube") {
+    return { youtubeVideoId: source.youtubeVideoId };
+  }
+  if (source.source === "user") {
+    return { reelId: source.reelId };
+  }
+  const collectedReelId = reelId ?? source.transcriptionReelId ?? null;
+  return collectedReelId != null ? { reelId: collectedReelId } : null;
+}
 
 function finiteNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;

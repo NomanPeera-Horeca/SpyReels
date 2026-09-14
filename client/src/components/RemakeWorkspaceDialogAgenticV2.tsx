@@ -1146,7 +1146,13 @@ export function RemakeWorkspaceDialog({
                   </div>
                 ) : null}
 
-                {tab === "preview" ? <Frame0TextPreview script={script} /> : null}
+                {tab === "preview" ? (
+                  <Frame0TextPreview
+                    script={script}
+                    source={target?.source ?? null}
+                    reelId={target?.reelId ?? null}
+                  />
+                ) : null}
               </div>
 
               <RemakeSourceDrawer

@@ -4,14 +4,9 @@ import type { LibraryRemakeSource } from "@/lib/libraryRemakeChainCore";
 import {
   formatRemakeSourceTime,
   normalizeRemakeSourceSegments,
+  remakeSourceReferenceInput,
 } from "@/lib/remakeSourceTranscript";
 import { trpc } from "@/lib/trpc";
-
-type SourceReferenceInput =
-  | { reelId: number }
-  | { featuredReelId: number }
-  | { tiktokVideoId: number }
-  | { youtubeVideoId: number };
 
 type Props = {
   open: boolean;
@@ -19,27 +14,6 @@ type Props = {
   source: LibraryRemakeSource | null;
   reelId: number | null;
 };
-
-function referenceInput(
-  source: LibraryRemakeSource | null,
-  reelId: number | null
-): SourceReferenceInput | null {
-  if (!source) return reelId != null ? { reelId } : null;
-  if (source.source === "featured") {
-    return { featuredReelId: source.featuredReelId };
-  }
-  if (source.source === "tiktok") {
-    return { tiktokVideoId: source.tiktokVideoId };
-  }
-  if (source.source === "youtube") {
-    return { youtubeVideoId: source.youtubeVideoId };
-  }
-  if (source.source === "user") {
-    return { reelId: source.reelId };
-  }
-  const collectedReelId = reelId ?? source.transcriptionReelId ?? null;
-  return collectedReelId != null ? { reelId: collectedReelId } : null;
-}
 
 function platformLabel(platform: string | null | undefined): string {
   if (platform === "tiktok") return "TikTok";
@@ -54,7 +28,7 @@ function creatorLabel(value: string | null | undefined): string | null {
 }
 
 export function RemakeSourceDrawer({ open, onClose, source, reelId }: Props) {
-  const input = referenceInput(source, reelId);
+  const input = remakeSourceReferenceInput(source, reelId);
   const query = trpc.transcribe.sourceReference.useQuery(
     input ?? { reelId: 0 },
     {
