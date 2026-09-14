@@ -23,6 +23,7 @@ import { expressAlertErrorHandler, alertOwnerThrottled } from "../monitoring/ale
 import { registerPublicScriptShareRoutes } from "../publicScriptShareRoute";
 import { registerCarouselExportImageProxy } from "../carousel/exportImageProxyRoute";
 import { localObjectStorageDir } from "../storage";
+import { registerAiGatewayRoutes } from "../aiGateway/routes";
 import { BLOG_SLUG_REDIRECTS } from "@shared/blogRedirects";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -105,6 +106,9 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
+  // Standards-based OAuth + remote MCP, registered only when the server-side
+  // SPYREELS_AI_GATEWAY_ENABLED flag is explicitly true.
+  registerAiGatewayRoutes(app);
   // Extension REST API (for Chrome extension)
   app.use("/api/extension", createExtensionRouter());
   app.use("/api/ext", createExtensionRouter());
