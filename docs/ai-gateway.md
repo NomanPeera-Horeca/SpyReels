@@ -211,3 +211,15 @@ Server analytics can report product activity by ChatGPT, Claude, Copilot, Gemini
 The implementation is still a release candidate, not production-enabled. GitHub-hosted CI has recently failed before executing any steps because no runner was assigned (`runner_id: 0`, empty runner name, zero steps). Treat that as infrastructure failure, not as a passing or failing code result.
 
 Before enabling the flag, we still require a real typecheck/test run plus an end-to-end OAuth + MCP + REST smoke test against an isolated environment.
+
+## Distribution sequence after transport validation
+
+Once the isolated smoke test passes, distribution work should happen as thin adapters over the same gateway rather than new platform-specific backends:
+
+1. ChatGPT / OpenAI connector metadata against Remote MCP.
+2. Claude remote MCP connection instructions/metadata.
+3. Microsoft Copilot connector or agent metadata, using MCP when supported and REST/OpenAPI otherwise.
+4. Gemini / Google agent integration, using the same OAuth account connection and REST/OpenAPI contract when MCP is not the preferred transport.
+5. Perplexity and other hosts through MCP or REST depending on their supported connector model.
+
+No adapter may bypass SpyReels OAuth, plan limits, usage accounting, source attribution, or the canonical tool registry.
