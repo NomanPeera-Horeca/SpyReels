@@ -2,6 +2,8 @@ import { TRPCError } from "@trpc/server";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import {
+  VIRAL_DAILY_FEED_MAX,
+  VIRAL_DAILY_FEED_MIN,
   VIRAL_POSTS_NOT_ENABLED_MESSAGE,
   isViralPostsV1Platform,
   type ViralDailyFeedResponse,
@@ -80,6 +82,97 @@ function shouldRegenerateStaleV1Feed(feed: ViralDailyFeedResponse): boolean {
   });
 }
 
+/**
+ * Reliability contract for the Today tab: never return a visually blank feed
+ * when we already have usable recommendations for this user or niche.
+ *
+ * First prefer the user's latest healthy historical feed. If this is a true
+ * cold start with no usable history, fall back to the already-indexed niche
+ * pool used by Explore. Both paths are DB/pool reads only; live discovery is
+ * still handled asynchronously by the normal recovery path.
+ */
+async function withNonEmptyFeedFallback(args: {
+  userId: number;
+  localDate: string;
+  feed: ViralDailyFeedResponse;
+}): Promise<ViralDailyFeedResponse> {
+  if (args.feed.items.length > 0) return args.feed;
+
+  try {
+    const history = await getFeedHistory({
+      userId: args.userId,
+      excludeLocalDate: args.localDate,
+      limit: 14,
+    });
+    const prior =
+      history.feeds.find(
+        (candidate) =>
+          candidate.status === "ready" &&
+          candidate.items.length >= VIRAL_DAILY_FEED_MIN
+      ) ?? history.feeds.find((candidate) => candidate.items.length > 0);
+
+    if (prior) {
+      console.warn("[viralPosts] daily_feed_history_fallback", {
+        userId: args.userId,
+        localDate: args.localDate,
+        feedId: args.feed.feedId,
+        fallbackLocalDate: prior.localDate,
+        fallbackItemCount: prior.items.length,
+      });
+      return {
+        ...args.feed,
+        // Keep today's feed identity/date so feedback and recovery remain tied
+        // to today, but use the fallback generation time so the UI does not
+        // falsely label an older feed as "Updated today".
+        generatedAt: prior.generatedAt,
+        status: "refreshing",
+        generationReason: `history_fallback:${prior.localDate}`,
+        items: prior.items.slice(0, VIRAL_DAILY_FEED_MAX),
+        errorMessage:
+          "Showing your latest good recommendations while fresh picks update.",
+      };
+    }
+  } catch (err) {
+    console.error("[viralPosts] daily_feed_history_fallback_failed", {
+      userId: args.userId,
+      localDate: args.localDate,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  try {
+    const browse = await browseViralPosts(args.userId);
+    if (browse.items.length > 0) {
+      console.warn("[viralPosts] daily_feed_browse_fallback", {
+        userId: args.userId,
+        localDate: args.localDate,
+        feedId: args.feed.feedId,
+        fallbackItemCount: browse.items.length,
+      });
+      return {
+        ...args.feed,
+        status: "refreshing",
+        generationReason: "browse_pool_fallback",
+        items: browse.items.slice(0, VIRAL_DAILY_FEED_MAX),
+        errorMessage:
+          "Showing strong niche matches while fresh picks update.",
+        poolRefreshStarted:
+          Boolean(args.feed.poolRefreshStarted) || browse.poolRefreshStarted,
+      };
+    }
+  } catch (err) {
+    console.error("[viralPosts] daily_feed_browse_fallback_failed", {
+      userId: args.userId,
+      localDate: args.localDate,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // There is genuinely no indexed content yet. Preserve the existing explicit
+  // refreshing/error state rather than inventing recommendations.
+  return args.feed;
+}
+
 const feedbackTypeInput = z.enum([
   "more_like_this",
   "not_relevant",
@@ -125,16 +218,22 @@ export const viralPostsRouter = router({
         localDate: input.localDate,
         timezone: input.timezone,
       };
-      const feed = await getOrCreateDailyFeed(request);
-      if (!shouldRegenerateStaleV1Feed(feed)) return feed;
+      let feed = await getOrCreateDailyFeed(request);
+      if (shouldRegenerateStaleV1Feed(feed)) {
+        console.info("[viralPosts] stale_v1_feed_regenerate", {
+          userId: ctx.user.id,
+          localDate: input.localDate,
+          feedId: feed.feedId,
+          platforms: [...new Set(feed.items.map((post) => post.platform))],
+        });
+        feed = await getOrCreateDailyFeed({ ...request, force: true });
+      }
 
-      console.info("[viralPosts] stale_v1_feed_regenerate", {
+      return withNonEmptyFeedFallback({
         userId: ctx.user.id,
         localDate: input.localDate,
-        feedId: feed.feedId,
-        platforms: [...new Set(feed.items.map((post) => post.platform))],
+        feed,
       });
-      return getOrCreateDailyFeed({ ...request, force: true });
     }),
 
   getFeedHistory: viralPostsProcedure
