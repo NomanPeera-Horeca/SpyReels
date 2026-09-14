@@ -45,7 +45,7 @@ jobs:
       - name: Run Viral Posts reliability regression tests
         env:
           NODE_OPTIONS: --max-old-space-size=4096
-        run: pnpm vitest run server/viralPosts/tests/diversity.test.ts
+        run: pnpm vitest run server/viralPosts/tests/diversity.test.ts server/viralPosts/tests/reliabilitySelection.test.ts
 
       - name: Typecheck and project checks
         env:
