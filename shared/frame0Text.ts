@@ -10,7 +10,9 @@ const LEADING_FILLER_PATTERNS = [
   /^here'?s the thing[:,]?\s*/i,
   /^i think\s+/i,
   /^i just\s+/i,
+  /^just\s+/i,
   /^i found (?:you\s+)?/i,
+  /^found (?:you\s+)?/i,
   /^let me (?:show|tell) you\s+/i,
 ];
 
@@ -56,8 +58,15 @@ function cleanScriptOpening(script: string): string {
     .replace(/\s+/g, " ")
     .trim();
 
-  for (const pattern of LEADING_FILLER_PATTERNS) {
-    value = value.replace(pattern, "").trim();
+  // Strip chained spoken-language setup such as
+  // “Hey Leo, I think I just found you ...” without touching the actual claim.
+  let changed = true;
+  while (changed) {
+    const before = value;
+    for (const pattern of LEADING_FILLER_PATTERNS) {
+      value = value.replace(pattern, "").trim();
+    }
+    changed = value !== before;
   }
 
   return value;
