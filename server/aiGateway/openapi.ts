@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { spyReelsAiTools } from "./tools";
-import { aiGatewayIssuer, tokenEndpoint } from "./oauth/config";
+import { aiGatewayIssuer, authorizationEndpoint, tokenEndpoint } from "./oauth/config";
 
 export const AI_GATEWAY_REST_BASE_PATH = "/api/ai/v1";
 export const AI_GATEWAY_OPENAPI_PATH = "/api/ai/openapi.json";
@@ -78,7 +78,7 @@ export function buildAiGatewayOpenApiDocument() {
           type: "oauth2",
           flows: {
             authorizationCode: {
-              authorizationUrl: `${aiGatewayIssuer()}/api/ai/oauth/authorize`,
+              authorizationUrl: authorizationEndpoint(),
               tokenUrl: tokenEndpoint(),
               scopes: {
                 "spyreels:read": "Read creator research and SpyReels account usage.",
