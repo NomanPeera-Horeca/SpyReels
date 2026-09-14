@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Camera, Move, Type } from "lucide-react";
+import { Camera, Move } from "lucide-react";
 import type { LibraryRemakeSource } from "@/lib/libraryRemakeChainCore";
 import { deriveFrame0Text } from "@shared/frame0Text";
 
@@ -81,15 +81,6 @@ export function Frame0TextPreview({ script }: Props) {
             />
 
             <div className="pointer-events-none absolute inset-x-4 top-[18%] h-[58%] rounded-xl border border-dashed border-white/12" aria-hidden="true" />
-
-            <div className="absolute inset-x-4 bottom-4 rounded-xl border border-white/10 bg-black/24 px-3 py-2.5 backdrop-blur-sm">
-              <div className="flex items-center gap-2 text-[10px] font-semibold text-white/80">
-                <Type className="h-3.5 w-3.5 text-violet-300" /> Hook overlay preview
-              </div>
-              <p className="mt-1 text-[9px] leading-relaxed text-white/45">
-                Add your own footage when filming. SpyReels is previewing the text composition, not copying the source video.
-              </p>
-            </div>
           </div>
         </div>
       </div>
