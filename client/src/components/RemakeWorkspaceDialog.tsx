@@ -4,7 +4,7 @@ import {
   RemakeWorkspaceDialog as RemakeWorkspaceDialogAgenticV2,
   type RemakeWorkspaceTarget,
 } from "@/components/RemakeWorkspaceDialogAgenticV2";
-import { TeleprompterMode } from "@/pages/TeleprompterMode";
+import { ExclusiveTeleprompterSurface } from "@/components/ExclusiveTeleprompterSurface";
 import { trpc } from "@/lib/trpc";
 import {
   REMAKE_WORKSPACE_BODY_ATTR,
@@ -24,6 +24,7 @@ export function RemakeWorkspaceDialog(props: Props) {
       enabled: props.open && teleprompterScriptId != null,
       staleTime: 0,
       retry: false,
+      refetchOnWindowFocus: false,
     }
   );
 
@@ -48,10 +49,22 @@ export function RemakeWorkspaceDialog(props: Props) {
   }, [props.open]);
 
   useEffect(() => {
-    if (teleprompterScriptId == null || !teleprompterQuery.isError) return;
-    toast.error("Could not open teleprompter");
-    setTeleprompterScriptId(null);
-  }, [teleprompterQuery.isError, teleprompterScriptId]);
+    if (teleprompterScriptId == null) return;
+    if (teleprompterQuery.isError) {
+      toast.error("Could not open teleprompter");
+      setTeleprompterScriptId(null);
+      return;
+    }
+    if (teleprompterQuery.isSuccess && !teleprompterScript) {
+      toast.error("This script is empty");
+      setTeleprompterScriptId(null);
+    }
+  }, [
+    teleprompterQuery.isError,
+    teleprompterQuery.isSuccess,
+    teleprompterScript,
+    teleprompterScriptId,
+  ]);
 
   return (
     <>
@@ -61,9 +74,11 @@ export function RemakeWorkspaceDialog(props: Props) {
           setTeleprompterScriptId(scriptId);
         }}
       />
-      {teleprompterScriptId != null && teleprompterScript ? (
-        <TeleprompterMode
-          script={teleprompterScript}
+
+      {teleprompterScriptId != null ? (
+        <ExclusiveTeleprompterSurface
+          script={teleprompterScript || null}
+          loading={teleprompterQuery.isPending || teleprompterQuery.isFetching}
           onClose={() => setTeleprompterScriptId(null)}
         />
       ) : null}
