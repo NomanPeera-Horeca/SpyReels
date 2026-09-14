@@ -70,7 +70,7 @@ export async function issueAiOAuthAuthorizationCode(input: {
 async function createRefreshToken(input: {
   clientId: string;
   userId: number;
-  source: AiGatewaySource;
+  source: AiGatewaySource | string;
   scopes: string[];
   familyId?: string;
 }): Promise<{ raw: string; hash: string; familyId: string }> {
@@ -178,7 +178,12 @@ async function revokeRefreshFamily(familyId: string): Promise<void> {
   await db
     .update(aiOAuthRefreshTokens)
     .set({ revokedAt: new Date() })
-    .where(and(eq(aiOAuthRefreshTokens.familyId, familyId), isNull(aiOAuthRefreshTokens.revokedAt)));
+    .where(
+      and(
+        eq(aiOAuthRefreshTokens.familyId, familyId),
+        isNull(aiOAuthRefreshTokens.revokedAt)
+      )
+    );
 }
 
 export async function refreshAiOAuthTokens(input: {
