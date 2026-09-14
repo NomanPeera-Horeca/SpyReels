@@ -8,6 +8,8 @@ Run it with:
 pnpm test:ai-gateway:e2e
 ```
 
+A second smoke test at `server/aiGateway/networkSmoke.test.ts` binds the same isolated Express gateway to a real TCP socket and drives OAuth, MCP, and REST with native HTTP requests. That catches network/header/redirect behavior that an in-process request harness can miss.
+
 ## What it proves
 
 The harness exercises the actual Express OAuth, MCP, REST/OpenAPI gateway routes and the canonical AI tool executor without touching production data, production OAuth clients, Stripe, Instagram, or PostHog.
@@ -38,6 +40,7 @@ It also verifies:
 - a plan-limit rejection returns `USAGE_LIMIT_REACHED` and does not consume another search
 - source attribution remains tied to the trusted OAuth client identity rather than the request Origin header
 - MCP and REST reject requests that do not carry a valid SpyReels bearer token
+- OAuth authorization, token exchange, MCP, and REST also work through a real loopback TCP socket
 
 ## Isolation boundary
 
@@ -72,24 +75,25 @@ Because GitHub Actions is currently failing before assigning a runner, the relea
 Verified results:
 
 - isolated `pnpm test:ai-gateway:e2e`: **PASS**, 2 tests passed
+- real-socket OAuth -> token -> MCP -> REST network smoke: **PASS**, 1 test passed
+- network-smoke Render build then reran the isolated E2E harness: **PASS**, 2 tests passed
 - AI Gateway OpenAPI contract after isolating billing configuration: **PASS**, 2 tests passed
 - full Vitest suite on the feature branch: **1426 passed, 1 skipped, 1 failed**
-- the remaining full-suite failure is `shared/scriptDisplayTitle.test.ts`; the implementation under test is byte-for-byte identical to `main`, so it is a baseline repository failure outside the AI Gateway changes
+- the remaining full-suite failure is `shared/scriptDisplayTitle.test.ts`; both that test file and the implementation under test are identical to `main`, so it is a baseline repository failure outside the AI Gateway changes
 - `pnpm check` reaches an existing TypeScript error in `client/src/pages/DevRemakeWorkspacePreview.tsx` where `RemakeWorkspaceTarget.source` is missing; the same source exists on `main`, so it is also a baseline issue outside this branch
 
 The AI Gateway-specific failure found by the first full-suite run was `server/aiGateway/openapi.test.ts` eagerly loading Stripe configuration. That test isolation was fixed and independently rerun successfully.
 
 ## Release gate
 
-Passing the isolated harness is necessary but not sufficient to enable `SPYREELS_AI_GATEWAY_ENABLED` in production.
+Passing the isolated and real-socket harnesses is necessary but not sufficient to enable `SPYREELS_AI_GATEWAY_ENABLED` in production.
 
 Before enabling the gateway we still require:
 
 1. keep AI Gateway-focused tests green on an independent runner
 2. validate migration `drizzle/0096_ai_gateway_oauth.sql` in an isolated MySQL-compatible environment before any production schema change
-3. run one deployed smoke test using an isolated OAuth client and non-production user
-4. call both MCP and REST against that isolated deployment
-5. confirm no production Stripe, Instagram, user, or PostHog side effects occurred
-6. review platform-specific distribution metadata/adapters only after the canonical transport path is proven
+3. validate one non-production OAuth client/user against an environment with the real OAuth persistence tables
+4. confirm no production Stripe, Instagram, user, or PostHog side effects occur during validation
+5. review platform-specific distribution metadata/adapters only after the canonical transport and persistence paths are proven
 
 Do not merge, deploy to the real SpyReels service, or enable the production gateway flag until those remaining gates are complete.
