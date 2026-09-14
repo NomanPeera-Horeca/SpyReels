@@ -5,11 +5,12 @@ import {
   isAiGatewayEnabled,
 } from "./oauth/config";
 import { registerAiOAuthRoutes } from "./oauth/routes";
+import { registerAiRestRoutes } from "./rest";
 
 /**
  * Register every externally reachable AI Gateway route in one place.
  * The feature flag defaults off, so merging the code alone cannot expose
- * OAuth or MCP endpoints in production.
+ * OAuth, MCP, REST, or OpenAPI endpoints in production.
  */
 export function registerAiGatewayRoutes(app: Express): boolean {
   if (!isAiGatewayEnabled()) {
@@ -19,6 +20,7 @@ export function registerAiGatewayRoutes(app: Express): boolean {
   assertAiGatewayConfiguration();
   registerAiOAuthRoutes(app);
   registerAiMcpRoute(app);
-  console.log("[ai-gateway] OAuth + MCP routes registered");
+  registerAiRestRoutes(app);
+  console.log("[ai-gateway] OAuth + MCP + REST/OpenAPI routes registered");
   return true;
 }
