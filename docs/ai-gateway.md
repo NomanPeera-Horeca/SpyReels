@@ -109,10 +109,13 @@ The AI Gateway implements an OAuth authorization-code flow with:
 - refresh-family revocation when token reuse is detected
 - exact redirect URI matching
 - dedicated access-token signing secret
-- explicit `spyreels:read` scope
+- explicit `spyreels:read` resource scope
+- `offline_access` refresh-continuity scope for long-lived AI-host connections
 - RFC 9728 protected-resource metadata
 - authorization-server metadata
 - RFC 9207-style `iss` parameter on authorization responses
+
+`offline_access` grants no additional SpyReels tool/data permission. It only allows compatible hosts to request refresh-token continuity.
 
 OAuth endpoints:
 
@@ -200,26 +203,51 @@ Server analytics can report product activity by ChatGPT, Claude, Copilot, Gemini
 
 1. Develop only on `feature/spyreels-ai-gateway-v1` until approved.
 2. Keep the first tools read-only except for normal SpyReels usage accounting.
-3. Keep `SPYREELS_AI_GATEWAY_ENABLED` off until schema migration and validation are complete.
-4. Do not deploy or merge without explicit approval.
+3. Keep `SPYREELS_AI_GATEWAY_ENABLED` off until explicit activation approval.
+4. Do not merge or enable without explicit approval.
 5. Reuse existing SpyReels services and entitlements instead of parallel business logic.
-6. Add platform-specific distribution metadata only after the canonical OAuth + MCP + REST/OpenAPI paths validate independently.
+6. Platform-specific distribution stays a thin configuration layer over the same gateway.
 7. Never put browser cookie secrets, Stripe identifiers, provider API keys, or database credentials into AI-host credentials.
 
 ## Current validation status
 
-The implementation is still a release candidate, not production-enabled. GitHub-hosted CI has recently failed before executing any steps because no runner was assigned (`runner_id: 0`, empty runner name, zero steps). Treat that as infrastructure failure, not as a passing or failing code result.
+The release candidate has completed the canonical transport and real-persistence gates.
 
-Before enabling the flag, we still require a real typecheck/test run plus an end-to-end OAuth + MCP + REST smoke test against an isolated environment.
+Validated checkpoints include:
 
-## Distribution sequence after transport validation
+- isolated OAuth/MCP/REST E2E
+- real-socket OAuth/MCP/REST network smoke
+- OAuth/OpenAPI/registry/crypto focused tests
+- migration contract tests
+- production MySQL migration/idempotence verification
+- production real-persistence OAuth smoke
+- PKCE failure safety
+- refresh persistence and rotation
+- MCP and REST account usage against real persistence
+- plan-limit rejection before expensive provider execution
+- trusted source attribution
+- complete cleanup with production users unchanged
 
-Once the isolated smoke test passes, distribution work should happen as thin adapters over the same gateway rather than new platform-specific backends:
+See `docs/ai-gateway-validation.md` for exact evidence.
 
-1. ChatGPT / OpenAI connector metadata against Remote MCP.
-2. Claude remote MCP connection instructions/metadata.
-3. Microsoft Copilot connector or agent metadata, using MCP when supported and REST/OpenAPI otherwise.
-4. Gemini / Google agent integration, using the same OAuth account connection and REST/OpenAPI contract when MCP is not the preferred transport.
-5. Perplexity and other hosts through MCP or REST depending on their supported connector model.
+The production gateway itself remains intentionally disabled. The remaining release work is final test/review, secret/issuer configuration, exact platform client/callback registration where required, and private ChatGPT/Claude connection tests after explicit activation approval.
 
-No adapter may bypass SpyReels OAuth, plan limits, usage accounting, source attribution, or the canonical tool registry.
+## ChatGPT and Claude distribution
+
+The distribution runbook is `docs/ai-gateway-distribution.md`.
+
+Canonical endpoint:
+
+```text
+https://spyreels.ai/api/ai/mcp
+```
+
+Prepared OAuth scopes:
+
+```text
+spyreels:read offline_access
+```
+
+Platform callback/client values are never guessed. During private platform setup, capture the values actually supplied by ChatGPT or Claude and register exact redirect URIs when a pre-provisioned database client is required. Modern HTTPS CIMD clients remain supported.
+
+No platform adapter may bypass SpyReels OAuth, plan limits, usage accounting, source attribution, or the canonical tool registry.
