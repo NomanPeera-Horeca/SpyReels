@@ -4,6 +4,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { UpgradeProvider } from "@/components/UpgradeSidesheet";
 import OnboardingGate from "@/components/OnboardingGate";
 import { Route, Switch, Redirect, useLocation } from "wouter";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { isAdminPanelClient } from "@/admin/isAdminClient";
 import { isDiscoveryV1Enabled } from "@/lib/featureFlags";
 import { lazyWithRetry } from "@/lib/lazyWithRetry";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -121,6 +123,24 @@ const VideoBrollUploadTest = lazyWithRetry(
 
 const MobileMore = lazyWithRetry(() => import("./pages/MobileMore"));
 
+function AdminOnlyFeature({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (!isAdminPanelClient(user)) {
+    return <NotFound />;
+  }
+
+  return <>{children}</>;
+}
+
 function MobileCreateRouteGuard({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   if (!isMobileCreateAllowedPath(location)) {
@@ -196,13 +216,31 @@ function DesktopDashboardRouter() {
           <Route path="/ideas">{() => <Redirect to="/studio" />}</Route>
           <Route path="/plan" component={ThirtyDayPlan} />
           <Route path="/studio" component={AiCoach} />
-          <Route path="/carousels/library" component={CarouselLibrary} />
-          <Route path="/carousels" component={Carousels} />
-          <Route path="/carousel-library">
-            <Redirect to="/carousels/library" />
+          <Route path="/carousels/library">
+            <AdminOnlyFeature>
+              <CarouselLibrary />
+            </AdminOnlyFeature>
           </Route>
-          <Route path="/broll-library" component={BrollLibrary} />
-          <Route path="/video-broll-upload-test" component={VideoBrollUploadTest} />
+          <Route path="/carousels">
+            <AdminOnlyFeature>
+              <Carousels />
+            </AdminOnlyFeature>
+          </Route>
+          <Route path="/carousel-library">
+            <AdminOnlyFeature>
+              <Redirect to="/carousels/library" />
+            </AdminOnlyFeature>
+          </Route>
+          <Route path="/broll-library">
+            <AdminOnlyFeature>
+              <BrollLibrary />
+            </AdminOnlyFeature>
+          </Route>
+          <Route path="/video-broll-upload-test">
+            <AdminOnlyFeature>
+              <VideoBrollUploadTest />
+            </AdminOnlyFeature>
+          </Route>
           <Route path="/paste" component={PasteScript} />
           <Route path="/history" component={History} />
           <Route path="/settings" component={Settings} />
@@ -290,7 +328,11 @@ function Router() {
         <Route path="/free-tools/tiktok-viral-video-finder" component={TikTokViralVideoFinder} />
         <Route path="/free-tools/youtube-shorts-viral-finder" component={YouTubeShortsViralFinder} />
         {/* THROWAWAY: carousel remake visual proof. Remove with DevCarouselPreview. */}
-        <Route path="/dev/carousel-preview" component={DevCarouselPreview} />
+        <Route path="/dev/carousel-preview">
+          <AdminOnlyFeature>
+            <DevCarouselPreview />
+          </AdminOnlyFeature>
+        </Route>
         {/* THROWAWAY: remake workspace visual proof. Remove with DevRemakeWorkspacePreview. */}
         <Route path="/dev/remake-workspace" component={DevRemakeWorkspacePreview} />
         {/* THROWAWAY: Viral Posts visual proof. Remove with DevViralPostsPreview. */}
@@ -324,20 +366,26 @@ function Router() {
         </Route>
         {/* Focused Carousel editor: full-bleed, belongs to /carousels. */}
         <Route path="/carousels/new">
-          <OnboardingGate>
-            <CarouselEditor />
-          </OnboardingGate>
+          <AdminOnlyFeature>
+            <OnboardingGate>
+              <CarouselEditor />
+            </OnboardingGate>
+          </AdminOnlyFeature>
         </Route>
         <Route path="/carousels/:remakeId/edit">
-          <OnboardingGate>
-            <CarouselEditor />
-          </OnboardingGate>
+          <AdminOnlyFeature>
+            <OnboardingGate>
+              <CarouselEditor />
+            </OnboardingGate>
+          </AdminOnlyFeature>
         </Route>
         {/* Legacy Studio URL: redirect into the Carousels product. */}
         <Route path="/carousel-studio">
-          <OnboardingGate>
-            <CarouselStudio />
-          </OnboardingGate>
+          <AdminOnlyFeature>
+            <OnboardingGate>
+              <CarouselStudio />
+            </OnboardingGate>
+          </AdminOnlyFeature>
         </Route>
         {/* Everything else goes through DashboardLayout (which shows landing page if not auth'd) */}
         <Route>
