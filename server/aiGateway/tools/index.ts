@@ -21,7 +21,8 @@ const handleSchema = z
   .trim()
   .min(1)
   .max(128)
-  .transform((value) => value.replace(/^@/, ""));
+  // Zod 4 overwrite preserves the string schema for MCP JSON Schema export.
+  .overwrite((value) => value.replace(/^@/, ""));
 
 export function createSpyReelsAiToolRegistry(): AiGatewayRegistry {
   const registry = new AiGatewayRegistry();
