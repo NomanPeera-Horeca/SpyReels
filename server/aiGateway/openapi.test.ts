@@ -1,10 +1,21 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// OpenAPI generation only needs the tool descriptors and schemas. Keep this
+// contract test isolated from Stripe runtime configuration so it can run in a
+// clean CI/validation environment without billing credentials.
+vi.mock("../stripe/stripe-service", () => ({
+  checkUsageLimit: vi.fn(),
+  incrementUsage: vi.fn(),
+  decrementUsage: vi.fn(),
+  getUserSubscription: vi.fn(),
+  getMonthlyUsage: vi.fn(),
+}));
+
 import {
   AI_GATEWAY_OPENAPI_PATH,
   AI_GATEWAY_REST_BASE_PATH,
   buildAiGatewayOpenApiDocument,
 } from "./openapi";
-
 
 describe("AI Gateway OpenAPI", () => {
   it("publishes the canonical read-only tool surface", () => {
