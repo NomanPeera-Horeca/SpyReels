@@ -70,7 +70,7 @@ This split is deliberate. It gives us a repeatable protocol-level release gate w
 
 ## Independent runner results
 
-Because GitHub Actions is currently failing before assigning a runner, the release candidate is also validated on isolated Render services with auto-deploy disabled and the AI Gateway production feature flag off.
+Because GitHub Actions had recently failed before assigning a runner, the release candidate was also validated on isolated Render services with auto-deploy disabled and the AI Gateway production feature flag off.
 
 Verified results:
 
@@ -78,22 +78,95 @@ Verified results:
 - real-socket OAuth -> token -> MCP -> REST network smoke: **PASS**, 1 test passed
 - network-smoke Render build then reran the isolated E2E harness: **PASS**, 2 tests passed
 - AI Gateway OpenAPI contract after isolating billing configuration: **PASS**, 2 tests passed
+- AI Gateway focused Render release gate: **PASS**, 8 test files / 26 tests
+- migration contract: **PASS**, verifies additive/idempotent schema and expected indexes/FKs
 - full Vitest suite on the feature branch: **1426 passed, 1 skipped, 1 failed**
 - the remaining full-suite failure is `shared/scriptDisplayTitle.test.ts`; both that test file and the implementation under test are identical to `main`, so it is a baseline repository failure outside the AI Gateway changes
 - `pnpm check` reaches an existing TypeScript error in `client/src/pages/DevRemakeWorkspacePreview.tsx` where `RemakeWorkspaceTarget.source` is missing; the same source exists on `main`, so it is also a baseline issue outside this branch
 
 The AI Gateway-specific failure found by the first full-suite run was `server/aiGateway/openapi.test.ts` eagerly loading Stripe configuration. That test isolation was fixed and independently rerun successfully.
 
-## Release gate
+## Production migration evidence
 
-Passing the isolated and real-socket harnesses is necessary but not sufficient to enable `SPYREELS_AI_GATEWAY_ENABLED` in production.
+The migration was then intentionally validated against the current production MySQL schema because the available staging schema was materially behind production.
 
-Before enabling the gateway we still require:
+Railway one-shot migration gate result:
 
-1. keep AI Gateway-focused tests green on an independent runner
-2. validate migration `drizzle/0096_ai_gateway_oauth.sql` in an isolated MySQL-compatible environment before any production schema change
-3. validate one non-production OAuth client/user against an environment with the real OAuth persistence tables
-4. confirm no production Stripe, Instagram, user, or PostHog side effects occur during validation
-5. review platform-specific distribution metadata/adapters only after the canonical transport and persistence paths are proven
+```text
+[ai-gateway-prod-db-gate] PRECHECK db='railway' users=541 existingAiTables=3
+[ai-gateway-prod-db-gate] migration applied twice successfully (idempotence PASS)
+[ai-gateway-prod-db-gate] PASS tables=3 indexes=9 foreignKeys=4 usersUnchanged=541
+```
 
-Do not merge, deploy to the real SpyReels service, or enable the production gateway flag until those remaining gates are complete.
+The production gate verifies:
+
+- the target host matches the explicitly configured production MySQL host token
+- an explicit production confirmation variable is present
+- the `users` table exists before migration
+- a MySQL advisory lock prevents concurrent gate execution
+- migration `0096_ai_gateway_oauth.sql` can be applied twice safely
+- all three OAuth tables exist
+- all nine expected indexes exist
+- all four expected foreign keys exist
+- the production user count is unchanged
+
+## Production persistence smoke evidence
+
+After the schema gate passed, a separate one-shot Railway service ran `scripts/ai-gateway-production-persistence-smoke.ts` against the real OAuth persistence tables.
+
+It used a temporary `isTestAccount=1` user and a temporary OAuth client, bound the test gateway to loopback only, disabled production PostHog credentials, prevented Stripe network usage, deliberately forced plan-limit rejection before any Instagram/provider call, and removed all temporary rows afterward.
+
+Railway result: **SUCCESS**.
+
+Runtime evidence:
+
+```text
+[ai-gateway-prod-smoke] PRECHECK db='railway' users=541
+[ai-gateway-prod-smoke] oauth_client PASS
+[ai-gateway-prod-smoke] pkce_wrong_verifier PASS
+[ai-gateway-prod-smoke] token_exchange PASS
+[ai-gateway-prod-smoke] refresh_persistence PASS
+[ai-gateway-prod-smoke] mcp_get_usage PASS
+[ai-gateway-prod-smoke] rest_get_usage PASS source=chatgpt
+[ai-gateway-prod-smoke] plan_limit PASS no_provider_call
+[ai-gateway-prod-smoke] refresh_rotation PASS
+[ai-gateway-prod-smoke] cleanup PASS testRows=0 usersBefore=541 usersAfter=541
+[ai-gateway-prod-smoke] PASS
+```
+
+This proves with real production persistence:
+
+- OAuth client persistence works
+- PKCE failure does not burn a valid authorization code
+- authorization-code exchange consumes the code exactly once
+- raw authorization codes are not persisted
+- raw refresh tokens are not persisted
+- refresh tokens persist, rotate, and revoke correctly
+- MCP and REST both authenticate against the same real OAuth data
+- `get_usage` reads real plan/usage persistence
+- trusted source attribution remains `chatgpt` even when a request Origin attempts to imply another source
+- plan-limit enforcement prevents the expensive provider path from running
+- cleanup removes the temporary OAuth/client/user/usage records
+- the production user count remains unchanged at 541
+
+## Distribution compatibility
+
+Release-prep added the standard `offline_access` OAuth scope for refresh-token continuity. It grants no additional SpyReels tool permission; `spyreels:read` remains the resource permission. ChatGPT/Claude distribution instructions are documented in `docs/ai-gateway-distribution.md`.
+
+The one-shot Railway migration and production-smoke services have watch patterns that do not match normal repository changes, so feature-branch commits no longer rerun production gates automatically.
+
+## Release gate status
+
+The canonical transport, schema, real OAuth persistence, plan enforcement, source attribution, refresh rotation, and cleanup gates are complete.
+
+Remaining before enabling `SPYREELS_AI_GATEWAY_ENABLED` on the real SpyReels web service:
+
+1. keep the AI Gateway feature branch reviewable against current `main`
+2. run the final focused tests after any release-prep compatibility changes
+3. configure a dedicated production `SPYREELS_AI_OAUTH_JWT_SECRET` separate from the browser-session `JWT_SECRET`
+4. configure `SPYREELS_AI_OAUTH_ISSUER=https://spyreels.ai`
+5. capture exact ChatGPT/Claude client identity and redirect/callback values during each platform's private connector setup when required
+6. perform one private ChatGPT connection/tool scan and one private Claude connector connection after intentional gateway activation
+7. verify real platform attribution and usage accounting before broader publication
+
+Do not merge PR #41 or enable the production gateway flag without explicit approval.
