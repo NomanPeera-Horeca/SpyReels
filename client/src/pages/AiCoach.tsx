@@ -883,6 +883,12 @@ export default function AiCoach() {
         description={description}
         onDescriptionChange={setDescription}
         onSubmit={handleSubmit}
+        onWriteIdea={(idea) => {
+          const trimmed = idea.trim();
+          if (!trimmed) return;
+          if (trimmed !== description.trim()) setDescription(trimmed);
+          beginWriteFlow(trimmed);
+        }}
         isBusy={isRouting || resolveIntentMutation.isPending || analyzeMutation.isPending}
         attachedContext={attachedContext}
         onClearPlanContext={clearPlanContext}

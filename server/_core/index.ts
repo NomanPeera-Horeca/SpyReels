@@ -22,6 +22,8 @@ import { startViralPostsPoolRefresher } from "../viralPosts/poolRefresh";
 import { expressAlertErrorHandler, alertOwnerThrottled } from "../monitoring/alerts";
 import { registerPublicScriptShareRoutes } from "../publicScriptShareRoute";
 import { registerCarouselExportImageProxy } from "../carousel/exportImageProxyRoute";
+import { registerFilmingReminderRoutes } from "../filmingReminderRoute";
+import { registerContentAgentRunRoutes } from "../contentAgentRunRoute";
 import { localObjectStorageDir } from "../storage";
 import { BLOG_SLUG_REDIRECTS } from "@shared/blogRedirects";
 
@@ -105,6 +107,11 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
+  // Agent filming reminders use the authenticated workspace context and are
+  // intentionally separate from publishing calendar fields.
+  registerFilmingReminderRoutes(app);
+  // Durable Agent runs keep multi-step work recoverable across refreshes.
+  registerContentAgentRunRoutes(app);
   // Extension REST API (for Chrome extension)
   app.use("/api/extension", createExtensionRouter());
   app.use("/api/ext", createExtensionRouter());

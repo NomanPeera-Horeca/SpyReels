@@ -53,6 +53,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { CoachScriptFeedback } from "@/components/CoachScriptFeedback";
 import { buildCarouselGenerateHref } from "@/components/carousel-studio/carouselsHub";
+import { ContentAgentConversation } from "@/components/content-agent/ContentAgentConversation";
+import { useAiCoachResultAgentController } from "@/hooks/useAiCoachResultAgentController";
 
 export type CoachResultScript = {
   id: number;
@@ -126,18 +128,6 @@ type InlineProposal = {
   previousDraft: AiCoachEditDraft;
 };
 
-type AgentTurn = {
-  id: number;
-  role: "user" | "agent";
-  kind: "text" | "action";
-  text: string;
-  detail?: string;
-};
-
-type ScheduleResolution =
-  | { ok: true; date: Date; time: string; label: string }
-  | { ok: false; question: string };
-
 function platformLabel(platform: string): string {
   if (platform === "both") return "Instagram Reels + TikTok";
   if (platform === "instagram") return "Instagram Reels";
@@ -195,81 +185,6 @@ function diffText(before: string, after: string) {
   };
 }
 
-function nextWeekday(base: Date, weekday: number): Date {
-  const next = new Date(base);
-  const delta = (weekday - base.getDay() + 7) % 7 || 7;
-  next.setDate(base.getDate() + delta);
-  return next;
-}
-
-function resolveFilmingSchedule(input: string): ScheduleResolution {
-  const text = input.trim().toLowerCase();
-  const now = new Date();
-  let date: Date | null = null;
-
-  if (/\btoday\b/.test(text)) date = new Date(now);
-  if (/\btomorrow\b/.test(text)) {
-    date = new Date(now);
-    date.setDate(date.getDate() + 1);
-  }
-
-  const weekdays: Record<string, number> = {
-    sunday: 0,
-    monday: 1,
-    tuesday: 2,
-    wednesday: 3,
-    thursday: 4,
-    friday: 5,
-    saturday: 6,
-  };
-  for (const [name, day] of Object.entries(weekdays)) {
-    if (new RegExp(`\\b${name}\\b`).test(text)) {
-      date = nextWeekday(now, day);
-      break;
-    }
-  }
-
-  let hour: number | null = null;
-  let minute = 0;
-  const explicit = text.match(/\b(1[0-2]|0?[1-9])(?::([0-5]\d))?\s*(am|pm)\b/);
-  if (explicit) {
-    hour = Number(explicit[1]);
-    minute = Number(explicit[2] ?? 0);
-    if (explicit[3] === "pm" && hour !== 12) hour += 12;
-    if (explicit[3] === "am" && hour === 12) hour = 0;
-  } else if (/\bmorning\b/.test(text)) {
-    hour = 9;
-  } else if (/\bafter lunch\b/.test(text)) {
-    hour = 13;
-  } else if (/\blunch\b/.test(text)) {
-    hour = 12;
-  } else if (/\bafternoon\b/.test(text)) {
-    hour = 15;
-  } else if (/\bevening\b/.test(text)) {
-    hour = 19;
-  } else {
-    const ambiguous = text.match(/\bat\s+(1[0-2]|0?[1-9])(?::([0-5]\d))?\b/);
-    if (ambiguous) {
-      return { ok: false, question: `Do you mean ${ambiguous[1]} AM or ${ambiguous[1]} PM?` };
-    }
-  }
-
-  if (!date && hour == null) return { ok: false, question: "When do you want to film this Reel?" };
-  if (!date) return { ok: false, question: "Which day do you want to film it?" };
-  if (hour == null) return { ok: false, question: "What time should I remind you to film it?" };
-
-  date.setHours(hour, minute, 0, 0);
-  const time = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-  const label = date.toLocaleString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-  return { ok: true, date, time, label };
-}
-
 function safeFileName(value: string): string {
   return value
     .toLowerCase()
@@ -283,9 +198,6 @@ export function AiCoachResultView({
   editMode,
   editDraft,
   onEditDraftChange,
-  refineInput,
-  onRefineInputChange,
-  onRefine,
   onReset,
   onToggleEdit,
   onSaveEdits,
@@ -296,13 +208,9 @@ export function AiCoachResultView({
   onApplyHookVariation,
   refinePending,
   savePending,
-  scheduleSave,
   onSaveToMyScripts,
   saveToMyScriptsPending,
   savedScriptId,
-  onOpenMyScripts,
-  onFilmNow,
-  filmNowPending,
   previewMode = false,
   onFixWeakest,
   onRefineWithInstruction,
@@ -310,21 +218,12 @@ export function AiCoachResultView({
   const [, setLocation] = useLocation();
   const artifactRef = useRef<HTMLDivElement>(null);
   const selectionEditorRef = useRef<HTMLDivElement>(null);
-  const composerRef = useRef<HTMLTextAreaElement>(null);
-  const scheduleSaveRef = useRef(scheduleSave);
-  scheduleSaveRef.current = scheduleSave;
-  const turnIdRef = useRef(1);
   const pendingInlineRef = useRef<{
     selection: SelectedText;
     beforeSection: string;
     previousDraft: AiCoachEditDraft;
     sawPending: boolean;
   } | null>(null);
-  const pendingAgentRefineRef = useRef<{ label: string; signature: string; sawPending: boolean } | null>(null);
-  const pendingSaveRef = useRef(false);
-  const sawSavePendingRef = useRef(false);
-  const pendingScheduleRef = useRef<string | null>(null);
-  const sawSchedulePendingRef = useRef(false);
 
   const [filmHelpOpen, setFilmHelpOpen] = useState(false);
   const [workOpen, setWorkOpen] = useState(false);
@@ -340,10 +239,6 @@ export function AiCoachResultView({
   const [selectionInstruction, setSelectionInstruction] = useState("");
   const [inlineProposal, setInlineProposal] = useState<InlineProposal | null>(null);
   const [undoDraft, setUndoDraft] = useState<AiCoachEditDraft | null>(null);
-  const [agentInput, setAgentInput] = useState("");
-  const [agentBusy, setAgentBusy] = useState(false);
-  const [scheduleMode, setScheduleMode] = useState(false);
-  const [turns, setTurns] = useState<AgentTurn[]>([]);
 
   const production = parseProductionNotes(result.productionNotes);
   const health = mapCoachJudgeToHealth(production?.coachJudge);
@@ -372,14 +267,6 @@ export function AiCoachResultView({
     return result[section];
   };
 
-  const appendTurn = (role: "user" | "agent", text: string) => {
-    setTurns((prev) => [...prev, { id: turnIdRef.current++, role, kind: "text", text }]);
-  };
-
-  const appendAction = (text: string, detail?: string) => {
-    setTurns((prev) => [...prev, { id: turnIdRef.current++, role: "agent", kind: "action", text, detail }]);
-  };
-
   useEffect(() => {
     const plan = hookOptionsArrivalPlan(hookVariations);
     setSelectedHookOptionIndex(plan.selectedIndex);
@@ -400,7 +287,6 @@ export function AiCoachResultView({
 
     const afterSection = sectionValue(pending.selection.section);
     pendingInlineRef.current = null;
-    setAgentBusy(false);
     setSelectionEditing(false);
     setSelectedText(null);
     setSelectionInstruction("");
@@ -414,46 +300,6 @@ export function AiCoachResultView({
       });
     }
   }, [refinePending, signature]);
-
-  useEffect(() => {
-    const pending = pendingAgentRefineRef.current;
-    if (!pending) return;
-    if (refinePending) {
-      pending.sawPending = true;
-      return;
-    }
-    if (!pending.sawPending) return;
-    pendingAgentRefineRef.current = null;
-    setAgentBusy(false);
-    if (signature !== pending.signature) appendAction(pending.label, "The current Reel has been updated.");
-  }, [refinePending, signature]);
-
-  useEffect(() => {
-    if (!pendingSaveRef.current) return;
-    if (saveToMyScriptsPending) {
-      sawSavePendingRef.current = true;
-      return;
-    }
-    if (!sawSavePendingRef.current) return;
-    pendingSaveRef.current = false;
-    sawSavePendingRef.current = false;
-    setAgentBusy(false);
-    if (savedScriptId != null) appendAction("Saved to My Scripts", "This Reel is now in your script library.");
-  }, [saveToMyScriptsPending, savedScriptId]);
-
-  useEffect(() => {
-    if (!pendingScheduleRef.current || !scheduleSave) return;
-    if (scheduleSave.isSaving) {
-      sawSchedulePendingRef.current = true;
-      return;
-    }
-    if (!sawSchedulePendingRef.current) return;
-    const label = pendingScheduleRef.current;
-    pendingScheduleRef.current = null;
-    sawSchedulePendingRef.current = false;
-    setAgentBusy(false);
-    appendAction("Filming reminder set", label);
-  }, [scheduleSave?.isSaving, savedScriptId]);
 
   useEffect(() => {
     if (!undoDraft) return;
@@ -563,10 +409,10 @@ export function AiCoachResultView({
       });
       const blob = await docx.Packer.toBlob(document);
       saveAs(blob, `${safeFileName(result.title)}-spyreels.docx`);
-      appendAction("Downloaded branded script", "SpyReels header, clean script layout, filming notes, and a subtle footer.");
     } catch (error) {
       console.error(error);
       toast.error("Could not download script");
+      throw error;
     } finally {
       setDownloadPending(false);
     }
@@ -641,7 +487,6 @@ export function AiCoachResultView({
       previousDraft: currentDraft,
       sawPending: false,
     };
-    setAgentBusy(true);
     const sectionLabel = selectedText.section === "hook" ? "hook" : "spoken script";
     onRefineWithInstruction(
       `Change only this exact selected text in the ${sectionLabel}: "${selectedText.text}". Instruction: ${selectionInstruction.trim()}. Keep every other word in every other section unchanged.`
@@ -650,56 +495,19 @@ export function AiCoachResultView({
 
   const acceptInlineProposal = () => {
     setInlineProposal(null);
-    appendAction("Selected text updated", "Only the requested wording changed.");
+    toast.success("Selected text updated");
   };
 
   const undoInlineProposal = () => {
     if (!inlineProposal) return;
     setUndoDraft(inlineProposal.previousDraft);
     onEditDraftChange(inlineProposal.previousDraft);
-    appendAction("Change undone", "The previous wording was restored.");
+    toast.message("Change undone");
   };
 
-  const runRefine = (instruction: string, label: string) => {
+  const runRefine = (instruction: string) => {
     if (!onRefineWithInstruction || refinePending) return;
-    pendingAgentRefineRef.current = { label, signature, sawPending: false };
-    setAgentBusy(true);
     onRefineWithInstruction(instruction);
-  };
-
-  const saveScript = () => {
-    if (savedScriptId != null) {
-      appendAction("Already saved", "This Reel is already in My Scripts.");
-      return;
-    }
-    if (!onSaveToMyScripts || saveToMyScriptsPending) return;
-    pendingSaveRef.current = true;
-    sawSavePendingRef.current = false;
-    setAgentBusy(true);
-    onSaveToMyScripts();
-  };
-
-  const scheduleFilming = (input: string) => {
-    if (!scheduleSave) {
-      appendTurn("agent", "Filming reminders are not available for this Reel yet.");
-      return;
-    }
-    const resolution = resolveFilmingSchedule(input);
-    if (!resolution.ok) {
-      appendTurn("agent", resolution.question);
-      setScheduleMode(true);
-      window.setTimeout(() => composerRef.current?.focus(), 0);
-      return;
-    }
-    scheduleSave.onPostDateChange(resolution.date);
-    scheduleSave.onPostTimeChange(resolution.time);
-    pendingScheduleRef.current = resolution.label;
-    sawSchedulePendingRef.current = false;
-    setAgentBusy(true);
-    setScheduleMode(false);
-    window.setTimeout(() => {
-      scheduleSaveRef.current?.onSave(true, { caption: "", hashtags: [] });
-    }, 0);
   };
 
   const turnIntoCarousel = () => {
@@ -714,76 +522,29 @@ export function AiCoachResultView({
     setLocation(buildCarouselGenerateHref(text));
   };
 
-  const routeAgentInput = (raw: string) => {
-    const input = raw.trim();
-    if (!input || agentBusy) return;
-    appendTurn("user", input);
-    setAgentInput("");
-
-    if (scheduleMode) {
-      scheduleFilming(input);
-      return;
-    }
-
-    const lower = input.toLowerCase();
-    if (/\bsave\b/.test(lower)) {
-      saveScript();
-      return;
-    }
-    if (/\b(download|export)\b/.test(lower)) {
-      void downloadBrandedScript();
-      return;
-    }
-    if (/\b(schedule|remind)\b/.test(lower) || /\bfilm\b/.test(lower) && /\b(today|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday|am|pm|morning|afternoon|evening)\b/.test(lower)) {
-      scheduleFilming(input);
-      return;
-    }
-    if (/\bcarousel\b/.test(lower)) {
-      appendAction("Opening Carousel Studio", "Your current Reel is being carried over as the source.");
-      window.setTimeout(turnIntoCarousel, 250);
-      return;
-    }
-    if (/\bhook options?\b/.test(lower)) {
-      setHookOptionsOpen(true);
-      if (!hookVariations?.length && !hookVariationsPending) onRequestHookVariations();
-      return;
-    }
-    if (/\bscript health\b/.test(lower)) {
-      setHealthOpen(true);
-      return;
-    }
-    if (/\bshort(er|en)?\b/.test(lower)) {
-      runRefine("Shorten the full script while keeping the same idea, strongest proof, and ending. Cut filler only.", "Reel shortened");
-      return;
-    }
-    if (/\b(fun(ny|nier)|humor)\b/.test(lower)) {
-      runRefine("Make the script funnier without changing the core point, facts, or useful takeaway.", "Tone updated");
-      return;
-    }
-    if (/\b(viral|stronger hook|strong hook)\b/.test(lower)) {
-      runRefine("Make this more viral with a stronger hook, tighter pacing, and clearer payoff. Keep the same idea and facts.", "Reel strengthened");
-      return;
-    }
-    if (/\bsimpl(if|ify|er)\b/.test(lower)) {
-      runRefine("Simplify the language. Use shorter sentences and easier words without removing the useful detail.", "Reel simplified");
-      return;
-    }
-    if (/\bchange niche\b/.test(lower) || /\badapt (this )?(for|to)\b/.test(lower)) {
-      runRefine(input, "Niche adapted");
-      return;
-    }
-    if (onRefineWithInstruction) {
-      runRefine(input, "Reel updated");
-      return;
-    }
-    onRefineInputChange(input);
-    window.setTimeout(onRefine, 0);
-  };
-
   const openHookOptions = () => {
     setHookOptionsOpen(true);
     if (!hookVariations?.length && !hookVariationsPending) onRequestHookVariations();
   };
+
+  const agent = useAiCoachResultAgentController({
+    scriptId: result.id,
+    title: result.title,
+    signature,
+    refinePending,
+    onRefineWithInstruction,
+    hookVariations,
+    hookVariationsPending,
+    onRequestHookVariations,
+    onOpenHookOptions: openHookOptions,
+    savedScriptId,
+    savePending: saveToMyScriptsPending,
+    onSaveToMyScripts,
+    onOpenCarousel: turnIntoCarousel,
+    onDownload: downloadBrandedScript,
+    onOpenHealth: () => setHealthOpen(true),
+    onNewScript: onReset,
+  });
 
   const renderSectionText = (section: SectionKey, value: string, className: string) => {
     const proposal = inlineProposal?.section === section ? inlineProposal : null;
@@ -864,14 +625,21 @@ export function AiCoachResultView({
               )}
 
               <span className="text-xs text-muted-foreground">
-                {savedScriptId ? "Saved" : scheduleSave?.isSaving ? "Saving reminder..." : "Ready to film"}
+                {savedScriptId ? "Saved" : "Ready to film"}
               </span>
 
               <div className="ml-auto flex items-center gap-1">
                 <button type="button" onClick={() => void copyScript()} title="Copy script" aria-label="Copy script" className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground">
                   {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
                 </button>
-                <button type="button" onClick={() => void downloadBrandedScript()} disabled={downloadPending} title="Download branded script" aria-label="Download branded script" className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50">
+                <button
+                  type="button"
+                  onClick={() => void agent.runButton("download_script", { scriptId: result.id })}
+                  disabled={downloadPending || agent.working}
+                  title="Download branded script"
+                  aria-label="Download branded script"
+                  className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+                >
                   {downloadPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                 </button>
                 <button type="button" onClick={() => setExpanded((value) => !value)} title={expanded ? "Exit expanded view" : "Expand script"} aria-label={expanded ? "Exit expanded view" : "Expand script"} className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground">
@@ -882,12 +650,12 @@ export function AiCoachResultView({
                     <button type="button" aria-label="More actions" className="grid h-9 w-9 place-items-center rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground"><MoreHorizontal className="h-4 w-4" /></button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-52">
-                    <DropdownMenuItem onSelect={saveScript}>Save to My Scripts</DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => scheduleFilming("")}>Schedule filming</DropdownMenuItem>
-                    <DropdownMenuItem onSelect={turnIntoCarousel}>Turn into carousel</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => void agent.runButton("save_script", { scriptId: result.id })}>Save to My Scripts</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => void agent.runButton("schedule_filming", { scriptId: result.id })}>Schedule filming</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => void agent.runButton("create_carousel", { scriptId: result.id })}>Turn into carousel</DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onSelect={openHookOptions}>Hook options</DropdownMenuItem>
-                    <DropdownMenuItem onSelect={() => setHealthOpen(true)}>Script health</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => void agent.runButton("generate_hook_ideas", { scriptId: result.id })}>Hook options</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => void agent.runButton("inspect_script_health", { scriptId: result.id })}>Script health</DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem onSelect={onReset}>New script</DropdownMenuItem>
                   </DropdownMenuContent>
@@ -994,46 +762,30 @@ export function AiCoachResultView({
 
         {!previewMode ? (
           <>
-            <div className="mt-7 space-y-3">
-              {turns.map((turn) => turn.role === "user" ? (
-                <div key={turn.id} className="ml-auto w-fit max-w-[80%] rounded-2xl rounded-br-md border border-violet-500/20 bg-violet-500/10 px-4 py-2.5 text-sm text-foreground">{turn.text}</div>
-              ) : turn.kind === "action" ? (
-                <div key={turn.id} className="max-w-[520px] rounded-xl border border-border/70 bg-card/50 px-4 py-3">
-                  <p className="text-sm font-medium text-foreground"><span className="mr-2 text-emerald-500">✓</span>{turn.text}</p>
-                  {turn.detail ? <p className="mt-1 text-xs text-muted-foreground">{turn.detail}</p> : null}
-                </div>
-              ) : (
-                <p key={turn.id} className="max-w-[620px] text-sm leading-relaxed text-foreground/85">{turn.text}</p>
-              ))}
-              {agentBusy ? <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin text-violet-500" /> Agent is working...</div> : null}
-            </div>
-
             <div className="mt-5 flex flex-wrap gap-2">
-              <button type="button" onClick={() => routeAgentInput("Make it 30% shorter")} className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">Shorter</button>
-              <button type="button" onClick={() => routeAgentInput("Make the hook stronger") } className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">Stronger hook</button>
-              <button type="button" onClick={() => routeAgentInput("Make it funnier without changing the point") } className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">Funnier</button>
-              <button type="button" onClick={() => routeAgentInput("Simplify the language") } className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">Simplify</button>
-              <button type="button" onClick={() => { setAgentInput("Adapt this for "); window.setTimeout(() => composerRef.current?.focus(), 0); }} className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">Change niche</button>
+              <button type="button" onClick={() => void agent.sendMessage("Make it 30% shorter")} disabled={agent.working} className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50">Shorter</button>
+              <button type="button" onClick={() => void agent.sendMessage("Make the hook stronger")} disabled={agent.working} className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50">Stronger hook</button>
+              <button type="button" onClick={() => void agent.sendMessage("Make it funnier without changing the point")} disabled={agent.working} className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50">Funnier</button>
+              <button type="button" onClick={() => void agent.sendMessage("Simplify the language")} disabled={agent.working} className="rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50">Simplify</button>
             </div>
 
-            <div className="sticky bottom-3 z-20 mt-4 rounded-2xl border border-border/90 bg-card/95 p-2 shadow-[0_18px_70px_rgba(0,0,0,0.24)] backdrop-blur-xl">
-              <Textarea
-                ref={composerRef}
-                value={agentInput}
-                onChange={(e) => setAgentInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key !== "Enter" || e.shiftKey || e.nativeEvent.isComposing) return;
-                  e.preventDefault();
-                  routeAgentInput(agentInput);
-                }}
-                placeholder={scheduleMode ? "Tell Agent when you want to film it..." : "Ask Agent anything: rewrite a section, change the niche, shorten it, or turn it into a carousel..."}
-                className="min-h-[70px] resize-none border-0 bg-transparent px-3 py-3 text-sm shadow-none focus-visible:ring-0"
-              />
-              <div className="flex items-center justify-between gap-3 px-2 pb-1">
-                <span className="text-[11px] text-muted-foreground">Agent keeps the current Reel and context.</span>
-                <button type="button" onClick={() => routeAgentInput(agentInput)} disabled={!agentInput.trim() || agentBusy} className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-violet-600 px-3 text-xs font-semibold text-white disabled:opacity-40">Send <Send className="h-3.5 w-3.5" /></button>
-              </div>
-            </div>
+            <ContentAgentConversation
+              turns={agent.turns}
+              artifactContext={{
+                kind: "reel",
+                id: result.id,
+                title: result.title,
+                duration: result.estimatedDuration,
+                platform: platformLabel(result.platform),
+              }}
+              working={agent.working}
+              workingLabel={agent.workingLabel}
+              workDurationSeconds={agent.workDurationSeconds}
+              placeholder={agent.placeholder}
+              onSend={agent.sendMessage}
+              disabled={refinePending || Boolean(saveToMyScriptsPending)}
+              className="mt-1 min-h-0 px-0 pb-0"
+            />
 
             <div className="mt-6"><CoachScriptFeedback coachScriptId={result.id} /></div>
           </>
@@ -1070,8 +822,8 @@ export function AiCoachResultView({
               onFixWeakest={onFixWeakest}
               fixPending={refinePending}
               onEditManually={onToggleEdit}
-              onShorten={onRefineWithInstruction ? () => runRefine("Shorten the full script while keeping the same idea and strongest proof.", "Reel shortened") : undefined}
-              onMakeViral={onRefineWithInstruction ? () => runRefine("Make this more viral with a stronger hook, tighter pacing, and clearer payoff. Keep the same idea and facts.", "Reel strengthened") : undefined}
+              onShorten={onRefineWithInstruction ? () => runRefine("Shorten the full script while keeping the same idea and strongest proof.") : undefined}
+              onMakeViral={onRefineWithInstruction ? () => runRefine("Make this more viral with a stronger hook, tighter pacing, and clearer payoff. Keep the same idea and facts.") : undefined}
               onCopy={() => void copyScript()}
             />
           </div>

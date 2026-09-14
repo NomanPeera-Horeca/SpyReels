@@ -1,4 +1,5 @@
 import {
+  CONTENT_AGENT_TOOL_REGISTRY,
   buildCoachIntentClassifierPrompt,
   parseLlmCoachAction,
   resolveCoachIntentRules,
@@ -27,12 +28,12 @@ export async function resolveCoachIntent(
         {
           role: "system",
           content: withAiFormattingRules(
-            "You classify creator intent for an AI script coach. Return only valid JSON."
+            "You route creator requests for SpyReels Agent. Choose only from the provided tool registry and return valid JSON."
           ),
         },
         {
           role: "user",
-          content: buildCoachIntentClassifierPrompt(input.message),
+          content: buildCoachIntentClassifierPrompt(input),
         },
       ],
       response_format: { type: "json_object" },
@@ -42,9 +43,17 @@ export async function resolveCoachIntent(
     const parsed = parseLlmJson<Record<string, unknown>>(raw, {});
     const llmAction = parseLlmCoachAction(JSON.stringify(parsed));
     if (llmAction) {
+      const scriptId =
+        llmAction.scriptId ?? input.activeScriptId ?? input.recentScriptId ?? undefined;
+      const toolDefinition = CONTENT_AGENT_TOOL_REGISTRY[llmAction.tool];
+
+      if (toolDefinition.requiresScript && !scriptId) {
+        return ruleAction;
+      }
+
       return {
         ...llmAction,
-        scriptId: llmAction.scriptId ?? input.activeScriptId ?? input.recentScriptId ?? undefined,
+        scriptId,
         planCardId: llmAction.planCardId ?? input.attachedPlanCardId ?? undefined,
       };
     }
