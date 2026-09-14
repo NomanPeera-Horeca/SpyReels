@@ -49,10 +49,22 @@ export function RemakeWorkspaceDialog(props: Props) {
   }, [props.open]);
 
   useEffect(() => {
-    if (teleprompterScriptId == null || !teleprompterQuery.isError) return;
-    toast.error("Could not open teleprompter");
-    setTeleprompterScriptId(null);
-  }, [teleprompterQuery.isError, teleprompterScriptId]);
+    if (teleprompterScriptId == null) return;
+    if (teleprompterQuery.isError) {
+      toast.error("Could not open teleprompter");
+      setTeleprompterScriptId(null);
+      return;
+    }
+    if (teleprompterQuery.isSuccess && !teleprompterScript) {
+      toast.error("This script is empty");
+      setTeleprompterScriptId(null);
+    }
+  }, [
+    teleprompterQuery.isError,
+    teleprompterQuery.isSuccess,
+    teleprompterScript,
+    teleprompterScriptId,
+  ]);
 
   return (
     <>
@@ -63,9 +75,10 @@ export function RemakeWorkspaceDialog(props: Props) {
         }}
       />
 
-      {teleprompterScriptId != null && teleprompterScript ? (
+      {teleprompterScriptId != null ? (
         <ExclusiveTeleprompterSurface
-          script={teleprompterScript}
+          script={teleprompterScript || null}
+          loading={teleprompterQuery.isPending || teleprompterQuery.isFetching}
           onClose={() => setTeleprompterScriptId(null)}
         />
       ) : null}
