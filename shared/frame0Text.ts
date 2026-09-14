@@ -58,8 +58,6 @@ function cleanScriptOpening(script: string): string {
     .replace(/\s+/g, " ")
     .trim();
 
-  // Strip chained spoken-language setup such as
-  // “Hey Leo, I think I just found you ...” without touching the actual claim.
   let changed = true;
   while (changed) {
     const before = value;
@@ -100,13 +98,19 @@ function sentenceLikeOpening(value: string): string {
   return (match?.[1] ?? value).trim();
 }
 
+function cleanSubject(value: string): string {
+  return value
+    .replace(/^(?:did you know|fun fact|fact|here'?s why)[:\s-]*/i, "")
+    .replace(/^[,.:;!?\s]+|[,.:;!?\s]+$/g, "")
+    .trim();
+}
+
 /**
- * Frame 0 Text Blueprint V1.
+ * Opening Hook Blueprint V1.
  *
- * Purpose: produce one fast-to-read on-screen overlay from the opening of a
- * short-form script. This is intentionally conservative until SpyReels has its
- * own performance dataset. It favors one idea, specificity, numbers, and
- * concise wording rather than trying to predict virality.
+ * Produces one concise, truthful on-screen hook from the script opening.
+ * It intentionally avoids fake scoring or unsupported claims until SpyReels
+ * has its own cross-niche performance dataset.
  */
 export function deriveFrame0Text(script: string): string {
   let opening = normalizeMoneyLanguage(cleanScriptOpening(script));
@@ -119,14 +123,25 @@ export function deriveFrame0Text(script: string): string {
 
   const lower = opening.toLowerCase();
 
-  // Common high-value financing pattern: keep the concrete benefit and object.
+  // Concrete financing benefit. Keep the object and the strongest number.
   if (/\$0\s+down/.test(lower)) {
     const objectMatch = opening.match(/\b([a-z][a-z -]{2,45}?)(?:\s+(?:with|for)\s+\$0\s+down|\s+\$0\s+down)/i);
     if (objectMatch?.[1]) {
       const object = objectMatch[1]
         .replace(/^(?:the|your|you need|some)\s+/i, "")
         .trim();
-      if (object) return `${compactWords(object, 4)} WITH $0 DOWN?`.toUpperCase();
+      if (object) return `${compactWords(object, 4)}\nWITH $0 DOWN?`.toUpperCase();
+    }
+  }
+
+  // Convert clunky spoken negation into the shorter wording a creator would
+  // actually place on screen, without inventing a new claim.
+  const closedMatch = opening.match(/^(.{2,60}?)\s+(?:does not|doesn't|is not|isn't)\s+open\s+on\s+(sundays?|mondays?|tuesdays?|wednesdays?|thursdays?|fridays?|saturdays?)\b/i);
+  if (closedMatch) {
+    const subject = cleanSubject(closedMatch[1]);
+    const day = closedMatch[2];
+    if (subject) {
+      return `${compactWords(subject, 4)}\nCLOSED ON ${day}`.toUpperCase();
     }
   }
 
