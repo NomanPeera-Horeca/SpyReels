@@ -38,6 +38,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Run critical feature regressions before the global typecheck so an
+      # unrelated baseline type failure cannot hide whether Viral Posts itself
+      # is safe. The global gate still runs immediately after this and remains
+      # required for merge.
+      - name: Run Viral Posts reliability regression tests
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: pnpm vitest run server/viralPosts/tests/diversity.test.ts
+
       - name: Typecheck and project checks
         env:
           NODE_OPTIONS: --max-old-space-size=4096
