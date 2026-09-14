@@ -15,6 +15,7 @@
     "cap:ios": "npx cap open ios",
     "cap:android": "npx cap open android",
     "mobile:assets": "tsx scripts/generate-mobile-brand-assets.ts",
+    "setup:viral-posts-local": "node scripts/setup-viral-posts-local-env.mjs",
     "watermark:cron": "tsx scripts/process-watermark-jobs.ts",
     "watermark:worker": "tsx scripts/watermark-worker.ts"
   },
@@ -77,7 +78,7 @@
     "framer-motion": "^12.23.22",
     "googleapis": "^171.4.0",
     "got-scraping": "^4.2.1",
-    "heic-convert": "^2.1.0",
+    "heic-convert": "^1.52.3",
     "html-to-image": "^1.11.13",
     "input-otp": "^1.4.2",
     "jose": "6.1.0",
@@ -123,14 +124,11 @@
     "@types/express": "4.17.21",
     "@types/file-saver": "^2.0.7",
     "@types/google.maps": "^3.58.1",
-    "@types/heic-convert": "^2.1.1",
-    "@types/jszip": "^3.4.1",
+    "@types/heic-convert": "^1.0.0",
     "@types/node": "^24.7.0",
     "@types/react": "^19.2.1",
     "@types/react-dom": "^19.2.1",
     "@types/supertest": "^7.2.0",
-    "@vitejs/plugin-react": "^5.0.4",
-    "add": "^2.0.6",
     "autoprefixer": "^10.4.20",
     "dotenv": "^17.4.2",
     "drizzle-kit": "^0.31.4",
@@ -150,7 +148,7 @@
     "vitest": "^2.1.4",
     "workbox-window": "^7.4.1"
   },
-  "packageManager": "pnpm@10.4.1+sha512.c753b6c3ad7afa13af388fa6d808035a008e30ea9993f58c6663e2bc5ff21679aa834db094987129aa4d488b86df57f7b634981b2f827cdcacc698cc0cfb88af",
+  "packageManager": "pnpm@10.4.1+sha512.c753b6c3ad7afa13af388fa6d808035a008e30ea9993f58c6663e2bc5ff21679aa834db094987129aa4d488b86f57f7b634981b2f827cdcacc698cc0cfb88af",
   "pnpm": {
     "patchedDependencies": {
       "wouter@3.7.1": "patches/wouter@3.7.1.patch"
