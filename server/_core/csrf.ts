@@ -28,17 +28,19 @@ const SIGNED_WEBHOOK_PATHS = new Set([
 const BEARER_API_PREFIXES = ["/api/ext", "/api/extension"];
 
 /**
- * OAuth token/revocation and MCP are external protocol endpoints. They use
- * client credentials, PKCE, refresh tokens, or bearer access tokens and must
- * remain callable by AI hosts that may send their own Origin header.
- * The authorization consent POST is intentionally NOT exempt because it is
- * browser-session authenticated and should retain first-party CSRF protection.
+ * OAuth token/revocation, MCP, and REST AI tools are external protocol
+ * endpoints. They use client credentials, PKCE, refresh tokens, or bearer
+ * access tokens and must remain callable by AI hosts that may send their own
+ * Origin header. The authorization consent POST is intentionally NOT exempt
+ * because it is browser-session authenticated and should retain first-party
+ * CSRF protection.
  */
 const EXTERNAL_AI_AUTH_PATHS = new Set([
   "/api/ai/oauth/token",
   "/api/ai/oauth/revoke",
   "/api/ai/mcp",
 ]);
+const EXTERNAL_AI_BEARER_PREFIXES = ["/api/ai/v1/"];
 
 const DEV_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
@@ -65,6 +67,7 @@ export function csrfOriginGuard(req: Request, res: Response, next: NextFunction)
   if (SIGNED_WEBHOOK_PATHS.has(req.path)) return next();
   if (BEARER_API_PREFIXES.some(prefix => req.path.startsWith(prefix))) return next();
   if (EXTERNAL_AI_AUTH_PATHS.has(req.path)) return next();
+  if (EXTERNAL_AI_BEARER_PREFIXES.some(prefix => req.path.startsWith(prefix))) return next();
 
   const origin = req.headers.origin;
   // No Origin header = not a browser cross-origin request; allow through.
