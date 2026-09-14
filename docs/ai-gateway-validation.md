@@ -18,7 +18,8 @@ The primary scenario validates this sequence:
 Connect SpyReels
   -> OAuth authorization request
   -> explicit user approval
-  -> PKCE S256 authorization-code exchange
+  -> reject an incorrect PKCE verifier
+  -> exchange the still-valid code with the correct verifier
   -> signed SpyReels access token
   -> authenticated MCP tools/call
   -> authenticated REST tool call
@@ -78,4 +79,8 @@ Before enabling the gateway we still require:
 6. MCP and REST calls against that isolated deployment
 7. confirmation that no production Stripe, Instagram, or PostHog side effects occurred during the isolated harness
 
-GitHub-hosted CI is currently failing before step 1 because no runner is assigned. Until a real runner executes the commands above, the gateway remains a release candidate and the feature flag must remain off.
+## Current execution status
+
+The harness is implemented and wired to a dedicated package command, but it has not yet produced a trustworthy GitHub-hosted pass/fail result. The latest Actions job still finishes with zero executed steps because no runner is assigned. That is an infrastructure failure, not a code result.
+
+Until a real runner executes the release-gate commands above, keep the gateway feature flag off and treat the branch as a release candidate only.
