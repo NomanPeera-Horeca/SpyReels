@@ -27,22 +27,13 @@ The AI Gateway is the canonical business boundary. MCP and REST/OpenAPI are tran
 
 ## Account and billing source of truth
 
-External AI hosts connect to the user's existing SpyReels account. SpyReels remains the source of truth for:
-
-- identity
-- subscription plan
-- entitlements
-- usage limits
-- billing
-- saved research and content
-
-The same account must work across SpyReels web, ChatGPT, Claude, Copilot, API clients, and future hosts.
+External AI hosts connect to the user's existing SpyReels account. SpyReels remains the source of truth for identity, subscription plan, entitlements, usage limits, billing, saved research, and content.
 
 Do not create a separate subscription per AI host.
 
 ## V1 universal tool contract
 
-First checkpoint exposes only the smallest high-confidence surface:
+The first read-only tool surface is intentionally small:
 
 - `find_creator`
 - `find_top_content`
@@ -58,23 +49,119 @@ Planned later tools, after the foundation is proven:
 
 Do not mirror every existing SpyReels UI action as a tool. The external surface should stay small, composable, and stable.
 
-## Authentication target
+## Remote MCP transport
 
-The remote integration must use a standards-based OAuth flow rather than reusing SpyReels browser session cookies.
+The gateway targets the finalized MCP `2026-07-28` protocol and also accepts the established legacy protocol versions during the migration window.
 
-Target capabilities:
+The modern transport is stateless. SpyReels does not require sticky MCP sessions. Modern requests validate:
 
-- OAuth 2.1-style authorization code flow
-- PKCE
-- refresh tokens
-- explicit scopes
-- per-user connection and revocation
-- protected-resource metadata (`/.well-known/oauth-protected-resource`)
+- `MCP-Protocol-Version`
+- `Mcp-Method`
+- `Mcp-Name` for named calls such as `tools/call`
+- JSON-RPC method/header agreement
+
+Supported transport methods in this checkpoint:
+
+- `server/discover`
+- `tools/list`
+- `tools/call`
+- `ping`
+- legacy `initialize`
+
+The MCP endpoint is:
+
+```text
+https://spyreels.ai/api/ai/mcp
+```
+
+All MCP calls require a SpyReels OAuth bearer token with `spyreels:read`.
+
+## OAuth authorization server
+
+External AI clients must never reuse the SpyReels browser session cookie as an API credential.
+
+The AI Gateway implements an OAuth authorization-code flow with:
+
+- PKCE S256 required
+- one-time authorization codes
+- five-minute authorization-code lifetime
+- one-hour signed access tokens
+- database-backed refresh tokens
+- refresh-token rotation
+- refresh-family revocation when token reuse is detected
+- exact redirect URI matching
+- dedicated access-token signing secret
+- explicit `spyreels:read` scope
+- RFC 9728 protected-resource metadata
 - authorization-server metadata
-- static OAuth clients first
-- dynamic client registration only after the provider is stable and tested
+- RFC 9207-style `iss` parameter on authorization responses
 
-No external host receives Stripe identifiers, session-cookie secrets, provider API keys, or internal database credentials.
+OAuth endpoints:
+
+```text
+/.well-known/oauth-protected-resource
+/.well-known/oauth-authorization-server
+/api/ai/oauth/authorize
+/api/ai/oauth/token
+/api/ai/oauth/revoke
+```
+
+### Client registration strategy
+
+SpyReels supports two client identities:
+
+1. **Pre-provisioned database clients** for known platform integrations and confidential clients.
+2. **Client ID Metadata Documents (CIMD)** for modern MCP clients whose `client_id` is an HTTPS metadata URL.
+
+CIMD is the preferred modern MCP discovery model. Dynamic Client Registration is not advertised in this checkpoint.
+
+CIMD fetching is restricted to public HTTPS hosts, rejects local/private-address hosts, rejects redirects, and does not trust arbitrary client metadata for SpyReels source attribution. Known platform attribution is derived only from trusted client hostnames. Unknown clients remain `unknown`.
+
+## OAuth persistence
+
+Migration `drizzle/0096_ai_gateway_oauth.sql` creates:
+
+- `ai_oauth_clients`
+- `ai_oauth_authorization_codes`
+- `ai_oauth_refresh_tokens`
+
+Raw authorization codes and refresh tokens are never stored. Only SHA-256 hashes are persisted.
+
+## Feature flag and environment
+
+The transport is registered only when:
+
+```text
+SPYREELS_AI_GATEWAY_ENABLED=true
+```
+
+The default is off. Merging the code without enabling the flag does not expose OAuth or MCP endpoints.
+
+Required before enabling:
+
+```text
+SPYREELS_AI_GATEWAY_ENABLED=true
+SPYREELS_AI_OAUTH_JWT_SECRET=<dedicated random secret, at least 32 characters>
+SPYREELS_AI_OAUTH_ISSUER=https://spyreels.ai
+```
+
+`SPYREELS_AI_OAUTH_JWT_SECRET` must be separate from the existing browser-session `JWT_SECRET`.
+
+## Browser login handoff
+
+If a user starts an OAuth connection without an active SpyReels browser session, the authorization endpoint sends them through the existing Google login. A same-origin `/ai/oauth/continue` bridge restores the exact authorization request afterward, because the existing Google callback intentionally refuses generic `/api/*` return destinations.
+
+The final consent screen is still served by SpyReels and requires an explicit **Connect SpyReels** action.
+
+## CSRF boundary
+
+Browser-session endpoints keep first-party CSRF origin protection, including the OAuth consent POST.
+
+The following external protocol endpoints are exempt from cookie CSRF checks because they authenticate with OAuth/client credentials rather than a browser session:
+
+- `/api/ai/oauth/token`
+- `/api/ai/oauth/revoke`
+- `/api/ai/mcp`
 
 ## Attribution and observability
 
@@ -82,31 +169,26 @@ Every gateway execution carries:
 
 - request id
 - AI source
-- optional client name
+- optional client identity
 - tool name
 - success/failure
 - stable external error code
 - duration
 
-Server analytics should allow product reporting by source such as ChatGPT, Claude, Copilot, Gemini, Perplexity, Cursor, API, and future clients.
+Server analytics can report product activity by ChatGPT, Claude, Copilot, Gemini, Perplexity, Cursor, API, and unknown/future clients.
 
 ## Rollout rules
 
 1. Develop only on `feature/spyreels-ai-gateway-v1` until approved.
 2. Keep the first tools read-only except for normal SpyReels usage accounting.
-3. No public MCP or REST route until auth and CI are green.
-4. Put any new transport behind a server-side feature flag.
-5. Do not deploy or merge without explicit approval.
-6. Reuse existing SpyReels services and entitlements instead of creating parallel logic.
-7. Add platform adapters only after the canonical gateway works independently of any one AI host.
+3. Keep `SPYREELS_AI_GATEWAY_ENABLED` off until schema migration and validation are complete.
+4. Do not deploy or merge without explicit approval.
+5. Reuse existing SpyReels services and entitlements instead of parallel business logic.
+6. Add platform-specific distribution metadata only after the canonical OAuth + MCP path works independently.
+7. Never put browser cookie secrets, Stripe identifiers, provider API keys, or database credentials into AI-host credentials.
 
-## Definition of done for the foundation
+## Current validation status
 
-The foundation is ready for the auth/transport milestone when:
+The implementation is still a release candidate, not production-enabled. GitHub-hosted CI has recently failed before executing any steps because no runner was assigned (`runner_id: 0`, empty runner name, zero steps). Treat that as infrastructure failure, not as a passing or failing code result.
 
-- gateway types and registry compile cleanly
-- registry tests pass
-- `find_creator`, `find_top_content`, and `get_usage` use existing SpyReels sources of truth
-- source attribution is captured
-- no production route is exposed
-- full repository CI is green
+Before enabling the flag, we still require a real typecheck/test run plus an end-to-end OAuth + MCP smoke test against an isolated environment.
