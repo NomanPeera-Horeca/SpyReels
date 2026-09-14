@@ -8,7 +8,10 @@ export const AI_GATEWAY_PROTECTED_RESOURCE_METADATA_PATH =
 export const AI_GATEWAY_AUTHORIZATION_SERVER_METADATA_PATH =
   "/.well-known/oauth-authorization-server";
 
-export const AI_GATEWAY_SCOPES = ["spyreels:read"] as const;
+// `offline_access` is advertised so MCP hosts such as ChatGPT can explicitly
+// request refresh-token continuity. It grants no additional SpyReels data or
+// tool permissions; `spyreels:read` remains the actual resource permission.
+export const AI_GATEWAY_SCOPES = ["spyreels:read", "offline_access"] as const;
 export type AiGatewayScope = (typeof AI_GATEWAY_SCOPES)[number];
 
 export const AI_ACCESS_TOKEN_TTL_SECONDS = 60 * 60;
