@@ -3,28 +3,34 @@ import { reportDirectAnthropicUsage } from "../_core/llmMeasured";
 
 export const YOUTUBE_QUERY_MODEL = "claude-haiku-4-5-20251001";
 
-const QUERY_PROMPT = `You generate search phrases for discovering strong YouTube Shorts in SpyReels.
+const QUERY_PROMPT = `You generate keyword search phrases for discovering strong YouTube Shorts in SpyReels.
 
-The caller gives you one creator niche and one content pillar. Translate that abstract pillar into the practical language real creators actually use in video titles and searches.
+The caller gives you one creator niche and one content pillar. Convert them into the short keyword phrases people and creators would actually type into YouTube search.
 
 Return ONLY valid JSON in this exact shape:
 {"queries":["query one","query two"]}
 
 RULES:
-1. Each query must clearly belong to the supplied niche.
-2. Prefer concrete audience language, problems, outcomes, tactics, and how-to phrasing over internal business taxonomy.
-3. Do not simply repeat the niche plus pillar if that sounds unnatural.
-4. Keep each query short, usually 3 to 7 words.
-5. Make the queries meaningfully different so they explore different creator language for the same pillar.
-6. Do not include YouTube, Shorts, hashtags, dates, quotation marks, or platform names.
-7. Do not invent a different niche or pillar.
-8. Never hard-code assumptions about restaurants, fitness, real estate, beauty, finance, or any other niche. Use only the supplied niche and pillar.
-9. Return exactly the requested number of queries.
-10. Do not use em dashes.
-11. Return JSON only.`;
+1. Every query must clearly stay inside the supplied niche and pillar.
+2. Use keyword-style searches, not sentences and not questions.
+3. Each query must contain 2 to 4 words total.
+4. Prefer concrete niche terms, audience terms, occupations, outcomes, tactics, and creator vocabulary.
+5. Avoid filler words such as how, to, the, a, an, that, actually, really, best, fast, and work unless they are essential to the niche meaning.
+6. Make the queries meaningfully different while still targeting the same pillar.
+7. Do not simply repeat an abstract internal taxonomy phrase when a more natural YouTube keyword phrase exists.
+8. Do not include YouTube, Shorts, hashtags, dates, quotation marks, or platform names.
+9. Do not invent a different niche or pillar.
+10. Never hard-code assumptions about restaurants, fitness, real estate, beauty, finance, or any other niche. Use only the supplied niche and pillar.
+11. Return exactly the requested number of queries.
+12. Do not use em dashes.
+13. Return JSON only.`;
 
 function compact(value: unknown): string {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+}
+
+function keywordWordCount(value: string): number {
+  return value.split(/\s+/).filter(Boolean).length;
 }
 
 function uniqueQueries(values: unknown[], limit: number): string[] {
@@ -33,7 +39,8 @@ function uniqueQueries(values: unknown[], limit: number): string[] {
   for (const value of values) {
     const query = compact(value).replace(/^['"]|['"]$/g, "");
     const key = query.toLowerCase();
-    if (!query || query.length > 90 || seen.has(key)) continue;
+    const words = keywordWordCount(query);
+    if (!query || query.length > 64 || words < 2 || words > 4 || seen.has(key)) continue;
     seen.add(key);
     out.push(query);
     if (out.length >= limit) break;
@@ -41,20 +48,33 @@ function uniqueQueries(values: unknown[], limit: number): string[] {
   return out;
 }
 
+function firstWords(value: string, count: number): string {
+  return value.split(/\s+/).filter(Boolean).slice(0, count).join(" ");
+}
+
 export function buildYouTubeQueryFallback(args: {
   niche: string;
   pillar: string;
   limit: number;
 }): string[] {
-  const niche = compact(args.niche);
-  const pillar = compact(args.pillar);
+  const niche = compact(args.niche).replace(/&/g, " ");
+  const pillar = compact(args.pillar).replace(/&/g, " ");
   const limit = Math.max(1, Math.min(3, Math.floor(args.limit)));
-  return uniqueQueries(
+  const nicheHead = firstWords(niche, 2);
+  const pillarHead = firstWords(pillar, 2);
+
+  const fallback = uniqueQueries(
     [
-      niche && pillar ? `${pillar} for ${niche}` : "",
-      niche && pillar ? `${niche} ${pillar} tips` : "",
-      niche ? `${niche} tips` : pillar,
+      nicheHead && pillarHead ? `${nicheHead} ${pillarHead}` : "",
+      nicheHead ? `${nicheHead} tips` : "",
+      pillarHead ? `${pillarHead} tips` : "",
     ],
+    limit
+  );
+
+  if (fallback.length >= limit) return fallback;
+  return uniqueQueries(
+    [...fallback, `${nicheHead || "creator"} growth`, `${pillarHead || "content"} strategy`],
     limit
   );
 }
@@ -97,8 +117,8 @@ export async function generateYouTubeShortsSearchQueries(args: {
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const response = await client.messages.create({
       model: YOUTUBE_QUERY_MODEL,
-      max_tokens: 260,
-      temperature: 0.1,
+      max_tokens: 220,
+      temperature: 0.05,
       system: QUERY_PROMPT,
       messages: [
         {
@@ -115,7 +135,7 @@ export async function generateYouTubeShortsSearchQueries(args: {
     const parsed = JSON.parse(stripCodeFences(textBlock.text));
     const queries = normalizeYouTubeQueryResponse(parsed, limit);
     if (queries.length !== limit) {
-      throw new Error(`YouTube query generator returned ${queries.length}/${limit} queries`);
+      throw new Error(`YouTube query generator returned ${queries.length}/${limit} valid keyword queries`);
     }
     return { queries, aiGenerated: true };
   } catch (error) {
