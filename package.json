@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "NODE_ENV=development tsx watch server/_core/index.ts",
     "build": "vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
-    "start": "NODE_ENV=production node dist/index.js",
+    "start": "node scripts/ensure-creator-discovery-schema.mjs && NODE_ENV=production node dist/index.js",
     "check": "tsc --noEmit && node scripts/verify-resend-tags.mjs",
     "format": "prettier --write .",
     "test": "vitest run",
@@ -16,6 +16,7 @@
     "cap:ios": "npx cap open ios",
     "cap:android": "npx cap open android",
     "mobile:assets": "tsx scripts/generate-mobile-brand-assets.ts",
+    "viral-posts:refresh-pools": "tsx scripts/viral-posts-pool-refresh.ts",
     "watermark:cron": "tsx scripts/process-watermark-jobs.ts",
     "watermark:worker": "tsx scripts/watermark-worker.ts"
   },
@@ -98,7 +99,7 @@
     "react-resizable-panels": "^3.0.6",
     "react-syntax-highlighter": "^16.1.1",
     "recharts": "^2.15.2",
-    "remark-gfm": "^4.0.1",
+    "remark-gfm": "^4.1.0",
     "resend": "^6.10.0",
     "sonner": "^2.0.7",
     "streamdown": "^1.4.0",
