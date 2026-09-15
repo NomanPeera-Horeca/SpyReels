@@ -7,8 +7,6 @@ export const SEMANTIC_POOL_MODEL = "claude-haiku-4-5-20251001";
 export const MIN_SEMANTIC_POOL_CONFIDENCE = 0.55;
 const SEMANTIC_BATCH_SIZE = 12;
 
-const ACTIVE_PILLARS = new Set<string>(DEFAULT_CONTENT_PILLARS);
-
 export type SemanticPoolVerdict = {
   sourceId: string;
   domainRelevant: boolean;
@@ -41,9 +39,13 @@ export type SemanticPoolClassificationResult = {
   haikuCalls: number;
 };
 
-export const SEMANTIC_POOL_PROMPT = `You classify already-viral short-form videos for SpyReels restaurant and hospitality business inspiration pools. Videos may be Instagram Reels, TikTok videos, or YouTube Shorts.
+/**
+ * Generic semantic policy. The current niche and active pillars are injected
+ * per request so the policy itself never assumes a specific creator niche.
+ */
+export const SEMANTIC_POOL_PROMPT = `You classify already-viral short-form videos for SpyReels creator inspiration pools. Videos may be Instagram Reels, TikTok videos, or YouTube Shorts.
 
-Your job is semantic relevance, not virality. Decide what the video is actually ABOUT and whether a restaurant or hospitality OPERATOR could use the business idea.
+Your job is semantic relevance, not virality. The caller supplies the creator's current niche and active content pillars. Judge whether the video's real lesson is useful to that niche and which supplied pillar fits best.
 
 Return ONLY valid JSON in this exact shape:
 {
@@ -51,41 +53,67 @@ Return ONLY valid JSON in this exact shape:
     {
       "sourceId": "AbC123",
       "domainRelevant": true,
-      "primaryPillar": "restaurant operations",
+      "primaryPillar": "one exact supplied pillar",
       "secondaryPillar": null,
       "confidence": 0.88,
-      "reason": "About staff training and shift systems"
+      "reason": "Short explanation of the semantic fit"
     }
   ]
 }
 
-Allowed pillars, exact strings only:
-- restaurant profitability
-- menu engineering
-- restaurant operations
-- kitchen buildouts
-- restaurant marketing
-- hospitality leadership
-
 RULES:
-1. Judge the meaning of the video, not isolated keyword matches. Do not treat platform, format, or hashtags as a substitute for the actual lesson.
-2. domainRelevant=true only when the content is useful to a restaurant/hospitality operator as BUSINESS, MANAGEMENT, GROWTH, MARKETING, MENU, KITCHEN, EQUIPMENT, PROFITABILITY, or LEADERSHIP inspiration.
-2a. INSTAGRAM TRANSFERABILITY RULE: For Instagram Reels, do NOT require the creator, caption, or setting to explicitly say restaurant or hospitality. If the Reel teaches a concrete business action that a restaurant or cafe operator can directly apply, mark domainRelevant=true and map it to the best pillar. Examples include local advertising, customer acquisition, opening a location, pricing, promotions, menu demand, service standards, staff or team systems, owner management, unit economics, retention, or operational growth. Keep generic motivation, vague entrepreneurship, lifestyle, and non-actionable business commentary domainRelevant=false.
-3. Recipe tutorials, cooking demonstrations, food porn, dish preparation, restaurant reviews, consumer food content, and entertainment are NOT business/operator content by themselves. Mark them domainRelevant=false unless the actual angle explicitly teaches an operator decision or lesson such as economics, menu strategy, workflow, equipment selection, equipment capacity, equipment cost, staffing, systems, marketing, throughput, or another business decision. Merely showing or using commercial equipment while making food is NOT enough.
-4. QSR/franchise/restaurant market opportunities, unit economics, margins, revenue models, pricing economics, expansion economics, and business opportunities normally map to restaurant profitability.
-5. Menu pricing, food cost decisions, menu design, upselling, item mix, specials strategy, and menu optimization map to menu engineering. A recipe alone does not.
-6. Staff, hiring, training, scheduling, SOPs, service systems, workflows, inventory operations, manager systems, and execution map to restaurant operations.
-7. Equipment, refrigeration, hoods, leases, fit-outs, construction, kitchen layout, and buildout decisions map to kitchen buildouts ONLY when the video teaches an operator-facing decision or lesson such as choosing/sizing equipment, capacity, throughput, labor savings, installation, utilities, layout, procurement, cost, or workflow design. A cooking demo that simply happens to use equipment is not kitchen buildouts.
-8. Ads, content, promotions, loyalty, customer acquisition, positioning, social media, and restaurant brand growth map to restaurant marketing.
-9. Owner/founder leadership, culture, management philosophy, team leadership, and hospitality leadership map to hospitality leadership.
-10. Hotel/hospitality content can be domainRelevant when the underlying operator lesson transfers to hospitality businesses. Do not label generic hotel promotion or inspirational guest-service copy as restaurant operations unless the video actually teaches an operational system or practice.
-11. Unrelated education, universities, general entrepreneurship, unrelated trades, lifestyle, motivation, and generic founder content are domainRelevant=false unless the specific lesson clearly applies to restaurant/hospitality operators.
-12. primaryPillar must be the single best allowed pillar when domainRelevant=true. secondaryPillar is optional metadata only and should be used only for a genuinely strong second fit. The primary pillar is the video's canonical pool. Do not use secondaryPillar merely to make the video eligible for another pool.
-13. confidence is 0 to 1 and measures semantic confidence in the pillar assignment, not virality or production quality.
-14. If domainRelevant=false, primaryPillar and secondaryPillar must be null.
-15. Preserve the exact sourceId values supplied. Return exactly one entry per input candidate.
-16. Do not use em dashes.
-17. Return ONLY the JSON object, no preamble or code fences.`;
+1. Judge the meaning of the video, not isolated keyword matches. Do not treat platform, format, hashtags, or creator category as a substitute for the actual lesson.
+2. Use only the CURRENT USER NICHE and ALLOWED ACTIVE CONTENT PILLARS supplied by the caller. Never assume a default niche and never invent a pillar.
+3. A video can be domainRelevant=true when it is directly about the niche OR when it teaches a concrete, transferable action that a creator or business in that niche can realistically apply. The creator, caption, and setting do not need to literally name the user's niche when the transfer is specific and practical.
+4. Transferable actions can include pricing, customer acquisition, retention, content strategy, promotion, sales, monetization, hiring, training, workflow, operations, customer experience, leadership, systems, or another clear tactic, but only when the lesson genuinely maps to one of the supplied pillars.
+5. Generic motivation, vague entrepreneurship, lifestyle content, entertainment, unrelated consumer content, and non-actionable commentary are domainRelevant=false unless the specific lesson clearly applies to the supplied niche and pillar.
+6. Tutorials or demonstrations are not automatically relevant just because they show a product, tool, location, or activity associated with the niche. The actual lesson must support the supplied niche and pillar.
+7. primaryPillar must be the single best exact value from ALLOWED ACTIVE CONTENT PILLARS when domainRelevant=true.
+8. secondaryPillar is optional metadata only and may be used only for a genuinely strong second fit from the supplied pillar list. Do not use it merely to make a video eligible for another pool.
+9. confidence is 0 to 1 and measures semantic confidence in the niche and pillar assignment, not virality or production quality.
+10. If domainRelevant=false, primaryPillar and secondaryPillar must be null.
+11. Preserve the exact sourceId values supplied. Return exactly one entry per input candidate.
+12. Do not use em dashes.
+13. Return ONLY the JSON object, no preamble or code fences.`;
+
+function cleanActivePillars(activePillars: readonly string[]): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const value of activePillars) {
+    const clean = value.trim();
+    if (!clean || seen.has(clean)) continue;
+    seen.add(clean);
+    out.push(clean);
+  }
+  return out.slice(0, 12);
+}
+
+/**
+ * Backward-compatible resolution for the existing Instagram restaurant-family
+ * caller. New or generic callers should pass their real active pillars explicitly.
+ * Non-restaurant admission paths remain unchanged by this release.
+ */
+function resolveActivePillars(activePillars?: readonly string[]): string[] {
+  const explicit = cleanActivePillars(activePillars ?? []);
+  return explicit.length > 0
+    ? explicit
+    : cleanActivePillars(DEFAULT_CONTENT_PILLARS);
+}
+
+export function buildSemanticPoolPrompt(args: {
+  niche: string;
+  activePillars: readonly string[];
+}): string {
+  const niche = args.niche.trim() || "General creator niche";
+  const activePillars = cleanActivePillars(args.activePillars);
+  if (activePillars.length === 0) {
+    throw new Error("Semantic pool relevance requires at least one active pillar");
+  }
+
+  return `${SEMANTIC_POOL_PROMPT}\n\nCURRENT USER NICHE:\n${niche}\n\nALLOWED ACTIVE CONTENT PILLARS, exact strings only:\n${activePillars
+    .map((pillar) => `- ${pillar}`)
+    .join("\n")}`;
+}
 
 function stripCodeFences(text: string): string {
   let trimmed = text.trim();
@@ -103,25 +131,33 @@ function chunkArray<T>(items: T[], size: number): T[][] {
   return out;
 }
 
-function validPillar(value: unknown): string | null {
+function validPillar(value: unknown, activePillars: Set<string>): string | null {
   if (typeof value !== "string") return null;
   const clean = value.trim();
-  return ACTIVE_PILLARS.has(clean) ? clean : null;
+  return activePillars.has(clean) ? clean : null;
 }
 
-export function normalizeSemanticPoolVerdict(row: unknown): SemanticPoolVerdict | null {
+export function normalizeSemanticPoolVerdict(
+  row: unknown,
+  activePillarsInput: readonly string[] = DEFAULT_CONTENT_PILLARS
+): SemanticPoolVerdict | null {
   if (!row || typeof row !== "object") return null;
   const raw = row as Record<string, unknown>;
   const sourceId = String(raw.sourceId ?? "").trim();
   if (!sourceId) return null;
 
+  const activePillars = new Set(cleanActivePillars(activePillarsInput));
   const domainRelevant = raw.domainRelevant === true;
   const confidenceRaw = Number(raw.confidence);
   const confidence = Number.isFinite(confidenceRaw)
     ? Math.max(0, Math.min(1, confidenceRaw))
     : 0;
-  const primaryPillar = domainRelevant ? validPillar(raw.primaryPillar) : null;
-  const secondaryPillar = domainRelevant ? validPillar(raw.secondaryPillar) : null;
+  const primaryPillar = domainRelevant
+    ? validPillar(raw.primaryPillar, activePillars)
+    : null;
+  const secondaryPillar = domainRelevant
+    ? validPillar(raw.secondaryPillar, activePillars)
+    : null;
   const reason = String(raw.reason ?? "").trim().slice(0, 300);
 
   return {
@@ -138,6 +174,7 @@ export function normalizeSemanticPoolVerdict(row: unknown): SemanticPoolVerdict 
 async function classifyBatch(
   client: Anthropic,
   niche: string,
+  activePillars: string[],
   candidates: AdaptedCandidate[]
 ): Promise<SemanticPoolVerdict[]> {
   const candidateLines = candidates
@@ -153,11 +190,11 @@ async function classifyBatch(
     model: SEMANTIC_POOL_MODEL,
     max_tokens: 1800,
     temperature: 0.05,
-    system: SEMANTIC_POOL_PROMPT,
+    system: buildSemanticPoolPrompt({ niche, activePillars }),
     messages: [
       {
         role: "user",
-        content: `Broad niche: ${niche}\n\nAlready-viral short-form videos to classify:\n${candidateLines}\n\nReturn semantic classification JSON for every sourceId.`,
+        content: `Already-viral short-form videos to classify:\n${candidateLines}\n\nReturn semantic classification JSON for every sourceId.`,
       },
     ],
   });
@@ -173,7 +210,7 @@ async function classifyBatch(
     throw new Error("Semantic pool relevance response missing reels array");
   }
   return parsed.reels
-    .map(normalizeSemanticPoolVerdict)
+    .map((row) => normalizeSemanticPoolVerdict(row, activePillars))
     .filter((row): row is SemanticPoolVerdict => row !== null);
 }
 
@@ -184,9 +221,11 @@ async function classifyBatch(
  */
 export async function classifySemanticPoolRelevance(args: {
   niche: string;
+  activePillars?: readonly string[];
   candidates: AdaptedCandidate[];
 }): Promise<SemanticPoolClassificationResult> {
   if (args.candidates.length === 0) return { verdicts: [], haikuCalls: 0 };
+  const activePillars = resolveActivePillars(args.activePillars);
   if (!process.env.ANTHROPIC_API_KEY?.trim()) {
     throw new Error("ANTHROPIC_API_KEY is not configured for semantic pool relevance");
   }
@@ -195,7 +234,12 @@ export async function classifySemanticPoolRelevance(args: {
   const verdicts: SemanticPoolVerdict[] = [];
   let haikuCalls = 0;
   for (const batch of chunkArray(args.candidates, SEMANTIC_BATCH_SIZE)) {
-    const batchVerdicts = await classifyBatch(client, args.niche, batch);
+    const batchVerdicts = await classifyBatch(
+      client,
+      args.niche,
+      activePillars,
+      batch
+    );
     haikuCalls++;
     verdicts.push(...batchVerdicts);
   }
@@ -237,7 +281,7 @@ export function routeSemanticPoolCandidates(args: {
       ...candidate,
       contentPillar: verdict.primaryPillar,
       pillarConfidence: verdict.confidence,
-      relevanceLabel: "Semantic restaurant fit",
+      relevanceLabel: "Semantic niche fit",
       relevanceReason: verdict.reason || `Semantic fit for ${verdict.primaryPillar}`,
       rawProviderPayload: {
         ...candidate.rawProviderPayload,
