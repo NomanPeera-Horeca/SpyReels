@@ -41,9 +41,12 @@ export const aiOAuthAuthorizationCodes = mysqlTable(
     id: bigint("id", { mode: "number" }).autoincrement().primaryKey(),
     /** Only the SHA-256 hash is persisted. The raw code exists only in the redirect. */
     codeHash: varchar("codeHash", { length: 64 }).notNull(),
-    clientId: varchar("clientId", { length: 128 })
-      .notNull()
-      .references(() => aiOAuthClients.clientId, { onDelete: "cascade" }),
+    /**
+     * Logical OAuth client identifier. This intentionally is not a foreign key:
+     * modern MCP hosts may use HTTPS Client ID Metadata Documents (CIMD) and
+     * therefore do not require a pre-provisioned row in ai_oauth_clients.
+     */
+    clientId: varchar("clientId", { length: 128 }).notNull(),
     userId: int("userId")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
@@ -75,9 +78,8 @@ export const aiOAuthRefreshTokens = mysqlTable(
     tokenHash: varchar("tokenHash", { length: 64 }).notNull(),
     /** Rotation family used to revoke the entire chain on token reuse. */
     familyId: varchar("familyId", { length: 64 }).notNull(),
-    clientId: varchar("clientId", { length: 128 })
-      .notNull()
-      .references(() => aiOAuthClients.clientId, { onDelete: "cascade" }),
+    /** Same logical client identifier model as authorization codes; see above. */
+    clientId: varchar("clientId", { length: 128 }).notNull(),
     userId: int("userId")
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
