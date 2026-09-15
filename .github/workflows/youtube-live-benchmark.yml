@@ -1,0 +1,52 @@
+name: YouTube Live Benchmark
+
+on:
+  push:
+    branches:
+      - feature/viral-posts-youtube-shorts-v1
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[youtube-benchmark]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      SCRAPECREATORS_API_KEY: ${{ secrets.SCRAPECREATORS_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      SCRAPECREATORS_USD_PER_CREDIT: ${{ vars.SCRAPECREATORS_USD_PER_CREDIT }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify benchmark credentials are available
+        run: |
+          test -n "$SCRAPECREATORS_API_KEY" || (echo "SCRAPECREATORS_API_KEY missing" && exit 1)
+          test -n "$ANTHROPIC_API_KEY" || (echo "ANTHROPIC_API_KEY missing" && exit 1)
+
+      - name: Run five-niche YouTube Shorts benchmark
+        run: pnpm tsx scripts/youtube-live-benchmark.ts
+
+      - name: Upload benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: youtube-live-benchmark
+          path: artifacts/youtube-live-benchmark.json
+          if-no-files-found: warn
