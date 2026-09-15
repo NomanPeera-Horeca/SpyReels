@@ -159,6 +159,11 @@ describe("semantic restaurant pool relevance", () => {
     expect(SEMANTIC_POOL_PROMPT).toContain("YouTube Shorts");
     expect(SEMANTIC_POOL_PROMPT).toContain("Recipe tutorials");
     expect(SEMANTIC_POOL_PROMPT).toContain("primary pillar is the video's canonical pool");
+    expect(SEMANTIC_POOL_PROMPT).toContain("INSTAGRAM TRANSFERABILITY RULE");
+    expect(SEMANTIC_POOL_PROMPT).toContain(
+      "do NOT require the creator, caption, or setting to explicitly say restaurant"
+    );
+    expect(SEMANTIC_POOL_PROMPT).toContain("generic motivation");
 
     const tiktok = candidate("tt-ops", "How we train restaurant staff before every shift");
     tiktok.platform = "tiktok";
