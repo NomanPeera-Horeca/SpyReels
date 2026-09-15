@@ -73,18 +73,6 @@ export const transcribeRouter = router({
                 ? "youtube"
                 : "user";
 
-        // ────────────────────────────────────────────────────────────
-        // Featured branch — cache-first (Commit 4b). The catalog owns
-        // a single shared transcript per reel in `featured_reels`, so:
-        //  1. If the cache is warm (completed / no_speech), return
-        //     immediately. No usage burn, no Deepgram call, no row
-        //     in `transcriptions`.
-        //  2. If another user is already transcribing (`processing`),
-        //     return the same key so the UI polls the same cache.
-        //  3. Otherwise, kick off Deepgram in the background and
-        //     mark the cache `processing`. Retry path clears a prior
-        //     `failed` before re-kicking.
-        // ────────────────────────────────────────────────────────────
         if (source === "featured") {
           const fr = await getFeaturedReelById(input.featuredReelId!);
           if (!fr) {
@@ -104,7 +92,6 @@ export const transcribeRouter = router({
             };
           }
 
-          // pending | failed → charge usage + kick Deepgram.
           const bypassTranscribeLimit = await isFirstRemakeUsageBypassEligible(
             ctx.user.id,
             ctx.user.hasCompletedFirstSpy,
@@ -360,10 +347,6 @@ export const transcribeRouter = router({
           };
         }
 
-        // ────────────────────────────────────────────────────────────
-        // User-scrape branch — unchanged behavior. Each user owns
-        // their own row in `transcriptions`.
-        // ────────────────────────────────────────────────────────────
         const reel = await assertUserScrapeReelInWorkspace(input.reelId!, ctx);
         const reelForRun = {
           id: reel.id,
@@ -467,9 +450,8 @@ export const transcribeRouter = router({
       }),
 
     /**
-     * Read-only reference payload for the Remake workspace Source drawer.
-     * This never starts a scrape/transcription or increments usage. It only
-     * exposes source metadata plus an already-cached transcript.
+     * Read-only reference payload for the Remake workspace Source drawer and
+     * social-style Opening Hook preview. This never starts a paid provider.
      */
     sourceReference: protectedProcedure
       .input(sourceReferenceInput)
@@ -485,6 +467,7 @@ export const transcribeRouter = router({
             creator: null,
             title: reel.caption ?? null,
             durationSec: reel.duration ?? null,
+            thumbnailUrl: reel.thumbnailUrl ?? null,
             originalUrl: reel.reelShortcode
               ? `https://www.instagram.com/reel/${encodeURIComponent(reel.reelShortcode)}/`
               : null,
@@ -520,6 +503,7 @@ export const transcribeRouter = router({
             creator: video.ownerUsername ?? null,
             title: video.caption ?? null,
             durationSec: video.durationSec ?? null,
+            thumbnailUrl: video.thumbnailUrl ?? null,
             originalUrl: video.videoPageUrl || null,
             transcript: transcription?.transcript ?? null,
             segments: transcription?.segments ?? null,
@@ -553,6 +537,7 @@ export const transcribeRouter = router({
             creator: video.ownerHandle ?? null,
             title: video.title ?? video.description ?? null,
             durationSec: video.durationSec ?? null,
+            thumbnailUrl: video.thumbnailUrl ?? null,
             originalUrl: video.videoPageUrl || null,
             transcript: transcription?.transcript ?? null,
             segments: transcription?.segments ?? null,
@@ -567,6 +552,7 @@ export const transcribeRouter = router({
           creator: reel.ownerUsername ?? null,
           title: reel.caption ?? null,
           durationSec: reel.duration ?? null,
+          thumbnailUrl: reel.thumbnailUrl ?? null,
           originalUrl: reel.reelUrl || null,
           transcript: transcription?.transcript ?? null,
           segments: transcription?.segments ?? null,

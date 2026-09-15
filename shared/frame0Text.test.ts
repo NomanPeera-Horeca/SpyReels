@@ -7,7 +7,13 @@ describe("deriveFrame0Text", () => {
       deriveFrame0Text(
         "Hey Leo, I think I just found you the restaurant equipment with zero money down. Nobody does that."
       )
-    ).toBe("RESTAURANT EQUIPMENT WITH $0 DOWN?");
+    ).toBe("RESTAURANT EQUIPMENT\nWITH $0 DOWN?");
+  });
+
+  it("turns spoken Sunday closure wording into concise on-screen text", () => {
+    expect(
+      deriveFrame0Text("Chick-fil-A does not open on Sundays because of a principle the founder put in place.")
+    ).toBe("CHICK-FIL-A\nCLOSED ON SUNDAYS");
   });
 
   it("removes a low-value scene-setting opener", () => {

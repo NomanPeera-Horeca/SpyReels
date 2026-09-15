@@ -203,6 +203,27 @@ export default function ViralPosts() {
     [feed?.items, hiddenCreatorKeys]
   );
 
+  const fallbackFeed = useMemo(
+    () =>
+      historyFeeds.find(
+        (day) => filterVisiblePosts(day.items, hiddenCreatorKeys).length > 0
+      ) ?? null,
+    [historyFeeds, hiddenCreatorKeys]
+  );
+  const fallbackPosts = useMemo(
+    () =>
+      fallbackFeed
+        ? filterVisiblePosts(fallbackFeed.items, hiddenCreatorKeys)
+        : [],
+    [fallbackFeed, hiddenCreatorKeys]
+  );
+  const usingFallbackFeed =
+    !feedLoading &&
+    dailyPosts.length === 0 &&
+    fallbackPosts.length > 0 &&
+    (feed?.status === "refreshing" || feed?.status === "error" || feedError != null);
+  const displayedDailyPosts = usingFallbackFeed ? fallbackPosts : dailyPosts;
+
   const usingExploreSearch = exploreSubmitted.trim().length >= 3;
 
   const explorePosts = useMemo(
@@ -481,10 +502,12 @@ export default function ViralPosts() {
   };
 
   const feedUpdatedToday =
-    feed?.generatedAt != null &&
+    feed?.status === "ready" &&
+    dailyPosts.length > 0 &&
+    feed.generatedAt != null &&
     localDateString(new Date(feed.generatedAt)) === localDate;
 
-  const displayFeedError = feedError;
+  const displayFeedError = usingFallbackFeed ? null : feedError;
 
   return (
     <div className="mx-auto max-w-[1400px] p-3 sm:p-6" data-testid="viral-posts-page">
@@ -545,7 +568,9 @@ export default function ViralPosts() {
               <h2 className="text-[22px] font-extrabold text-[#f6f4fb]">
                 {feedLoading
                   ? "Finding fresh posts for you"
-                  : `${dailyPosts.length} fresh posts for you today`}
+                  : usingFallbackFeed
+                    ? `${displayedDailyPosts.length} strong posts for you`
+                    : `${dailyPosts.length} fresh posts for you today`}
               </h2>
               <p className="text-sm text-[#a9a4b8]">
                 Based on your audience, content pillars, and previous activity.
@@ -554,6 +579,10 @@ export default function ViralPosts() {
             {feedUpdatedToday ? (
               <span className="inline-flex items-center gap-1.5 py-1.5 text-xs font-bold text-[#bff8e4]">
                 ✓ Updated today
+              </span>
+            ) : usingFallbackFeed ? (
+              <span className="inline-flex items-center gap-1.5 py-1.5 text-xs font-bold text-[#c8bddf]">
+                Fresh picks updating
               </span>
             ) : null}
           </div>
@@ -575,13 +604,15 @@ export default function ViralPosts() {
             </div>
           ) : null}
 
-          {feed?.status === "refreshing" && !feedLoading ? (
+          {(feed?.status === "refreshing" || usingFallbackFeed) && !feedLoading ? (
             <div className="mb-[18px] flex flex-col gap-3 rounded-[11px] border border-[#3a3550] bg-[#171522] px-3.5 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-sm text-[#a9a4b8]">
-                {dailyPosts.length > 0
-                  ? "Showing the best matches we have while we refresh your niche pool."
-                  : feed.errorMessage ||
-                    "Refreshing your niche pool for stronger matches. You can keep using the page."}
+                {usingFallbackFeed
+                  ? "Fresh picks are updating. Showing your latest strong matches for now."
+                  : dailyPosts.length > 0
+                    ? "Showing the best matches we have while we refresh your niche pool."
+                    : feed?.errorMessage ||
+                      "Refreshing your niche pool for stronger matches. You can keep using the page."}
               </div>
               <Button
                 type="button"
@@ -632,10 +663,10 @@ export default function ViralPosts() {
           ) : (
             <div>
               <h3 className="mb-3 text-base font-bold text-[#f6f4fb]">
-                Generated on {formatFeedLocalDate(localDate)}
+                Generated on {formatFeedLocalDate(usingFallbackFeed && fallbackFeed ? fallbackFeed.localDate : localDate)}
               </h3>
               <ViralPostGrid
-                posts={dailyPosts}
+                posts={displayedDailyPosts}
                 loading={feedLoading}
                 emptyTitle="We couldn't find enough strong matches yet."
                 emptyDescription="Try adjusting recommendations or explore more posts."
@@ -645,6 +676,7 @@ export default function ViralPosts() {
           )}
 
           {historyFeeds.map((day) => {
+            if (usingFallbackFeed && fallbackFeed?.feedId === day.feedId) return null;
             const posts = filterVisiblePosts(day.items, hiddenCreatorKeys);
             if (posts.length === 0 && day.status !== "error") return null;
             return (
@@ -692,7 +724,7 @@ export default function ViralPosts() {
             </div>
           ) : null}
 
-          {!feedLoading && dailyPosts.length > 0 ? (
+          {!feedLoading && displayedDailyPosts.length > 0 ? (
             <div className="mt-8 rounded-2xl border border-[#2b2739] bg-[#111019] px-6 py-10 text-center">
               <h3 className="text-lg font-bold text-[#f6f4fb]">
                 You've seen today's best matches
