@@ -134,11 +134,13 @@ export function parseYouTubeSearchShort(row: unknown): YouTubeVideoData | null {
 export function extractYouTubeSearchShorts(data: unknown): YouTubeVideoData[] {
   if (!data || typeof data !== "object") return [];
   const root = data as YouTubeSearchResponse;
-  const rows = Array.isArray(root.shorts)
-    ? root.shorts
-    : Array.isArray(root.videos)
-      ? root.videos
-      : [];
+  // ScrapeCreators has returned Shorts in either `shorts` or `videos` across
+  // different YouTube surfaces. Read both so a provider payload shape change
+  // cannot silently collapse the pool to zero.
+  const rows = [
+    ...(Array.isArray(root.shorts) ? root.shorts : []),
+    ...(Array.isArray(root.videos) ? root.videos : []),
+  ];
 
   const byId = new Map<string, YouTubeVideoData>();
   for (const row of rows) {
