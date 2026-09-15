@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import mysql from "mysql2/promise";
 
 const databaseUrl = process.env.DATABASE_URL?.trim();
@@ -71,3 +72,26 @@ try {
 }
 
 await import("./ensure-complimentary-access-schema.mjs");
+
+// One-time dark benchmark only. The normal value is blank, so production does
+// nothing. When explicitly set, launch the benchmark in a detached child after
+// schema preflight. The web server starts normally and YouTube stays hard-off
+// for users. This process never changes pools or feed state.
+const youtubeBenchmarkRunId = process.env.YOUTUBE_SHADOW_BENCHMARK_RUN_ID?.trim();
+if (youtubeBenchmarkRunId) {
+  console.info("[youtube.shadow] launch_requested", {
+    runId: youtubeBenchmarkRunId,
+    userExposure: false,
+    youtubeFeedEnabled: false,
+  });
+  const child = spawn(
+    "pnpm",
+    ["tsx", "scripts/youtube-live-benchmark.ts"],
+    {
+      env: process.env,
+      stdio: "inherit",
+      detached: true,
+    }
+  );
+  child.unref();
+}
