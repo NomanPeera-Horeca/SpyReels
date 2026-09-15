@@ -17,6 +17,9 @@ const LEGACY_MCP_PROTOCOL_VERSIONS = new Set([
   "2025-11-25",
 ]);
 const SERVER_INFO = { name: "SpyReels", version: "1.0.0" } as const;
+const SERVER_INSTRUCTIONS =
+  "SpyReels helps creators research public social content and turn performance signals into actionable content intelligence.";
+const PRIVATE_CACHE_HINT = { ttlMs: 300_000, cacheScope: "private" } as const;
 
 type JsonRpcId = string | number | null;
 type JsonRpcRequest = {
@@ -143,13 +146,17 @@ function listMcpTools() {
 
 function discoverResult() {
   return {
+    resultType: "complete" as const,
+    supportedVersions: [
+      CURRENT_MCP_PROTOCOL_VERSION,
+      ...LEGACY_MCP_PROTOCOL_VERSIONS,
+    ],
     capabilities: {
       tools: { listChanged: false },
     },
-    _meta: {
-      "io.modelcontextprotocol/protocolVersion": CURRENT_MCP_PROTOCOL_VERSION,
-      "io.modelcontextprotocol/serverInfo": SERVER_INFO,
-    },
+    serverInfo: SERVER_INFO,
+    instructions: SERVER_INSTRUCTIONS,
+    ...PRIVATE_CACHE_HINT,
   };
 }
 
@@ -163,9 +170,16 @@ function legacyInitializeResult(protocolVersion: string) {
       tools: { listChanged: false },
     },
     serverInfo: SERVER_INFO,
-    instructions:
-      "SpyReels helps creators research public social content and turn performance signals into actionable content intelligence.",
+    instructions: SERVER_INSTRUCTIONS,
   };
+}
+
+function modernCompleteResult<T extends Record<string, unknown>>(
+  protocolVersion: string,
+  result: T
+): T | ({ resultType: "complete" } & T) {
+  if (protocolVersion !== CURRENT_MCP_PROTOCOL_VERSION) return result;
+  return { resultType: "complete", ...result };
 }
 
 function textContent(value: unknown): Array<{ type: "text"; text: string }> {
@@ -187,21 +201,27 @@ async function handleMcpMethod(
 ): Promise<unknown> {
   switch (request.method) {
     case "ping":
-      return {};
+      return modernCompleteResult(protocolVersion, {});
 
     case "server/discover":
+      if (protocolVersion !== CURRENT_MCP_PROTOCOL_VERSION) {
+        throw Object.assign(new Error("Method not found"), { jsonRpcCode: -32601 });
+      }
       return discoverResult();
 
     case "initialize":
+      if (protocolVersion === CURRENT_MCP_PROTOCOL_VERSION) {
+        throw Object.assign(new Error("Method not found"), { jsonRpcCode: -32601 });
+      }
       return legacyInitializeResult(protocolVersion);
 
     case "tools/list":
-      return {
+      return modernCompleteResult(protocolVersion, {
         tools: listMcpTools(),
         ...(protocolVersion === CURRENT_MCP_PROTOCOL_VERSION
-          ? { ttlMs: 300_000, cacheScope: "private" }
+          ? PRIVATE_CACHE_HINT
           : {}),
-      };
+      });
 
     case "tools/call": {
       const params =
@@ -210,13 +230,13 @@ async function handleMcpMethod(
           : {};
       const name = typeof params.name === "string" ? params.name : "";
       if (!name) {
-        return {
+        return modernCompleteResult(protocolVersion, {
           content: textContent({
             code: "INVALID_INPUT",
             message: "tools/call requires params.name.",
           }),
           isError: true,
-        };
+        });
       }
       const result = await executeSpyReelsAiTool(
         name,
@@ -224,13 +244,13 @@ async function handleMcpMethod(
         context
       );
       if (!result.ok) {
-        return {
+        return modernCompleteResult(protocolVersion, {
           content: textContent(result.error),
           structuredContent: { error: result.error, meta: result.meta },
           isError: true,
-        };
+        });
       }
-      return {
+      return modernCompleteResult(protocolVersion, {
         content: textContent(result.data),
         structuredContent:
           result.data && typeof result.data === "object"
@@ -240,7 +260,7 @@ async function handleMcpMethod(
         _meta: {
           spyreels: result.meta,
         },
-      };
+      });
     }
 
     default:
@@ -319,6 +339,17 @@ export function registerAiMcpRoute(app: Express): void {
       if (request.id === undefined) {
         res.status(202).send("");
         return;
+      }
+      if (request.method === "server/discover") {
+        console.info("[ai-gateway] MCP discovery served", {
+          protocolVersion,
+          toolCapability: true,
+        });
+      } else if (request.method === "tools/list") {
+        console.info("[ai-gateway] MCP tool catalog served", {
+          protocolVersion,
+          toolCount: listMcpTools().length,
+        });
       }
       res.json(jsonRpcResult(request.id, result));
     } catch (error) {
