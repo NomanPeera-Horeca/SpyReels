@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   normalizeRequestedScopes,
+  selectCimdTokenEndpointAuthMethod,
   validateAiOAuthClientSecret,
   validateAiOAuthRedirectUri,
   type ResolvedAiOAuthClient,
@@ -55,5 +56,31 @@ describe("AI Gateway OAuth client validation", () => {
     expect(validateAiOAuthClientSecret(value, "correct-secret")).toBe(true);
     expect(validateAiOAuthClientSecret(value, "wrong-secret")).toBe(false);
     expect(validateAiOAuthClientSecret(value, undefined)).toBe(false);
+  });
+
+  it("negotiates ChatGPT transition CIMD metadata to the supported public PKCE path", () => {
+    expect(
+      selectCimdTokenEndpointAuthMethod({
+        token_endpoint_auth_methods_supported: ["none", "private_key_jwt"],
+        token_endpoint_auth_method: "private_key_jwt",
+      })
+    ).toBe("none");
+  });
+
+  it("keeps supporting legacy CIMD clients that explicitly use none", () => {
+    expect(
+      selectCimdTokenEndpointAuthMethod({
+        token_endpoint_auth_method: "none",
+      })
+    ).toBe("none");
+  });
+
+  it("rejects CIMD clients when there is no supported auth-method intersection", () => {
+    expect(
+      selectCimdTokenEndpointAuthMethod({
+        token_endpoint_auth_methods_supported: ["private_key_jwt"],
+        token_endpoint_auth_method: "private_key_jwt",
+      })
+    ).toBeNull();
   });
 });
