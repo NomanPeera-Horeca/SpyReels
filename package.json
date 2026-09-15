@@ -10,6 +10,7 @@
     "check": "tsc --noEmit && node scripts/verify-resend-tags.mjs",
     "format": "prettier --write .",
     "test": "vitest run",
+    "test:ai-gateway:e2e": "vitest run server/aiGateway/e2eHarness.test.ts",
     "db:push": "drizzle-kit generate && drizzle-kit migrate",
     "cap:sync": "pnpm build && npx cap sync",
     "cap:ios": "npx cap open ios",

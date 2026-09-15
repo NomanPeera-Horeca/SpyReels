@@ -10,22 +10,37 @@ import type { NextFunction, Request, Response } from "express";
  *
  * Requests without an `Origin` header (curl, server-to-server integrations,
  * some bots) are allowed through: those clients do not carry the victim's
- * cookies, so they cannot mount a CSRF attack. The same applies to the
- * signature-verified webhooks excluded below (Stripe/Resend/Telegram), which
- * are authenticated by payload signature rather than a cookie.
+ * cookies, so they cannot mount a CSRF attack. The same applies to routes
+ * authenticated by signatures or bearer/OAuth credentials rather than a
+ * browser session cookie.
  */
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
-/** Signature-verified webhooks — no cookie auth, CSRF does not apply. */
+/** Signature-verified webhooks, no cookie auth, CSRF does not apply. */
 const SIGNED_WEBHOOK_PATHS = new Set([
   "/api/stripe/webhook",
   "/api/resend/webhook",
   "/api/telegram/webhook",
 ]);
 
-/** Bearer-token-authenticated extension API — not cookie-authenticated. */
+/** Bearer-token-authenticated extension API, not cookie-authenticated. */
 const BEARER_API_PREFIXES = ["/api/ext", "/api/extension"];
+
+/**
+ * OAuth token/revocation, MCP, and REST AI tools are external protocol
+ * endpoints. They use client credentials, PKCE, refresh tokens, or bearer
+ * access tokens and must remain callable by AI hosts that may send their own
+ * Origin header. The authorization consent POST is intentionally NOT exempt
+ * because it is browser-session authenticated and should retain first-party
+ * CSRF protection.
+ */
+const EXTERNAL_AI_AUTH_PATHS = new Set([
+  "/api/ai/oauth/token",
+  "/api/ai/oauth/revoke",
+  "/api/ai/mcp",
+]);
+const EXTERNAL_AI_BEARER_PREFIXES = ["/api/ai/v1/"];
 
 const DEV_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
@@ -51,6 +66,8 @@ export function csrfOriginGuard(req: Request, res: Response, next: NextFunction)
 
   if (SIGNED_WEBHOOK_PATHS.has(req.path)) return next();
   if (BEARER_API_PREFIXES.some(prefix => req.path.startsWith(prefix))) return next();
+  if (EXTERNAL_AI_AUTH_PATHS.has(req.path)) return next();
+  if (EXTERNAL_AI_BEARER_PREFIXES.some(prefix => req.path.startsWith(prefix))) return next();
 
   const origin = req.headers.origin;
   // No Origin header = not a browser cross-origin request; allow through.
