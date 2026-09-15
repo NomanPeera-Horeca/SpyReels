@@ -25,6 +25,7 @@ type CimdDocument = {
   redirect_uris?: unknown;
   scope?: unknown;
   token_endpoint_auth_method?: unknown;
+  token_endpoint_auth_methods_supported?: unknown;
   response_types?: unknown;
   grant_types?: unknown;
 };
@@ -126,6 +127,29 @@ function requestedScopesFromMetadata(document: CimdDocument): string[] {
   return intersection.length > 0 ? intersection : [...AI_GATEWAY_SCOPES];
 }
 
+/**
+ * ChatGPT's current CIMD transition metadata publishes both a plural list of
+ * supported token-endpoint auth methods and a legacy singular preference.
+ * OAuth servers must negotiate from the intersection. SpyReels currently
+ * supports the public PKCE path (`none`) for CIMD clients, so a legacy
+ * `private_key_jwt` preference must not cause rejection when the plural list
+ * also offers `none`.
+ */
+export function selectCimdTokenEndpointAuthMethod(
+  document: Pick<
+    CimdDocument,
+    "token_endpoint_auth_method" | "token_endpoint_auth_methods_supported"
+  >
+): "none" | null {
+  const advertised = normalizeStringArray(document.token_endpoint_auth_methods_supported);
+  if (advertised.length > 0) {
+    return advertised.includes("none") ? "none" : null;
+  }
+
+  if (document.token_endpoint_auth_method == null) return "none";
+  return document.token_endpoint_auth_method === "none" ? "none" : null;
+}
+
 async function fetchCimdClient(clientId: string): Promise<ResolvedAiOAuthClient> {
   const url = await assertPublicHttpsUrl(clientId);
   const controller = new AbortController();
@@ -180,11 +204,10 @@ async function fetchCimdClient(clientId: string): Promise<ResolvedAiOAuthClient>
     }
   }
 
-  if (
-    document.token_endpoint_auth_method != null &&
-    document.token_endpoint_auth_method !== "none"
-  ) {
-    throw new Error("CIMD clients must use token_endpoint_auth_method=none.");
+  if (!selectCimdTokenEndpointAuthMethod(document)) {
+    throw new Error(
+      "CIMD client does not offer a token endpoint authentication method supported by SpyReels."
+    );
   }
 
   return {
