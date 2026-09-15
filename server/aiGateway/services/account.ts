@@ -35,15 +35,25 @@ export async function getAccountUsage(actor: AiGatewayActor) {
   };
 
   if (unlimitedUsage) {
+    const accessLabel = actor.role === "admin" ? "Admin" : "Owner";
     return {
       access: {
         mode: "unlimited" as const,
-        label: actor.role === "admin" ? "Admin" : "Owner",
+        label: accessLabel,
         status: "active" as const,
         unlimitedUsage: true,
         authoritative: true,
         message:
           "This SpyReels account has unlimited usage. Billing-plan quotas do not apply to this account.",
+      },
+      // Backward-compatible effective plan view for existing AI clients.
+      plan: {
+        id: "admin" as const,
+        name: accessLabel,
+        status: "active" as const,
+        billingInterval: null,
+        cancelAtPeriodEnd: false,
+        currentPeriodEnd: null,
       },
       usage,
       limits: null,
@@ -58,6 +68,16 @@ export async function getAccountUsage(actor: AiGatewayActor) {
       status: subscription.status,
       unlimitedUsage: false,
       authoritative: true,
+    },
+    plan: {
+      id: planId,
+      name: plan.name,
+      status: subscription.status,
+      billingInterval: subscription.billingInterval,
+      cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+      currentPeriodEnd: subscription.currentPeriodEnd
+        ? subscription.currentPeriodEnd.toISOString()
+        : null,
     },
     usage,
     limits: getPlanLimits(planId),
