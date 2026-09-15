@@ -6,6 +6,7 @@ import {
   routeSemanticPoolCandidates,
   type SemanticPoolRejected,
 } from "./semanticPoolRelevance";
+import { generateYouTubeShortsSearchQueries } from "./youtubeQueryGeneration";
 
 const SCRAPECREATORS_API_BASE = "https://api.scrapecreators.com";
 const DEFAULT_SC_USD_PER_CREDIT = 0.002;
@@ -62,9 +63,8 @@ function uniqueNonEmpty(values: string[]): string[] {
 }
 
 /**
- * Search phrases are derived only from the current pool's niche and pillar.
- * No niche is hard-coded, so Restaurants, Fitness, Real Estate, Beauty, Finance,
- * and future niches all use the same supply engine.
+ * Deterministic fallback used when AI query generation is unavailable.
+ * Live discovery now prefers creator-language queries from youtubeQueryGeneration.
  */
 export function buildYouTubeShortsSearchQueries(args: {
   niche: string;
@@ -134,9 +134,6 @@ export function parseYouTubeSearchShort(row: unknown): YouTubeVideoData | null {
 export function extractYouTubeSearchShorts(data: unknown): YouTubeVideoData[] {
   if (!data || typeof data !== "object") return [];
   const root = data as YouTubeSearchResponse;
-  // ScrapeCreators has returned Shorts in either `shorts` or `videos` across
-  // different YouTube surfaces. Read both so a provider payload shape change
-  // cannot silently collapse the pool to zero.
   const rows = [
     ...(Array.isArray(root.shorts) ? root.shorts : []),
     ...(Array.isArray(root.videos) ? root.videos : []),
@@ -206,8 +203,6 @@ async function searchYouTubeShorts(args: {
 /**
  * Search-first YouTube Shorts supply for one niche/pillar pool.
  * This module does not create pools, change ranking, or enable YouTube in production.
- * The platform remains behind the Viral Posts YouTube feature flag until integration
- * and provider smoke tests are complete.
  */
 export async function discoverYouTubePoolCandidates(args: {
   niche: string;
@@ -216,11 +211,12 @@ export async function discoverYouTubePoolCandidates(args: {
   region?: string;
 }): Promise<YouTubePoolDiscoveryResult> {
   const maxScCalls = Math.max(0, Math.floor(args.maxScCalls));
-  const queries = buildYouTubeShortsSearchQueries({
+  const queryGeneration = await generateYouTubeShortsSearchQueries({
     niche: args.niche,
     pillar: args.pillar,
     limit: Math.min(YOUTUBE_POOL_MAX_SEARCH_QUERIES, maxScCalls || 1),
   });
+  const queries = queryGeneration.queries;
 
   const allShorts = new Map<string, YouTubeVideoData>();
   let searchCalls = 0;
@@ -299,6 +295,7 @@ export async function discoverYouTubePoolCandidates(args: {
     niche: args.niche,
     pillar: args.pillar,
     queries,
+    queryGenerationAi: queryGeneration.aiGenerated,
     searchCalls,
     searchSuccesses,
     searchFailures,
