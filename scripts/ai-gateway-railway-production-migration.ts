@@ -27,7 +27,7 @@ if (!parsed.hostname.includes(expectedHostToken)) {
   );
 }
 
-const migrationPath = path.resolve("drizzle/0096_ai_gateway_oauth.sql");
+const migrationPath = path.resolve("drizzle/0097_ai_gateway_oauth.sql");
 const migrationSql = await fs.readFile(migrationPath, "utf8");
 
 const connection = await mysql.createConnection({
@@ -78,7 +78,7 @@ try {
   const userCountBefore = Number(userCountBeforeRows[0]?.count || 0);
 
   const [lockRows] = await connection.query<mysql.RowDataPacket[]>(
-    "SELECT GET_LOCK('spyreels_ai_gateway_oauth_0096', 10) AS acquired"
+    "SELECT GET_LOCK('spyreels_ai_gateway_oauth_0097', 10) AS acquired"
   );
   lockAcquired = Number(lockRows[0]?.acquired || 0) === 1;
   if (!lockAcquired) {
@@ -138,7 +138,7 @@ try {
 } finally {
   if (lockAcquired) {
     try {
-      await connection.query("SELECT RELEASE_LOCK('spyreels_ai_gateway_oauth_0096')");
+      await connection.query("SELECT RELEASE_LOCK('spyreels_ai_gateway_oauth_0097')");
     } catch {
       // Connection close also releases the lock.
     }
