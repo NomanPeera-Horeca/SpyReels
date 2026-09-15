@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { reportDirectAnthropicUsage } from "../_core/llmMeasured";
 import type { AdaptedCandidate } from "./candidateAdapter";
+import { DEFAULT_CONTENT_PILLARS } from "./constants";
 
 export const SEMANTIC_POOL_MODEL = "claude-haiku-4-5-20251001";
 export const MIN_SEMANTIC_POOL_CONFIDENCE = 0.55;
@@ -39,8 +40,8 @@ export type SemanticPoolClassificationResult = {
 };
 
 /**
- * Generic semantic policy. The actual user niche and active pillars are injected
- * per request by buildSemanticPoolPrompt(), so no niche is hard-coded here.
+ * Generic semantic policy. The current niche and active pillars are injected
+ * per request so the policy itself never assumes a specific creator niche.
  */
 export const SEMANTIC_POOL_PROMPT = `You classify already-viral short-form videos for SpyReels creator inspiration pools. Videos may be Instagram Reels, TikTok videos, or YouTube Shorts.
 
@@ -75,7 +76,7 @@ RULES:
 12. Do not use em dashes.
 13. Return ONLY the JSON object, no preamble or code fences.`;
 
-function cleanActivePillars(activePillars: string[]): string[] {
+function cleanActivePillars(activePillars: readonly string[]): string[] {
   const out: string[] = [];
   const seen = new Set<string>();
   for (const value of activePillars) {
@@ -87,9 +88,21 @@ function cleanActivePillars(activePillars: string[]): string[] {
   return out.slice(0, 12);
 }
 
+/**
+ * Backward-compatible resolution for the existing Instagram restaurant-family
+ * caller. New or generic callers should pass their real active pillars explicitly.
+ * Non-restaurant admission paths remain unchanged by this release.
+ */
+function resolveActivePillars(activePillars?: readonly string[]): string[] {
+  const explicit = cleanActivePillars(activePillars ?? []);
+  return explicit.length > 0
+    ? explicit
+    : cleanActivePillars(DEFAULT_CONTENT_PILLARS);
+}
+
 export function buildSemanticPoolPrompt(args: {
   niche: string;
-  activePillars: string[];
+  activePillars: readonly string[];
 }): string {
   const niche = args.niche.trim() || "General creator niche";
   const activePillars = cleanActivePillars(args.activePillars);
@@ -126,7 +139,7 @@ function validPillar(value: unknown, activePillars: Set<string>): string | null 
 
 export function normalizeSemanticPoolVerdict(
   row: unknown,
-  activePillarsInput: string[]
+  activePillarsInput: readonly string[] = DEFAULT_CONTENT_PILLARS
 ): SemanticPoolVerdict | null {
   if (!row || typeof row !== "object") return null;
   const raw = row as Record<string, unknown>;
@@ -208,14 +221,11 @@ async function classifyBatch(
  */
 export async function classifySemanticPoolRelevance(args: {
   niche: string;
-  activePillars: string[];
+  activePillars?: readonly string[];
   candidates: AdaptedCandidate[];
 }): Promise<SemanticPoolClassificationResult> {
   if (args.candidates.length === 0) return { verdicts: [], haikuCalls: 0 };
-  const activePillars = cleanActivePillars(args.activePillars);
-  if (activePillars.length === 0) {
-    throw new Error("Semantic pool relevance requires at least one active pillar");
-  }
+  const activePillars = resolveActivePillars(args.activePillars);
   if (!process.env.ANTHROPIC_API_KEY?.trim()) {
     throw new Error("ANTHROPIC_API_KEY is not configured for semantic pool relevance");
   }
