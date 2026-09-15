@@ -23,7 +23,7 @@ if (!parsed.hostname.includes(expectedHostToken)) {
   );
 }
 
-const migrationPath = path.resolve("drizzle/0096_ai_gateway_oauth.sql");
+const migrationPath = path.resolve("drizzle/0097_ai_gateway_oauth.sql");
 const migrationSql = await fs.readFile(migrationPath, "utf8");
 
 const connection = await mysql.createConnection({
