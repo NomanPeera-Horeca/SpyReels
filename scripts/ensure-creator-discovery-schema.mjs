@@ -73,10 +73,8 @@ try {
 
 await import("./ensure-complimentary-access-schema.mjs");
 
-// One-time dark benchmark only. The normal value is blank, so production does
-// nothing. When explicitly set, launch the benchmark in a detached child after
-// schema preflight. The web server starts normally and YouTube stays hard-off
-// for users. This process never changes pools or feed state.
+// One-time dark semantic benchmark only. The normal value is blank, so
+// production does nothing. This process never changes pools or feed state.
 const youtubeBenchmarkRunId = process.env.YOUTUBE_SHADOW_BENCHMARK_RUN_ID?.trim();
 if (youtubeBenchmarkRunId) {
   console.info("[youtube.shadow] launch_requested", {
@@ -87,6 +85,30 @@ if (youtubeBenchmarkRunId) {
   const child = spawn(
     "pnpm",
     ["tsx", "scripts/youtube-live-benchmark.ts"],
+    {
+      env: process.env,
+      stdio: "inherit",
+      detached: true,
+    }
+  );
+  child.unref();
+}
+
+// One-time provider-only benchmark. This exists so we can validate live
+// YouTube search supply even when the semantic model account is unavailable.
+// It never writes to pools, never changes ranking, and never exposes YouTube.
+const youtubeProviderBenchmarkRunId =
+  process.env.YOUTUBE_PROVIDER_BENCHMARK_RUN_ID?.trim();
+if (youtubeProviderBenchmarkRunId) {
+  console.info("[youtube.providerBenchmark] launch_requested", {
+    runId: youtubeProviderBenchmarkRunId,
+    semanticEvaluation: "not_run_provider_only",
+    userExposure: false,
+    youtubeFeedEnabled: false,
+  });
+  const child = spawn(
+    "pnpm",
+    ["tsx", "scripts/youtube-provider-live-benchmark.ts"],
     {
       env: process.env,
       stdio: "inherit",
