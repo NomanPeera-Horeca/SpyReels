@@ -63,9 +63,9 @@ export function createSpyReelsAiToolRegistry(): AiGatewayRegistry {
 
   registry.register({
     name: "get_usage",
-    title: "Get SpyReels plan and usage",
+    title: "Get SpyReels access and usage",
     description:
-      "Return the connected user's current SpyReels plan, configured limits, and usage counters so the AI can explain availability before expensive actions.",
+      "Return the connected user's effective SpyReels access and usage. Treat access as authoritative: owner/admin accounts can have unlimited usage even when historical billing metadata shows a free or cancelled subscription.",
     category: "account",
     auth: "required",
     readOnly: true,
