@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const ROOT = process.cwd();
-const MIGRATION_NAME = "0096_ai_gateway_oauth.sql";
+const MIGRATION_NAME = "0097_ai_gateway_oauth.sql";
 const migrationPath = resolve(ROOT, "drizzle", MIGRATION_NAME);
 const migrationSql = readFileSync(migrationPath, "utf8");
 const drizzleSchemaSource = readFileSync(
@@ -29,9 +29,9 @@ function declaredColumns(block: string): string[] {
 }
 
 describe("AI Gateway OAuth migration contract", () => {
-  it("owns the next migration number without a sibling 0096 collision", () => {
+  it("owns the next migration number without a sibling 0097 collision", () => {
     const siblings = readdirSync(resolve(ROOT, "drizzle"))
-      .filter((name) => /^0096_.*\.sql$/.test(name))
+      .filter((name) => /^0097_.*\.sql$/.test(name))
       .sort();
     expect(siblings).toEqual([MIGRATION_NAME]);
   });
