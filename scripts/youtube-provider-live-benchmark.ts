@@ -1,9 +1,9 @@
 import "dotenv/config";
 import {
-  buildYouTubeShortsSearchQueries,
   extractYouTubeSearchShorts,
   prequalifyYouTubeSearchShorts,
 } from "../server/viralPosts/youtubePoolDiscovery";
+import { generateYouTubeShortsSearchQueries } from "../server/viralPosts/youtubeQueryGeneration";
 import type { YouTubeVideoData } from "../server/youtube";
 
 type BenchmarkCase = { niche: string; pillar: string };
@@ -84,23 +84,26 @@ async function main(): Promise<void> {
     rawShorts: number;
     uniqueShorts: number;
     prequalifiedShorts: number;
+    queryGenerationAi: boolean;
   }> = [];
 
   console.info("[youtube.providerBenchmark] benchmark_start", {
     runId,
     cases: CASES.length,
     maxCallsPerCase: MAX_CALLS_PER_CASE,
+    queryStrategy: "creator_language_ai_v2",
     semanticEvaluation: "not_run_provider_only",
     userExposure: false,
     youtubeFeedEnabled: false,
   });
 
   for (const testCase of CASES) {
-    const queries = buildYouTubeShortsSearchQueries({
+    const queryGeneration = await generateYouTubeShortsSearchQueries({
       niche: testCase.niche,
       pillar: testCase.pillar,
       limit: MAX_CALLS_PER_CASE,
     });
+    const queries = queryGeneration.queries;
     const byId = new Map<string, YouTubeVideoData>();
     let searchCalls = 0;
     let searchFailures = 0;
@@ -143,6 +146,7 @@ async function main(): Promise<void> {
       niche: testCase.niche,
       pillar: testCase.pillar,
       queries,
+      queryGenerationAi: queryGeneration.aiGenerated,
       searchCalls,
       searchFailures,
       rawShorts,
@@ -153,6 +157,7 @@ async function main(): Promise<void> {
     summaryRows.push({
       niche: testCase.niche,
       pillar: testCase.pillar,
+      queryGenerationAi: queryGeneration.aiGenerated,
       searchCalls,
       searchFailures,
       rawShorts,
@@ -181,12 +186,14 @@ async function main(): Promise<void> {
     durationMs: Date.now() - startedAt,
     casesPlanned: CASES.length,
     casesCompleted: summaryRows.length,
+    aiQueryCases: summaryRows.filter((row) => row.queryGenerationAi).length,
     searchCalls,
     searchFailures: summaryRows.reduce((sum, row) => sum + row.searchFailures, 0),
     rawShorts: summaryRows.reduce((sum, row) => sum + row.rawShorts, 0),
     uniqueShorts: summaryRows.reduce((sum, row) => sum + row.uniqueShorts, 0),
     prequalifiedShorts: summaryRows.reduce((sum, row) => sum + row.prequalifiedShorts, 0),
     providerCostEstimateUsd: Number((searchCalls * usdPerCredit).toFixed(4)),
+    queryStrategy: "creator_language_ai_v2",
     semanticEvaluation: "not_run_provider_only",
     summaryByNiche,
     userExposure: false,
