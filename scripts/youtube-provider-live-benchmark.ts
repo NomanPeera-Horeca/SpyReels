@@ -42,8 +42,7 @@ async function search(query: string): Promise<YouTubeVideoData[]> {
   const url = new URL(API_BASE);
   url.searchParams.set("query", query);
   url.searchParams.set("type", "shorts");
-  url.searchParams.set("sortBy", "popular");
-  url.searchParams.set("uploadDate", "this_month");
+  url.searchParams.set("sortBy", "relevance");
   url.searchParams.set("includeExtras", "true");
 
   const controller = new AbortController();
@@ -91,7 +90,9 @@ async function main(): Promise<void> {
     runId,
     cases: CASES.length,
     maxCallsPerCase: MAX_CALLS_PER_CASE,
-    queryStrategy: "creator_language_ai_v2",
+    queryStrategy: "keyword_ai_v3_broad_relevance",
+    sortBy: "relevance",
+    uploadDate: "none",
     semanticEvaluation: "not_run_provider_only",
     userExposure: false,
     youtubeFeedEnabled: false,
@@ -193,7 +194,9 @@ async function main(): Promise<void> {
     uniqueShorts: summaryRows.reduce((sum, row) => sum + row.uniqueShorts, 0),
     prequalifiedShorts: summaryRows.reduce((sum, row) => sum + row.prequalifiedShorts, 0),
     providerCostEstimateUsd: Number((searchCalls * usdPerCredit).toFixed(4)),
-    queryStrategy: "creator_language_ai_v2",
+    queryStrategy: "keyword_ai_v3_broad_relevance",
+    sortBy: "relevance",
+    uploadDate: "none",
     semanticEvaluation: "not_run_provider_only",
     summaryByNiche,
     userExposure: false,
