@@ -59,8 +59,6 @@ try {
     );
   }
 
-  // Verify the exact read path used by Viral Posts personalization. Using a
-  // user id that cannot match keeps the preflight read-only after schema setup.
   await connection.execute(
     "SELECT resultJson, createdAt FROM creator_discovery_searches WHERE userId = ? ORDER BY createdAt DESC LIMIT 1",
     [-1]
@@ -73,8 +71,6 @@ try {
 
 await import("./ensure-complimentary-access-schema.mjs");
 
-// One-time dark semantic benchmark only. The normal value is blank, so
-// production does nothing. This process never changes pools or feed state.
 const youtubeBenchmarkRunId = process.env.YOUTUBE_SHADOW_BENCHMARK_RUN_ID?.trim();
 if (youtubeBenchmarkRunId) {
   console.info("[youtube.shadow] launch_requested", {
@@ -94,9 +90,6 @@ if (youtubeBenchmarkRunId) {
   child.unref();
 }
 
-// One-time provider-only benchmark. This exists so we can validate live
-// YouTube search supply even when the semantic model account is unavailable.
-// It never writes to pools, never changes ranking, and never exposes YouTube.
 const youtubeProviderBenchmarkRunId =
   process.env.YOUTUBE_PROVIDER_BENCHMARK_RUN_ID?.trim();
 if (youtubeProviderBenchmarkRunId) {
@@ -109,6 +102,31 @@ if (youtubeProviderBenchmarkRunId) {
   const child = spawn(
     "pnpm",
     ["tsx", "scripts/youtube-provider-live-benchmark.ts"],
+    {
+      env: process.env,
+      stdio: "inherit",
+      detached: true,
+    }
+  );
+  child.unref();
+}
+
+// One-time broad-relevance semantic benchmark. It reuses the exact deterministic
+// queries and retrieval settings from the successful provider benchmark, then
+// evaluates semantic fit at 0.50 without changing the production 0.55 threshold.
+const youtubeSemanticBenchmarkRunId =
+  process.env.YOUTUBE_SEMANTIC_BENCHMARK_RUN_ID?.trim();
+if (youtubeSemanticBenchmarkRunId) {
+  console.info("[youtube.semanticBenchmark] launch_requested", {
+    runId: youtubeSemanticBenchmarkRunId,
+    benchmarkThreshold: 0.5,
+    productionThresholdUnchanged: 0.55,
+    userExposure: false,
+    youtubeFeedEnabled: false,
+  });
+  const child = spawn(
+    "pnpm",
+    ["tsx", "scripts/youtube-semantic-live-benchmark.ts"],
     {
       env: process.env,
       stdio: "inherit",
