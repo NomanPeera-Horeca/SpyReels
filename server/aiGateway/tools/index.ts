@@ -41,9 +41,9 @@ export function createSpyReelsAiToolRegistry(): AiGatewayRegistry {
 
   registry.register({
     name: "find_top_content",
-    title: "Find top creator Reels",
+    title: "Rank creator Reels from a bounded sample",
     description:
-      "Research a public Instagram creator and rank their strongest recent Reels by views or engagement.",
+      "Fetch a bounded sample of a public Instagram creator's Reels and rank that analyzed sample by views or engagement. The result includes sample size and date range and must not be described as the creator's absolute all-time top Reels.",
     category: "research",
     auth: "required",
     readOnly: true,
