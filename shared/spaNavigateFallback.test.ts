@@ -11,6 +11,12 @@ describe("SPA navigate fallback denylist", () => {
     expect(shouldUseSpaNavigateFallback("/_next/static/chunks/app.js")).toBe(false);
   });
 
+  it("keeps OAuth server routes out of the SPA/service-worker fallback", () => {
+    expect(shouldUseSpaNavigateFallback("/api/ai/oauth/authorize?client_id=test")).toBe(false);
+    expect(shouldUseSpaNavigateFallback("/api/ai/oauth/token")).toBe(false);
+    expect(shouldUseSpaNavigateFallback("/ai/oauth/continue?request=abc123")).toBe(false);
+  });
+
   it("does not broaden the exclusion to other /features pages", () => {
     expect(shouldUseSpaNavigateFallback("/features/30-day-content-plan")).toBe(true);
     expect(shouldUseSpaNavigateFallback("/features/ai-personal-brand-coach")).toBe(true);
