@@ -169,12 +169,54 @@ queryClient.getMutationCache().subscribe(event => {
   }
 });
 
-createRoot(document.getElementById("root")!).render(
-  <PostHogProvider client={posthog}>
-    <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>
-        <App />
-      </QueryClientProvider>
-    </trpc.Provider>
-  </PostHogProvider>
-);
+const root = createRoot(document.getElementById("root")!);
+const oauthAuthorizePath = "/api/ai/oauth/authorize";
+const renderOAuthHandoffFallback =
+  typeof window !== "undefined" && window.location.pathname === oauthAuthorizePath;
+
+if (renderOAuthHandoffFallback) {
+  // The API route normally owns this path. This UI is only a defensive fallback
+  // for browsers/service workers that restore the SPA after the OAuth callback.
+  // It prevents a successful connection from ending on SpyReels' generic 404.
+  root.render(
+    <main
+      style={{
+        minHeight: "100vh",
+        display: "grid",
+        placeItems: "center",
+        padding: 24,
+        background: "#09090b",
+        color: "#fafafa",
+        fontFamily: "Inter, ui-sans-serif, system-ui, sans-serif",
+      }}
+    >
+      <section
+        style={{
+          width: "min(520px, 100%)",
+          border: "1px solid #27272a",
+          borderRadius: 18,
+          padding: 28,
+          background: "#111113",
+          boxShadow: "0 22px 80px rgba(0,0,0,.36)",
+        }}
+      >
+        <div style={{ fontWeight: 750, marginBottom: 24 }}>SpyReels</div>
+        <h1 style={{ margin: "0 0 10px", fontSize: 26 }}>Connection handoff complete</h1>
+        <p style={{ margin: 0, color: "#a1a1aa", lineHeight: 1.6 }}>
+          Return to ChatGPT to continue. If ChatGPT does not show SpyReels as connected,
+          retry the connection from ChatGPT Plugins.
+        </p>
+      </section>
+    </main>
+  );
+} else {
+  root.render(
+    <PostHogProvider client={posthog}>
+      <trpc.Provider client={trpcClient} queryClient={queryClient}>
+        <QueryClientProvider client={queryClient}>
+          <App />
+        </QueryClientProvider>
+      </trpc.Provider>
+    </PostHogProvider>
+  );
+}

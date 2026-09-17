@@ -6,6 +6,7 @@ import {
   resolveInstagramIdentity,
   searchReelsByHandle,
   type InstagramIdentity,
+  type ProfileInfo,
   type SearchReelData,
 } from "../../instagram";
 import {
@@ -15,6 +16,19 @@ import {
 } from "../../stripe/stripe-service";
 import { AiGatewayError } from "../errors";
 import type { AiGatewayActor } from "../types";
+
+const TOP_CONTENT_MIN_SAMPLE = 10;
+const TOP_CONTENT_MAX_SAMPLE = 12;
+const TOP_CONTENT_CACHE_TTL_MS = 5 * 60 * 1000;
+const TOP_CONTENT_CACHE_MAX_ENTRIES = 100;
+
+type CachedCreatorSample = {
+  expiresAt: number;
+  profile: ProfileInfo;
+  reels: SearchReelData[];
+};
+
+const creatorSampleCache = new Map<string, CachedCreatorSample>();
 
 export interface CreatorSummary {
   username: string;
@@ -43,7 +57,17 @@ export interface RankedContentItem {
   thumbnailUrl: string;
 }
 
-function creatorSummary(identity: InstagramIdentity): CreatorSummary {
+export interface TopContentSampleMeta {
+  policy: "bounded_provider_sample";
+  requested: number;
+  analyzed: number;
+  newestPostedAt: string | null;
+  oldestPostedAt: string | null;
+  cacheHit: boolean;
+  statement: string;
+}
+
+function creatorSummary(identity: InstagramIdentity | ProfileInfo): CreatorSummary {
   return {
     username: identity.username,
     fullName: identity.fullName,
@@ -120,6 +144,105 @@ function mapRankedContent(item: SearchReelData): RankedContentItem {
   };
 }
 
+function normalizedHandle(handle: string): string {
+  return handle.replace(/^@/, "").trim().toLowerCase();
+}
+
+function sampleTarget(limit: number): number {
+  return Math.min(
+    TOP_CONTENT_MAX_SAMPLE,
+    Math.max(TOP_CONTENT_MIN_SAMPLE, limit * 2)
+  );
+}
+
+function pruneCreatorSampleCache(now = Date.now()): void {
+  for (const [key, value] of creatorSampleCache) {
+    if (value.expiresAt <= now) creatorSampleCache.delete(key);
+  }
+  while (creatorSampleCache.size > TOP_CONTENT_CACHE_MAX_ENTRIES) {
+    const oldestKey = creatorSampleCache.keys().next().value as string | undefined;
+    if (!oldestKey) break;
+    creatorSampleCache.delete(oldestKey);
+  }
+}
+
+async function getCreatorSample(
+  handle: string,
+  requested: number
+): Promise<{ reels: SearchReelData[]; profile: ProfileInfo; cacheHit: boolean }> {
+  const key = normalizedHandle(handle);
+  const now = Date.now();
+  pruneCreatorSampleCache(now);
+  const cached = creatorSampleCache.get(key);
+  if (cached && cached.expiresAt > now && cached.reels.length >= requested) {
+    return {
+      reels: cached.reels.slice(0, requested),
+      profile: cached.profile,
+      cacheHit: true,
+    };
+  }
+
+  const fresh = await searchReelsByHandle(handle, requested);
+  creatorSampleCache.set(key, {
+    expiresAt: now + TOP_CONTENT_CACHE_TTL_MS,
+    profile: fresh.profile,
+    reels: fresh.reels,
+  });
+  pruneCreatorSampleCache(now);
+  return { ...fresh, cacheHit: false };
+}
+
+function compareByRecencyThenShortcode(a: SearchReelData, b: SearchReelData): number {
+  const recency = b.postedAt.getTime() - a.postedAt.getTime();
+  if (recency !== 0) return recency;
+  return a.shortcode.localeCompare(b.shortcode);
+}
+
+export function sortTopContentDeterministically(
+  reels: SearchReelData[],
+  rankBy: "views" | "engagement"
+): SearchReelData[] {
+  return [...reels].sort((a, b) => {
+    if (rankBy === "engagement") {
+      return (
+        b.engagementRate - a.engagementRate ||
+        b.viewCount - a.viewCount ||
+        compareByRecencyThenShortcode(a, b)
+      );
+    }
+    return (
+      b.viewCount - a.viewCount ||
+      b.engagementRate - a.engagementRate ||
+      compareByRecencyThenShortcode(a, b)
+    );
+  });
+}
+
+function sampleMeta(
+  reels: SearchReelData[],
+  requested: number,
+  cacheHit: boolean
+): TopContentSampleMeta {
+  const validDates = reels
+    .map((reel) => reel.postedAt)
+    .filter((date) => !Number.isNaN(date.getTime()))
+    .sort((a, b) => a.getTime() - b.getTime());
+  const oldest = validDates[0] ?? null;
+  const newest = validDates.at(-1) ?? null;
+
+  return {
+    policy: "bounded_provider_sample",
+    requested,
+    analyzed: reels.length,
+    newestPostedAt: newest?.toISOString() ?? null,
+    oldestPostedAt: oldest?.toISOString() ?? null,
+    cacheHit,
+    statement:
+      `Ranked from ${reels.length} Reels returned in this bounded provider sample. ` +
+      "This is not an all-time ranking of every Reel the creator has posted.",
+  };
+}
+
 export async function findTopContent(input: {
   actor: AiGatewayActor;
   handle: string;
@@ -129,6 +252,7 @@ export async function findTopContent(input: {
   creator: CreatorSummary;
   rankBy: "views" | "engagement";
   sampleSize: number;
+  sample: TopContentSampleMeta;
   content: RankedContentItem[];
 }> {
   const usage = await checkUsageLimit(
@@ -152,35 +276,18 @@ export async function findTopContent(input: {
   await incrementUsage(input.actor.userId, "searchCount");
 
   try {
-    const sampleTarget = Math.min(50, Math.max(input.limit * 4, 20));
-    const { reels, profile } = await searchReelsByHandle(
+    const requested = sampleTarget(input.limit);
+    const { reels, profile, cacheHit } = await getCreatorSample(
       input.handle,
-      sampleTarget
+      requested
     );
-
-    const ranked = [...reels].sort((a, b) => {
-      if (input.rankBy === "engagement") {
-        return b.engagementRate - a.engagementRate || b.viewCount - a.viewCount;
-      }
-      return b.viewCount - a.viewCount || b.engagementRate - a.engagementRate;
-    });
+    const ranked = sortTopContentDeterministically(reels, input.rankBy);
 
     return {
-      creator: {
-        username: profile.username,
-        fullName: profile.fullName,
-        biography: profile.biography,
-        followerCount: profile.followerCount,
-        followingCount: profile.followingCount,
-        postCount: profile.postCount,
-        isVerified: profile.isVerified,
-        isPrivate: profile.isPrivate,
-        category: profile.category,
-        externalUrl: profile.externalUrl,
-        profilePicUrl: profile.profilePicUrl,
-      },
+      creator: creatorSummary(profile),
       rankBy: input.rankBy,
       sampleSize: reels.length,
+      sample: sampleMeta(reels, requested, cacheHit),
       content: ranked.slice(0, input.limit).map(mapRankedContent),
     };
   } catch (error) {

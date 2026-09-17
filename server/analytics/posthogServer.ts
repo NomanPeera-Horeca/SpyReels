@@ -1,13 +1,23 @@
 /** Fire-and-forget PostHog capture from the server (no posthog-node dependency). */
 
 function posthogHost(): string {
-  const raw = process.env.VITE_PUBLIC_POSTHOG_HOST?.trim() || "https://us.i.posthog.com";
+  const raw =
+    process.env.VITE_PUBLIC_POSTHOG_HOST?.trim() ||
+    process.env.POSTHOG_HOST?.trim() ||
+    "https://us.i.posthog.com";
   return raw.replace(/\/$/, "");
 }
 
-function posthogApiKey(): string | null {
+/**
+ * PostHog event ingestion requires the project token (phc_...), not the
+ * personal API key used by the build/sourcemap API. VITE_PUBLIC_POSTHOG_TOKEN
+ * is already the browser project's canonical ingestion token, so the server
+ * should use the same value. POSTHOG_PROJECT_TOKEN is supported for an
+ * explicit server-only override.
+ */
+function posthogProjectToken(): string | null {
   return (
-    process.env.POSTHOG_API_KEY?.trim() ||
+    process.env.POSTHOG_PROJECT_TOKEN?.trim() ||
     process.env.VITE_PUBLIC_POSTHOG_TOKEN?.trim() ||
     null
   );
@@ -18,7 +28,7 @@ export async function capturePostHogEvent(opts: {
   event: string;
   properties?: Record<string, unknown>;
 }): Promise<void> {
-  const apiKey = posthogApiKey();
+  const apiKey = posthogProjectToken();
   if (!apiKey) return;
 
   try {
@@ -28,15 +38,19 @@ export async function capturePostHogEvent(opts: {
       body: JSON.stringify({
         api_key: apiKey,
         event: opts.event,
-        distinct_id: opts.distinctId,
         properties: {
+          distinct_id: opts.distinctId,
           ...opts.properties,
           $lib: "spyreels-server",
         },
       }),
     });
     if (!res.ok) {
-      console.warn(`[PostHog] capture HTTP ${res.status} for ${opts.event}`);
+      const responseText = await res.text().catch(() => "");
+      console.warn(
+        `[PostHog] capture HTTP ${res.status} for ${opts.event}` +
+          (responseText ? ` (${responseText.slice(0, 160)})` : "")
+      );
     }
   } catch (err) {
     console.warn("[PostHog] capture failed:", err instanceof Error ? err.message : err);
