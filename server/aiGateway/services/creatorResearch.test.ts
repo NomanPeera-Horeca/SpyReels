@@ -8,19 +8,20 @@ const mocks = vi.hoisted(() => ({
   decrementUsage: vi.fn(),
 }));
 
-class InstagramHandleNotFoundError extends Error {}
-class InstagramPrivateAccountError extends Error {}
-class InstagramProviderError extends Error {}
-class InstagramRestrictedMediaError extends Error {}
-
-vi.mock("../../instagram", () => ({
-  InstagramHandleNotFoundError,
-  InstagramPrivateAccountError,
-  InstagramProviderError,
-  InstagramRestrictedMediaError,
-  resolveInstagramIdentity: mocks.resolveInstagramIdentity,
-  searchReelsByHandle: mocks.searchReelsByHandle,
-}));
+vi.mock("../../instagram", () => {
+  class InstagramHandleNotFoundError extends Error {}
+  class InstagramPrivateAccountError extends Error {}
+  class InstagramProviderError extends Error {}
+  class InstagramRestrictedMediaError extends Error {}
+  return {
+    InstagramHandleNotFoundError,
+    InstagramPrivateAccountError,
+    InstagramProviderError,
+    InstagramRestrictedMediaError,
+    resolveInstagramIdentity: mocks.resolveInstagramIdentity,
+    searchReelsByHandle: mocks.searchReelsByHandle,
+  };
+});
 
 vi.mock("../../stripe/stripe-service", () => ({
   checkUsageLimit: mocks.checkUsageLimit,
