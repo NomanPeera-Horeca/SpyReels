@@ -19,6 +19,8 @@ function statusForError(code: string): number {
       return 401;
     case "INSUFFICIENT_SCOPE":
       return 403;
+    case "CLARIFICATION_REQUIRED":
+      return 400;
     case "TOOL_NOT_FOUND":
     case "NOT_FOUND":
       return 404;
