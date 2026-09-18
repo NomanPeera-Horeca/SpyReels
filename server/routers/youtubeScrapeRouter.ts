@@ -238,6 +238,59 @@ export const youtubeScrapeRouter = router({
         };
       }),
 
+    /** Refresh an existing Creator Radar session without losing its last good data. */
+    resync: protectedProcedure
+      .input(z.object({ jobId: z.number() }))
+      .mutation(async ({ ctx, input }) => {
+        const db = await getDb();
+        if (!db) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Database not available",
+          });
+        }
+
+        const [job] = await db
+          .select()
+          .from(youtubeScrapeJobs)
+          .where(eq(youtubeScrapeJobs.id, input.jobId))
+          .limit(1);
+        if (!job) throw new TRPCError({ code: "NOT_FOUND", message: "Job not found" });
+        if (job.workspaceId !== ctx.workspaceId) throw new TRPCError({ code: "FORBIDDEN" });
+        if (job.status === "running" || job.status === "pending") {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "Refresh is already running" });
+        }
+
+        const daysSinceSync = Math.max(
+          1,
+          Math.ceil((Date.now() - new Date(job.updatedAt).getTime()) / 86_400_000)
+        );
+        await db
+          .update(youtubeScrapeJobs)
+          .set({
+            status: "running",
+            currentStep: "connecting",
+            progressPercent: 5,
+            errorMessage: null,
+          })
+          .where(eq(youtubeScrapeJobs.id, job.id));
+
+        runYouTubeScrapeJob(
+          job.id,
+          ctx.user.id,
+          ctx.workspaceId,
+          job.handle,
+          {
+            timeframeDays: job.timeframeDays ?? 30,
+            replaceExisting: true,
+          }
+        ).catch((error) => {
+          console.error(`YouTube refresh job ${job.id} failed:`, error);
+        });
+
+        return { jobId: job.id, daysSinceSync };
+      }),
+
     delete: protectedProcedure
       .input(z.object({ jobId: z.number() }))
       .mutation(async ({ ctx, input }) => {

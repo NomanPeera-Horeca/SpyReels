@@ -16,7 +16,7 @@ export async function runYouTubeScrapeJob(
   userId: number,
   workspaceId: string,
   handle: string,
-  options?: { maxVideos?: number; timeoutMs?: number; timeframeDays?: number }
+  options?: { maxVideos?: number; timeoutMs?: number; timeframeDays?: number; replaceExisting?: boolean }
 ): Promise<void> {
   const db = await getDb();
   if (!db) return;
@@ -79,7 +79,7 @@ export async function runYouTubeScrapeJob(
             })
             .where(eq(youtubeScrapeJobs.id, jobId));
 
-          if (batch.length > 0) {
+          if (batch.length > 0 && !options?.replaceExisting) {
             await db.insert(youtubeVideos).values(
               batch.map((video) => ({
                 jobId,
@@ -117,6 +117,32 @@ export async function runYouTubeScrapeJob(
     );
 
     await Promise.all(pendingWrites);
+
+    if (options?.replaceExisting) {
+      await db.transaction(async (tx) => {
+        await tx.delete(youtubeVideos).where(eq(youtubeVideos.jobId, jobId));
+        if (result.videos.length > 0) {
+          await tx.insert(youtubeVideos).values(
+            result.videos.map((video) => ({
+              jobId,
+              workspaceId,
+              videoId: video.videoId,
+              title: video.title,
+              description: video.description,
+              viewCount: video.viewCount,
+              likeCount: video.likeCount,
+              commentCount: video.commentCount,
+              thumbnailUrl: video.thumbnailUrl,
+              videoPageUrl: video.videoPageUrl,
+              durationSec: Math.round(video.durationSec),
+              postedAt: video.postedAt,
+              ownerHandle: video.ownerHandle,
+              outsideSpyWindow: video.outsideSpyWindow === true ? true : null,
+            }))
+          );
+        }
+      });
+    }
 
     const inWindowCount = result.videos.filter(
       (video) => video.outsideSpyWindow !== true
