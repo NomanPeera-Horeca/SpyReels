@@ -275,8 +275,42 @@ export async function remakeReelUrl(input: {
         gradeLevel,
         deliveryCuesIncluded: addCues,
         generatedScript: generated.generatedScript,
-        viralStructure: generated.viralStructure,
-        readabilityAnalysis: generated.readabilityAnalysis,
+        structure: {
+          hookType:
+            typeof (generated.viralStructure.hook as any)?.type === "string"
+              ? (generated.viralStructure.hook as any).type
+              : null,
+          pacing:
+            typeof (generated.viralStructure.body as any)?.pacing === "string"
+              ? (generated.viralStructure.body as any).pacing
+              : null,
+          transitionType:
+            typeof (generated.viralStructure.transition as any)?.type === "string"
+              ? (generated.viralStructure.transition as any).type
+              : null,
+          ctaType:
+            typeof (generated.viralStructure.cta as any)?.type === "string"
+              ? (generated.viralStructure.cta as any).type
+              : null,
+          tone:
+            typeof (generated.viralStructure as any)?.overallTone === "string"
+              ? (generated.viralStructure as any).overallTone
+              : null,
+        },
+        readability: {
+          gradeLevel:
+            typeof (generated.readabilityAnalysis as any)?.gradeLevel === "number"
+              ? (generated.readabilityAnalysis as any).gradeLevel
+              : null,
+          readingEase:
+            typeof (generated.readabilityAnalysis as any)?.readingEase === "number"
+              ? (generated.readabilityAnalysis as any).readingEase
+              : null,
+          wordCount:
+            typeof (generated.readabilityAnalysis as any)?.wordCount === "number"
+              ? (generated.readabilityAnalysis as any).wordCount
+              : null,
+        },
       },
       transcriptCache: transcriptResult.cache,
       grounding: {
