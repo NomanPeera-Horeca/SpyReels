@@ -100,32 +100,82 @@ export function createSpyReelsAiToolRegistry(): AiGatewayRegistry {
     name: "remake_reel",
     title: "Remake an Instagram Reel",
     description:
-      "Generate a new script from one exact public Instagram Reel URL using the same SpyReels remake engine as the app. Infer the user's remake intent naturally when it is clear; do not ask unnecessary setup questions. Map requests like 'keep the same topic' to same_topic. Map an explicit new subject or angle such as 'make this about menu engineering' to custom and pass that direction in angle. Map requests such as 'remake this for me', 'make this my version', 'adapt this to my niche', or 'remake this similarly for me' to niche so SpyReels uses the connected creator profile. If the user explicitly names a different niche or audience, treat that wording as an explicit custom direction so it is not overridden by the saved profile. Only when the user gives no usable direction, for example only 'remake this', ask one short natural clarification based on the three SpyReels choices: use my idea, keep this topic, or adapt to my niche. Do not mechanically list choices when the intent is already clear. custom requires angle. This action can consume normal SpyReels transcription/remake usage and never publishes content automatically.",
+      "Generate a new script from one exact public Instagram Reel URL using the same SpyReels remake engine as the app. Pass the user's actual remake wording in instruction. Do not choose an internal mode yourself. SpyReels resolves whether the request means keep the same topic, adapt to the connected creator profile, or use an explicit new angle. Only when the user's wording is genuinely vague, such as only 'remake this', ask one short natural clarification. Do not add a niche or topic the user did not state. This action can consume normal SpyReels transcription/remake usage and never publishes content automatically.",
     category: "creation",
     auth: "required",
     readOnly: false,
     requiredScope: "spyreels:create",
-    inputSchema: z.object({
-      url: z.string().trim().min(1).max(2048),
-      instruction: z
-        .string()
-        .trim()
-        .min(1)
-        .max(2000)
-        .describe(
-          "Copy the user's actual remake instruction as closely as possible, excluding the Reel URL. Do not add, infer, or paraphrase a niche, topic, or angle that the user did not state. SpyReels resolves the mode itself and will request clarification when the instruction is ambiguous."
-        ),
-      gradeLevel: z
-        .enum(["auto", "2", "3", "4", "5", "6", "7", "8"])
-        .default("auto"),
-    }),
-    execute: async (context, input) =>
-      remakeReelUrl({
+    inputSchema: z
+      .object({
+        url: z.string().trim().min(1).max(2048),
+        instruction: z
+          .string()
+          .trim()
+          .min(1)
+          .max(2000)
+          .optional()
+          .describe(
+            "Preferred field. Copy the user's actual remake instruction as closely as possible, excluding the Reel URL. Do not add, infer, or paraphrase a niche, topic, or angle that the user did not state. SpyReels resolves intent itself and requests clarification when the instruction is ambiguous."
+          ),
+        mode: z
+          .enum(["custom", "same_topic", "niche"])
+          .optional()
+          .describe(
+            "Deprecated compatibility field for AI hosts that cached the older tool schema. Do not use for new calls."
+          ),
+        angle: z
+          .string()
+          .trim()
+          .min(1)
+          .max(2000)
+          .optional()
+          .describe(
+            "Deprecated compatibility field. Only used with legacy mode=custom."
+          ),
+        gradeLevel: z
+          .enum(["auto", "2", "3", "4", "5", "6", "7", "8"])
+          .default("auto"),
+      })
+      .superRefine((value, ctx) => {
+        if (value.instruction?.trim()) return;
+
+        if (value.mode === "same_topic") return;
+
+        if (value.mode === "custom" && value.angle?.trim()) return;
+
+        if (value.mode === "niche") {
+          ctx.addIssue({
+            code: "custom",
+            path: ["instruction"],
+            message:
+              "This connector is using an older cached remake schema. Refresh or reconnect SpyReels, then retry so SpyReels can verify that adapt-to-niche was explicitly requested.",
+          });
+          return;
+        }
+
+        ctx.addIssue({
+          code: "custom",
+          path: ["instruction"],
+          message:
+            "Provide the user's actual remake instruction. A bare remake request must be clarified before generation.",
+        });
+      }),
+    execute: async (context, input) => {
+      const effectiveInstruction =
+        input.instruction?.trim() ||
+        (input.mode === "same_topic"
+          ? "keep the same topic"
+          : input.mode === "custom" && input.angle?.trim()
+            ? `make this about ${input.angle.trim()}`
+            : "");
+
+      return remakeReelUrl({
         actor: requireActor(context),
         url: input.url,
-        instruction: input.instruction,
+        instruction: effectiveInstruction,
         gradeLevel: input.gradeLevel,
-      }),
+      });
+    },
   });
 
   registry.register({
