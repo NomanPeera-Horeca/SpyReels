@@ -10,51 +10,56 @@ import {
 import { shouldSkipUnsupportedViralPostsPlatform } from "../poolRefresh";
 import { filterViralPostsV1PoolSpecs } from "../poolRepository";
 
-describe("Viral Posts V1 platforms", () => {
-  it("supports only Instagram and TikTok", () => {
-    expect([...VIRAL_POSTS_V1_PLATFORMS]).toEqual(["instagram", "tiktok"]);
+describe("Viral Posts platforms", () => {
+  it("supports Instagram, TikTok, and YouTube", () => {
+    expect([...VIRAL_POSTS_V1_PLATFORMS]).toEqual([
+      "instagram",
+      "tiktok",
+      "youtube",
+    ]);
     expect(isViralPostsV1Platform("instagram")).toBe(true);
     expect(isViralPostsV1Platform("tiktok")).toBe(true);
-    expect(isViralPostsV1Platform("youtube")).toBe(false);
-    expect(isViralPostsV1Platform("YOUTUBE")).toBe(false);
+    expect(isViralPostsV1Platform("youtube")).toBe(true);
+    expect(isViralPostsV1Platform("YOUTUBE")).toBe(true);
   });
 
-  it("treats YouTube as unsupported only for Viral Posts V1", () => {
-    expect(shouldSkipUnsupportedViralPostsPlatform("youtube")).toBe(true);
+  it("rejects only unknown platforms before provider spend", () => {
+    expect(shouldSkipUnsupportedViralPostsPlatform("youtube")).toBe(false);
     expect(shouldSkipUnsupportedViralPostsPlatform("instagram")).toBe(false);
     expect(shouldSkipUnsupportedViralPostsPlatform("tiktok")).toBe(false);
+    expect(shouldSkipUnsupportedViralPostsPlatform("unknown")).toBe(true);
   });
 
-  it("forces Viral Posts YouTube flag off even when live is on", () => {
+  it("keeps YouTube opt-in and gated by Viral Posts live mode", () => {
     expect(parseViralPostsYoutubeEnabled(undefined, true)).toBe(false);
-    expect(parseViralPostsYoutubeEnabled("true", true)).toBe(false);
+    expect(parseViralPostsYoutubeEnabled("true", true)).toBe(true);
     expect(parseViralPostsYoutubeEnabled("false", true)).toBe(false);
+    expect(parseViralPostsYoutubeEnabled("true", false)).toBe(false);
   });
 
-  it("drops YouTube from pool ensure specs so no new YouTube pools are created", () => {
+  it("keeps YouTube pool specs when requested", () => {
     const filtered = filterViralPostsV1PoolSpecs([
       { niche: "n", pillar: "p", platform: "instagram" },
       { niche: "n", pillar: "p", platform: "tiktok" },
-      { niche: "n", pillar: "seed", platform: "youtube" },
+      { niche: "n", pillar: "p", platform: "youtube" },
     ]);
-    expect(filtered.map((s) => s.platform)).toEqual(["instagram", "tiktok"]);
+    expect(filtered.map((s) => s.platform)).toEqual([
+      "instagram",
+      "tiktok",
+      "youtube",
+    ]);
   });
 
-  it("skips historical YouTube pool refresh with zero provider calls", () => {
-    // Pure guard used by refreshPoolById before any scrape / lock work.
-    expect(shouldSkipUnsupportedViralPostsPlatform("youtube")).toBe(true);
-  });
-
-  it("normalizes stale youtube platform state to the V1 default", () => {
-    expect(normalizeViralPostsV1Platform("youtube")).toBe(
+  it("normalizes YouTube to itself and unknown state to the default", () => {
+    expect(normalizeViralPostsV1Platform("youtube")).toBe("youtube");
+    expect(normalizeViralPostsV1Platform("unknown")).toBe(
       VIRAL_POSTS_V1_DEFAULT_PLATFORM
     );
-    expect(normalizeViralPostsV1Platform("unknown")).toBe("instagram");
     expect(normalizeViralPostsV1Platform("tiktok")).toBe("tiktok");
     expect(normalizeViralPostsV1Platform("instagram")).toBe("instagram");
   });
 
-  it("UI platform filters force YouTube off (no empty YouTube Explore state)", () => {
+  it("preserves supported UI platform filters", () => {
     expect(
       normalizeViralPostsExplorePlatforms({
         instagram: true,
@@ -64,14 +69,7 @@ describe("Viral Posts V1 platforms", () => {
     ).toEqual({
       instagram: true,
       tiktok: true,
-      youtube: false,
+      youtube: true,
     });
-    expect(
-      normalizeViralPostsExplorePlatforms({
-        instagram: false,
-        tiktok: false,
-        youtube: true,
-      }).youtube
-    ).toBe(false);
   });
 });
