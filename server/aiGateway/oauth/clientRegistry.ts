@@ -280,7 +280,7 @@ export function normalizeRequestedScopes(
   client: ResolvedAiOAuthClient,
   rawScope: string | undefined
 ): string[] | null {
-  const requested = (rawScope || AI_GATEWAY_SCOPES.join(" "))
+  const requested = (rawScope || client.allowedScopes.join(" "))
     .split(/\s+/)
     .map((scope) => scope.trim())
     .filter(Boolean);
