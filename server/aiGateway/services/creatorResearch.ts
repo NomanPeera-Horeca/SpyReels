@@ -10,6 +10,10 @@ import {
   type SearchReelData,
 } from "../../instagram";
 import {
+  getInstagramVisiblePostCount,
+  type InstagramVisiblePostCount,
+} from "../../instagramPostCount";
+import {
   checkUsageLimit,
   decrementUsage,
   incrementUsage,
@@ -36,7 +40,10 @@ export interface CreatorSummary {
   biography: string;
   followerCount: number;
   followingCount: number;
-  postCount: number;
+  postCount: number | null;
+  postCountEstimated: boolean;
+  postCountVerified: boolean;
+  postCountSource: "instagram_profile_post_count" | "unavailable";
   isVerified: boolean;
   isPrivate: boolean;
   category: string;
@@ -67,14 +74,22 @@ export interface TopContentSampleMeta {
   statement: string;
 }
 
-function creatorSummary(identity: InstagramIdentity | ProfileInfo): CreatorSummary {
+function creatorSummary(
+  identity: InstagramIdentity | ProfileInfo,
+  visiblePostCount: InstagramVisiblePostCount | null
+): CreatorSummary {
   return {
     username: identity.username,
     fullName: identity.fullName,
     biography: identity.biography,
     followerCount: identity.followerCount,
     followingCount: identity.followingCount,
-    postCount: identity.postCount,
+    postCount: visiblePostCount?.count ?? null,
+    postCountEstimated: visiblePostCount?.estimated ?? false,
+    postCountVerified: visiblePostCount !== null,
+    postCountSource: visiblePostCount
+      ? "instagram_profile_post_count"
+      : "unavailable",
     isVerified: identity.isVerified,
     isPrivate: identity.isPrivate,
     category: identity.category,
@@ -123,7 +138,8 @@ function mapInstagramError(error: unknown): never {
 export async function findCreator(handle: string): Promise<CreatorSummary> {
   try {
     const identity = await resolveInstagramIdentity(handle);
-    return creatorSummary(identity);
+    const visiblePostCount = await getInstagramVisiblePostCount(identity.username);
+    return creatorSummary(identity, visiblePostCount);
   } catch (error) {
     return mapInstagramError(error);
   }
@@ -281,10 +297,11 @@ export async function findTopContent(input: {
       input.handle,
       requested
     );
+    const visiblePostCount = await getInstagramVisiblePostCount(profile.username);
     const ranked = sortTopContentDeterministically(reels, input.rankBy);
 
     return {
-      creator: creatorSummary(profile),
+      creator: creatorSummary(profile, visiblePostCount),
       rankBy: input.rankBy,
       sampleSize: reels.length,
       sample: sampleMeta(reels, requested, cacheHit),
