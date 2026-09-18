@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   incrementUsage: vi.fn(),
   decrementUsage: vi.fn(),
   transcribeReel: vi.fn(),
+  acquireTranscriptionSlot: vi.fn(),
+  releaseTranscriptionSlot: vi.fn(),
 }));
 
 vi.mock("../../collectedReelFetch", () => ({
@@ -25,6 +27,11 @@ vi.mock("../../stripe/stripe-service", () => ({
 
 vi.mock("../../services/transcribeReel", () => ({
   transcribeReel: mocks.transcribeReel,
+}));
+
+vi.mock("../../transcriptionSemaphore", () => ({
+  acquireTranscriptionSlot: mocks.acquireTranscriptionSlot,
+  releaseTranscriptionSlot: mocks.releaseTranscriptionSlot,
 }));
 
 import {
@@ -67,7 +74,10 @@ describe("AI Gateway exact Reel research", () => {
     mocks.incrementUsage.mockReset();
     mocks.decrementUsage.mockReset();
     mocks.transcribeReel.mockReset();
+    mocks.acquireTranscriptionSlot.mockReset();
+    mocks.releaseTranscriptionSlot.mockReset();
 
+    mocks.acquireTranscriptionSlot.mockResolvedValue(undefined);
     mocks.fetchCollectedReelMetadata.mockResolvedValue({
       ok: true,
       provider: "scrapecreators",
@@ -137,10 +147,12 @@ describe("AI Gateway exact Reel research", () => {
       { email: "admin@example.com", role: "admin" }
     );
     expect(mocks.incrementUsage).toHaveBeenCalledWith(42, "transcribeCount");
+    expect(mocks.acquireTranscriptionSlot).toHaveBeenCalledTimes(1);
     expect(mocks.transcribeReel).toHaveBeenCalledWith({
       videoUrl: "https://cdn.example.com/reel.mp4",
       shortcode: "C13BR_GvZVJ",
     });
+    expect(mocks.releaseTranscriptionSlot).toHaveBeenCalledTimes(1);
     expect(result.transcript).toBe("This is the spoken transcript.");
     expect(result.cache).toEqual({ hit: false, source: "live" });
   });
@@ -162,6 +174,8 @@ describe("AI Gateway exact Reel research", () => {
     expect(mocks.checkUsageLimit).toHaveBeenCalledTimes(1);
     expect(mocks.incrementUsage).toHaveBeenCalledTimes(1);
     expect(mocks.transcribeReel).toHaveBeenCalledTimes(1);
+    expect(mocks.acquireTranscriptionSlot).toHaveBeenCalledTimes(1);
+    expect(mocks.releaseTranscriptionSlot).toHaveBeenCalledTimes(1);
   });
 
   it("refunds quota and returns a stable no-speech error when the Reel has no voice track", async () => {
@@ -178,6 +192,7 @@ describe("AI Gateway exact Reel research", () => {
     });
     expect(mocks.incrementUsage).toHaveBeenCalledTimes(1);
     expect(mocks.decrementUsage).toHaveBeenCalledWith(42, "transcribeCount");
+    expect(mocks.releaseTranscriptionSlot).toHaveBeenCalledTimes(1);
   });
 
   it("stops before Deepgram when the plan transcription limit is reached", async () => {
