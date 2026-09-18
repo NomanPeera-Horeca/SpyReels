@@ -514,7 +514,7 @@ async function runResyncJob(
       errorMessage: message,
       currentStep: existingReelCount > 0 ? "complete" : "failed",
       failureReason,
-      progressPercent: existingReelCount > 0 ? 100 : undefined,
+      progressPercent: existingReelCount > 0 ? 100 : 0,
     });
   }
 }
