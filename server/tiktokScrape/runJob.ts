@@ -193,15 +193,16 @@ export async function runTikTokScrapeJob(
     const errorMessage = failureMessageForHandle(handle, rawMessage);
 
     console.warn(
-      `[runTikTokScrapeJob ${jobId}] failed handle=@${cleanHandle}: ${errorMessage}`
+      `[runTikTokScrapeJob ${jobId}] ${options?.replaceExisting ? "refresh failed; preserving existing data" : "failed"} handle=@${cleanHandle}: ${errorMessage}`
     );
 
     try {
       await db
         .update(tiktokScrapeJobs)
         .set({
-          status: "failed",
-          currentStep: "failed",
+          status: options?.replaceExisting ? "completed" : "failed",
+          currentStep: options?.replaceExisting ? "complete" : "failed",
+          progressPercent: options?.replaceExisting ? 100 : 0,
           errorMessage,
         })
         .where(eq(tiktokScrapeJobs.id, jobId));
