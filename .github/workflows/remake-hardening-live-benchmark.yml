@@ -1,9 +1,9 @@
 name: Remake Hardening Live Benchmark
 
 on:
-  push:
+  pull_request:
     branches:
-      - feature/remake-hardening-v1
+      - main
   workflow_dispatch:
 
 permissions:
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   benchmark:
-    if: github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[remake-benchmark]')
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'feature/remake-hardening-v1'
     runs-on: ubuntu-latest
     timeout-minutes: 55
     env:
