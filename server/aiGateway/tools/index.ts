@@ -105,30 +105,25 @@ export function createSpyReelsAiToolRegistry(): AiGatewayRegistry {
     auth: "required",
     readOnly: false,
     requiredScope: "spyreels:create",
-    inputSchema: z
-      .object({
-        url: z.string().trim().min(1).max(2048),
-        mode: z.enum(["custom", "same_topic", "niche"]),
-        angle: z.string().trim().min(1).max(2000).optional(),
-        gradeLevel: z
-          .enum(["auto", "2", "3", "4", "5", "6", "7", "8"])
-          .default("auto"),
-      })
-      .superRefine((value, ctx) => {
-        if (value.mode === "custom" && !value.angle?.trim()) {
-          ctx.addIssue({
-            code: "custom",
-            path: ["angle"],
-            message: "Use my idea requires an angle.",
-          });
-        }
-      }),
+    inputSchema: z.object({
+      url: z.string().trim().min(1).max(2048),
+      instruction: z
+        .string()
+        .trim()
+        .min(1)
+        .max(2000)
+        .describe(
+          "Copy the user's actual remake instruction as closely as possible, excluding the Reel URL. Do not add, infer, or paraphrase a niche, topic, or angle that the user did not state. SpyReels resolves the mode itself and will request clarification when the instruction is ambiguous."
+        ),
+      gradeLevel: z
+        .enum(["auto", "2", "3", "4", "5", "6", "7", "8"])
+        .default("auto"),
+    }),
     execute: async (context, input) =>
       remakeReelUrl({
         actor: requireActor(context),
         url: input.url,
-        mode: input.mode,
-        angle: input.angle,
+        instruction: input.instruction,
         gradeLevel: input.gradeLevel,
       }),
   });
