@@ -175,10 +175,12 @@ describe("SpyReels MCP 2026-07-28 wire contract", () => {
         (tool: any) => tool.inputSchema?.type === "object"
       )
     ).toBe(true);
-    expect(
-      response.body.result.tools.find((tool: any) => tool.name === "remake_reel")
-        ?.annotations?.readOnlyHint
-    ).toBe(false);
+    const remakeTool = response.body.result.tools.find(
+      (tool: any) => tool.name === "remake_reel"
+    );
+    expect(remakeTool?.annotations?.readOnlyHint).toBe(false);
+    expect(remakeTool?.inputSchema?.properties?.instruction).toBeTruthy();
+    expect(remakeTool?.inputSchema?.properties?.mode).toBeUndefined();
   });
 
   it("marks modern tool-call results complete while preserving legacy initialize", async () => {
