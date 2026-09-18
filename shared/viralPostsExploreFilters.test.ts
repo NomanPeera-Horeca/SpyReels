@@ -271,6 +271,6 @@ describe("applyExplorePostFilters", () => {
         rawResultCount: 10,
         quickFilter: "all",
       }).description
-    ).toBe("Select Instagram or TikTok to see posts.");
+    ).toBe("Select Instagram, TikTok, or YouTube to see posts.");
   });
 });
