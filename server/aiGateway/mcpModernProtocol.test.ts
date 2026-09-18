@@ -115,7 +115,7 @@ describe("SpyReels MCP 2026-07-28 wire contract", () => {
     expect(response.body.result.supportedVersions).toContain("2026-07-28");
   });
 
-  it("returns all three callable tools with modern cache/result metadata", async () => {
+  it("returns all five callable tools with modern cache/result metadata", async () => {
     const app = await makeApp();
     const response = await request(app)
       .post("/api/ai/mcp")
@@ -141,9 +141,11 @@ describe("SpyReels MCP 2026-07-28 wire contract", () => {
     expect(response.body.result.ttlMs).toBe(300000);
     expect(response.body.result.cacheScope).toBe("private");
     expect(response.body.result.tools.map((tool: any) => tool.name)).toEqual([
-      "get_usage",
       "find_creator",
       "find_top_content",
+      "inspect_reel",
+      "transcribe_reel",
+      "get_usage",
     ]);
     expect(
       response.body.result.tools.every(
