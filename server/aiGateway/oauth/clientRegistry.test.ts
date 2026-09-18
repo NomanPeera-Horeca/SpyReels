@@ -14,7 +14,7 @@ function client(overrides: Partial<ResolvedAiOAuthClient> = {}): ResolvedAiOAuth
     clientName: "Test client",
     source: "api",
     redirectUris: ["https://client.example/callback"],
-    allowedScopes: ["spyreels:read", "offline_access"],
+    allowedScopes: ["spyreels:read", "spyreels:create", "offline_access"],
     isPublic: true,
     clientSecretHash: null,
     registrationKind: "database",
@@ -37,6 +37,16 @@ describe("AI Gateway OAuth client validation", () => {
       "spyreels:read",
       "offline_access",
     ]);
+  });
+
+  it("accepts the explicit content creation scope", () => {
+    const value = client();
+    expect(
+      normalizeRequestedScopes(
+        value,
+        "spyreels:read spyreels:create offline_access"
+      )
+    ).toEqual(["spyreels:read", "spyreels:create", "offline_access"]);
   });
 
   it("rejects scopes outside the registered client scope", () => {
