@@ -66,7 +66,7 @@ export function resolveRemakeIntent(instruction: string): ResolvedRemakeIntent {
   if (
     /\bkeep\s+(?:the\s+)?same\s+topic\b/i.test(original) ||
     /\bsame\s+topic\b/i.test(original) ||
-    /\bkeep\s+(?:the\s+)?topic\b/i.test(original) ||
+    /\bkeep\s+(?:(?:the|this)\s+)?topic\b/i.test(original) ||
     /\bsame\s+subject\b/i.test(original) ||
     /\bdo\s+not\s+change\s+(?:the\s+)?topic\b/i.test(original) ||
     /\bdon['’]?t\s+change\s+(?:the\s+)?topic\b/i.test(original)
