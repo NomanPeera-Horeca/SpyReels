@@ -4,6 +4,7 @@ import { AiGatewayRegistry } from "../registry";
 import { getAccountUsage } from "../services/account";
 import { findCreator, findTopContent } from "../services/creatorResearch";
 import { inspectReelUrl, transcribeReelUrl } from "../services/reelResearch";
+import { remakeReelUrl } from "../services/remakeReel";
 import type { AiGatewayActor, AiGatewayContext } from "../types";
 
 function requireActor(context: AiGatewayContext): AiGatewayActor {
@@ -92,6 +93,43 @@ export function createSpyReelsAiToolRegistry(): AiGatewayRegistry {
       transcribeReelUrl({
         actor: requireActor(context),
         url: input.url,
+      }),
+  });
+
+  registry.register({
+    name: "remake_reel",
+    title: "Remake an Instagram Reel",
+    description:
+      "Generate a new script from one exact public Instagram Reel URL using the same SpyReels remake engine as the app. There are exactly three modes: custom = Use my idea, same_topic = Keep this topic, niche = Adapt to my niche. If the user's request does not clearly select one of these directions, present the three choices before calling this tool. custom requires angle. This action can consume normal SpyReels transcription/remake usage and never publishes content automatically.",
+    category: "creation",
+    auth: "required",
+    readOnly: false,
+    requiredScope: "spyreels:create",
+    inputSchema: z
+      .object({
+        url: z.string().trim().min(1).max(2048),
+        mode: z.enum(["custom", "same_topic", "niche"]),
+        angle: z.string().trim().min(1).max(2000).optional(),
+        gradeLevel: z
+          .enum(["auto", "2", "3", "4", "5", "6", "7", "8"])
+          .default("auto"),
+      })
+      .superRefine((value, ctx) => {
+        if (value.mode === "custom" && !value.angle?.trim()) {
+          ctx.addIssue({
+            code: "custom",
+            path: ["angle"],
+            message: "Use my idea requires an angle.",
+          });
+        }
+      }),
+    execute: async (context, input) =>
+      remakeReelUrl({
+        actor: requireActor(context),
+        url: input.url,
+        mode: input.mode,
+        angle: input.angle,
+        gradeLevel: input.gradeLevel,
       }),
   });
 
