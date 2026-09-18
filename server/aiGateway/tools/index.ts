@@ -5,6 +5,7 @@ import { getAccountUsage } from "../services/account";
 import { findCreator, findTopContent } from "../services/creatorResearch";
 import { inspectReelUrl, transcribeReelUrl } from "../services/reelResearch";
 import { remakeReelUrl } from "../services/remakeReel";
+import { normalizeRemakeToolInput } from "../services/remakeToolInput";
 import type { AiGatewayActor, AiGatewayContext } from "../types";
 
 function requireActor(context: AiGatewayContext): AiGatewayActor {
@@ -105,41 +106,7 @@ export function createSpyReelsAiToolRegistry(): AiGatewayRegistry {
     auth: "required",
     readOnly: false,
     requiredScope: "spyreels:create",
-    normalizeInput: (rawInput) => {
-      if (!rawInput || typeof rawInput !== "object") return rawInput;
-      const record = rawInput as Record<string, unknown>;
-      const instruction =
-        typeof record.instruction === "string"
-          ? record.instruction.trim()
-          : "";
-      if (instruction) return rawInput;
-
-      const mode = typeof record.mode === "string" ? record.mode : "";
-      const angle = typeof record.angle === "string" ? record.angle.trim() : "";
-
-      if (mode === "same_topic") {
-        return {
-          ...record,
-          instruction: "keep the same topic",
-        };
-      }
-
-      if (mode === "custom" && angle) {
-        return {
-          ...record,
-          instruction: `make this about ${angle}`,
-        };
-      }
-
-      if (mode === "niche") {
-        return {
-          ...record,
-          instruction: "remake this",
-        };
-      }
-
-      return rawInput;
-    },
+    normalizeInput: normalizeRemakeToolInput,
     inputSchema: z.object({
       url: z.string().trim().min(1).max(2048),
       instruction: z
