@@ -17,6 +17,8 @@ function statusForError(code: string): number {
       return 400;
     case "UNAUTHENTICATED":
       return 401;
+    case "INSUFFICIENT_SCOPE":
+      return 403;
     case "TOOL_NOT_FOUND":
     case "NOT_FOUND":
       return 404;
