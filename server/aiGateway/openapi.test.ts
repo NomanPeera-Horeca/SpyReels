@@ -18,7 +18,7 @@ import {
 } from "./openapi";
 
 describe("AI Gateway OpenAPI", () => {
-  it("publishes the canonical read-only tool surface", () => {
+  it("publishes the canonical scoped tool surface", () => {
     const document = buildAiGatewayOpenApiDocument() as any;
 
     expect(AI_GATEWAY_OPENAPI_PATH).toBe("/api/ai/openapi.json");
@@ -37,6 +37,11 @@ describe("AI Gateway OpenAPI", () => {
       expect(operation?.security).toEqual([{ spyreelsOAuth: ["spyreels:read"] }]);
       expect(operation?.requestBody?.content?.["application/json"]?.schema).toBeTruthy();
     }
+
+    const remake = document.paths[`${AI_GATEWAY_REST_BASE_PATH}/tools/remake_reel`]?.post;
+    expect(remake?.operationId).toBe("remake_reel");
+    expect(remake?.security).toEqual([{ spyreelsOAuth: ["spyreels:create"] }]);
+    expect(remake?.requestBody?.content?.["application/json"]?.schema).toBeTruthy();
   });
 
   it("does not expose browser-session auth in the API contract", () => {
@@ -45,5 +50,6 @@ describe("AI Gateway OpenAPI", () => {
 
     expect(security.type).toBe("oauth2");
     expect(security.flows.authorizationCode.scopes["spyreels:read"]).toBeTruthy();
+    expect(security.flows.authorizationCode.scopes["spyreels:create"]).toBeTruthy();
   });
 });
