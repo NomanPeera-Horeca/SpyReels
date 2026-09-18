@@ -27,7 +27,7 @@ export function buildAiGatewayOpenApiDocument() {
           summary: tool.title,
           description: tool.description,
           tags: [tool.category],
-          security: [{ spyreelsOAuth: ["spyreels:read"] }],
+          security: [{ spyreelsOAuth: [tool.requiredScope] }],
           requestBody: {
             required: true,
             content: {
@@ -55,7 +55,7 @@ export function buildAiGatewayOpenApiDocument() {
       title: "SpyReels AI Gateway API",
       version: "1.0.0",
       description:
-        "Read-only creator research and account-intelligence tools backed by a connected SpyReels account.",
+        "Creator research, exact-Reel intelligence, transcription and controlled content-generation tools backed by a connected SpyReels account.",
     },
     servers: [{ url: aiGatewayIssuer() }],
     paths: {
@@ -81,7 +81,10 @@ export function buildAiGatewayOpenApiDocument() {
               authorizationUrl: authorizationEndpoint(),
               tokenUrl: tokenEndpoint(),
               scopes: {
-                "spyreels:read": "Read creator research and SpyReels account usage.",
+                "spyreels:read":
+                  "Read creator research, exact Reel metadata, transcripts and SpyReels account usage.",
+                "spyreels:create":
+                  "Generate content such as remake scripts using the connected SpyReels account.",
               },
             },
           },
