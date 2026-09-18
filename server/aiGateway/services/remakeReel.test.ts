@@ -120,8 +120,7 @@ describe("AI Gateway remake_reel", () => {
     const result = await remakeReelUrl({
       actor,
       url: reelResult.reel.reelUrl,
-      mode: "custom",
-      angle: "Why menu engineering matters for restaurant profit",
+      instruction: "Use this structure but make it about why menu engineering matters for restaurant profit",
     });
 
     expect(mocks.transcribeReelUrl).toHaveBeenCalledWith({
@@ -136,7 +135,7 @@ describe("AI Gateway remake_reel", () => {
         gradeLevel: "auto",
         addCues: true,
         platformLabel: "Instagram Reel",
-        topic: expect.stringContaining("Why menu engineering matters"),
+        topic: expect.stringContaining("menu engineering matters"),
       })
     );
     expect(result.remake.mode).toBe("custom");
@@ -148,7 +147,7 @@ describe("AI Gateway remake_reel", () => {
     await remakeReelUrl({
       actor,
       url: reelResult.reel.reelUrl,
-      mode: "same_topic",
+      instruction: "Keep the same topic but rewrite it for me",
     });
 
     expect(mocks.generateRemakeContent).toHaveBeenCalledWith(
@@ -160,7 +159,7 @@ describe("AI Gateway remake_reel", () => {
     await remakeReelUrl({
       actor,
       url: reelResult.reel.reelUrl,
-      mode: "niche",
+      instruction: "Remake this similarly for me",
     });
 
     expect(mocks.getPersonalWorkspaceId).toHaveBeenCalledWith(42);
@@ -189,7 +188,7 @@ describe("AI Gateway remake_reel", () => {
       remakeReelUrl({
         actor,
         url: reelResult.reel.reelUrl,
-        mode: "same_topic",
+        instruction: "Keep the same topic",
       })
     ).rejects.toMatchObject({
       code: "USAGE_LIMIT_REACHED",
@@ -207,7 +206,7 @@ describe("AI Gateway remake_reel", () => {
       remakeReelUrl({
         actor,
         url: reelResult.reel.reelUrl,
-        mode: "same_topic",
+        instruction: "Keep the same topic",
       })
     ).rejects.toThrow("provider down");
 
@@ -215,16 +214,31 @@ describe("AI Gateway remake_reel", () => {
     expect(mocks.decrementUsage).toHaveBeenCalledWith(42, "recreateCount");
   });
 
-  it("requires an angle for Use my idea", async () => {
+  it("requires clarification for a bare remake request before any quota or transcription work", async () => {
     await expect(
       remakeReelUrl({
         actor,
         url: reelResult.reel.reelUrl,
-        mode: "custom",
+        instruction: "remake this",
       })
     ).rejects.toMatchObject({
-      code: "INVALID_INPUT",
+      code: "CLARIFICATION_REQUIRED",
     });
+
+    expect(mocks.checkUsageLimit).not.toHaveBeenCalled();
     expect(mocks.transcribeReelUrl).not.toHaveBeenCalled();
+    expect(mocks.incrementUsage).not.toHaveBeenCalled();
+  });
+
+  it("treats an explicitly named niche as a custom direction instead of saved profile", async () => {
+    const result = await remakeReelUrl({
+      actor,
+      url: reelResult.reel.reelUrl,
+      instruction: "Remake this for my fitness niche",
+    });
+
+    expect(result.remake.mode).toBe("custom");
+    expect(result.remake.angle).toContain("fitness niche");
+    expect(mocks.getPersonalWorkspaceId).not.toHaveBeenCalled();
   });
 });

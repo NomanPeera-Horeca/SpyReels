@@ -19,6 +19,7 @@ import { isFirstRemakeUsageBypassEligible } from "../../routers/_shared";
 import { AiGatewayError } from "../errors";
 import type { AiGatewayActor } from "../types";
 import { transcribeReelUrl } from "./reelResearch";
+import { resolveRemakeIntent } from "./remakeIntent";
 
 export type RemakeMode = "custom" | "same_topic" | "niche";
 
@@ -88,10 +89,18 @@ async function buildTopic(input: {
 export async function remakeReelUrl(input: {
   actor: AiGatewayActor;
   url: string;
-  mode: RemakeMode;
-  angle?: string;
+  instruction: string;
   gradeLevel?: "auto" | "2" | "3" | "4" | "5" | "6" | "7" | "8";
 }) {
+  const resolvedIntent = resolveRemakeIntent(input.instruction);
+  if (resolvedIntent.status === "clarification_required") {
+    throw new AiGatewayError({
+      code: "CLARIFICATION_REQUIRED",
+      message:
+        "The remake direction is ambiguous. Ask the user one short natural clarification: do they want to keep the same topic, adapt it to their niche/profile, or use a different idea/angle? Do not start transcription or consume remake usage until they answer.",
+      retryable: false,
+    });
+  }
   const state = await getOnboardingState(input.actor.userId).catch(() => null);
   const bypassRecreateLimit = await isFirstRemakeUsageBypassEligible(
     input.actor.userId,
@@ -119,8 +128,8 @@ export async function remakeReelUrl(input: {
   const [topicResult, subscription] = await Promise.all([
     buildTopic({
       actor: input.actor,
-      mode: input.mode,
-      angle: input.angle,
+      mode: resolvedIntent.mode,
+      angle: resolvedIntent.angle,
     }),
     getUserSubscription(input.actor.userId),
   ]);
@@ -158,7 +167,10 @@ export async function remakeReelUrl(input: {
       },
       remake: {
         mode: topicResult.displayMode,
-        angle: input.mode === "custom" ? input.angle?.trim() || null : null,
+        angle:
+          resolvedIntent.mode === "custom"
+            ? resolvedIntent.angle?.trim() || null
+            : null,
         gradeLevel,
         deliveryCuesIncluded: addCues,
         generatedScript: generated.generatedScript,
