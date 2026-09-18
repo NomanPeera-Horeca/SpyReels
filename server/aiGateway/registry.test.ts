@@ -17,6 +17,17 @@ function createTestRegistry() {
     execute: async (_context, input) => ({ value: input.value }),
   });
   registry.register({
+    name: "create",
+    title: "Create",
+    description: "Test create scope",
+    category: "creation",
+    auth: "required",
+    readOnly: false,
+    requiredScope: "spyreels:create",
+    inputSchema: z.object({}).strict(),
+    execute: async () => ({ created: true }),
+  });
+  registry.register({
     name: "limited",
     title: "Limited",
     description: "Test stable errors",
@@ -39,8 +50,24 @@ describe("AiGatewayRegistry", () => {
   it("lists tool metadata without exposing implementation details", () => {
     const registry = createTestRegistry();
     expect(registry.list()).toEqual([
-      expect.objectContaining({ name: "echo", auth: "required", readOnly: true }),
-      expect.objectContaining({ name: "limited", auth: "required", readOnly: true }),
+      expect.objectContaining({
+        name: "echo",
+        auth: "required",
+        readOnly: true,
+        requiredScope: "spyreels:read",
+      }),
+      expect.objectContaining({
+        name: "create",
+        auth: "required",
+        readOnly: false,
+        requiredScope: "spyreels:create",
+      }),
+      expect.objectContaining({
+        name: "limited",
+        auth: "required",
+        readOnly: true,
+        requiredScope: "spyreels:read",
+      }),
     ]);
   });
 
@@ -65,6 +92,7 @@ describe("AiGatewayRegistry", () => {
       createAiGatewayContext({
         source: "claude",
         actor: { userId: 42 },
+        scopes: ["spyreels:read"],
       })
     );
 
@@ -81,6 +109,7 @@ describe("AiGatewayRegistry", () => {
         source: "copilot",
         requestId: "req-2",
         actor: { userId: 42 },
+        scopes: ["spyreels:read"],
       })
     );
 
@@ -96,6 +125,38 @@ describe("AiGatewayRegistry", () => {
     );
   });
 
+  it("blocks creation tools when the connection has read scope only", async () => {
+    const result = await createTestRegistry().execute(
+      "create",
+      {},
+      createAiGatewayContext({
+        source: "claude",
+        actor: { userId: 42 },
+        scopes: ["spyreels:read"],
+      })
+    );
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error.code).toBe("INSUFFICIENT_SCOPE");
+  });
+
+  it("allows creation tools after content creation access is approved", async () => {
+    const result = await createTestRegistry().execute(
+      "create",
+      {},
+      createAiGatewayContext({
+        source: "chatgpt",
+        actor: { userId: 42 },
+        scopes: ["spyreels:read", "spyreels:create"],
+      })
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data).toEqual({ created: true });
+  });
+
   it("returns stable upgrade metadata for plan limits", async () => {
     const result = await createTestRegistry().execute(
       "limited",
@@ -103,6 +164,7 @@ describe("AiGatewayRegistry", () => {
       createAiGatewayContext({
         source: "gemini",
         actor: { userId: 42 },
+        scopes: ["spyreels:read"],
       })
     );
 

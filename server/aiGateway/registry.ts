@@ -15,6 +15,7 @@ export interface AiGatewayToolDescriptor {
   category: AnyToolDefinition["category"];
   auth: AnyToolDefinition["auth"];
   readOnly: boolean;
+  requiredScope: string;
 }
 
 export class AiGatewayRegistry {
@@ -40,6 +41,7 @@ export class AiGatewayRegistry {
       category: tool.category,
       auth: tool.auth,
       readOnly: tool.readOnly,
+      requiredScope: tool.requiredScope ?? "spyreels:read",
     }));
   }
 
@@ -76,6 +78,22 @@ export class AiGatewayRegistry {
         error: {
           code: "UNAUTHENTICATED",
           message: "Connect your SpyReels account to use this tool.",
+          retryable: false,
+        },
+        meta: meta(),
+      };
+    }
+
+    const requiredScope = tool.requiredScope ?? "spyreels:read";
+    if (tool.auth === "required" && !context.scopes.includes(requiredScope)) {
+      return {
+        ok: false,
+        error: {
+          code: "INSUFFICIENT_SCOPE",
+          message:
+            requiredScope === "spyreels:create"
+              ? "Reconnect SpyReels and approve content creation access to use this tool."
+              : "Reconnect SpyReels and approve the required access to use this tool.",
           retryable: false,
         },
         meta: meta(),

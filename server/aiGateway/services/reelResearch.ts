@@ -34,7 +34,7 @@ export interface InspectedReel {
   creator: {
     username: string;
     fullName: string;
-    followerCount: number;
+    followerCount: number | null;
     profilePicUrl: string;
   };
   caption: string;
@@ -165,7 +165,10 @@ async function loadMetadata(rawUrl: string): Promise<{
     creator: {
       username: d.ownerUsername || "",
       fullName: d.ownerFullName || "",
-      followerCount: d.ownerFollowerCount || 0,
+      followerCount:
+        Number.isFinite(d.ownerFollowerCount) && d.ownerFollowerCount > 0
+          ? d.ownerFollowerCount
+          : null,
       profilePicUrl: d.ownerProfilePicUrl || "",
     },
     caption: d.caption || "",

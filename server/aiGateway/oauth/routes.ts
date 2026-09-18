@@ -107,6 +107,18 @@ function consentHtml(input: {
   codeChallenge: string;
   resource?: string;
 }): string {
+  const scopes = new Set(input.scope.split(/\\s+/).filter(Boolean));
+  const canCreate = scopes.has("spyreels:create");
+  const accessCopy = canCreate
+    ? `${escapeHtml(input.clientName)} is asking for access to research content and generate remake scripts using your SpyReels account.`
+    : `${escapeHtml(input.clientName)} is asking for read-only access to your SpyReels account.`;
+  const permissionTitle = canCreate
+    ? "Creator research, transcription and remake generation"
+    : "Creator research and account usage";
+  const permissionCopy = canCreate
+    ? "Research public creators, inspect and transcribe public Reels, read your SpyReels usage, and generate remake scripts. Generation can use your normal SpyReels plan allowance. SpyReels will not publish content or modify Instagram."
+    : "Research public creators, view top-performing content, and read your current SpyReels usage.";
+
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -134,10 +146,10 @@ function consentHtml(input: {
   <main>
     <div class="brand">SpyReels</div>
     <h1>Connect SpyReels to ${escapeHtml(input.clientName)}</h1>
-    <p>${escapeHtml(input.clientName)} is asking for read-only access to your SpyReels account.</p>
+    <p>${accessCopy}</p>
     <div class="permission">
-      <strong>Creator research and account usage</strong>
-      <p>Research public creators, view top-performing content, and read your current SpyReels usage.</p>
+      <strong>${permissionTitle}</strong>
+      <p>${permissionCopy}</p>
     </div>
     <form method="post" action="/api/ai/oauth/authorize">
       ${hidden("response_type", "code")}

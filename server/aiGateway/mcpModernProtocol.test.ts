@@ -49,6 +49,14 @@ vi.mock("./tools", async () => {
       readOnly: true,
     },
     {
+      name: "remake_reel",
+      title: "Remake Reel",
+      description: "Generate a remake from one exact Instagram Reel.",
+      category: "creation",
+      readOnly: false,
+      requiredScope: "spyreels:create",
+    },
+    {
       name: "get_usage",
       title: "Get SpyReels usage",
       description: "Read current SpyReels account usage.",
@@ -129,7 +137,7 @@ describe("SpyReels MCP 2026-07-28 wire contract", () => {
     expect(response.body.result.supportedVersions).toContain("2026-07-28");
   });
 
-  it("returns all five callable tools with modern cache/result metadata", async () => {
+  it("returns all six callable tools with modern cache/result metadata", async () => {
     const app = await makeApp();
     const response = await request(app)
       .post("/api/ai/mcp")
@@ -159,6 +167,7 @@ describe("SpyReels MCP 2026-07-28 wire contract", () => {
       "find_top_content",
       "inspect_reel",
       "transcribe_reel",
+      "remake_reel",
       "get_usage",
     ]);
     expect(
@@ -166,6 +175,10 @@ describe("SpyReels MCP 2026-07-28 wire contract", () => {
         (tool: any) => tool.inputSchema?.type === "object"
       )
     ).toBe(true);
+    expect(
+      response.body.result.tools.find((tool: any) => tool.name === "remake_reel")
+        ?.annotations?.readOnlyHint
+    ).toBe(false);
   });
 
   it("marks modern tool-call results complete while preserving legacy initialize", async () => {

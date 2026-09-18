@@ -25,6 +25,7 @@ export function createAiGatewayContext(input?: {
   source?: string | null;
   clientName?: string | null;
   actor?: AiGatewayActor | null;
+  scopes?: string[];
 }): AiGatewayContext {
   const requestId = input?.requestId?.trim() || randomUUID();
   const clientName = input?.clientName?.trim() || null;
@@ -34,6 +35,7 @@ export function createAiGatewayContext(input?: {
     source: normalizeAiGatewaySource(input?.source),
     clientName,
     actor: input?.actor ?? null,
+    scopes: [...new Set(input?.scopes ?? [])],
     startedAt: new Date(),
   };
 }

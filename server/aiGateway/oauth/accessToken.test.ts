@@ -26,14 +26,14 @@ describe("AI Gateway access tokens", () => {
       userId: 42,
       clientId: "https://client.example/oauth-metadata.json",
       source: "chatgpt",
-      scopes: ["spyreels:read"],
+      scopes: ["spyreels:read", "spyreels:create"],
     });
 
     const identity = await verifyAiGatewayAccessToken(issued.accessToken);
     expect(identity.userId).toBe(42);
     expect(identity.clientId).toBe("https://client.example/oauth-metadata.json");
     expect(identity.source).toBe("chatgpt");
-    expect(identity.scopes).toEqual(["spyreels:read"]);
+    expect(identity.scopes).toEqual(["spyreels:read", "spyreels:create"]);
     expect(identity.jti).toBeTruthy();
     expect(issued.expiresIn).toBe(3600);
   });

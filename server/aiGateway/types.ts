@@ -31,6 +31,7 @@ export interface AiGatewayContext {
   source: AiGatewaySource;
   clientName?: string | null;
   actor: AiGatewayActor | null;
+  scopes: string[];
   startedAt: Date;
 }
 
@@ -48,6 +49,7 @@ export interface AiGatewayToolDefinition<TInput extends z.ZodType = z.ZodType, T
   category: AiGatewayToolCategory;
   auth: AiGatewayAuthMode;
   readOnly: boolean;
+  requiredScope?: string;
   inputSchema: TInput;
   execute: (
     context: AiGatewayContext,
@@ -60,6 +62,7 @@ export type AiGatewayErrorCode =
   | "INVALID_INPUT"
   | "TOOL_NOT_FOUND"
   | "USAGE_LIMIT_REACHED"
+  | "INSUFFICIENT_SCOPE"
   | "UPSTREAM_UNAVAILABLE"
   | "NOT_FOUND"
   | "PRIVATE_ACCOUNT"

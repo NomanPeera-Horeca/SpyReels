@@ -1,0 +1,230 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const mocks = vi.hoisted(() => ({
+  getOnboardingState: vi.fn(),
+  getPersonalWorkspaceId: vi.fn(),
+  getCreatorCoachProfile: vi.fn(),
+  getOrFetchAudienceSignals: vi.fn(),
+  checkUsageLimit: vi.fn(),
+  incrementUsage: vi.fn(),
+  decrementUsage: vi.fn(),
+  getUserSubscription: vi.fn(),
+  isFirstRemakeUsageBypassEligible: vi.fn(),
+  transcribeReelUrl: vi.fn(),
+  generateRemakeContent: vi.fn(),
+}));
+
+vi.mock("../../db", () => ({
+  getOnboardingState: mocks.getOnboardingState,
+}));
+
+vi.mock("../../personalWorkspace", () => ({
+  getPersonalWorkspaceId: mocks.getPersonalWorkspaceId,
+}));
+
+vi.mock("../../planCoachProfile", () => ({
+  getCreatorCoachProfile: mocks.getCreatorCoachProfile,
+}));
+
+vi.mock("../../audienceResearch/service", () => ({
+  getOrFetchAudienceSignals: mocks.getOrFetchAudienceSignals,
+}));
+
+vi.mock("../../stripe/stripe-service", () => ({
+  checkUsageLimit: mocks.checkUsageLimit,
+  incrementUsage: mocks.incrementUsage,
+  decrementUsage: mocks.decrementUsage,
+  getUserSubscription: mocks.getUserSubscription,
+}));
+
+vi.mock("../../routers/_shared", () => ({
+  isFirstRemakeUsageBypassEligible: mocks.isFirstRemakeUsageBypassEligible,
+}));
+
+vi.mock("./reelResearch", () => ({
+  transcribeReelUrl: mocks.transcribeReelUrl,
+}));
+
+vi.mock("../../recreate/generateRemakeContent", () => ({
+  generateRemakeContent: mocks.generateRemakeContent,
+}));
+
+import { remakeReelUrl } from "./remakeReel";
+
+const actor = {
+  userId: 42,
+  openId: "open-42",
+  email: "admin@example.com",
+  role: "admin",
+};
+
+const reelResult = {
+  reel: {
+    platform: "instagram" as const,
+    shortcode: "C13BR_GvZVJ",
+    reelUrl: "https://www.instagram.com/reel/C13BR_GvZVJ/",
+    creator: {
+      username: "the_30_rule",
+      fullName: "Preston Lee",
+      followerCount: 49921,
+      profilePicUrl: "",
+    },
+    caption: "restaurant strategy",
+    metrics: { views: 884042, likes: 18144, comments: 307 },
+    durationSec: 69,
+    postedAt: "2024-01-09T00:00:00.000Z",
+    thumbnailUrl: "",
+    provider: "scrapecreators" as const,
+  },
+  transcript: "Why does Cheesecake Factory have 250 menu items?",
+  segments: [],
+  durationSec: 69,
+  cache: { hit: true, source: "memory" as const },
+};
+
+describe("AI Gateway remake_reel", () => {
+  beforeEach(() => {
+    for (const mock of Object.values(mocks)) mock.mockReset();
+
+    mocks.getOnboardingState.mockResolvedValue({
+      hasCompletedFirstSpy: true,
+      targetAudience: "restaurant owners",
+      businessDescription: "I teach restaurant owners how to grow profitably",
+    });
+    mocks.getPersonalWorkspaceId.mockResolvedValue("workspace-1");
+    mocks.getCreatorCoachProfile.mockResolvedValue({
+      niche: "Restaurants & Cafes",
+      nicheSlug: "restaurants-cafes",
+      targetAudience: "restaurant owners",
+      brandDescription: "restaurant growth education",
+    });
+    mocks.getOrFetchAudienceSignals.mockResolvedValue({ signals: [] });
+    mocks.isFirstRemakeUsageBypassEligible.mockResolvedValue(false);
+    mocks.checkUsageLimit.mockResolvedValue({
+      allowed: true,
+      used: 1,
+      limit: 100,
+    });
+    mocks.getUserSubscription.mockResolvedValue({ plan: "pro" });
+    mocks.incrementUsage.mockResolvedValue(undefined);
+    mocks.decrementUsage.mockResolvedValue(undefined);
+    mocks.transcribeReelUrl.mockResolvedValue(reelResult);
+    mocks.generateRemakeContent.mockResolvedValue({
+      viralStructure: { hook: { type: "Question" } },
+      generatedScript: "Here is the SpyReels remake.",
+      readabilityAnalysis: { gradeLevel: 5 },
+    });
+  });
+
+  it("uses the shared remake engine for Use my idea", async () => {
+    const result = await remakeReelUrl({
+      actor,
+      url: reelResult.reel.reelUrl,
+      mode: "custom",
+      angle: "Why menu engineering matters for restaurant profit",
+    });
+
+    expect(mocks.transcribeReelUrl).toHaveBeenCalledWith({
+      actor,
+      url: reelResult.reel.reelUrl,
+    });
+    expect(mocks.incrementUsage).toHaveBeenCalledWith(42, "recreateCount");
+    expect(mocks.generateRemakeContent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        originalTranscript: reelResult.transcript,
+        caption: "restaurant strategy",
+        gradeLevel: "auto",
+        addCues: true,
+        platformLabel: "Instagram Reel",
+        topic: expect.stringContaining("Why menu engineering matters"),
+      })
+    );
+    expect(result.remake.mode).toBe("custom");
+    expect(result.remake.generatedScript).toBe("Here is the SpyReels remake.");
+    expect(result.savedToSpyReels).toBe(false);
+  });
+
+  it("maps Keep this topic to SAME_TOPIC", async () => {
+    await remakeReelUrl({
+      actor,
+      url: reelResult.reel.reelUrl,
+      mode: "same_topic",
+    });
+
+    expect(mocks.generateRemakeContent).toHaveBeenCalledWith(
+      expect.objectContaining({ topic: "SAME_TOPIC" })
+    );
+  });
+
+  it("uses the creator profile and audience research for Adapt to my niche", async () => {
+    await remakeReelUrl({
+      actor,
+      url: reelResult.reel.reelUrl,
+      mode: "niche",
+    });
+
+    expect(mocks.getPersonalWorkspaceId).toHaveBeenCalledWith(42);
+    expect(mocks.getOrFetchAudienceSignals).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      nicheSlug: "restaurants-cafes",
+      nicheLabel: "Restaurants & Cafes",
+      targetAudience: "restaurant owners",
+    });
+    expect(mocks.generateRemakeContent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        topic: expect.stringContaining("Restaurants & Cafes"),
+      })
+    );
+  });
+
+  it("blocks remake before transcription when the plan limit is reached", async () => {
+    mocks.checkUsageLimit.mockResolvedValue({
+      allowed: false,
+      used: 3,
+      limit: 3,
+      planRequired: "starter",
+    });
+
+    await expect(
+      remakeReelUrl({
+        actor,
+        url: reelResult.reel.reelUrl,
+        mode: "same_topic",
+      })
+    ).rejects.toMatchObject({
+      code: "USAGE_LIMIT_REACHED",
+      upgradePlan: "starter",
+    });
+
+    expect(mocks.transcribeReelUrl).not.toHaveBeenCalled();
+    expect(mocks.incrementUsage).not.toHaveBeenCalled();
+  });
+
+  it("refunds remake usage when generation fails", async () => {
+    mocks.generateRemakeContent.mockRejectedValue(new Error("provider down"));
+
+    await expect(
+      remakeReelUrl({
+        actor,
+        url: reelResult.reel.reelUrl,
+        mode: "same_topic",
+      })
+    ).rejects.toThrow("provider down");
+
+    expect(mocks.incrementUsage).toHaveBeenCalledWith(42, "recreateCount");
+    expect(mocks.decrementUsage).toHaveBeenCalledWith(42, "recreateCount");
+  });
+
+  it("requires an angle for Use my idea", async () => {
+    await expect(
+      remakeReelUrl({
+        actor,
+        url: reelResult.reel.reelUrl,
+        mode: "custom",
+      })
+    ).rejects.toMatchObject({
+      code: "INVALID_INPUT",
+    });
+    expect(mocks.transcribeReelUrl).not.toHaveBeenCalled();
+  });
+});
