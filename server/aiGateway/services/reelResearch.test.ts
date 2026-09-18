@@ -120,6 +120,21 @@ describe("AI Gateway exact Reel research", () => {
     );
   });
 
+  it("returns unavailable follower count as null instead of inventing zero", async () => {
+    mocks.fetchCollectedReelMetadata.mockResolvedValue({
+      ok: true,
+      provider: "scrapecreators",
+      data: {
+        ...metadata,
+        ownerFollowerCount: 0,
+      },
+    });
+
+    const result = await inspectReelUrl(URL);
+
+    expect(result.creator.followerCount).toBeNull();
+  });
+
   it("rejects non-Instagram URLs before provider access", async () => {
     await expect(
       inspectReelUrl("https://example.com/reel/C13BR_GvZVJ/")
