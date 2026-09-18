@@ -63,6 +63,7 @@ export type AiGatewayErrorCode =
   | "UPSTREAM_UNAVAILABLE"
   | "NOT_FOUND"
   | "PRIVATE_ACCOUNT"
+  | "NO_SPEECH"
   | "INTERNAL_ERROR";
 
 export interface AiGatewayErrorShape {
