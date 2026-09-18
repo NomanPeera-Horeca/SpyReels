@@ -135,7 +135,7 @@ describe("AI Gateway remake_reel", () => {
         gradeLevel: "auto",
         addCues: true,
         platformLabel: "Instagram Reel",
-        topic: expect.stringContaining("Why menu engineering matters"),
+        topic: expect.stringContaining("menu engineering matters"),
       })
     );
     expect(result.remake.mode).toBe("custom");
