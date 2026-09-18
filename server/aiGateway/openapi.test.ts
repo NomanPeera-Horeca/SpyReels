@@ -25,7 +25,13 @@ describe("AI Gateway OpenAPI", () => {
     expect(document.openapi).toBe("3.1.0");
     expect(document.paths[`${AI_GATEWAY_REST_BASE_PATH}/tools`]?.get).toBeTruthy();
 
-    for (const name of ["find_creator", "find_top_content", "get_usage"]) {
+    for (const name of [
+      "find_creator",
+      "find_top_content",
+      "inspect_reel",
+      "transcribe_reel",
+      "get_usage",
+    ]) {
       const operation = document.paths[`${AI_GATEWAY_REST_BASE_PATH}/tools/${name}`]?.post;
       expect(operation?.operationId).toBe(name);
       expect(operation?.security).toEqual([{ spyreelsOAuth: ["spyreels:read"] }]);

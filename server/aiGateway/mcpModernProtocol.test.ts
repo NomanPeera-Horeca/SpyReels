@@ -21,13 +21,6 @@ vi.mock("./tools", async () => {
   const { z } = await import("zod");
   const descriptors = [
     {
-      name: "get_usage",
-      title: "Get SpyReels usage",
-      description: "Read current SpyReels account usage.",
-      category: "account",
-      readOnly: true,
-    },
-    {
       name: "find_creator",
       title: "Find creator",
       description: "Research a public creator.",
@@ -39,6 +32,27 @@ vi.mock("./tools", async () => {
       title: "Find top content",
       description: "Find top-performing public content.",
       category: "research",
+      readOnly: true,
+    },
+    {
+      name: "inspect_reel",
+      title: "Inspect Reel",
+      description: "Inspect one exact public Instagram Reel URL.",
+      category: "research",
+      readOnly: true,
+    },
+    {
+      name: "transcribe_reel",
+      title: "Transcribe Reel",
+      description: "Transcribe one exact public Instagram Reel URL.",
+      category: "analysis",
+      readOnly: true,
+    },
+    {
+      name: "get_usage",
+      title: "Get SpyReels usage",
+      description: "Read current SpyReels account usage.",
+      category: "account",
       readOnly: true,
     },
   ] as const;
@@ -115,7 +129,7 @@ describe("SpyReels MCP 2026-07-28 wire contract", () => {
     expect(response.body.result.supportedVersions).toContain("2026-07-28");
   });
 
-  it("returns all three callable tools with modern cache/result metadata", async () => {
+  it("returns all five callable tools with modern cache/result metadata", async () => {
     const app = await makeApp();
     const response = await request(app)
       .post("/api/ai/mcp")
@@ -141,9 +155,11 @@ describe("SpyReels MCP 2026-07-28 wire contract", () => {
     expect(response.body.result.ttlMs).toBe(300000);
     expect(response.body.result.cacheScope).toBe("private");
     expect(response.body.result.tools.map((tool: any) => tool.name)).toEqual([
-      "get_usage",
       "find_creator",
       "find_top_content",
+      "inspect_reel",
+      "transcribe_reel",
+      "get_usage",
     ]);
     expect(
       response.body.result.tools.every(
