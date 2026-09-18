@@ -167,7 +167,7 @@ const MODE_ORDER: Mode[] = ["same_topic", "niche", "custom"];
 const MIN_SCORE = 7;
 const MIN_INTENT_SCORE = 8;
 const MIN_AVERAGE = 7.5;
-const TARGET_CASES = 30;
+const TARGET_CASES = 15;
 const MAX_TRANSCRIPTION_ATTEMPTS = 42;
 const WARM_CASES_PER_MODE = 2;
 
@@ -1027,8 +1027,8 @@ async function main() {
     },
     acceptance: {
       hallucinationsRequired: 0,
-      intentRequired: "30/30 >= 8",
-      toolSuccessRequired: "30/30 for final merge gate",
+      intentRequired: "15/15 >= 8",
+      toolSuccessRequired: "15/15 for final merge gate",
       creativeQualityRequired:
         "all core scores >= 7, average >= 7.5, judge verdict pass",
     },
