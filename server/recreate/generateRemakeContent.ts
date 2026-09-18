@@ -132,8 +132,9 @@ async function repairUnsupportedFacts(input: {
   risksText: string;
   trustedGrounding: string;
   scriptFormatClosing: string;
+  llmInvoker: typeof invokeLLM;
 }): Promise<string> {
-  const response = await invokeLLM({
+  const response = await input.llmInvoker({
     messages: [
       {
         role: "system",
@@ -193,8 +194,10 @@ export async function generateRemakeContent(input: {
   trustedResearchTexts?: string[];
   platformLabel?: "Instagram Reel" | "TikTok video" | "YouTube Short";
   viralStructureOverride?: Record<string, unknown>;
+  llmInvoker?: typeof invokeLLM;
 }): Promise<GeneratedRemakeContent> {
   const platformLabel = input.platformLabel ?? "Instagram Reel";
+  const runLlm = input.llmInvoker ?? invokeLLM;
   const analyzed = input.viralStructureOverride
     ? { structure: input.viralStructureOverride, cacheHit: true }
     : await analyzeRemakeStructure({
@@ -202,6 +205,7 @@ export async function generateRemakeContent(input: {
         caption: input.caption,
         sourceKey: input.sourceKey,
         platformLabel,
+        llmInvoker: runLlm,
       });
   const viralStructure = analyzed.structure;
 
@@ -280,7 +284,7 @@ ${cuesInstruction}
 ${scriptFormatClosing}`;
 
   const writerStarted = Date.now();
-  const scriptResponse = await invokeLLM({
+  const scriptResponse = await runLlm({
     messages: [
       {
         role: "system",
@@ -321,6 +325,7 @@ ${scriptFormatClosing}`;
       risksText: formatFactRisksForRepair(initialRisk.risks),
       trustedGrounding: trustedTexts.filter(Boolean).join("\n\n"),
       scriptFormatClosing,
+      llmInvoker: runLlm,
     });
 
     const repairedRisk = validateRemakeFactRisk({
