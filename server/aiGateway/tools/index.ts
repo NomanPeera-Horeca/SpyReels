@@ -5,6 +5,7 @@ import { getAccountUsage } from "../services/account";
 import { findCreator, findTopContent } from "../services/creatorResearch";
 import { inspectReelUrl, transcribeReelUrl } from "../services/reelResearch";
 import { remakeReelUrl } from "../services/remakeReel";
+import { normalizeRemakeToolInput } from "../services/remakeToolInput";
 import type { AiGatewayActor, AiGatewayContext } from "../types";
 
 function requireActor(context: AiGatewayContext): AiGatewayActor {
@@ -100,11 +101,12 @@ export function createSpyReelsAiToolRegistry(): AiGatewayRegistry {
     name: "remake_reel",
     title: "Remake an Instagram Reel",
     description:
-      "Generate a new script from one exact public Instagram Reel URL using the same SpyReels remake engine as the app. Infer the user's remake intent naturally when it is clear; do not ask unnecessary setup questions. Map requests like 'keep the same topic' to same_topic. Map an explicit new subject or angle such as 'make this about menu engineering' to custom and pass that direction in angle. Map requests such as 'remake this for me', 'make this my version', 'adapt this to my niche', or 'remake this similarly for me' to niche so SpyReels uses the connected creator profile. If the user explicitly names a different niche or audience, treat that wording as an explicit custom direction so it is not overridden by the saved profile. Only when the user gives no usable direction, for example only 'remake this', ask one short natural clarification based on the three SpyReels choices: use my idea, keep this topic, or adapt to my niche. Do not mechanically list choices when the intent is already clear. custom requires angle. This action can consume normal SpyReels transcription/remake usage and never publishes content automatically.",
+      "Generate a new script from one exact public Instagram Reel URL using the same SpyReels remake engine as the app. Pass the user's actual remake wording in instruction. Do not choose an internal mode yourself. SpyReels resolves whether the request means keep the same topic, adapt to the connected creator profile, or use an explicit new angle. Only when the user's wording is genuinely vague, such as only 'remake this', ask one short natural clarification. Do not add a niche or topic the user did not state. This action can consume normal SpyReels transcription/remake usage and never publishes content automatically.",
     category: "creation",
     auth: "required",
     readOnly: false,
     requiredScope: "spyreels:create",
+    normalizeInput: normalizeRemakeToolInput,
     inputSchema: z.object({
       url: z.string().trim().min(1).max(2048),
       instruction: z
@@ -113,7 +115,7 @@ export function createSpyReelsAiToolRegistry(): AiGatewayRegistry {
         .min(1)
         .max(2000)
         .describe(
-          "Copy the user's actual remake instruction as closely as possible, excluding the Reel URL. Do not add, infer, or paraphrase a niche, topic, or angle that the user did not state. SpyReels resolves the mode itself and will request clarification when the instruction is ambiguous."
+          "Copy the user's actual remake instruction as closely as possible, excluding the Reel URL. Do not add, infer, or paraphrase a niche, topic, or angle that the user did not state. SpyReels resolves intent itself and requests clarification when the instruction is ambiguous."
         ),
       gradeLevel: z
         .enum(["auto", "2", "3", "4", "5", "6", "7", "8"])

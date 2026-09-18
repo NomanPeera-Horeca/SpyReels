@@ -50,6 +50,7 @@ export interface AiGatewayToolDefinition<TInput extends z.ZodType = z.ZodType, T
   auth: AiGatewayAuthMode;
   readOnly: boolean;
   requiredScope?: string;
+  normalizeInput?: (rawInput: unknown) => unknown;
   inputSchema: TInput;
   execute: (
     context: AiGatewayContext,

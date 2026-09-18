@@ -100,7 +100,10 @@ export class AiGatewayRegistry {
       };
     }
 
-    const parsed = await tool.inputSchema.safeParseAsync(rawInput);
+    const normalizedInput = tool.normalizeInput
+      ? tool.normalizeInput(rawInput)
+      : rawInput;
+    const parsed = await tool.inputSchema.safeParseAsync(normalizedInput);
     if (!parsed.success) {
       return {
         ok: false,
