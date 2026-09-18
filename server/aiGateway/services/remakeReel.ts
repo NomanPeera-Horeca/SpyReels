@@ -8,6 +8,11 @@ import { getOnboardingState } from "../../db";
 import { getPersonalWorkspaceId } from "../../personalWorkspace";
 import { getCreatorCoachProfile } from "../../planCoachProfile";
 import { generateRemakeContent } from "../../recreate/generateRemakeContent";
+import { analyzeRemakeStructure } from "../../recreate/remakeStructure";
+import {
+  formatResearchGroundingForPrompt,
+  getResearchGrounding,
+} from "../../studioResearchGrounding";
 import { getPlanLimits } from "../../stripe/products";
 import {
   checkUsageLimit,
@@ -27,9 +32,21 @@ async function buildTopic(input: {
   actor: AiGatewayActor;
   mode: RemakeMode;
   angle?: string;
-}): Promise<{ topic: string; displayMode: RemakeMode }> {
+}): Promise<{
+  topic: string;
+  displayMode: RemakeMode;
+  researchIdea: string | null;
+  researchNiche: string;
+  trustedTexts: string[];
+}> {
   if (input.mode === "same_topic") {
-    return { topic: "SAME_TOPIC", displayMode: input.mode };
+    return {
+      topic: "SAME_TOPIC",
+      displayMode: input.mode,
+      researchIdea: null,
+      researchNiche: "business",
+      trustedTexts: [],
+    };
   }
 
   if (input.mode === "custom") {
@@ -43,7 +60,10 @@ async function buildTopic(input: {
       });
     }
 
-    const state = await getOnboardingState(input.actor.userId).catch(() => null);
+    const [state, profile] = await Promise.all([
+      getOnboardingState(input.actor.userId).catch(() => null),
+      getCreatorCoachProfile(input.actor.userId).catch(() => null),
+    ]);
     return {
       topic: buildRecreateTopicPrompt({
         angle,
@@ -51,6 +71,13 @@ async function buildTopic(input: {
         businessDescription: state?.businessDescription ?? null,
       }),
       displayMode: input.mode,
+      researchIdea: angle,
+      researchNiche: profile?.niche ?? "business",
+      trustedTexts: [
+        angle,
+        state?.targetAudience ?? "",
+        state?.businessDescription ?? "",
+      ].filter(Boolean),
     };
   }
 
@@ -75,14 +102,35 @@ async function buildTopic(input: {
     targetAudience: profile.targetAudience,
   });
 
+  const topSignals = signals.slice(0, 5);
+  const audienceResearchBlock = formatAudienceSignalsForPrompt(topSignals);
+  const researchIdea = [
+    profile.niche,
+    profile.targetAudience,
+    ...topSignals.slice(0, 3).map((signal) => signal.title),
+  ]
+    .filter(Boolean)
+    .join(" | ");
+
   return {
     topic: buildRecreateDefaultTopicPrompt({
       niche: profile.niche,
       targetAudience: profile.targetAudience,
       businessDescription: profile.brandDescription,
-      audienceResearchBlock: formatAudienceSignalsForPrompt(signals.slice(0, 5)),
+      audienceResearchBlock,
     }),
     displayMode: input.mode,
+    researchIdea,
+    researchNiche: profile.niche,
+    trustedTexts: [
+      profile.targetAudience,
+      profile.brandDescription ?? "",
+      ...topSignals.flatMap((signal) => [
+        signal.title,
+        signal.snippet ?? "",
+        signal.sourceUrl,
+      ]),
+    ].filter(Boolean),
   };
 }
 
@@ -125,19 +173,45 @@ export async function remakeReelUrl(input: {
     }
   }
 
-  const [topicResult, subscription] = await Promise.all([
+  const preparationStarted = Date.now();
+  const [topicResult, subscription, transcriptResult] = await Promise.all([
     buildTopic({
       actor: input.actor,
       mode: resolvedIntent.mode,
       angle: resolvedIntent.angle,
     }),
     getUserSubscription(input.actor.userId),
+    transcribeReelUrl({
+      actor: input.actor,
+      url: input.url,
+    }),
   ]);
-
-  const transcriptResult = await transcribeReelUrl({
-    actor: input.actor,
-    url: input.url,
+  console.info("[RemakeLatency] preparation_parallel_ms", Date.now() - preparationStarted, {
+    mode: resolvedIntent.mode,
+    transcriptCacheHit: transcriptResult.cache.hit,
   });
+
+  const researchIdea =
+    topicResult.researchIdea ||
+    transcriptResult.reel.caption ||
+    transcriptResult.transcript.slice(0, 300);
+
+  const groundingStarted = Date.now();
+  const [researchItems, structureResult] = await Promise.all([
+    getResearchGrounding(researchIdea, topicResult.researchNiche),
+    analyzeRemakeStructure({
+      originalTranscript: transcriptResult.transcript,
+      caption: transcriptResult.reel.caption,
+      sourceKey: transcriptResult.reel.shortcode,
+      platformLabel: "Instagram Reel",
+    }),
+  ]);
+  console.info("[RemakeLatency] grounding_parallel_ms", Date.now() - groundingStarted, {
+    researchCount: researchItems.length,
+    structureCacheHit: structureResult.cacheHit,
+  });
+
+  const researchGroundingBlock = formatResearchGroundingForPrompt(researchItems);
 
   const limits = getPlanLimits(subscription.plan);
   const addCues = Boolean(limits.hasAiCues);
@@ -146,15 +220,42 @@ export async function remakeReelUrl(input: {
   await incrementUsage(input.actor.userId, "recreateCount");
 
   try {
-    const generated = await generateRemakeContent({
-      originalTranscript: transcriptResult.transcript,
-      caption: transcriptResult.reel.caption,
-      reel: transcriptResult.reel,
-      topic: topicResult.topic,
-      gradeLevel,
-      addCues,
-      platformLabel: "Instagram Reel",
-    });
+    let generated;
+    try {
+      generated = await generateRemakeContent({
+        originalTranscript: transcriptResult.transcript,
+        caption: transcriptResult.reel.caption,
+        reel: transcriptResult.reel,
+        sourceKey: transcriptResult.reel.shortcode,
+        topic: topicResult.topic,
+        gradeLevel,
+        addCues,
+        researchGroundingBlock,
+        trustedResearchTexts: [
+          ...topicResult.trustedTexts,
+          ...researchItems.flatMap((item) => [
+            item.title,
+            item.snippet ?? "",
+            item.sourceUrl,
+          ]),
+        ],
+        platformLabel: "Instagram Reel",
+        viralStructureOverride: structureResult.structure,
+      });
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message.includes("safely grounded remake")
+      ) {
+        throw new AiGatewayError({
+          code: "UPSTREAM_UNAVAILABLE",
+          message: error.message,
+          retryable: true,
+          cause: error,
+        });
+      }
+      throw error;
+    }
 
     return {
       source: {
@@ -178,6 +279,11 @@ export async function remakeReelUrl(input: {
         readabilityAnalysis: generated.readabilityAnalysis,
       },
       transcriptCache: transcriptResult.cache,
+      grounding: {
+        researchSourceCount: researchItems.length,
+        structureCacheHit: structureResult.cacheHit,
+        factRepairApplied: generated.factIntegrity.repaired,
+      },
       savedToSpyReels: false,
       note:
         "This remake was generated with the same SpyReels remake engine used in the app. It was returned to the AI host and was not silently saved or published.",
