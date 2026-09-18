@@ -215,35 +215,60 @@ export default function History() {
       toast.error("Refresh failed", { description: error.message });
     },
   });
+  const resyncTikTokMutation = trpc.tiktokScrape.resync.useMutation({
+    onError: (error) => {
+      toast.error("Refresh failed", { description: error.message });
+    },
+  });
+  const resyncYouTubeMutation = trpc.youtubeScrape.resync.useMutation({
+    onError: (error) => {
+      toast.error("Refresh failed", { description: error.message });
+    },
+  });
 
-  const handleResync = (e: React.MouseEvent, jobId: number) => {
-    e.stopPropagation();
-    resyncMutation.mutate(
-      { jobId },
-      {
-        onSuccess: (data) => {
-          utils.scrape.list.invalidate();
-          void utils.scrape.status.invalidate({ jobId });
-          void utils.reels.list.invalidate({ jobId });
-          toast.success("Pulling fresh reels", {
-            description: `Fetching posts since your last sync (last ${data.daysSinceSync} day${data.daysSinceSync > 1 ? "s" : ""}). New data only (not a full historical backfill).`,
-          });
-        },
-      }
-    );
+  const refreshPending =
+    resyncMutation.isPending ||
+    resyncTikTokMutation.isPending ||
+    resyncYouTubeMutation.isPending;
+
+  const isRefreshingJob = (job: HistoryJobRow) => {
+    if (job.platform === "instagram") {
+      return isRefreshingJob(job);
+    }
+    if (job.platform === "tiktok") {
+      return resyncTikTokMutation.isPending && resyncTikTokMutation.variables?.jobId === job.id;
+    }
+    return resyncYouTubeMutation.isPending && resyncYouTubeMutation.variables?.jobId === job.id;
   };
 
-  const handleFailedRetry = (e: React.MouseEvent, jobId: number) => {
+  const handleRefresh = (e: React.MouseEvent, job: HistoryJobRow) => {
     e.stopPropagation();
-    resyncMutation.mutate(
-      { jobId },
+    const mutation =
+      job.platform === "instagram"
+        ? resyncMutation
+        : job.platform === "tiktok"
+          ? resyncTikTokMutation
+          : resyncYouTubeMutation;
+
+    mutation.mutate(
+      { jobId: job.id },
       {
         onSuccess: () => {
-          utils.scrape.list.invalidate();
-          void utils.scrape.status.invalidate({ jobId });
-          void utils.reels.list.invalidate({ jobId });
-          toast.success("Retry started", {
-            description: "We’re reconnecting and running the pipeline again.",
+          if (job.platform === "instagram") {
+            void utils.scrape.list.invalidate();
+            void utils.scrape.status.invalidate({ jobId: job.id });
+            void utils.reels.list.invalidate({ jobId: job.id });
+          } else if (job.platform === "tiktok") {
+            void utils.tiktokScrape.list.invalidate();
+            void utils.tiktokScrape.progress.invalidate({ jobId: job.id });
+            void utils.tiktokScrape.videos.invalidate({ jobId: job.id });
+          } else {
+            void utils.youtubeScrape.list.invalidate();
+            void utils.youtubeScrape.progress.invalidate({ jobId: job.id });
+            void utils.youtubeScrape.videos.invalidate({ jobId: job.id });
+          }
+          toast.success(job.status === "failed" ? "Retry started" : "Refreshing creator", {
+            description: "Your existing results stay available until fresh data is ready.",
           });
         },
       }
@@ -671,32 +696,31 @@ export default function History() {
                     className="mt-2 flex items-center justify-end gap-1"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    {job.platform === "instagram" && job.status === "failed" && (
+                    {job.status === "failed" && (
                       <Button
                         variant="outline"
                         size="sm"
                         className="min-h-9 gap-1 text-xs"
-                        onClick={(e) => handleFailedRetry(e, job.id)}
-                        disabled={resyncMutation.isPending}
+                        onClick={(e) => handleRefresh(e, job)}
+                        disabled={refreshPending}
                       >
                         <RefreshCw
-                          className={`h-3.5 w-3.5 ${resyncMutation.isPending && resyncMutation.variables?.jobId === job.id ? "animate-spin" : ""}`}
+                          className={`h-3.5 w-3.5 ${isRefreshingJob(job) ? "animate-spin" : ""}`}
                         />
                         Retry
                       </Button>
                     )}
-                    {job.platform === "instagram" &&
-                      job.status === "completed" &&
+                    {job.status === "completed" &&
                       !syncedRecently && (
                       <Button
                         variant="outline"
                         size="sm"
                         className="min-h-9 gap-1 text-xs"
-                        onClick={(e) => handleResync(e, job.id)}
-                        disabled={resyncMutation.isPending}
+                        onClick={(e) => handleRefresh(e, job)}
+                        disabled={refreshPending}
                       >
                         <RefreshCw
-                          className={`h-3.5 w-3.5 ${resyncMutation.isPending && resyncMutation.variables?.jobId === job.id ? "animate-spin" : ""}`}
+                          className={`h-3.5 w-3.5 ${isRefreshingJob(job) ? "animate-spin" : ""}`}
                         />
                         Refresh
                       </Button>
@@ -709,7 +733,7 @@ export default function History() {
                         handleDelete(e, job.id, job.handle, job.platform)
                       }
                       disabled={
-                        deleteMutation.isPending || deleteTikTokMutation.isPending
+                        deleteMutation.isPending || deleteTikTokMutation.isPending || deleteYouTubeMutation.isPending
                       }
                       title="Remove from Creator Radar"
                     >
@@ -826,29 +850,28 @@ export default function History() {
                   className="flex shrink-0 flex-wrap justify-end gap-2"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {job.platform === "instagram" && job.status === "failed" && (
+                  {job.status === "failed" && (
                     <Button
                       variant="outline"
                       size="sm"
                       className="min-h-9 gap-1.5 text-xs"
-                      onClick={(e) => handleFailedRetry(e, job.id)}
-                      disabled={resyncMutation.isPending}
+                      onClick={(e) => handleRefresh(e, job)}
+                      disabled={refreshPending}
                     >
-                      <RefreshCw className={`h-3.5 w-3.5 ${resyncMutation.isPending && resyncMutation.variables?.jobId === job.id ? "animate-spin" : ""}`} />
+                      <RefreshCw className={`h-3.5 w-3.5 ${isRefreshingJob(job) ? "animate-spin" : ""}`} />
                       Retry
                     </Button>
                   )}
-                  {job.platform === "instagram" &&
-                    job.status === "completed" &&
+                  {job.status === "completed" &&
                     !syncedRecently && (
                     <Button
                       variant="outline"
                       size="sm"
                       className="min-h-9 gap-1.5 text-xs"
-                      onClick={(e) => handleResync(e, job.id)}
-                      disabled={resyncMutation.isPending}
+                      onClick={(e) => handleRefresh(e, job)}
+                      disabled={refreshPending}
                     >
-                      <RefreshCw className={`h-3.5 w-3.5 ${resyncMutation.isPending && resyncMutation.variables?.jobId === job.id ? "animate-spin" : ""}`} />
+                      <RefreshCw className={`h-3.5 w-3.5 ${isRefreshingJob(job) ? "animate-spin" : ""}`} />
                       Refresh
                     </Button>
                   )}
@@ -865,7 +888,7 @@ export default function History() {
                       handleDelete(e, job.id, job.handle, job.platform)
                     }
                     disabled={
-                      deleteMutation.isPending || deleteTikTokMutation.isPending
+                      deleteMutation.isPending || deleteTikTokMutation.isPending || deleteYouTubeMutation.isPending
                     }
                   >
                     <Trash2 className="h-4 w-4" />
