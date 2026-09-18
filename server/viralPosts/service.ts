@@ -497,7 +497,12 @@ function scheduleDailyFeedRecovery(
 ): boolean {
   const tiktokPools = pools.filter((pool) => pool.platform === "tiktok");
   const instagramPools = pools.filter((pool) => pool.platform === "instagram");
-  const toRefresh = [...instagramPools.slice(0, 2), ...tiktokPools].slice(0, 4);
+  const youtubePools = pools.filter((pool) => pool.platform === "youtube");
+  const toRefresh = [
+    ...instagramPools.slice(0, 2),
+    ...tiktokPools,
+    ...youtubePools.slice(0, 1),
+  ].slice(0, 4);
   if (!toRefresh[0]) return false;
 
   // Force only one highest-priority pool so a genuinely fresh-but-low-quality
@@ -1128,7 +1133,11 @@ async function ensureUserViralPools(args: {
       platform: "tiktok",
     });
   }
-  // Viral Posts V1: no YouTube pool ensure (historical rows may remain).
+  if (isViralPostsYoutubeEnabled) {
+    for (const pillar of args.pillars.slice(0, 6)) {
+      specs.push({ niche: args.niche, pillar, platform: "youtube" });
+    }
+  }
   if (specs.length === 0 && isViralPostsInstagramEnabled) {
     specs.push({
       niche: args.niche,

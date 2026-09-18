@@ -25,6 +25,7 @@ import {
   shouldRunTikTokSeedFallback,
   shouldUseTikTokSearchDiscovery,
 } from "./tiktokPoolDiscovery";
+import { discoverYouTubePoolCandidates } from "./youtubePoolDiscovery";
 import { classifyCandidateForPoolAdmission } from "./poolAdmission";
 import type { SemanticPoolReroute } from "./semanticPoolRelevance";
 import { adaptTikTokVideos } from "./platformAdapters";
@@ -49,7 +50,7 @@ export type PoolRefreshResult = {
   error?: string;
 };
 
-/** Historical YouTube (and any non-V1) Viral Posts pools must not spend SC calls. */
+/** Unknown/non-supported Viral Posts pools must not spend provider calls. */
 export function shouldSkipUnsupportedViralPostsPlatform(
   platform: string | null | undefined
 ): boolean {
@@ -488,6 +489,43 @@ async function refreshTikTokPool(
   };
 }
 
+async function refreshYouTubePool(
+  pool: ViralPostPool,
+  remainingBudget: number
+): Promise<{ scCalls: number; candidateCount: number; costEstimateUsd?: number }> {
+  const search = await discoverYouTubePoolCandidates({
+    niche: pool.niche,
+    pillar: pool.pillar,
+    maxScCalls: Math.min(
+      VIRAL_POOL_DEFAULTS.refreshMaxScCalls,
+      remainingBudget
+    ),
+    region: pool.region || undefined,
+  });
+  const candidateCount = await persistAdaptedToPool({
+    pool,
+    adapted: search.adapted,
+    scCalls: search.totalScCalls,
+    costEstimateUsd: search.costEstimateUsd,
+  });
+  console.info("[viralPosts.pool] youtube_supply_mix", {
+    poolId: pool.id,
+    searchCalls: search.totalScCalls,
+    searchSuccesses: search.searchSuccesses,
+    searchFailures: search.searchFailures,
+    rawShorts: search.rawShorts,
+    prequalifiedShorts: search.prequalifiedShorts,
+    semanticHaikuCalls: search.semanticHaikuCalls,
+    semanticRejected: search.semanticRejected,
+    providerCandidates: candidateCount,
+  });
+  return {
+    scCalls: search.totalScCalls,
+    candidateCount,
+    costEstimateUsd: search.costEstimateUsd,
+  };
+}
+
 /**
  * Refresh one shared niche/pillar pool with a hard provider budget.
  * Uses a DB lease so multiple app instances cannot duplicate provider calls.
@@ -526,8 +564,7 @@ export async function refreshPoolById(
     };
   }
 
-  // Viral Posts V1: Instagram + TikTok only. Historical YouTube pools stay in DB
-  // but must never spend ScrapeCreators budget.
+  // Reject unknown platforms before lock acquisition or provider spend.
   if (shouldSkipUnsupportedViralPostsPlatform(pool.platform)) {
     console.info("[viralPosts.pool] lock_skip", {
       poolId: pool.id,
@@ -565,7 +602,8 @@ export async function refreshPoolById(
 
   const used = await poolRepo.getBudgetUsed(pool.id);
   const remaining = Math.max(0, pool.dailyCallBudget - used);
-  const minBudget = pool.platform === "tiktok" ? 3 : 5;
+  const minBudget =
+    pool.platform === "youtube" ? 1 : pool.platform === "tiktok" ? 3 : 5;
   if (remaining < minBudget) {
     const featuredCandidateCount = await hydrateFeaturedSupply(pool);
     console.info("[viralPosts.pool] lock_skip", {
@@ -627,6 +665,11 @@ export async function refreshPoolById(
 
     if (pool.platform === "tiktok") {
       const result = await refreshTikTokPool(pool, remaining);
+      scCalls = result.scCalls;
+      candidateCount = result.candidateCount;
+      costEstimateUsd = result.costEstimateUsd;
+    } else if (pool.platform === "youtube") {
+      const result = await refreshYouTubePool(pool, remaining);
       scCalls = result.scCalls;
       candidateCount = result.candidateCount;
       costEstimateUsd = result.costEstimateUsd;

@@ -10,11 +10,10 @@ export type ViralTrendStatus =
 export type ViralPostPlatform = "instagram" | "tiktok" | "youtube";
 
 /**
- * Viral Posts V1 ships Instagram + TikTok only.
- * YouTube remains a typed platform for historical rows and non-Viral-Posts
- * SpyReels features, but is not a supported Viral Posts V1 discovery source.
+ * Supported Viral Posts discovery platforms. YouTube remains opt-in through
+ * VIRAL_POSTS_YOUTUBE_ENABLED so production can roll it back independently.
  */
-export const VIRAL_POSTS_V1_PLATFORMS = ["instagram", "tiktok"] as const;
+export const VIRAL_POSTS_V1_PLATFORMS = ["instagram", "tiktok", "youtube"] as const;
 export type ViralPostsV1Platform = (typeof VIRAL_POSTS_V1_PLATFORMS)[number];
 export const VIRAL_POSTS_V1_DEFAULT_PLATFORM: ViralPostsV1Platform = "instagram";
 
@@ -31,19 +30,17 @@ export function normalizeViralPostsV1Platform(
 ): ViralPostsV1Platform {
   const clean = (platform || "").trim().toLowerCase();
   if (clean === "tiktok") return "tiktok";
+  if (clean === "youtube") return "youtube";
   return VIRAL_POSTS_V1_DEFAULT_PLATFORM;
 }
 
-/** Explore filter platforms: force YouTube off for Viral Posts V1. */
+/** Preserve supported Explore filters; server-side feature flags still govern supply. */
 export function normalizeViralPostsExplorePlatforms(platforms: {
   instagram: boolean;
   tiktok: boolean;
   youtube: boolean;
 }): { instagram: boolean; tiktok: boolean; youtube: boolean } {
-  return {
-    ...platforms,
-    youtube: false,
-  };
+  return { ...platforms };
 }
 
 export type ViralFeedbackType =
@@ -180,16 +177,13 @@ export function parseViralPostsTiktokEnabled(
 
 /**
  * Parsed from VIRAL_POSTS_YOUTUBE_ENABLED.
- * Viral Posts V1 keeps YouTube off even when VIRAL_POSTS_LIVE is on.
- * Explicit true is ignored so V1 cannot re-enable YouTube pool creation.
+ * YouTube is opt-in only: blank/invalid/false stay disabled even when Viral Posts is live.
  */
 export function parseViralPostsYoutubeEnabled(
   raw: string | undefined,
   viralPostsLive: boolean
 ): boolean {
-  void raw;
-  void viralPostsLive;
-  return false;
+  return viralPostsLive && parseExplicitBoolean(raw) === true;
 }
 
 /**

@@ -86,7 +86,7 @@ describe("applyExplorePostFilters", () => {
     expect(items).toEqual([]);
   });
 
-  it("never surfaces historical YouTube rows", () => {
+  it("surfaces YouTube rows only when the YouTube filter is enabled", () => {
     const items = applyExplorePostFilters({
       posts: [
         post({ id: "yt", platform: "youtube", ageHours: 1 }),
@@ -97,7 +97,15 @@ describe("applyExplorePostFilters", () => {
       quickFilter: "all",
       nowMs,
     });
-    expect(items.map((p) => p.id)).toEqual(["ig"]);
+    expect(items.map((p) => p.id)).toEqual(["yt", "ig"]);
+    const disabled = applyExplorePostFilters({
+      posts: items,
+      platforms: { instagram: true, tiktok: true, youtube: false },
+      postedWithin: "30d",
+      quickFilter: "all",
+      nowMs,
+    });
+    expect(disabled.map((p) => p.id)).toEqual(["ig"]);
   });
 
   it("respects 24h date boundary", () => {
@@ -263,6 +271,6 @@ describe("applyExplorePostFilters", () => {
         rawResultCount: 10,
         quickFilter: "all",
       }).description
-    ).toBe("Select Instagram or TikTok to see posts.");
+    ).toBe("Select Instagram, TikTok, or YouTube to see posts.");
   });
 });

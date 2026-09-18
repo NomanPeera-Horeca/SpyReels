@@ -52,7 +52,7 @@ describe("Viral Posts unified UI wiring", () => {
     expect(legacy).toContain("applyExplorePostFilters");
   });
 
-  it("browse and search results share Explore filters including YouTube exclusion", () => {
+  it("browse and search results share Explore filters including YouTube", () => {
     const browse = [
       post({ id: "ig", platform: "instagram", sourceId: "ig1" }),
       post({ id: "tt", platform: "tiktok", sourceId: "tt1" }),
@@ -62,7 +62,7 @@ describe("Viral Posts unified UI wiring", () => {
       post({ id: "ig2", platform: "instagram", sourceId: "ig2" }),
       post({ id: "yt2", platform: "youtube", sourceId: "yt2" }),
     ];
-    const platforms = { instagram: true, tiktok: true, youtube: false };
+    const platforms = { instagram: true, tiktok: true, youtube: true };
     const browseFiltered = applyExplorePostFilters({
       posts: browse,
       platforms,
@@ -84,8 +84,12 @@ describe("Viral Posts unified UI wiring", () => {
     expect(browseFiltered.map((p) => p.platform).sort()).toEqual([
       "instagram",
       "tiktok",
+      "youtube",
     ]);
-    expect(searchFiltered.map((p) => p.platform)).toEqual(["instagram"]);
+    expect(searchFiltered.map((p) => p.platform)).toEqual([
+      "instagram",
+      "youtube",
+    ]);
   });
 
   it("clearing search conceptually returns to browse empty-copy path", () => {

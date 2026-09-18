@@ -90,15 +90,17 @@ export function matchesExplorePlatform(
   platform: string | null | undefined,
   platforms: ExplorePlatformFilters
 ): boolean {
-  if (!platforms.instagram && !platforms.tiktok) return false;
-  // Viral Posts V1 never surfaces YouTube rows.
+  if (!platforms.instagram && !platforms.tiktok && !platforms.youtube) {
+    return false;
+  }
   if (!isViralPostsV1Platform(platform)) return false;
+  if (platform === "youtube") return platforms.youtube === true;
   if (platform === "tiktok") return platforms.tiktok === true;
   return platforms.instagram === true;
 }
 
 /**
- * Pure Explore V1 filter for Browse and Search result lists.
+ * Pure Explore filter for Browse and Search result lists.
  * Does not trigger provider discovery.
  */
 export function applyExplorePostFilters<T extends ExploreFilterablePost>(args: {
@@ -144,10 +146,14 @@ export function exploreEmptyCopy(args: {
   rawResultCount: number;
   quickFilter: ExploreQuickFilter;
 }): { title: string; description: string } {
-  if (!args.platforms.instagram && !args.platforms.tiktok) {
+  if (
+    !args.platforms.instagram &&
+    !args.platforms.tiktok &&
+    !args.platforms.youtube
+  ) {
     return {
-      title: "Select Instagram or TikTok to see posts",
-      description: "Select Instagram or TikTok to see posts.",
+      title: "Select a platform to see posts",
+      description: "Select Instagram, TikTok, or YouTube to see posts.",
     };
   }
   if (args.usingSearch) {
