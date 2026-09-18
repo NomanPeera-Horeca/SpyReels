@@ -105,77 +105,62 @@ export function createSpyReelsAiToolRegistry(): AiGatewayRegistry {
     auth: "required",
     readOnly: false,
     requiredScope: "spyreels:create",
-    inputSchema: z
-      .object({
-        url: z.string().trim().min(1).max(2048),
-        instruction: z
-          .string()
-          .trim()
-          .min(1)
-          .max(2000)
-          .optional()
-          .describe(
-            "Preferred field. Copy the user's actual remake instruction as closely as possible, excluding the Reel URL. Do not add, infer, or paraphrase a niche, topic, or angle that the user did not state. SpyReels resolves intent itself and requests clarification when the instruction is ambiguous."
-          ),
-        mode: z
-          .enum(["custom", "same_topic", "niche"])
-          .optional()
-          .describe(
-            "Deprecated compatibility field for AI hosts that cached the older tool schema. Do not use for new calls."
-          ),
-        angle: z
-          .string()
-          .trim()
-          .min(1)
-          .max(2000)
-          .optional()
-          .describe(
-            "Deprecated compatibility field. Only used with legacy mode=custom."
-          ),
-        gradeLevel: z
-          .enum(["auto", "2", "3", "4", "5", "6", "7", "8"])
-          .default("auto"),
-      })
-      .superRefine((value, ctx) => {
-        if (value.instruction?.trim()) return;
+    normalizeInput: (rawInput) => {
+      if (!rawInput || typeof rawInput !== "object") return rawInput;
+      const record = rawInput as Record<string, unknown>;
+      const instruction =
+        typeof record.instruction === "string"
+          ? record.instruction.trim()
+          : "";
+      if (instruction) return rawInput;
 
-        if (value.mode === "same_topic") return;
+      const mode = typeof record.mode === "string" ? record.mode : "";
+      const angle = typeof record.angle === "string" ? record.angle.trim() : "";
 
-        if (value.mode === "custom" && value.angle?.trim()) return;
+      if (mode === "same_topic") {
+        return {
+          ...record,
+          instruction: "keep the same topic",
+        };
+      }
 
-        if (value.mode === "niche") {
-          ctx.addIssue({
-            code: "custom",
-            path: ["instruction"],
-            message:
-              "This connector is using an older cached remake schema. Refresh or reconnect SpyReels, then retry so SpyReels can verify that adapt-to-niche was explicitly requested.",
-          });
-          return;
-        }
+      if (mode === "custom" && angle) {
+        return {
+          ...record,
+          instruction: `make this about ${angle}`,
+        };
+      }
 
-        ctx.addIssue({
-          code: "custom",
-          path: ["instruction"],
-          message:
-            "Provide the user's actual remake instruction. A bare remake request must be clarified before generation.",
-        });
-      }),
-    execute: async (context, input) => {
-      const effectiveInstruction =
-        input.instruction?.trim() ||
-        (input.mode === "same_topic"
-          ? "keep the same topic"
-          : input.mode === "custom" && input.angle?.trim()
-            ? `make this about ${input.angle.trim()}`
-            : "");
+      if (mode === "niche") {
+        return {
+          ...record,
+          instruction: "remake this",
+        };
+      }
 
-      return remakeReelUrl({
+      return rawInput;
+    },
+    inputSchema: z.object({
+      url: z.string().trim().min(1).max(2048),
+      instruction: z
+        .string()
+        .trim()
+        .min(1)
+        .max(2000)
+        .describe(
+          "Copy the user's actual remake instruction as closely as possible, excluding the Reel URL. Do not add, infer, or paraphrase a niche, topic, or angle that the user did not state. SpyReels resolves intent itself and requests clarification when the instruction is ambiguous."
+        ),
+      gradeLevel: z
+        .enum(["auto", "2", "3", "4", "5", "6", "7", "8"])
+        .default("auto"),
+    }),
+    execute: async (context, input) =>
+      remakeReelUrl({
         actor: requireActor(context),
         url: input.url,
-        instruction: effectiveInstruction,
+        instruction: input.instruction,
         gradeLevel: input.gradeLevel,
-      });
-    },
+      }),
   });
 
   registry.register({
