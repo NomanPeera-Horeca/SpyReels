@@ -44,6 +44,7 @@ export async function analyzeRemakeStructure(input: {
   caption: string;
   sourceKey?: string;
   platformLabel?: "Instagram Reel" | "TikTok video" | "YouTube Short";
+  llmInvoker?: typeof invokeLLM;
 }): Promise<{ structure: Record<string, unknown>; cacheHit: boolean }> {
   const platformLabel = input.platformLabel ?? "Instagram Reel";
   const key = cacheKey({
@@ -94,7 +95,7 @@ ${input.originalTranscript}
 
 Return ONLY valid JSON, no markdown formatting.`;
 
-  const response = await invokeLLM({
+  const response = await (input.llmInvoker ?? invokeLLM)({
     messages: [
       {
         role: "system",
