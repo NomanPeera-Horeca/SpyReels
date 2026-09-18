@@ -468,6 +468,7 @@ export default function History() {
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {sortedJobs.map((job) => {
             const syncedRecently = isSyncedWithin24h(job.updatedAt);
+            const refreshFailed = job.status === "completed" && Boolean(job.errorMessage);
             const stats = job.reelStats;
             const niche = jobNiche(job);
             const canOpenRadar = job.status === "completed" || job.status === "running";
@@ -483,7 +484,7 @@ export default function History() {
                   if (canOpenRadar && e.key === "Enter") openJob(job);
                 }}
                 className={`group relative flex flex-col overflow-hidden rounded-2xl border bg-card text-left transition-all hover:border-primary/35 hover:shadow-lg hover:shadow-primary/5 ${
-                  job.status === "failed"
+                  (job.status === "failed" || refreshFailed)
                     ? "border-destructive/30 opacity-95"
                     : "border-border/50"
                 } ${canOpenRadar ? "cursor-pointer" : "cursor-default"}`}
@@ -492,7 +493,7 @@ export default function History() {
                   <div className="relative shrink-0">
                     <div
                       className={`h-14 w-14 rounded-2xl bg-muted overflow-hidden ring-2 ring-offset-2 ring-offset-background ${
-                        syncedRecently && job.status === "completed" ? "ring-emerald-500/50" : "ring-border/50"
+                        syncedRecently && job.status === "completed" && !refreshFailed ? "ring-emerald-500/50" : "ring-border/50"
                       }`}
                     >
                       <img
@@ -518,10 +519,10 @@ export default function History() {
                       </Badge>
                       <Badge
                         variant={
-                          job.status === "completed"
-                            ? "secondary"
-                            : job.status === "failed"
-                              ? "destructive"
+                          refreshFailed || job.status === "failed"
+                            ? "destructive"
+                            : job.status === "completed"
+                              ? "secondary"
                               : "outline"
                         }
                         className="text-[10px]"
@@ -529,13 +530,15 @@ export default function History() {
                         {job.status === "running" && (
                           <Loader2 className="mr-1 h-2.5 w-2.5 animate-spin" />
                         )}
-                        {job.status === "failed"
-                          ? jobStatusLabel(job)
-                          : job.status === "running"
-                            ? `${job.progressPercent}%`
-                            : job.status}
+                        {refreshFailed
+                          ? "Refresh failed"
+                          : job.status === "failed"
+                            ? jobStatusLabel(job)
+                            : isScrapeJobInFlight(job.status)
+                              ? job.status === "pending" ? "Queued" : `${job.progressPercent}%`
+                              : job.status}
                       </Badge>
-                      {syncedRecently && job.status === "completed" ? (
+                      {syncedRecently && job.status === "completed" && !refreshFailed ? (
                         <span className="text-[10px] font-semibold uppercase tracking-wide text-emerald-500">
                           Fresh
                         </span>
@@ -692,7 +695,7 @@ export default function History() {
                     className="mt-2 flex items-center justify-end gap-1"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    {job.status === "failed" && (
+                    {(job.status === "failed" || refreshFailed) && (
                       <Button
                         variant="outline"
                         size="sm"
@@ -707,6 +710,7 @@ export default function History() {
                       </Button>
                     )}
                     {job.status === "completed" &&
+                      !refreshFailed &&
                       !syncedRecently && (
                       <Button
                         variant="outline"
@@ -747,6 +751,7 @@ export default function History() {
         <div className="space-y-2">
           {sortedJobs.map((job) => {
             const syncedRecently = isSyncedWithin24h(job.updatedAt);
+            const refreshFailed = job.status === "completed" && Boolean(job.errorMessage);
             const stats = job.reelStats;
             const niche = jobNiche(job);
             const canOpenRadar = job.status === "completed" || job.status === "running";
@@ -838,7 +843,7 @@ export default function History() {
                   <span className="flex items-center gap-1">
                     <Clock className="h-3 w-3" /> {timeAgo(job.updatedAt)}
                   </span>
-                  {syncedRecently && job.status === "completed" ? (
+                  {syncedRecently && job.status === "completed" && !refreshFailed ? (
                     <span className="text-emerald-500 font-medium">Fresh</span>
                   ) : null}
                 </div>
@@ -846,7 +851,7 @@ export default function History() {
                   className="flex shrink-0 flex-wrap justify-end gap-2"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  {job.status === "failed" && (
+                  {(job.status === "failed" || refreshFailed) && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -859,6 +864,7 @@ export default function History() {
                     </Button>
                   )}
                   {job.status === "completed" &&
+                    !refreshFailed &&
                     !syncedRecently && (
                     <Button
                       variant="outline"
