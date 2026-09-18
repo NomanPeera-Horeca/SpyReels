@@ -233,7 +233,7 @@ export default function History() {
 
   const isRefreshingJob = (job: HistoryJobRow) => {
     if (job.platform === "instagram") {
-      return isRefreshingJob(job);
+      return resyncMutation.isPending && resyncMutation.variables?.jobId === job.id;
     }
     if (job.platform === "tiktok") {
       return resyncTikTokMutation.isPending && resyncTikTokMutation.variables?.jobId === job.id;
@@ -243,36 +243,32 @@ export default function History() {
 
   const handleRefresh = (e: React.MouseEvent, job: HistoryJobRow) => {
     e.stopPropagation();
-    const mutation =
-      job.platform === "instagram"
-        ? resyncMutation
-        : job.platform === "tiktok"
-          ? resyncTikTokMutation
-          : resyncYouTubeMutation;
-
-    mutation.mutate(
-      { jobId: job.id },
-      {
-        onSuccess: () => {
-          if (job.platform === "instagram") {
-            void utils.scrape.list.invalidate();
-            void utils.scrape.status.invalidate({ jobId: job.id });
-            void utils.reels.list.invalidate({ jobId: job.id });
-          } else if (job.platform === "tiktok") {
-            void utils.tiktokScrape.list.invalidate();
-            void utils.tiktokScrape.progress.invalidate({ jobId: job.id });
-            void utils.tiktokScrape.videos.invalidate({ jobId: job.id });
-          } else {
-            void utils.youtubeScrape.list.invalidate();
-            void utils.youtubeScrape.progress.invalidate({ jobId: job.id });
-            void utils.youtubeScrape.videos.invalidate({ jobId: job.id });
-          }
-          toast.success(job.status === "failed" ? "Retry started" : "Refreshing creator", {
-            description: "Your existing results stay available until fresh data is ready.",
-          });
-        },
+    const onSuccess = () => {
+      if (job.platform === "instagram") {
+        void utils.scrape.list.invalidate();
+        void utils.scrape.status.invalidate({ jobId: job.id });
+        void utils.reels.list.invalidate({ jobId: job.id });
+      } else if (job.platform === "tiktok") {
+        void utils.tiktokScrape.list.invalidate();
+        void utils.tiktokScrape.progress.invalidate({ jobId: job.id });
+        void utils.tiktokScrape.videos.invalidate({ jobId: job.id });
+      } else {
+        void utils.youtubeScrape.list.invalidate();
+        void utils.youtubeScrape.progress.invalidate({ jobId: job.id });
+        void utils.youtubeScrape.videos.invalidate({ jobId: job.id });
       }
-    );
+      toast.success(job.status === "failed" ? "Retry started" : "Refreshing creator", {
+        description: "Your existing results stay available until fresh data is ready.",
+      });
+    };
+
+    if (job.platform === "instagram") {
+      resyncMutation.mutate({ jobId: job.id }, { onSuccess });
+    } else if (job.platform === "tiktok") {
+      resyncTikTokMutation.mutate({ jobId: job.id }, { onSuccess });
+    } else {
+      resyncYouTubeMutation.mutate({ jobId: job.id }, { onSuccess });
+    }
   };
 
   const deleteMutation = trpc.scrape.delete.useMutation({
