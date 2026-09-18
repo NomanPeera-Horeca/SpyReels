@@ -2,7 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { featuredAccounts, reels as reelsTable, scrapeJobs } from "../../drizzle/schema";
-import { getScrapeJobsByWorkspace, updateScrapeJob, getDb, createScrapeJob, seedFeaturedReelsIntoJob, getScrapeJob, deleteScrapeJob, insertReels, dedupeReelsForJob, countReelsForJob, updateReelsForJobFromScrape, getExistingShortcodes, updateScrapeJobResync } from "../db";
+import { getScrapeJobsByWorkspace, updateScrapeJob, getDb, createScrapeJob, seedFeaturedReelsIntoJob, getScrapeJob, deleteScrapeJob, insertReels, dedupeReelsForJob, countReelsForJob, updateReelsForJobFromScrape, getReelsByJobId, updateScrapeJobResync } from "../db";
 import { resolveInstagramIdentity, scrapeReels, fetchProfile, runWithScrapeCallContext } from "../instagram";
 import { ensureProfilePicOnR2 } from "../profilePicR2";
 import { ensureReelThumbnailOnR2 } from "../reelThumbnailR2";
@@ -16,6 +16,7 @@ import { normalizeInstagramHandle, isValidInstagramHandleNormalized, INSTAGRAM_H
 import { and, not, sql, eq, inArray, or } from "drizzle-orm";
 import { maybeMarkFirstSpyCompleted } from "./_shared";
 import { enqueueCreatorRadarRefresh } from "../creatorRadarRefreshQueue";
+import { getCreatorRadarReconciliationDays } from "../creatorRadarReconciliation";
 
 async function uploadReelThumbnailsBounded(
   items: Array<{ shortcode: string; thumbnailUrl: string }>,
@@ -400,12 +401,12 @@ async function runScrapeJobInner(
 async function runResyncJob(
   jobId: number,
   handle: string,
-  daysSinceSync: number
+  reconciliationDays: number
 ): Promise<void> {
   const cleanHandleForLog = handle.replace(/^@/, "").trim().toLowerCase();
   try {
     console.log(
-      `[runResyncJob ${jobId}] start handle=@${cleanHandleForLog} daysSinceSync=${daysSinceSync}`
+      `[runResyncJob ${jobId}] start handle=@${cleanHandleForLog} reconciliationDays=${reconciliationDays}`
     );
     await updateScrapeJob(jobId, {
       currentStep: "connecting",
@@ -416,13 +417,13 @@ async function runResyncJob(
       progressPercent: 15,
     });
 
-    const { reels: reelData, followerCount, profilePicUrl } =
+    const { reels: reelData, followerCount, profilePicUrl, reelsInWindow } =
       await runWithScrapeCallContext(
         { source: "resync_job", jobId, handle: cleanHandleForLog },
         () =>
           scrapeReels(
             handle,
-            daysSinceSync,
+            reconciliationDays,
             (count) => {
               updateScrapeJob(jobId, {
                 currentStep: "pulling_reels",
@@ -440,41 +441,53 @@ async function runResyncJob(
       progressPercent: 85,
     });
 
-    const cleanHandle = handle.replace(/^@/, "").trim().toLowerCase();
     const proxiedPicUrl = await ensureProfilePicOnR2(
-      cleanHandle,
+      cleanHandleForLog,
       profilePicUrl
     );
 
-    // Get existing shortcodes to deduplicate
-    const existingShortcodes = new Set(await getExistingShortcodes(jobId));
-    const newReels = reelData.filter(r => !existingShortcodes.has(r.shortcode));
+    // Reconcile the fetched window against the stored catalog. Existing rows
+    // keep their durable R2 thumbnails while live metrics and metadata update.
+    const existingReels = await getReelsByJobId(jobId);
+    const existingByShortcode = new Map(
+      existingReels.map((reel) => [reel.shortcode, reel])
+    );
+    const newReels = reelData.filter(
+      (reel) => !existingByShortcode.has(reel.shortcode)
+    );
+    const stableThumbs = await uploadReelThumbnailsBounded(
+      newReels.map((reel) => ({
+        shortcode: reel.shortcode,
+        thumbnailUrl: reel.thumbnailUrl,
+      }))
+    );
 
-    if (newReels.length > 0) {
-      const stableThumbs = await uploadReelThumbnailsBounded(
-        newReels.map((r) => ({ shortcode: r.shortcode, thumbnailUrl: r.thumbnailUrl }))
-      );
+    const mappedReels = reelData.map((reel) => ({
+      jobId,
+      shortcode: reel.shortcode,
+      caption: reel.caption,
+      viewCount: reel.viewCount,
+      likeCount: reel.likeCount,
+      commentCount: reel.commentCount,
+      thumbnailUrl:
+        existingByShortcode.get(reel.shortcode)?.thumbnailUrl ??
+        stableThumbs.get(reel.shortcode) ??
+        reel.thumbnailUrl,
+      videoUrl: reel.videoUrl ?? "",
+      reelUrl: reel.reelUrl,
+      duration: reel.duration,
+      postedAt: reel.postedAt,
+      ownerUsername: reel.ownerUsername,
+    }));
 
-      await insertReels(
-        newReels.map((r) => ({
-          jobId,
-          shortcode: r.shortcode,
-          caption: r.caption,
-          viewCount: r.viewCount,
-          likeCount: r.likeCount,
-          commentCount: r.commentCount,
-          thumbnailUrl: stableThumbs.get(r.shortcode) ?? r.thumbnailUrl,
-          videoUrl: r.videoUrl ?? "",
-          reelUrl: r.reelUrl,
-          duration: r.duration,
-          postedAt: r.postedAt,
-          ownerUsername: r.ownerUsername,
-        }))
-      );
-    }
+    await updateReelsForJobFromScrape(jobId, mappedReels);
+    await insertReels(mappedReels);
+    await dedupeReelsForJob(jobId);
+    await refreshViralFlagsForScrapeJob(jobId);
 
-    // Update total count (existing + new)
-    const totalReels = existingShortcodes.size + newReels.length;
+    // Count from the database after reconciliation. Never infer completion
+    // totals from attempted inserts because dedupe or partial writes can differ.
+    const totalReels = await countReelsForJob(jobId);
     await updateScrapeJobResync(jobId, {
       totalReels,
       followerCount,
@@ -484,17 +497,20 @@ async function runResyncJob(
     await updateScrapeJob(jobId, {
       currentStep: "complete",
       reelsFound: totalReels,
+      reelsInWindow,
       progressPercent: 100,
       errorMessage: null,
       failureReason: null,
     });
 
-    console.log(`[Resync] @${handle}: ${newReels.length} new reels added (${totalReels} total)`);
+    console.log(
+      `[Resync] @${handle}: reconciled ${reelData.length} reels, added ${newReels.length} (${totalReels} total)`
+    );
 
     if (newReels.length > 0) {
       const insertedIds = await reelIdsForJobShortcodes(
         jobId,
-        newReels.map((r) => r.shortcode)
+        newReels.map((reel) => reel.shortcode)
       );
       if (insertedIds.length > 0) {
         scheduleScrapeReelPostCompleteWork(insertedIds, `runResyncJob ${jobId}`);
@@ -518,7 +534,6 @@ async function runResyncJob(
     });
   }
 }
-
 
 export const scrapeRouter = router({
     start: protectedProcedure
@@ -792,10 +807,21 @@ export const scrapeRouter = router({
         if (job.workspaceId !== ctx.workspaceId) throw new TRPCError({ code: "FORBIDDEN" });
         if (job.status === "running") throw new TRPCError({ code: "BAD_REQUEST", message: "Job is already running" });
 
-        // Calculate days since last sync (updatedAt) — only fetch reels from that period
+        // Refresh is a reconciliation, not an incremental insert. Re-scan the
+        // configured research window so provider/pagination holes self-heal.
         const lastSyncDate = new Date(job.updatedAt);
         const now = new Date();
-        const daysSinceSync = Math.max(1, Math.ceil((now.getTime() - lastSyncDate.getTime()) / (1000 * 60 * 60 * 24)));
+        const daysSinceSync = Math.max(
+          1,
+          Math.ceil(
+            (now.getTime() - lastSyncDate.getTime()) /
+              (1000 * 60 * 60 * 24)
+          )
+        );
+        const reconciliationDays = getCreatorRadarReconciliationDays(
+          job.timeframeDays,
+          daysSinceSync
+        );
 
         await updateScrapeJob(input.jobId, {
           status: "pending",
@@ -806,7 +832,7 @@ export const scrapeRouter = router({
         });
 
         const queued = enqueueCreatorRadarRefresh(() =>
-          runResyncJob(input.jobId, job.handle, daysSinceSync)
+          runResyncJob(input.jobId, job.handle, reconciliationDays)
         );
         if (!queued) {
           await updateScrapeJob(input.jobId, {
@@ -821,7 +847,12 @@ export const scrapeRouter = router({
           });
         }
 
-        return { jobId: input.jobId, daysSinceSync, queued: true as const };
+        return {
+          jobId: input.jobId,
+          daysSinceSync,
+          reconciliationDays,
+          queued: true as const,
+        };
       }),
 
     /** Preview an Instagram profile before scraping */
