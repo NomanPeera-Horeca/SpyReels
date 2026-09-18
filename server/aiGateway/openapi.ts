@@ -27,7 +27,14 @@ export function buildAiGatewayOpenApiDocument() {
           summary: tool.title,
           description: tool.description,
           tags: [tool.category],
-          security: [{ spyreelsOAuth: [tool.requiredScope] }],
+          security: [
+            {
+              spyreelsOAuth:
+                tool.requiredScope === "spyreels:create"
+                  ? ["spyreels:read", "spyreels:create"]
+                  : ["spyreels:read"],
+            },
+          ],
           requestBody: {
             required: true,
             content: {
