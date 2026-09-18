@@ -1,11 +1,16 @@
 import { invokeLLM } from "../_core/llm";
 import { withAiFormattingRules } from "../utils/aiFormattingRules";
-import { sanitizeAiOutputDeep } from "../utils/sanitizeAiOutput";
 import { AI_FACT_CLAIM_GUARDRAIL } from "@shared/aiFactClaimGuardrail";
 import {
   RECREATE_DEFAULT_TOPIC_RULES,
   RECREATE_EXPLICIT_ANGLE_RULES,
 } from "@shared/recreateAnglePrompt";
+import { analyzeRemakeReadability } from "./remakeReadability";
+import {
+  formatFactRisksForRepair,
+  validateRemakeFactRisk,
+} from "./remakeFactRisk";
+import { analyzeRemakeStructure } from "./remakeStructure";
 
 function formatNiche(niche: string | null): string | null {
   if (!niche) return null;
@@ -25,9 +30,7 @@ function formatHookPattern(hook: string | null): string | null {
 
 function formatRetentionTactics(tactics: unknown): string | null {
   if (!Array.isArray(tactics) || tactics.length === 0) return null;
-  return tactics
-    .map((t) => String(t).split("_").join(" "))
-    .join(", ");
+  return tactics.map((t) => String(t).split("_").join(" ")).join(", ");
 }
 
 function hasExplicitUserAngleInTopic(topic: string): boolean {
@@ -81,187 +84,131 @@ function buildV13ContextBlock(
 
   const applyBlock = options?.explicitUserAngle
     ? `**APPLY THIS WHEN WRITING:**
-- The creator provided their own angle. Use ONLY hook pattern and retention tactics from the source reel. Do NOT reuse the source reel's niche, content type, subject matter, or vocabulary.
-- Transfer STRUCTURE and ENGAGEMENT MECHANICS, not the literal topic from the classifier or transcript.
-- The hook pattern above is the structural opening that helped this reel succeed. Use the SAME pattern type adapted to the creator's angle.
-- The retention tactics above are the mechanics that kept viewers watching. Replicate them in the new script.`
+- The creator provided their own angle. Use ONLY hook pattern and retention tactics from the source Reel.
+- Do NOT reuse the source Reel's niche, subject matter, examples, named entities, or vocabulary unless the creator explicitly asks for them.
+- Transfer STRUCTURE and ENGAGEMENT MECHANICS, not the literal topic.
+- Use the same hook pattern type adapted to the creator's angle.
+- Replicate the retention mechanics without copying the factual story.`
     : `**APPLY THIS WHEN WRITING:**
-- The hook pattern above is the structural opening that helped this reel succeed. Use the SAME pattern type adapted to the new topic.
-- The retention tactics above are the mechanics that kept viewers watching. Replicate them in the new script.
-- The content type and niche guide the tone and vocabulary.
-- Transfer the STRUCTURE, not the literal words. The new script is on a different topic but uses the same engagement mechanics.`;
+- Use the source Reel for hook pattern, pacing, retention mechanics, transition style, and CTA style.
+- Transfer STRUCTURE, not literal wording.
+- Let the approved creator/audience context choose the new subject.`;
 
   return `
-**PRE-ANALYZED SOURCE REEL CONTEXT (from our classifier):**
+**PRE-ANALYZED SOURCE REEL CONTEXT:**
 ${lines.join("\n")}
 
 ${applyBlock}
-
 `;
 }
 
 function buildDeliveryCuesPromptSection(): string {
   return `
-**DELIVERY CUES:** Add performance/delivery cues in square brackets throughout the script to guide the speaker on HOW to deliver each line. Use cues like:
-- [PAUSE]
-- [LEAN IN]
-- [SPEED UP]
-- [SLOW DOWN]
-- [WHISPER]
-- [EMPHASIZE]
-- [LOOK AT CAMERA]
-- [GESTURE]
-- [RAISE VOICE]
-- [SMILE]
-- [SERIOUS FACE]
-- [COUNT ON FINGERS]
-- [SHAKE HEAD]
-- [NOD]
+**DELIVERY CUES:** Add performance/delivery cues in square brackets throughout the script. Use concise cues such as [PAUSE], [LEAN IN], [SPEED UP], [SLOW DOWN], [EMPHASIZE], [LOOK AT CAMERA], [GESTURE], [SMILE], [SERIOUS FACE], [COUNT ON FINGERS], [SHAKE HEAD], or [NOD].
+Place a cue at the start of the line it applies to. Do not overuse them.`;
+}
 
-Place cues at the START of the line they apply to. Every 2-3 lines should have a cue. The cues should create a dynamic, engaging delivery that keeps viewer attention throughout.`;
+function groundingRules(block: string, isSameTopic: boolean): string {
+  if (!block.trim()) {
+    return isSameTopic
+      ? `**FACT GROUNDING:** The source transcript/caption may be used for facts about the original topic. Do not add new named people, businesses, dates, quotes, studies, revenue figures, wait times, percentages, or historical claims that are not present in the source. Generic or clearly hypothetical examples are allowed.`
+      : `**FACT GROUNDING:** No external research was available. Do not invent named people, businesses, dates, quotes, studies, revenue figures, wait times, percentages, or historical claims. Use generic or clearly hypothetical examples instead. ${AI_FACT_CLAIM_GUARDRAIL}`;
+  }
+
+  return `**VERIFIED RESEARCH GROUNDING:**
+Use the research below only as factual support. You may paraphrase supported facts, but do not expand snippets into stronger claims than they contain.
+${block}
+
+**FACT RULES:**
+- Any real person, company, restaurant, institution, date, quote, study, statistic, money figure, percentage, or performance number must be explicitly supported by the verified research${isSameTopic ? " or the source transcript/caption" : ""}.
+- If a useful example is not supported, make it generic or clearly hypothetical.
+- Never invent a founder story or named case study merely to imitate the source Reel's narrative shape.
+- Vague-but-honest beats precise-but-invented.
+${AI_FACT_CLAIM_GUARDRAIL}`;
+}
+
+async function repairUnsupportedFacts(input: {
+  script: string;
+  risksText: string;
+  trustedGrounding: string;
+  scriptFormatClosing: string;
+}): Promise<string> {
+  const response = await invokeLLM({
+    messages: [
+      {
+        role: "system",
+        content: withAiFormattingRules(
+          "You are a factual-integrity editor for short-form scripts. Remove unsupported specificity without weakening the hook or pacing. Never add replacement facts. Return only the repaired spoken script."
+        ),
+      },
+      {
+        role: "user",
+        content: `Repair this script so every factual real-world claim is supported.
+
+UNSUPPORTED OR RISKY CLAIMS
+${input.risksText}
+
+TRUSTED GROUNDING
+${input.trustedGrounding || "(none — use generic or clearly hypothetical examples)"}
+
+CURRENT SCRIPT
+${input.script}
+
+RULES
+- Remove or generalize every unsupported named entity, date, quote, study, statistic, money figure, performance number, or historical claim.
+- Do not invent a replacement person, company, restaurant, event, number, or quote.
+- Preserve the viral structure, hook pattern, pacing, and core lesson.
+- A hypothetical example must be explicitly generic, not presented as a true story.
+- Do not add citations or structural labels to the spoken script.
+
+${input.scriptFormatClosing}`,
+      },
+    ],
+    maxTokens: 3000,
+  });
+
+  return String(response.choices[0]?.message?.content ?? "").trim();
 }
 
 export type GeneratedRemakeContent = {
   viralStructure: Record<string, unknown>;
   generatedScript: string;
   readabilityAnalysis: Record<string, unknown>;
+  structureCacheHit: boolean;
+  factIntegrity: {
+    repaired: boolean;
+    initialRiskCount: number;
+  };
 };
 
 export async function generateRemakeContent(input: {
   originalTranscript: string;
   caption: string;
   reel?: any;
+  sourceKey?: string;
   topic: string;
   gradeLevel: string;
   addCues: boolean;
+  researchGroundingBlock?: string;
+  trustedResearchTexts?: string[];
   platformLabel?: "Instagram Reel" | "TikTok video" | "YouTube Short";
+  viralStructureOverride?: Record<string, unknown>;
 }): Promise<GeneratedRemakeContent> {
   const platformLabel = input.platformLabel ?? "Instagram Reel";
-  const structurePrompt = `You are an expert viral content analyst specializing in ${platformLabel} scripts.
-
-Analyze the following viral ${platformLabel} transcript and identify its exact structure. Return a JSON object with these fields:
-
-{
-  "hook": {
-    "type": "string",
-    "text": "string",
-    "technique": "string"
-  },
-  "body": {
-    "pacing": "string",
-    "structure": "string",
-    "keyPoints": ["array of the main points made"]
-  },
-  "transition": {
-    "type": "string",
-    "text": "string"
-  },
-  "cta": {
-    "type": "string",
-    "text": "string"
-  },
-  "overallTone": "string",
-  "estimatedPace": "string"
-}
-
-**Caption:** ${input.caption}
-
-**Full Transcript:**
-${input.originalTranscript}
-
-Return ONLY valid JSON, no markdown formatting.`;
-
-  const structureResponse = await invokeLLM({
-    messages: [
-      {
-        role: "system",
-        content: withAiFormattingRules(
-          "You are a viral content structure analyst. Always respond with valid JSON only."
-        ),
-      },
-      { role: "user", content: structurePrompt },
-    ],
-    response_format: {
-      type: "json_schema",
-      json_schema: {
-        name: "viral_structure",
-        strict: true,
-        schema: {
-          type: "object",
-          properties: {
-            hook: {
-              type: "object",
-              properties: {
-                type: { type: "string" },
-                text: { type: "string" },
-                technique: { type: "string" },
-              },
-              required: ["type", "text", "technique"],
-              additionalProperties: false,
-            },
-            body: {
-              type: "object",
-              properties: {
-                pacing: { type: "string" },
-                structure: { type: "string" },
-                keyPoints: { type: "array", items: { type: "string" } },
-              },
-              required: ["pacing", "structure", "keyPoints"],
-              additionalProperties: false,
-            },
-            transition: {
-              type: "object",
-              properties: {
-                type: { type: "string" },
-                text: { type: "string" },
-              },
-              required: ["type", "text"],
-              additionalProperties: false,
-            },
-            cta: {
-              type: "object",
-              properties: {
-                type: { type: "string" },
-                text: { type: "string" },
-              },
-              required: ["type", "text"],
-              additionalProperties: false,
-            },
-            overallTone: { type: "string" },
-            estimatedPace: { type: "string" },
-          },
-          required: [
-            "hook",
-            "body",
-            "transition",
-            "cta",
-            "overallTone",
-            "estimatedPace",
-          ],
-          additionalProperties: false,
-        },
-      },
-    },
-  });
-
-  let viralStructure: Record<string, unknown>;
-  try {
-    viralStructure = sanitizeAiOutputDeep(
-      JSON.parse(
-        (String(structureResponse.choices[0].message.content) || "{}")
-          .replace(/```json\n?/g, "")
-          .replace(/```\n?/g, "")
-          .trim()
-      )
-    );
-  } catch {
-    viralStructure = { error: "Failed to parse structure" };
-  }
+  const analyzed = input.viralStructureOverride
+    ? { structure: input.viralStructureOverride, cacheHit: true }
+    : await analyzeRemakeStructure({
+        originalTranscript: input.originalTranscript,
+        caption: input.caption,
+        sourceKey: input.sourceKey,
+        platformLabel,
+      });
+  const viralStructure = analyzed.structure;
 
   const gradeLevelInstruction =
     input.gradeLevel === "auto"
-      ? "Choose the most appropriate grade level (between Grade 2-6) based on the topic and audience."
-      : `Write at a Grade ${input.gradeLevel} reading level. Use simple vocabulary and short sentences appropriate for that grade level.`;
+      ? "Choose the most appropriate grade level between Grade 2 and Grade 6 for spoken short-form content."
+      : `Write at a Grade ${input.gradeLevel} reading level with simple vocabulary and short spoken sentences.`;
 
   const isSameTopic = input.topic === "SAME_TOPIC";
   const v13Context = buildV13ContextBlock(input.reel, {
@@ -271,15 +218,14 @@ Return ONLY valid JSON, no markdown formatting.`;
     ? buildDeliveryCuesPromptSection()
     : "";
   const scriptFormatClosing = input.addCues
-    ? `Write the script as natural spoken text. Add delivery cues in [BRACKETS] throughout using the cue types above. Place each cue at the START of the line it applies to. Every 2-3 spoken lines should include a cue.
-Use short paragraphs for natural pauses.
-Do NOT include structural labels like "Hook:" or "Body:"; write one flowing speaking script with inline [CUES] only.`
-    : `Write the script as spoken text (no stage directions, no [brackets]). Write it exactly as it should be spoken aloud.
-Use short paragraphs to indicate natural pauses.
-Do NOT include any labels like "Hook:" or "Body:". Write one flowing script.`;
+    ? `Write natural spoken text with short paragraphs. Add concise [DELIVERY CUES] only where useful. Do not include labels like "Hook:" or "Body:".`
+    : `Write natural spoken text with short paragraphs. Do not add stage directions or structural labels.`;
+
+  const researchGroundingBlock = input.researchGroundingBlock?.trim() ?? "";
+  const factsBlock = groundingRules(researchGroundingBlock, isSameTopic);
 
   const scriptPrompt = isSameTopic
-    ? `You are an expert ${platformLabel} scriptwriter. Rewrite the following viral ${platformLabel} script keeping the EXACT SAME TOPIC and core message, but make it sound fresh and original, not a copy.
+    ? `You are an expert ${platformLabel} scriptwriter. Rewrite the following viral ${platformLabel} script on the SAME TOPIC and core message, but make it fresh and original.
 
 **VIRAL STRUCTURE ANALYSIS:**
 ${JSON.stringify(viralStructure, null, 2)}
@@ -288,172 +234,125 @@ ${v13Context}
 **ORIGINAL VIRAL TRANSCRIPT:**
 ${input.originalTranscript}
 
-**READABILITY REQUIREMENT:**
-${gradeLevelInstruction}${cuesInstruction}
+${factsBlock}
+
+**READABILITY:**
+${gradeLevelInstruction}
+${cuesInstruction}
 
 **INSTRUCTIONS:**
-1. Keep the SAME topic and core message as the original.
-2. HOOK: Use the SAME hook pattern type ("${(viralStructure.hook as any)?.type || "Bold Statement"}") with the same core idea, but rephrase it.
-3. BODY: Cover the SAME key points and arguments but rephrase them. Change examples, analogies, or supporting details. New examples must stay generic or hypothetical; do not swap in a different invented real-entity fact, study, or named-source claim. ${AI_FACT_CLAIM_GUARDRAIL} Keep the same pacing style ("${(viralStructure.body as any)?.pacing || "Problem-solution"}") and information flow.
-4. TRANSITION: Use a similar transition technique ("${(viralStructure.transition as any)?.type || "pivot"}") but word it differently.
-5. CTA: End with a similar call-to-action style ("${(viralStructure.cta as any)?.type || "engagement"}") but phrase it in your own words.
-6. Match the overall tone: "${(viralStructure as any)?.overallTone || "engaging"}"
-7. Keep similar length and pacing to the original.
-8. The result should feel like a different person making the same argument: same topic, same structure, but different wording throughout.
-9. Do NOT just swap synonyms. Genuinely rephrase and restructure sentences while keeping the meaning.
+1. Keep the same topic and core message.
+2. Use the same hook pattern type ("${(viralStructure.hook as any)?.type || "Bold Statement"}") but rephrase it.
+3. Cover the same core points without copying sentences.
+4. Preserve pacing style ("${(viralStructure.body as any)?.pacing || "Problem-solution"}"), transition technique, and CTA style.
+5. Keep similar duration and spoken rhythm.
+6. Do not swap in a different invented real-world example.
 
 ${scriptFormatClosing}`
-    : `You are an expert ${platformLabel} scriptwriter. Using the EXACT viral structure from a proven viral ${platformLabel}, write a NEW script on a different topic.
+    : `You are an expert ${platformLabel} scriptwriter. Use the proven viral STRUCTURE below to write a NEW script for the creator's requested direction.
 
 **VIRAL STRUCTURE ANALYSIS:**
 ${JSON.stringify(viralStructure, null, 2)}
 ${v13Context}
 
-**ORIGINAL VIRAL TRANSCRIPT (for reference of style and pacing):**
+**SOURCE TRANSCRIPT — STRUCTURE AND PACING REFERENCE ONLY, NOT A FACT SOURCE FOR THE NEW TOPIC:**
 ${input.originalTranscript}
 
-**NEW TOPIC/ANGLE:**
+**CREATOR DIRECTION:**
 ${input.topic}
 
 ${hasExplicitUserAngleInTopic(input.topic) ? RECREATE_EXPLICIT_ANGLE_RULES : RECREATE_DEFAULT_TOPIC_RULES}
 
-**READABILITY REQUIREMENT:**
-${gradeLevelInstruction}${cuesInstruction}
+${factsBlock}
+
+**READABILITY:**
+${gradeLevelInstruction}
+${cuesInstruction}
 
 **INSTRUCTIONS:**
-1. HOOK: Use the SAME hook pattern type ("${(viralStructure.hook as any)?.type || "Bold Statement"}") but adapted to the new topic.
-2. BODY: Follow the SAME pacing style ("${(viralStructure.body as any)?.pacing || "Problem-solution"}") and information structure. Match the number of key points.
-3. TRANSITION: Use a similar transition technique ("${(viralStructure.transition as any)?.type || "pivot"}") adapted to the new topic.
-4. CTA: End with a similar call-to-action style ("${(viralStructure.cta as any)?.type || "engagement"}") but relevant to the new topic.
-5. Match the overall tone: "${(viralStructure as any)?.overallTone || "engaging"}"
-6. Keep similar length and pacing to the original.
+1. Use the same hook pattern type ("${(viralStructure.hook as any)?.type || "Bold Statement"}") adapted to the new direction.
+2. Follow the same pacing style ("${(viralStructure.body as any)?.pacing || "Problem-solution"}") and information flow.
+3. Preserve the transition and CTA mechanics while making the message relevant to the creator.
+4. Keep similar length and spoken rhythm.
+5. Research supports facts; the source Reel supports structure. Never reverse those roles.
+6. If research does not support a concrete story, use a generic or clearly hypothetical example rather than inventing one.
 
 ${scriptFormatClosing}`;
 
+  const writerStarted = Date.now();
   const scriptResponse = await invokeLLM({
     messages: [
       {
         role: "system",
         content: withAiFormattingRules(
-          `You are an expert ${platformLabel} scriptwriter. Write natural, spoken scripts that match viral patterns.`
+          `You are an expert ${platformLabel} scriptwriter. Write natural, spoken scripts that preserve proven viral mechanics and factual integrity.`
         ),
       },
       { role: "user", content: scriptPrompt },
     ],
+    maxTokens: 3200,
   });
 
-  const generatedScript = String(
-    scriptResponse.choices[0].message.content || ""
-  );
+  let generatedScript = String(
+    scriptResponse.choices[0]?.message?.content || ""
+  ).trim();
 
-  const hemingwayPrompt = `You are a readability analysis engine modeled after the Hemingway Editor. Analyze the following script and return a JSON response.
+  console.info("[RemakeLatency] writer_ms", Date.now() - writerStarted, {
+    sourceKey: input.sourceKey ?? null,
+  });
 
-**SCRIPT:**
-${generatedScript}
+  const trustedTexts = [
+    input.topic,
+    researchGroundingBlock,
+    ...(input.trustedResearchTexts ?? []),
+    ...(isSameTopic ? [input.originalTranscript, input.caption] : []),
+  ];
 
-**TARGET GRADE LEVEL:** ${input.gradeLevel === "auto" ? "Auto-detect appropriate level" : `Grade ${input.gradeLevel}`}
+  const initialRisk = validateRemakeFactRisk({
+    script: generatedScript,
+    trustedTexts,
+  });
 
-Return a JSON object with:
-{
-  "gradeLevel": number,
-  "readingEase": number,
-  "wordCount": number,
-  "sentenceCount": number,
-  "avgWordsPerSentence": number,
-  "issues": [
-    {
-      "type": "passive_voice" | "complex_sentence" | "adverb" | "hard_to_read" | "very_hard_to_read",
-      "text": "the exact problematic text",
-      "suggestion": "brief suggestion for improvement"
+  let repaired = false;
+  if (!initialRisk.safe) {
+    const repairStarted = Date.now();
+    const repairedScript = await repairUnsupportedFacts({
+      script: generatedScript,
+      risksText: formatFactRisksForRepair(initialRisk.risks),
+      trustedGrounding: trustedTexts.filter(Boolean).join("\n\n"),
+      scriptFormatClosing,
+    });
+
+    const repairedRisk = validateRemakeFactRisk({
+      script: repairedScript,
+      trustedTexts,
+    });
+
+    console.info("[RemakeLatency] fact_repair_ms", Date.now() - repairStarted, {
+      initialRiskCount: initialRisk.risks.length,
+      remainingRiskCount: repairedRisk.risks.length,
+    });
+
+    if (!repairedScript || !repairedRisk.safe) {
+      throw new Error(
+        "SpyReels could not produce a safely grounded remake. Please try again."
+      );
     }
-  ],
-  "passiveVoiceCount": number,
-  "adverbCount": number,
-  "hardSentenceCount": number,
-  "veryHardSentenceCount": number,
-  "overallAssessment": "string"
-}
 
-Return ONLY valid JSON.`;
-
-  const hemingwayResponse = await invokeLLM({
-    messages: [
-      {
-        role: "system",
-        content: withAiFormattingRules(
-          "You are a readability analysis engine. Always respond with valid JSON only."
-        ),
-      },
-      { role: "user", content: hemingwayPrompt },
-    ],
-    response_format: {
-      type: "json_schema",
-      json_schema: {
-        name: "readability_analysis",
-        strict: true,
-        schema: {
-          type: "object",
-          properties: {
-            gradeLevel: { type: "number" },
-            readingEase: { type: "number" },
-            wordCount: { type: "number" },
-            sentenceCount: { type: "number" },
-            avgWordsPerSentence: { type: "number" },
-            issues: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  type: { type: "string" },
-                  text: { type: "string" },
-                  suggestion: { type: "string" },
-                },
-                required: ["type", "text", "suggestion"],
-                additionalProperties: false,
-              },
-            },
-            passiveVoiceCount: { type: "number" },
-            adverbCount: { type: "number" },
-            hardSentenceCount: { type: "number" },
-            veryHardSentenceCount: { type: "number" },
-            overallAssessment: { type: "string" },
-          },
-          required: [
-            "gradeLevel",
-            "readingEase",
-            "wordCount",
-            "sentenceCount",
-            "avgWordsPerSentence",
-            "issues",
-            "passiveVoiceCount",
-            "adverbCount",
-            "hardSentenceCount",
-            "veryHardSentenceCount",
-            "overallAssessment",
-          ],
-          additionalProperties: false,
-        },
-      },
-    },
-  });
-
-  let readabilityAnalysis: Record<string, unknown>;
-  try {
-    readabilityAnalysis = sanitizeAiOutputDeep(
-      JSON.parse(
-        (String(hemingwayResponse.choices[0].message.content) || "{}")
-          .replace(/```json\n?/g, "")
-          .replace(/```\n?/g, "")
-          .trim()
-      )
-    );
-  } catch {
-    readabilityAnalysis = { error: "Failed to parse readability analysis" };
+    generatedScript = repairedScript;
+    repaired = true;
   }
+
+  const readabilityAnalysis = analyzeRemakeReadability(generatedScript);
 
   return {
     viralStructure,
     generatedScript,
     readabilityAnalysis,
+    structureCacheHit: analyzed.cacheHit,
+    factIntegrity: {
+      repaired,
+      initialRiskCount: initialRisk.risks.length,
+    },
   };
 }
