@@ -73,6 +73,7 @@ export async function authenticateAiGatewayRequest(
         email: user.email,
         role: user.role,
       },
+      scopes: identity.scopes,
     }),
   };
 }
