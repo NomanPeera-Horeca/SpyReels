@@ -16,6 +16,10 @@ import {
   type Segment,
   type TranscriptionResult,
 } from "../../services/transcribeReel";
+import {
+  acquireTranscriptionSlot,
+  releaseTranscriptionSlot,
+} from "../../transcriptionSemaphore";
 import { AiGatewayError } from "../errors";
 import type { AiGatewayActor } from "../types";
 
@@ -356,6 +360,7 @@ export async function transcribeReelUrl(input: {
   await incrementUsage(input.actor.userId, "transcribeCount");
 
   let result: TranscriptionResult;
+  await acquireTranscriptionSlot();
   try {
     result = await transcribeReel({
       videoUrl,
@@ -364,6 +369,8 @@ export async function transcribeReelUrl(input: {
   } catch (error) {
     await decrementUsage(input.actor.userId, "transcribeCount").catch(() => {});
     throw error;
+  } finally {
+    releaseTranscriptionSlot();
   }
 
   if (!result.success) {
