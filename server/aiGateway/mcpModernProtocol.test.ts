@@ -67,7 +67,18 @@ vi.mock("./tools", async () => {
   const schemas = new Map(
     descriptors.map((descriptor) => [
       descriptor.name,
-      { inputSchema: z.object({}).strict() },
+      {
+        inputSchema:
+          descriptor.name === "remake_reel"
+            ? z.object({
+                url: z.string(),
+                instruction: z.string(),
+                gradeLevel: z
+                  .enum(["auto", "2", "3", "4", "5", "6", "7", "8"])
+                  .default("auto"),
+              })
+            : z.object({}).strict(),
+      },
     ])
   );
   return {
