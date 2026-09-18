@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  id-token: write
 
 jobs:
   benchmark:
@@ -15,10 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 55
     env:
-      SCRAPECREATORS_API_KEY: ${{ secrets.SCRAPECREATORS_API_KEY }}
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      DEEPGRAM_API_KEY: ${{ secrets.DEEPGRAM_API_KEY }}
-      SERPER_API_KEY: ${{ secrets.SERPER_API_KEY }}
+      SPYREELS_BENCHMARK_PROXY_URL: https://spyreels.ai/api/internal/remake-benchmark
 
     steps:
       - name: Checkout benchmark branch
@@ -36,13 +34,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Verify live benchmark credentials
+      - name: Mint GitHub OIDC token for production benchmark proxy
+        shell: bash
         run: |
-          test -n "$SCRAPECREATORS_API_KEY" || (echo "SCRAPECREATORS_API_KEY missing" && exit 1)
-          test -n "$ANTHROPIC_API_KEY" || (echo "ANTHROPIC_API_KEY missing" && exit 1)
-          test -n "$DEEPGRAM_API_KEY" || (echo "DEEPGRAM_API_KEY missing" && exit 1)
-          test -n "$SERPER_API_KEY" || (echo "SERPER_API_KEY missing" && exit 1)
-          ffmpeg -version >/dev/null 2>&1 || (echo "ffmpeg missing" && exit 1)
+          set -euo pipefail
+          RESPONSE="$(curl --fail --silent --show-error \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=spyreels-remake-benchmark")"
+          TOKEN="$(node -e 'const x=JSON.parse(process.argv[1]); if(!x.value) process.exit(2); process.stdout.write(x.value)' "$RESPONSE")"
+          echo "::add-mask::$TOKEN"
+          echo "SPYREELS_BENCHMARK_OIDC_TOKEN=$TOKEN" >> "$GITHUB_ENV"
 
       - name: Run 30-case real Reel benchmark
         run: pnpm tsx scripts/remake-hardening-live-benchmark.ts
