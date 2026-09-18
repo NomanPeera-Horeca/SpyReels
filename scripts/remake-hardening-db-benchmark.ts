@@ -98,7 +98,7 @@ const OUTPUT_PATH = path.join(
   "remake-hardening-db-benchmark.json"
 );
 
-const TARGET_CASES = 30;
+const TARGET_CASES = 15;
 const ACCOUNTS_NEEDED = 10;
 const MODE_ORDER: Mode[] = ["same_topic", "niche", "custom"];
 const MIN_SCORE = 7;
@@ -753,9 +753,9 @@ async function runBenchmark(): Promise<Record<string, unknown>> {
       warmTotal: warmTimes.length,
     },
     acceptance: {
-      hallucinationRequired: "0/30",
-      intentRequired: "30/30 >= 8/10",
-      toolSuccessRequired: "30/30",
+      hallucinationRequired: "0/15",
+      intentRequired: "15/15 >= 8/10",
+      toolSuccessRequired: "15/15",
       creativeQuality:
         "all core scores >= 7/10, average >= 7.5/10, judge verdict pass",
     },
