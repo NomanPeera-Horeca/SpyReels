@@ -5,6 +5,7 @@ import { youtubeScrapeJobs, youtubeVideos } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { checkUsageLimit, incrementUsage } from "../stripe/stripe-service";
 import { runYouTubeScrapeJob } from "../youtubeScrape/runJob";
+import { enqueueCreatorRadarRefresh } from "../creatorRadarRefreshQueue";
 import { not, eq, desc, sql, and, inArray } from "drizzle-orm";
 
 
@@ -268,27 +269,42 @@ export const youtubeScrapeRouter = router({
         await db
           .update(youtubeScrapeJobs)
           .set({
-            status: "running",
-            currentStep: "connecting",
-            progressPercent: 5,
+            status: "pending",
+            currentStep: "pending",
+            progressPercent: 0,
             errorMessage: null,
           })
           .where(eq(youtubeScrapeJobs.id, job.id));
 
-        runYouTubeScrapeJob(
-          job.id,
-          ctx.user.id,
-          ctx.workspaceId,
-          job.handle,
-          {
-            timeframeDays: job.timeframeDays ?? 30,
-            replaceExisting: true,
-          }
-        ).catch((error) => {
-          console.error(`YouTube refresh job ${job.id} failed:`, error);
-        });
+        const queued = enqueueCreatorRadarRefresh(() =>
+          runYouTubeScrapeJob(
+            job.id,
+            ctx.user.id,
+            ctx.workspaceId,
+            job.handle,
+            {
+              timeframeDays: job.timeframeDays ?? 30,
+              replaceExisting: true,
+            }
+          )
+        );
+        if (!queued) {
+          await db
+            .update(youtubeScrapeJobs)
+            .set({
+              status: "completed",
+              currentStep: "complete",
+              progressPercent: 100,
+              errorMessage: "Refresh queue is busy. Please try again shortly.",
+            })
+            .where(eq(youtubeScrapeJobs.id, job.id));
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: "Too many refreshes are queued. Please try again shortly.",
+          });
+        }
 
-        return { jobId: job.id, daysSinceSync };
+        return { jobId: job.id, daysSinceSync, queued: true as const };
       }),
 
     delete: protectedProcedure

@@ -11,10 +11,12 @@ function source(relativePath: string): string {
 
 describe("Creator Radar platform actions", () => {
   const history = source("../client/src/pages/History.tsx");
+  const instagramRouter = source("./routers/scrapeRouter.ts");
   const tiktokRouter = source("./routers/tiktokScrapeRouter.ts");
   const youtubeRouter = source("./routers/youtubeScrapeRouter.ts");
   const tiktokRunner = source("./tiktokScrape/runJob.ts");
   const youtubeRunner = source("./youtubeScrape/runJob.ts");
+  const refreshQueue = source("./creatorRadarRefreshQueue.ts");
 
   it("exposes refresh for Instagram, TikTok, and YouTube from one UI flow", () => {
     expect(history).toContain("trpc.scrape.resync.useMutation");
@@ -33,6 +35,22 @@ describe("Creator Radar platform actions", () => {
     expect(youtubeRunner).toContain("if (options?.replaceExisting)");
     expect(tiktokRunner).toContain("db.transaction");
     expect(youtubeRunner).toContain("db.transaction");
+  });
+
+  it("serializes provider refreshes through one bounded queue", () => {
+    expect(refreshQueue).toContain("MAX_QUEUED_REFRESHES");
+    expect(refreshQueue).toContain("refreshTail.then(task, task)");
+    expect(instagramRouter).toContain("enqueueCreatorRadarRefresh");
+    expect(tiktokRouter).toContain("enqueueCreatorRadarRefresh");
+    expect(youtubeRouter).toContain("enqueueCreatorRadarRefresh");
+  });
+
+  it("preserves valid sessions and exposes retry after provider failure", () => {
+    expect(instagramRouter).toContain('existingReelCount > 0 ? "completed" : "failed"');
+    expect(tiktokRunner).toContain('options?.replaceExisting ? "completed" : "failed"');
+    expect(youtubeRunner).toContain('options?.replaceExisting ? "completed" : "failed"');
+    expect(history).toContain('"Refresh failed"');
+    expect(history).toContain('"Queued"');
   });
 
   it("wires delete and pending state for every platform", () => {

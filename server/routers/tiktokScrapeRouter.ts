@@ -9,6 +9,7 @@ import { scrapeTikTokVideos, fetchTikTokVideoInfo } from "../tiktok";
 import { mirrorTiktokThumbnailsBounded } from "../tiktokScrape/mediaMirror";
 import { repairTikTokProfilePicsBounded } from "../tiktokScrape/repairProfilePics";
 import { runTikTokScrapeJob } from "../tiktokScrape/runJob";
+import { enqueueCreatorRadarRefresh } from "../creatorRadarRefreshQueue";
 import { isDurableTiktokVideoUrl, scheduleTiktokVideoMirror } from "../tiktokVideoR2";
 import { PUBLIC_TIKTOK_DEMO_HANDLES, PUBLIC_TIKTOK_DEMO_VIDEO_LIMIT, isPublicTikTokDemoHandle } from "@shared/publicTikTokDemoAccounts";
 import { not, eq, desc, sql, and, inArray, or } from "drizzle-orm";
@@ -512,27 +513,42 @@ export const tiktokScrapeRouter = router({
         await db
           .update(tiktokScrapeJobs)
           .set({
-            status: "running",
-            currentStep: "connecting",
-            progressPercent: 5,
+            status: "pending",
+            currentStep: "pending",
+            progressPercent: 0,
             errorMessage: null,
           })
           .where(eq(tiktokScrapeJobs.id, job.id));
 
-        runTikTokScrapeJob(
-          job.id,
-          ctx.user.id,
-          ctx.workspaceId,
-          job.handle,
-          {
-            timeframeDays: job.timeframeDays ?? 30,
-            replaceExisting: true,
-          }
-        ).catch((error) => {
-          console.error(`TikTok refresh job ${job.id} failed:`, error);
-        });
+        const queued = enqueueCreatorRadarRefresh(() =>
+          runTikTokScrapeJob(
+            job.id,
+            ctx.user.id,
+            ctx.workspaceId,
+            job.handle,
+            {
+              timeframeDays: job.timeframeDays ?? 30,
+              replaceExisting: true,
+            }
+          )
+        );
+        if (!queued) {
+          await db
+            .update(tiktokScrapeJobs)
+            .set({
+              status: "completed",
+              currentStep: "complete",
+              progressPercent: 100,
+              errorMessage: "Refresh queue is busy. Please try again shortly.",
+            })
+            .where(eq(tiktokScrapeJobs.id, job.id));
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: "Too many refreshes are queued. Please try again shortly.",
+          });
+        }
 
-        return { jobId: job.id, daysSinceSync };
+        return { jobId: job.id, daysSinceSync, queued: true as const };
       }),
 
     delete: protectedProcedure
