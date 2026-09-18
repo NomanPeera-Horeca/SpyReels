@@ -21,13 +21,6 @@ vi.mock("./tools", async () => {
   const { z } = await import("zod");
   const descriptors = [
     {
-      name: "get_usage",
-      title: "Get SpyReels usage",
-      description: "Read current SpyReels account usage.",
-      category: "account",
-      readOnly: true,
-    },
-    {
       name: "find_creator",
       title: "Find creator",
       description: "Research a public creator.",
@@ -39,6 +32,27 @@ vi.mock("./tools", async () => {
       title: "Find top content",
       description: "Find top-performing public content.",
       category: "research",
+      readOnly: true,
+    },
+    {
+      name: "inspect_reel",
+      title: "Inspect Reel",
+      description: "Inspect one exact public Instagram Reel URL.",
+      category: "research",
+      readOnly: true,
+    },
+    {
+      name: "transcribe_reel",
+      title: "Transcribe Reel",
+      description: "Transcribe one exact public Instagram Reel URL.",
+      category: "analysis",
+      readOnly: true,
+    },
+    {
+      name: "get_usage",
+      title: "Get SpyReels usage",
+      description: "Read current SpyReels account usage.",
+      category: "account",
       readOnly: true,
     },
   ] as const;
