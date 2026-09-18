@@ -172,15 +172,16 @@ export async function runYouTubeScrapeJob(
     const errorMessage = failureMessageForHandle(handle, rawMessage);
 
     console.warn(
-      `[runYouTubeScrapeJob ${jobId}] failed handle=@${cleanHandle}: ${errorMessage}`
+      `[runYouTubeScrapeJob ${jobId}] ${options?.replaceExisting ? "refresh failed; preserving existing data" : "failed"} handle=@${cleanHandle}: ${errorMessage}`
     );
 
     try {
       await db
         .update(youtubeScrapeJobs)
         .set({
-          status: "failed",
-          currentStep: "failed",
+          status: options?.replaceExisting ? "completed" : "failed",
+          currentStep: options?.replaceExisting ? "complete" : "failed",
+          progressPercent: options?.replaceExisting ? 100 : 0,
           errorMessage,
         })
         .where(eq(youtubeScrapeJobs.id, jobId));
