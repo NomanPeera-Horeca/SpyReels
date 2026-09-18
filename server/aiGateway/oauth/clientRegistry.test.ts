@@ -31,6 +31,16 @@ describe("AI Gateway OAuth client validation", () => {
     expect(validateAiOAuthRedirectUri(value, "https://evil.example/callback")).toBe(false);
   });
 
+  it("defaults to the individual client's allowed scopes when scope is omitted", () => {
+    const legacy = client({
+      allowedScopes: ["spyreels:read", "offline_access"],
+    });
+    expect(normalizeRequestedScopes(legacy, undefined)).toEqual([
+      "spyreels:read",
+      "offline_access",
+    ]);
+  });
+
   it("accepts the refresh continuity scope without widening SpyReels permissions", () => {
     const value = client();
     expect(normalizeRequestedScopes(value, "spyreels:read offline_access")).toEqual([
