@@ -3,7 +3,9 @@ import {
   extractYouTubeSearchShorts,
   prequalifyYouTubeSearchShorts,
 } from "../server/viralPosts/youtubePoolDiscovery";
-import { generateYouTubeShortsSearchQueries } from "../server/viralPosts/youtubeQueryGeneration";
+import { buildYouTubeQueryFallback } from "../server/viralPosts/youtubeQueryGeneration";
+import { adaptYouTubeShorts } from "../server/viralPosts/platformAdapters";
+import { classifySemanticPoolRelevance } from "../server/viralPosts/semanticPoolRelevance";
 import type { YouTubeVideoData } from "../server/youtube";
 
 type BenchmarkCase = { niche: string; pillar: string };
@@ -30,6 +32,7 @@ const API_BASE = "https://api.scrapecreators.com/v1/youtube/search";
 const MAX_CALLS_PER_CASE = 2;
 const SAMPLE_LIMIT = 5;
 const TIMEOUT_MS = 25_000;
+const SEMANTIC_TEST_THRESHOLD = 0.5;
 
 function compact(value: string | null | undefined, max = 220): string {
   return (value || "").replace(/\s+/g, " ").trim().slice(0, max);
@@ -72,6 +75,10 @@ async function search(query: string): Promise<YouTubeVideoData[]> {
 }
 
 async function main(): Promise<void> {
+  if (!process.env.ANTHROPIC_API_KEY?.trim()) {
+    throw new Error("ANTHROPIC_API_KEY is required for semantic benchmark");
+  }
+
   const runId = process.env.YOUTUBE_PROVIDER_BENCHMARK_RUN_ID?.trim() || `manual-${Date.now()}`;
   const usdPerCredit = Number(process.env.SCRAPECREATORS_USD_PER_CREDIT) || 0.002;
   const startedAt = Date.now();
@@ -83,28 +90,34 @@ async function main(): Promise<void> {
     rawShorts: number;
     uniqueShorts: number;
     prequalifiedShorts: number;
-    queryGenerationAi: boolean;
+    semanticEvaluated: number;
+    semanticAcceptedAt05: number;
+    semanticRejectedAt05: number;
+    semanticCalls: number;
   }> = [];
 
-  console.info("[youtube.providerBenchmark] benchmark_start", {
+  console.info("[youtube.semanticBenchmark] benchmark_start", {
     runId,
     cases: CASES.length,
     maxCallsPerCase: MAX_CALLS_PER_CASE,
-    queryStrategy: "keyword_ai_v3_broad_relevance",
+    queryStrategy: "same_fallback_queries_as_broad_relevance_run",
     sortBy: "relevance",
     uploadDate: "none",
-    semanticEvaluation: "not_run_provider_only",
+    semanticThreshold: SEMANTIC_TEST_THRESHOLD,
+    productionThresholdChanged: false,
     userExposure: false,
     youtubeFeedEnabled: false,
   });
 
   for (const testCase of CASES) {
-    const queryGeneration = await generateYouTubeShortsSearchQueries({
+    // Use the same deterministic fallback query shape that produced the 570
+    // prequalified Shorts in the prior broad-relevance benchmark.
+    const queries = buildYouTubeQueryFallback({
       niche: testCase.niche,
       pillar: testCase.pillar,
       limit: MAX_CALLS_PER_CASE,
     });
-    const queries = queryGeneration.queries;
+
     const byId = new Map<string, YouTubeVideoData>();
     let searchCalls = 0;
     let searchFailures = 0;
@@ -120,7 +133,7 @@ async function main(): Promise<void> {
         }
       } catch (error) {
         searchFailures++;
-        console.warn("[youtube.providerBenchmark] search_failed", {
+        console.warn("[youtube.semanticBenchmark] search_failed", {
           runId,
           niche: testCase.niche,
           pillar: testCase.pillar,
@@ -133,39 +146,86 @@ async function main(): Promise<void> {
     const unique = [...byId.values()];
     const prequalified = prequalifyYouTubeSearchShorts(unique)
       .sort((a, b) => (b.viewCount || 0) - (a.viewCount || 0));
-    const samples = prequalified.slice(0, SAMPLE_LIMIT).map((video) => ({
-      sourceId: video.videoId,
-      sourceUrl: video.videoPageUrl,
-      creator: video.ownerHandle,
-      views: video.viewCount,
-      publishedAt: video.postedAt?.toISOString() ?? null,
-      title: compact(video.title, 180),
-      description: compact(video.description, 220),
-    }));
+
+    const candidates = adaptYouTubeShorts(prequalified, {
+      niche: testCase.niche,
+      creatorFollowers: 0,
+      creatorAvatarUrl: "",
+    });
+
+    const semantic = await classifySemanticPoolRelevance({
+      niche: testCase.niche,
+      activePillars: [testCase.pillar],
+      candidates,
+    });
+    const verdictBySource = new Map(semantic.verdicts.map((row) => [row.sourceId, row]));
+
+    const accepted = candidates.filter((candidate) => {
+      const verdict = verdictBySource.get(candidate.sourceId);
+      return Boolean(
+        verdict &&
+          verdict.domainRelevant &&
+          verdict.primaryPillar === testCase.pillar &&
+          verdict.confidence >= SEMANTIC_TEST_THRESHOLD
+      );
+    });
+    const rejected = candidates.filter((candidate) => !accepted.some((row) => row.sourceId === candidate.sourceId));
+
+    const acceptedSamples = accepted.slice(0, SAMPLE_LIMIT).map((candidate) => {
+      const verdict = verdictBySource.get(candidate.sourceId);
+      return {
+        sourceId: candidate.sourceId,
+        sourceUrl: candidate.sourceUrl,
+        views: candidate.views,
+        hook: compact(candidate.hook, 180),
+        confidence: verdict?.confidence ?? null,
+        reason: compact(verdict?.reason, 220),
+      };
+    });
+    const rejectedSamples = rejected.slice(0, SAMPLE_LIMIT).map((candidate) => {
+      const verdict = verdictBySource.get(candidate.sourceId);
+      return {
+        sourceId: candidate.sourceId,
+        sourceUrl: candidate.sourceUrl,
+        views: candidate.views,
+        hook: compact(candidate.hook, 180),
+        confidence: verdict?.confidence ?? null,
+        domainRelevant: verdict?.domainRelevant ?? null,
+        reason: compact(verdict?.reason, 220),
+      };
+    });
 
     const row = {
       niche: testCase.niche,
       pillar: testCase.pillar,
       queries,
-      queryGenerationAi: queryGeneration.aiGenerated,
       searchCalls,
       searchFailures,
       rawShorts,
       uniqueShorts: unique.length,
       prequalifiedShorts: prequalified.length,
-      samples,
+      semanticEvaluated: candidates.length,
+      semanticAcceptedAt05: accepted.length,
+      semanticRejectedAt05: rejected.length,
+      semanticCalls: semantic.haikuCalls,
+      acceptedSamples,
+      rejectedSamples,
     };
+
     summaryRows.push({
       niche: testCase.niche,
       pillar: testCase.pillar,
-      queryGenerationAi: queryGeneration.aiGenerated,
       searchCalls,
       searchFailures,
       rawShorts,
       uniqueShorts: unique.length,
       prequalifiedShorts: prequalified.length,
+      semanticEvaluated: candidates.length,
+      semanticAcceptedAt05: accepted.length,
+      semanticRejectedAt05: rejected.length,
+      semanticCalls: semantic.haikuCalls,
     });
-    console.info("[youtube.providerBenchmark] case_done", JSON.stringify({ runId, ...row }));
+    console.info("[youtube.semanticBenchmark] case_done", JSON.stringify({ runId, ...row }));
   }
 
   const summaryByNiche = [...new Set(CASES.map((row) => row.niche))].map((niche) => {
@@ -173,31 +233,37 @@ async function main(): Promise<void> {
     return {
       niche,
       pillarsCompleted: rows.length,
-      searchCalls: rows.reduce((sum, row) => sum + row.searchCalls, 0),
-      searchFailures: rows.reduce((sum, row) => sum + row.searchFailures, 0),
-      rawShorts: rows.reduce((sum, row) => sum + row.rawShorts, 0),
-      uniqueShorts: rows.reduce((sum, row) => sum + row.uniqueShorts, 0),
       prequalifiedShorts: rows.reduce((sum, row) => sum + row.prequalifiedShorts, 0),
+      semanticEvaluated: rows.reduce((sum, row) => sum + row.semanticEvaluated, 0),
+      semanticAcceptedAt05: rows.reduce((sum, row) => sum + row.semanticAcceptedAt05, 0),
+      semanticRejectedAt05: rows.reduce((sum, row) => sum + row.semanticRejectedAt05, 0),
+      semanticCalls: rows.reduce((sum, row) => sum + row.semanticCalls, 0),
     };
   });
 
   const searchCalls = summaryRows.reduce((sum, row) => sum + row.searchCalls, 0);
-  console.info("[youtube.providerBenchmark] benchmark_complete", JSON.stringify({
+  const semanticEvaluated = summaryRows.reduce((sum, row) => sum + row.semanticEvaluated, 0);
+  const semanticAcceptedAt05 = summaryRows.reduce((sum, row) => sum + row.semanticAcceptedAt05, 0);
+  const semanticRejectedAt05 = summaryRows.reduce((sum, row) => sum + row.semanticRejectedAt05, 0);
+
+  console.info("[youtube.semanticBenchmark] benchmark_complete", JSON.stringify({
     runId,
     durationMs: Date.now() - startedAt,
     casesPlanned: CASES.length,
     casesCompleted: summaryRows.length,
-    aiQueryCases: summaryRows.filter((row) => row.queryGenerationAi).length,
     searchCalls,
     searchFailures: summaryRows.reduce((sum, row) => sum + row.searchFailures, 0),
     rawShorts: summaryRows.reduce((sum, row) => sum + row.rawShorts, 0),
     uniqueShorts: summaryRows.reduce((sum, row) => sum + row.uniqueShorts, 0),
     prequalifiedShorts: summaryRows.reduce((sum, row) => sum + row.prequalifiedShorts, 0),
+    semanticEvaluated,
+    semanticAcceptedAt05,
+    semanticRejectedAt05,
+    acceptanceRate: semanticEvaluated > 0 ? Number((semanticAcceptedAt05 / semanticEvaluated).toFixed(4)) : 0,
+    semanticCalls: summaryRows.reduce((sum, row) => sum + row.semanticCalls, 0),
     providerCostEstimateUsd: Number((searchCalls * usdPerCredit).toFixed(4)),
-    queryStrategy: "keyword_ai_v3_broad_relevance",
-    sortBy: "relevance",
-    uploadDate: "none",
-    semanticEvaluation: "not_run_provider_only",
+    semanticThreshold: SEMANTIC_TEST_THRESHOLD,
+    productionThresholdChanged: false,
     summaryByNiche,
     userExposure: false,
     youtubeFeedEnabled: false,
@@ -205,7 +271,7 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  console.error("[youtube.providerBenchmark] fatal", {
+  console.error("[youtube.semanticBenchmark] fatal", {
     error: error instanceof Error ? error.message : String(error),
   });
   process.exit(1);
