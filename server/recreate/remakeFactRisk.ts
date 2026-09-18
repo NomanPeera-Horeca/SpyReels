@@ -150,6 +150,20 @@ export function validateRemakeFactRisk(input: {
     risks.push(risk);
   };
 
+  const globalAttributedQuotePattern =
+    /\b(?:said|says|asked|wrote|told|according to)\b[^“"\n]{0,100}([“"][^”"\n]{3,180}[”"])/gi;
+  for (const match of input.script.matchAll(globalAttributedQuotePattern)) {
+    const quote = match[1] ?? "";
+    if (!quote || trustedIncludes(trusted, quote.replace(/[“”"]/g, ""))) continue;
+    addRisk({
+      kind: "unsupported_quote",
+      value: quote,
+      sentence: match[0].replace(/\s+/g, " ").trim(),
+      reason:
+        "Attributed quotes must be present in the user's input or research rather than invented.",
+    });
+  }
+
   for (const sentence of sentencesOf(input.script)) {
     for (const entity of titleCaseEntities(sentence)) {
       if (trustedIncludes(trusted, entity)) continue;
