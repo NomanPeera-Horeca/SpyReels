@@ -11,6 +11,11 @@ import { getOrFetchAudienceSignals } from "../audienceResearch/service";
 import { getTranscriptionByReelId, getFeaturedReelById, getTranscriptionByFeaturedReelId, getDb, getTranscriptionByTiktokVideoId, getTranscriptionByYoutubeVideoId, createRecreatedScript, getReelById, getRecreatedScriptsByFeaturedReelId, getRecreatedScriptsByTiktokVideoId, getRecreatedScriptsByYoutubeVideoId, getRecreatedScriptsByReelId, updateRecreatedScript, getRecreatedScript } from "../db";
 import { getCreatorCoachProfile } from "../planCoachProfile";
 import { generateRemakeContent } from "../recreate/generateRemakeContent";
+import { analyzeRemakeStructure } from "../recreate/remakeStructure";
+import {
+  formatResearchGroundingForPrompt,
+  getResearchGrounding,
+} from "../studioResearchGrounding";
 import { getPlanLimits } from "../stripe/products";
 import type { PlanId } from "../stripe/products";
 import { checkUsageLimit, incrementUsage, getUserSubscription } from "../stripe/stripe-service";
@@ -58,14 +63,50 @@ export async function runScriptGeneration(
   platformLabel: "Instagram Reel" | "TikTok video" | "YouTube Short" = "Instagram Reel"
 ): Promise<void> {
   try {
+    const profile = await getCreatorCoachProfile(userId).catch(() => null);
+    const researchIdea =
+      topic === "SAME_TOPIC"
+        ? caption || originalTranscript.slice(0, 300)
+        : topic;
+
+    const groundingStarted = Date.now();
+    const [researchItems, structureResult] = await Promise.all([
+      getResearchGrounding(researchIdea, profile?.niche ?? "business"),
+      analyzeRemakeStructure({
+        originalTranscript,
+        caption,
+        sourceKey:
+          typeof reel?.shortcode === "string" && reel.shortcode.trim()
+            ? reel.shortcode.trim()
+            : undefined,
+        platformLabel,
+      }),
+    ]);
+    console.info("[RemakeLatency] web_grounding_parallel_ms", Date.now() - groundingStarted, {
+      researchCount: researchItems.length,
+      structureCacheHit: structureResult.cacheHit,
+    });
+
+    const researchGroundingBlock = formatResearchGroundingForPrompt(researchItems);
     const generated = await generateRemakeContent({
       originalTranscript,
       caption,
       reel,
+      sourceKey:
+        typeof reel?.shortcode === "string" && reel.shortcode.trim()
+          ? reel.shortcode.trim()
+          : undefined,
       topic,
       gradeLevel,
       addCues,
+      researchGroundingBlock,
+      trustedResearchTexts: researchItems.flatMap((item) => [
+        item.title,
+        item.snippet ?? "",
+        item.sourceUrl,
+      ]),
       platformLabel,
+      viralStructureOverride: structureResult.structure,
     });
 
     await updateRecreatedScript(scriptId, {
