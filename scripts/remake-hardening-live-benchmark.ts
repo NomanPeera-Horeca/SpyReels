@@ -180,15 +180,76 @@ type ProxyEnvelope<T> = {
   message?: string;
 };
 
+let benchmarkOidcToken =
+  process.env.SPYREELS_BENCHMARK_OIDC_TOKEN?.trim() ?? "";
+
+function jwtExpiresAtMs(token: string): number {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return 0;
+    const decoded = JSON.parse(
+      Buffer.from(payload, "base64url").toString("utf8")
+    ) as { exp?: number };
+    return typeof decoded.exp === "number" ? decoded.exp * 1000 : 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function refreshBenchmarkOidcToken(force = false): Promise<string> {
+  const expiresAt = jwtExpiresAtMs(benchmarkOidcToken);
+  const freshEnough =
+    benchmarkOidcToken &&
+    expiresAt > Date.now() + 45_000;
+
+  if (!force && freshEnough) {
+    return benchmarkOidcToken;
+  }
+
+  const requestUrl = process.env.ACTIONS_ID_TOKEN_REQUEST_URL?.trim();
+  const requestToken = process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN?.trim();
+
+  if (!requestUrl || !requestToken) {
+    if (benchmarkOidcToken && !force) return benchmarkOidcToken;
+    throw new Error(
+      "GitHub OIDC refresh variables are unavailable to the benchmark step."
+    );
+  }
+
+  const separator = requestUrl.includes("?") ? "&" : "?";
+  const response = await fetch(
+    `${requestUrl}${separator}audience=spyreels-remake-benchmark`,
+    {
+      headers: {
+        Authorization: `bearer ${requestToken}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      `GitHub OIDC refresh failed (${response.status})`
+    );
+  }
+
+  const payload = (await response.json()) as { value?: string };
+  if (!payload.value) {
+    throw new Error("GitHub OIDC refresh returned no token.");
+  }
+
+  benchmarkOidcToken = payload.value;
+  return benchmarkOidcToken;
+}
+
 async function benchmarkProxyCall<T>(
   body: Record<string, unknown>
 ): Promise<T> {
   const url = requiredEnv("SPYREELS_BENCHMARK_PROXY_URL");
-  const token = requiredEnv("SPYREELS_BENCHMARK_OIDC_TOKEN");
   let lastError: unknown;
 
   for (let attempt = 0; attempt < 3; attempt++) {
     try {
+      const token = await refreshBenchmarkOidcToken(attempt > 0);
       const response = await fetch(url, {
         method: "POST",
         headers: {
@@ -199,6 +260,13 @@ async function benchmarkProxyCall<T>(
       });
 
       const payload = (await response.json()) as ProxyEnvelope<T>;
+
+      if (response.status === 401 && attempt < 2) {
+        benchmarkOidcToken = "";
+        await sleep(250);
+        continue;
+      }
+
       if (!response.ok || !payload.ok || payload.data === undefined) {
         throw new Error(
           `Benchmark proxy ${body.op} failed (${response.status}): ${payload.message ?? payload.error ?? "unknown error"}`
@@ -311,10 +379,12 @@ async function proxyTopicResearch(
   const hit = topicResearchCache.get(key);
   if (hit) return hit;
 
+  const safeIdea = idea.replace(/\s+/g, " ").trim().slice(0, 780);
+  const safeNiche = nicheLabel.replace(/\s+/g, " ").trim().slice(0, 150);
   const rows = await benchmarkProxyCall<any[]>({
     op: "topic_research",
-    idea,
-    nicheLabel,
+    idea: safeIdea,
+    nicheLabel: safeNiche,
   });
   topicResearchCache.set(key, rows);
   return rows;
