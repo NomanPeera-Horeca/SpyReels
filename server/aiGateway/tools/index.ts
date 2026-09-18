@@ -3,6 +3,7 @@ import { AiGatewayError } from "../errors";
 import { AiGatewayRegistry } from "../registry";
 import { getAccountUsage } from "../services/account";
 import { findCreator, findTopContent } from "../services/creatorResearch";
+import { inspectReelUrl, transcribeReelUrl } from "../services/reelResearch";
 import type { AiGatewayActor, AiGatewayContext } from "../types";
 
 function requireActor(context: AiGatewayContext): AiGatewayActor {
@@ -58,6 +59,39 @@ export function createSpyReelsAiToolRegistry(): AiGatewayRegistry {
         handle: input.handle,
         limit: input.limit,
         rankBy: input.rankBy,
+      }),
+  });
+
+
+  registry.register({
+    name: "inspect_reel",
+    title: "Inspect an Instagram Reel",
+    description:
+      "Inspect one exact public Instagram Reel URL and return verified creator, caption, performance metrics, duration and posting metadata for that Reel.",
+    category: "research",
+    auth: "required",
+    readOnly: true,
+    inputSchema: z.object({
+      url: z.string().trim().min(1).max(2048),
+    }),
+    execute: async (_context, input) => inspectReelUrl(input.url),
+  });
+
+  registry.register({
+    name: "transcribe_reel",
+    title: "Transcribe an Instagram Reel",
+    description:
+      "Transcribe the spoken audio from one exact public Instagram Reel URL. Reuses an existing SpyReels transcript when available; otherwise consumes the connected account's normal transcription quota.",
+    category: "analysis",
+    auth: "required",
+    readOnly: true,
+    inputSchema: z.object({
+      url: z.string().trim().min(1).max(2048),
+    }),
+    execute: async (context, input) =>
+      transcribeReelUrl({
+        actor: requireActor(context),
+        url: input.url,
       }),
   });
 
