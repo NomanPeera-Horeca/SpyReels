@@ -16,90 +16,12 @@ import type { PlanId } from "../stripe/products";
 import { checkUsageLimit, incrementUsage, getUserSubscription } from "../stripe/stripe-service";
 import { withAiFormattingRules } from "../utils/aiFormattingRules";
 import { sanitizeAiOutputDeep } from "../utils/sanitizeAiOutput";
-import { AI_FACT_CLAIM_GUARDRAIL } from "@shared/aiFactClaimGuardrail";
 import { formatAudienceSignalsForPrompt } from "@shared/audienceResearch";
 import { formatIdeaScriptErrorForUser } from "@shared/ideaScriptErrors";
-import { buildRecreateTopicPrompt, buildRecreateDefaultTopicPrompt, RECREATE_EXPLICIT_ANGLE_RULES, RECREATE_DEFAULT_TOPIC_RULES } from "@shared/recreateAnglePrompt";
+import { buildRecreateTopicPrompt, buildRecreateDefaultTopicPrompt, RECREATE_EXPLICIT_ANGLE_RULES } from "@shared/recreateAnglePrompt";
 import { buildRemakeScriptCompletedProps, buildRemakeScriptFailedProps } from "@shared/scriptGenerationAnalytics";
 import { and, or, not, eq, inArray, like } from "drizzle-orm";
 import { isFirstRemakeUsageBypassEligible, maybeMarkFirstSpyCompletedFromFeaturedScript } from "./_shared";
-
-function formatNiche(niche: string | null): string | null {
-  if (!niche) return null;
-  return niche.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-}
-
-
-function formatHookPattern(hook: string | null): string | null {
-  if (!hook) return null;
-  return hook.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-}
-
-
-function formatRetentionTactics(tactics: unknown): string | null {
-  if (!Array.isArray(tactics) || tactics.length === 0) return null;
-  return tactics.map(t => String(t).split("_").join(" ")).join(", ");
-}
-
-
-function hasExplicitUserAngleInTopic(topic: string): boolean {
-  return (
-    topic.includes("Creator's chosen angle") ||
-    topic.includes("Creator goal (ground truth")
-  );
-}
-
-
-function buildV13ContextBlock(
-  reel: any,
-  options?: { explicitUserAngle?: boolean }
-): string {
-  const lines: string[] = [];
-  const {
-    niche: rawNiche = null,
-    hookPattern: rawHookPattern = null,
-    retentionTactics: rawRetentionTactics = null,
-    contentType: rawContentType = null,
-    classificationReason: rawClassificationReason = null,
-    viralFlag = false,
-  } = reel ?? {};
-  const niche = formatNiche(rawNiche ? String(rawNiche) : null);
-  const hookPattern = formatHookPattern(rawHookPattern ? String(rawHookPattern) : null);
-  const retentionTactics = formatRetentionTactics(rawRetentionTactics);
-  const contentType = rawContentType ? String(rawContentType) : null;
-  const classificationReason = rawClassificationReason ? String(rawClassificationReason) : null;
-  const isViral = viralFlag === 1 || viralFlag === true;
-
-  if (niche) lines.push(`- Niche: ${niche}`);
-  if (contentType) lines.push(`- Content type: ${contentType}`);
-  if (hookPattern) lines.push(`- Hook pattern used: ${hookPattern}`);
-  if (retentionTactics) lines.push(`- Retention tactics used: ${retentionTactics}`);
-  if (isViral) lines.push(`- Performance: VIRAL (top performer for this creator's recent posts)`);
-  if (classificationReason) lines.push(`- Editor's analysis: ${classificationReason}`);
-
-  if (lines.length === 0) return "";
-
-  const applyBlock = options?.explicitUserAngle
-    ? `**APPLY THIS WHEN WRITING:**
-- The creator provided their own angle. Use ONLY hook pattern and retention tactics from the source reel. Do NOT reuse the source reel's niche, content type, subject matter, or vocabulary.
-- Transfer STRUCTURE and ENGAGEMENT MECHANICS, not the literal topic from the classifier or transcript.
-- The hook pattern above is the structural opening that helped this reel succeed. Use the SAME pattern type adapted to the creator's angle.
-- The retention tactics above are the mechanics that kept viewers watching. Replicate them in the new script.`
-    : `**APPLY THIS WHEN WRITING:**
-- The hook pattern above is the structural opening that helped this reel succeed. Use the SAME pattern type (e.g., contrarian = open with a controversial stance; question = open with a challenging question; stat = open with a surprising number).
-- The retention tactics above are the mechanics that kept viewers watching. Replicate them in the new script (e.g., cliffhanger = withhold key info until late; pattern_interrupt = abrupt shift in pace; specific_numbers = concrete data points).
-- The content type and niche guide the tone and vocabulary.
-- Transfer the STRUCTURE, not the literal words. The new script is on a different topic but uses the same engagement mechanics.`;
-
-  return `
-**PRE-ANALYZED SOURCE REEL CONTEXT (from our classifier):**
-${lines.join("\n")}
-
-${applyBlock}
-
-`;
-}
-
 
 function buildDeliveryCuesPromptSection(): string {
   return `
