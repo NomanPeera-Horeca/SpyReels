@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   checkUsageLimit: vi.fn(),
   incrementUsage: vi.fn(),
   decrementUsage: vi.fn(),
+  getInstagramVisiblePostCount: vi.fn(),
 }));
 
 vi.mock("../../instagram", () => {
@@ -23,6 +24,10 @@ vi.mock("../../instagram", () => {
   };
 });
 
+vi.mock("../../instagramPostCount", () => ({
+  getInstagramVisiblePostCount: mocks.getInstagramVisiblePostCount,
+}));
+
 vi.mock("../../stripe/stripe-service", () => ({
   checkUsageLimit: mocks.checkUsageLimit,
   incrementUsage: mocks.incrementUsage,
@@ -30,6 +35,7 @@ vi.mock("../../stripe/stripe-service", () => ({
 }));
 
 import {
+  findCreator,
   findTopContent,
   sortTopContentDeterministically,
 } from "./creatorResearch";
@@ -88,9 +94,58 @@ describe("AI Gateway creator research", () => {
     mocks.checkUsageLimit.mockReset();
     mocks.incrementUsage.mockReset();
     mocks.decrementUsage.mockReset();
+    mocks.getInstagramVisiblePostCount.mockReset();
+    mocks.getInstagramVisiblePostCount.mockResolvedValue({
+      count: 432,
+      estimated: false,
+      source: "instagram_profile_post_count",
+    });
     mocks.checkUsageLimit.mockResolvedValue({ allowed: true, used: 0, limit: 20 });
     mocks.incrementUsage.mockResolvedValue(undefined);
     mocks.decrementUsage.mockResolvedValue(undefined);
+  });
+
+  it("uses the dedicated visible profile post count instead of the ambiguous profile payload count", async () => {
+    mocks.resolveInstagramIdentity.mockResolvedValue({
+      ...profile,
+      username: "the_30_rule",
+      postCount: 12,
+      requestedHandle: "the_30_rule",
+      resolutionMethod: "profile_handle",
+      fallbackUsed: false,
+      mediaRestricted: false,
+    });
+    mocks.getInstagramVisiblePostCount.mockResolvedValue({
+      count: 487,
+      estimated: false,
+      source: "instagram_profile_post_count",
+    });
+
+    const result = await findCreator("the_30_rule");
+
+    expect(mocks.getInstagramVisiblePostCount).toHaveBeenCalledWith("the_30_rule");
+    expect(result.postCount).toBe(487);
+    expect(result.postCountVerified).toBe(true);
+    expect(result.postCountEstimated).toBe(false);
+    expect(result.postCountSource).toBe("instagram_profile_post_count");
+  });
+
+  it("does not fall back to the ambiguous profile count when the visible count cannot be verified", async () => {
+    mocks.resolveInstagramIdentity.mockResolvedValue({
+      ...profile,
+      postCount: 12,
+      requestedHandle: "creator",
+      resolutionMethod: "profile_handle",
+      fallbackUsed: false,
+      mediaRestricted: false,
+    });
+    mocks.getInstagramVisiblePostCount.mockResolvedValue(null);
+
+    const result = await findCreator("creator");
+
+    expect(result.postCount).toBeNull();
+    expect(result.postCountVerified).toBe(false);
+    expect(result.postCountSource).toBe("unavailable");
   });
 
   it("sorts ties deterministically by metric, recency, then shortcode", () => {
@@ -129,6 +184,8 @@ describe("AI Gateway creator research", () => {
 
     expect(mocks.searchReelsByHandle).toHaveBeenCalledWith("creator", 10);
     expect(result.sampleSize).toBe(10);
+    expect(result.creator.postCount).toBe(432);
+    expect(result.creator.postCountVerified).toBe(true);
     expect(result.sample).toEqual(
       expect.objectContaining({
         policy: "bounded_provider_sample",
