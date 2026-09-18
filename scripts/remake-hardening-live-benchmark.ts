@@ -1,22 +1,17 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { searchReelsByHandle } from "../server/instagram";
-import { transcribeReel } from "../server/services/transcribeReel";
-import {
-  fetchAudienceSignalsFromWeb,
-} from "../server/audienceResearch/fetchSignals";
 import { formatAudienceSignalsForPrompt } from "../shared/audienceResearch";
 import {
   buildRecreateDefaultTopicPrompt,
   buildRecreateTopicPrompt,
 } from "../shared/recreateAnglePrompt";
-import {
-  formatResearchGroundingForPrompt,
-  getResearchGrounding,
-} from "../server/studioResearchGrounding";
+import { formatResearchGroundingForPrompt } from "../server/studioResearchGrounding";
 import { analyzeRemakeStructure } from "../server/recreate/remakeStructure";
 import { generateRemakeContent } from "../server/recreate/generateRemakeContent";
-import { invokeLLM } from "../server/_core/llm";
+import type {
+  InvokeParams,
+  InvokeResult,
+} from "../server/_core/llm";
 import { withAiFormattingRules } from "../server/utils/aiFormattingRules";
 
 type Mode = "same_topic" | "niche" | "custom";
@@ -178,6 +173,153 @@ const WARM_CASES_PER_MODE = 2;
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+type ProxyEnvelope<T> = {
+  ok: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+};
+
+async function benchmarkProxyCall<T>(
+  body: Record<string, unknown>
+): Promise<T> {
+  const url = requiredEnv("SPYREELS_BENCHMARK_PROXY_URL");
+  const token = requiredEnv("SPYREELS_BENCHMARK_OIDC_TOKEN");
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      });
+
+      const payload = (await response.json()) as ProxyEnvelope<T>;
+      if (!response.ok || !payload.ok || payload.data === undefined) {
+        throw new Error(
+          `Benchmark proxy ${body.op} failed (${response.status}): ${payload.message ?? payload.error ?? "unknown error"}`
+        );
+      }
+      return payload.data;
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) await sleep(1000 * (attempt + 1));
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error(String(lastError ?? "Benchmark proxy failed"));
+}
+
+function messageText(content: InvokeParams["messages"][number]["content"]): string {
+  if (typeof content === "string") return content;
+  return content
+    .map((part) =>
+      typeof part === "string"
+        ? part
+        : part.type === "text"
+          ? part.text
+          : JSON.stringify(part)
+    )
+    .join("\n");
+}
+
+async function proxyInvokeLlm(params: InvokeParams): Promise<InvokeResult> {
+  const responseFormat =
+    params.response_format ??
+    params.responseFormat ??
+    (params.output_schema || params.outputSchema
+      ? {
+          type: "json_schema",
+          json_schema: params.output_schema ?? params.outputSchema,
+        }
+      : undefined);
+
+  return benchmarkProxyCall<InvokeResult>({
+    op: "llm",
+    messages: params.messages
+      .filter((message) =>
+        ["system", "user", "assistant"].includes(message.role)
+      )
+      .map((message) => ({
+        role: message.role,
+        content: messageText(message.content),
+      })),
+    model: params.model,
+    maxTokens: params.maxTokens ?? params.max_tokens,
+    temperature: params.temperature,
+    responseFormat,
+  });
+}
+
+type ProxyReelSearchResult = {
+  reels: Array<{
+    shortcode: string;
+    reelUrl: string;
+    videoUrl: string;
+    caption: string;
+    viewCount: number;
+    likeCount: number;
+    commentCount: number;
+    duration: number;
+    postedAt: string;
+  }>;
+};
+
+async function proxySearchReelsByHandle(
+  handle: string,
+  limit: number
+): Promise<ProxyReelSearchResult> {
+  return benchmarkProxyCall<ProxyReelSearchResult>({
+    op: "search_reels",
+    handle,
+    limit,
+  });
+}
+
+async function proxyTranscribeReel(args: {
+  videoUrl: string;
+  shortcode: string;
+}): Promise<any> {
+  return benchmarkProxyCall({
+    op: "transcribe",
+    ...args,
+  });
+}
+
+async function proxyAudienceResearch(profile: TargetProfile): Promise<any[]> {
+  return benchmarkProxyCall<any[]>({
+    op: "audience_research",
+    nicheSlug: profile.nicheSlug,
+    nicheLabel: profile.niche,
+    targetAudience: profile.targetAudience,
+  });
+}
+
+const topicResearchCache = new Map<string, any[]>();
+
+async function proxyTopicResearch(
+  idea: string,
+  nicheLabel: string
+): Promise<any[]> {
+  const key = `${nicheLabel.toLowerCase()}|${idea.toLowerCase().slice(0, 300)}`;
+  const hit = topicResearchCache.get(key);
+  if (hit) return hit;
+
+  const rows = await benchmarkProxyCall<any[]>({
+    op: "topic_research",
+    idea,
+    nicheLabel,
+  });
+  topicResearchCache.set(key, rows);
+  return rows;
+}
+
 function requiredEnv(name: string): string {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`${name} is not configured`);
@@ -242,7 +384,7 @@ async function judgeRemake(args: {
       ? `SOURCE TRANSCRIPT/CAPTION + VERIFIED RESEARCH`
       : `VERIFIED RESEARCH + CREATOR INSTRUCTION ONLY. The source transcript is NOT factual support for the new topic.`;
 
-  const response = await invokeLLM({
+  const response = await proxyInvokeLlm({
     model: "claude-sonnet-4-6",
     temperature: 0,
     maxTokens: 1400,
@@ -346,11 +488,7 @@ async function audienceBlock(profile: TargetProfile): Promise<string> {
   const hit = audienceCache.get(profile.id);
   if (hit !== undefined) return hit;
 
-  const signals = await fetchAudienceSignalsFromWeb({
-    nicheSlug: profile.nicheSlug,
-    nicheLabel: profile.niche,
-    targetAudience: profile.targetAudience,
-  });
+  const signals = await proxyAudienceResearch(profile);
   const block = formatAudienceSignalsForPrompt(signals.slice(0, 5));
   audienceCache.set(profile.id, block);
   return block;
@@ -430,7 +568,7 @@ async function prepareSources(): Promise<PreparedReel[]> {
 
     let search;
     try {
-      search = await searchReelsByHandle(creator.handle, 5);
+      search = await proxySearchReelsByHandle(creator.handle, 5);
     } catch (error) {
       console.warn(
         `[RemakeBenchmark] creator lookup failed @${creator.handle}`,
@@ -448,7 +586,7 @@ async function prepareSources(): Promise<PreparedReel[]> {
       transcriptionAttempts += 1;
 
       const started = Date.now();
-      const result = await transcribeReel({
+      const result = await proxyTranscribeReel({
         videoUrl: reel.videoUrl,
         shortcode: reel.shortcode,
       });
@@ -503,12 +641,13 @@ async function runGeneration(args: {
   const started = Date.now();
 
   const [researchItems, structureResult] = await Promise.all([
-    getResearchGrounding(context.researchIdea, context.researchNiche),
+    proxyTopicResearch(context.researchIdea, context.researchNiche),
     analyzeRemakeStructure({
       originalTranscript: args.source.transcript,
       caption: args.source.caption,
       sourceKey: args.source.shortcode,
       platformLabel: "Instagram Reel",
+      llmInvoker: proxyInvokeLlm,
     }),
   ]);
 
@@ -540,6 +679,7 @@ async function runGeneration(args: {
     ],
     platformLabel: "Instagram Reel",
     viralStructureOverride: structureResult.structure,
+    llmInvoker: proxyInvokeLlm,
   });
 
   return {
@@ -590,10 +730,8 @@ function passCase(judge: JudgeResult, copiedRun: number): {
 }
 
 async function main() {
-  requiredEnv("SCRAPECREATORS_API_KEY");
-  requiredEnv("ANTHROPIC_API_KEY");
-  requiredEnv("DEEPGRAM_API_KEY");
-  requiredEnv("SERPER_API_KEY");
+  requiredEnv("SPYREELS_BENCHMARK_PROXY_URL");
+  requiredEnv("SPYREELS_BENCHMARK_OIDC_TOKEN");
 
   const startedAt = new Date().toISOString();
   const report: {
