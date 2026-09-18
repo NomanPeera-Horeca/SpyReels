@@ -45,7 +45,7 @@ jobs:
           echo "::add-mask::$TOKEN"
           echo "SPYREELS_BENCHMARK_OIDC_TOKEN=$TOKEN" >> "$GITHUB_ENV"
 
-      - name: Run 30-case real Reel benchmark
+      - name: Run 15-case real Reel benchmark
         run: pnpm tsx scripts/remake-hardening-live-benchmark.ts
 
       - name: Upload benchmark report
