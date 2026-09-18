@@ -182,6 +182,14 @@ describe("AI Gateway remake_reel", () => {
     );
     expect(result.remake.mode).toBe("custom");
     expect(result.remake.generatedScript).toBe("Here is the SpyReels remake.");
+    expect(result.remake).not.toHaveProperty("viralStructure");
+    expect(result.remake).not.toHaveProperty("readabilityAnalysis");
+    expect(result.remake.structure).toEqual(
+      expect.objectContaining({ hookType: "Question" })
+    );
+    expect(result.remake.readability).toEqual(
+      expect.objectContaining({ gradeLevel: 5 })
+    );
     expect(result.savedToSpyReels).toBe(false);
   });
 
