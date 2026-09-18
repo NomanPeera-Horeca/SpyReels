@@ -15,6 +15,7 @@ import { checkUsageLimit, incrementUsage, decrementUsage } from "../stripe/strip
 import { normalizeInstagramHandle, isValidInstagramHandleNormalized, INSTAGRAM_HANDLE_INVALID_MESSAGE } from "@shared/instagramHandle";
 import { and, not, sql, eq, inArray, or } from "drizzle-orm";
 import { maybeMarkFirstSpyCompleted } from "./_shared";
+import { enqueueCreatorRadarRefresh } from "../creatorRadarRefreshQueue";
 
 async function uploadReelThumbnailsBounded(
   items: Array<{ shortcode: string; thumbnailUrl: string }>,
@@ -504,11 +505,16 @@ async function runResyncJob(
     const failureReason =
       classifyThrownInstagramError(error) ??
       classifyScrapeFailureMessage(message);
+    const existingReelCount = await countReelsForJob(jobId);
+    console.warn(
+      `[runResyncJob ${jobId}] failed handle=@${cleanHandleForLog} reason=${instagramFailureLogReason(error, failureReason)} existingReels=${existingReelCount}: ${message}`
+    );
     await updateScrapeJob(jobId, {
-      status: "failed",
+      status: existingReelCount > 0 ? "completed" : "failed",
       errorMessage: message,
-      currentStep: "failed",
+      currentStep: existingReelCount > 0 ? "complete" : "failed",
       failureReason,
+      progressPercent: existingReelCount > 0 ? 100 : undefined,
     });
   }
 }
@@ -791,19 +797,31 @@ export const scrapeRouter = router({
         const now = new Date();
         const daysSinceSync = Math.max(1, Math.ceil((now.getTime() - lastSyncDate.getTime()) / (1000 * 60 * 60 * 24)));
 
-        // Mark as running
         await updateScrapeJob(input.jobId, {
-          status: "running",
+          status: "pending",
+          currentStep: "pending",
+          progressPercent: 0,
           errorMessage: null,
           failureReason: null,
         });
 
-        // Run resync in background
-        runResyncJob(input.jobId, job.handle, daysSinceSync).catch((err) => {
-          console.error(`Resync job ${input.jobId} failed:`, err);
-        });
+        const queued = enqueueCreatorRadarRefresh(() =>
+          runResyncJob(input.jobId, job.handle, daysSinceSync)
+        );
+        if (!queued) {
+          await updateScrapeJob(input.jobId, {
+            status: "completed",
+            currentStep: "complete",
+            progressPercent: 100,
+            errorMessage: "Refresh queue is busy. Please try again shortly.",
+          });
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: "Too many refreshes are queued. Please try again shortly.",
+          });
+        }
 
-        return { jobId: input.jobId, daysSinceSync };
+        return { jobId: input.jobId, daysSinceSync, queued: true as const };
       }),
 
     /** Preview an Instagram profile before scraping */
