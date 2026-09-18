@@ -40,7 +40,9 @@ describe("AI Gateway OpenAPI", () => {
 
     const remake = document.paths[`${AI_GATEWAY_REST_BASE_PATH}/tools/remake_reel`]?.post;
     expect(remake?.operationId).toBe("remake_reel");
-    expect(remake?.security).toEqual([{ spyreelsOAuth: ["spyreels:create"] }]);
+    expect(remake?.security).toEqual([
+      { spyreelsOAuth: ["spyreels:read", "spyreels:create"] },
+    ]);
     expect(remake?.requestBody?.content?.["application/json"]?.schema).toBeTruthy();
   });
 
