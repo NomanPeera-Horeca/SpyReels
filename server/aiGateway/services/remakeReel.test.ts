@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   isFirstRemakeUsageBypassEligible: vi.fn(),
   transcribeReelUrl: vi.fn(),
   generateRemakeContent: vi.fn(),
+  getResearchGrounding: vi.fn(),
+  analyzeRemakeStructure: vi.fn(),
 }));
 
 vi.mock("../../db", () => ({
@@ -47,6 +49,18 @@ vi.mock("./reelResearch", () => ({
 
 vi.mock("../../recreate/generateRemakeContent", () => ({
   generateRemakeContent: mocks.generateRemakeContent,
+}));
+
+vi.mock("../../studioResearchGrounding", () => ({
+  getResearchGrounding: mocks.getResearchGrounding,
+  formatResearchGroundingForPrompt: (items: Array<{ title: string; snippet?: string | null; sourceUrl: string }>) =>
+    items
+      .map((item, index) => `${index + 1}. ${item.title}\n   Fact/detail: ${item.snippet ?? "(no snippet)"}\n   Source: ${item.sourceUrl}`)
+      .join("\n"),
+}));
+
+vi.mock("../../recreate/remakeStructure", () => ({
+  analyzeRemakeStructure: mocks.analyzeRemakeStructure,
 }));
 
 import { remakeReelUrl } from "./remakeReel";
@@ -109,10 +123,23 @@ describe("AI Gateway remake_reel", () => {
     mocks.incrementUsage.mockResolvedValue(undefined);
     mocks.decrementUsage.mockResolvedValue(undefined);
     mocks.transcribeReelUrl.mockResolvedValue(reelResult);
+    mocks.getResearchGrounding.mockResolvedValue([
+      {
+        title: "Restaurant menu engineering basics",
+        snippet: "Operators use menu engineering to compare item popularity and profitability.",
+        sourceUrl: "https://example.com/menu-engineering",
+      },
+    ]);
+    mocks.analyzeRemakeStructure.mockResolvedValue({
+      structure: { hook: { type: "Question" } },
+      cacheHit: false,
+    });
     mocks.generateRemakeContent.mockResolvedValue({
       viralStructure: { hook: { type: "Question" } },
       generatedScript: "Here is the SpyReels remake.",
       readabilityAnalysis: { gradeLevel: 5 },
+      structureCacheHit: false,
+      factIntegrity: { repaired: false, initialRiskCount: 0 },
     });
   });
 
@@ -128,14 +155,29 @@ describe("AI Gateway remake_reel", () => {
       url: reelResult.reel.reelUrl,
     });
     expect(mocks.incrementUsage).toHaveBeenCalledWith(42, "recreateCount");
+    expect(mocks.getResearchGrounding).toHaveBeenCalledWith(
+      expect.stringContaining("menu engineering matters"),
+      "Restaurants & Cafes"
+    );
+    expect(mocks.analyzeRemakeStructure).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceKey: "C13BR_GvZVJ",
+        originalTranscript: reelResult.transcript,
+      })
+    );
     expect(mocks.generateRemakeContent).toHaveBeenCalledWith(
       expect.objectContaining({
         originalTranscript: reelResult.transcript,
         caption: "restaurant strategy",
+        sourceKey: "C13BR_GvZVJ",
         gradeLevel: "auto",
         addCues: true,
         platformLabel: "Instagram Reel",
         topic: expect.stringContaining("menu engineering matters"),
+        researchGroundingBlock: expect.stringContaining("Restaurant menu engineering basics"),
+        viralStructureOverride: expect.objectContaining({
+          hook: expect.objectContaining({ type: "Question" }),
+        }),
       })
     );
     expect(result.remake.mode).toBe("custom");
