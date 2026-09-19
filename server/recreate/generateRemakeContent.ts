@@ -119,7 +119,7 @@ function buildFormatFidelityRules(
   const pacing = String(body.pacing ?? "");
   const hookType = String(hook.type ?? "");
   const tone = String(viralStructure.overallTone ?? "");
-  const combined = \`\${structure} \${pacing} \${hookType} \${tone}\`.toLowerCase();
+  const combined = `${structure} ${pacing} ${hookType} ${tone}`.toLowerCase();
 
   const rules = [
     "- Preserve the source Reel's presentation format, not just its topic and pacing.",
@@ -158,7 +158,7 @@ function buildFormatFidelityRules(
     );
   }
 
-  return \`**FORMAT FIDELITY:**\\n\${rules.join("\\n")}\`;
+  return `**FORMAT FIDELITY:**\\n${rules.join("\\n")}`;
 }
 
 function groundingRules(block: string, isSameTopic: boolean): string {
@@ -198,16 +198,16 @@ async function repairCopiedSameTopic(input: {
       },
       {
         role: "user",
-        content: \`The script below keeps the correct topic but is too close to the source.
+        content: `The script below keeps the correct topic but is too close to the source.
 
 SOURCE TRANSCRIPT
-<<<\${input.sourceTranscript}>>>
+<<<${input.sourceTranscript}>>>
 
 CURRENT REMAKE
-<<<\${input.script}>>>
+<<<${input.script}>>>
 
 VIRAL STRUCTURE
-\${JSON.stringify(input.viralStructure, null, 2)}
+${JSON.stringify(input.viralStructure, null, 2)}
 
 REBUILD RULES
 - Keep the SAME topic and core message.
@@ -220,7 +220,7 @@ REBUILD RULES
 - Never copy a long phrase from the source.
 - The result should feel like a different creator independently making a Reel on the same topic.
 
-\${input.scriptFormatClosing}\`,
+${input.scriptFormatClosing}`,
       },
     ],
     maxTokens: 3000,
