@@ -1,0 +1,57 @@
+name: Remake Hardening Live Benchmark
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  benchmark:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'feature/remake-hardening-v1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      SPYREELS_BENCHMARK_PROXY_URL: https://spyreels.onrender.com/api/internal/remake-benchmark
+
+    steps:
+      - name: Checkout benchmark branch
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Mint GitHub OIDC token for production benchmark proxy
+        shell: bash
+        run: |
+          set -euo pipefail
+          RESPONSE="$(curl --fail --silent --show-error \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=spyreels-remake-benchmark")"
+          TOKEN="$(node -e 'const x=JSON.parse(process.argv[1]); if(!x.value) process.exit(2); process.stdout.write(x.value)' "$RESPONSE")"
+          echo "::add-mask::$TOKEN"
+          echo "SPYREELS_BENCHMARK_OIDC_TOKEN=$TOKEN" >> "$GITHUB_ENV"
+
+      - name: Run 15-case real Reel benchmark
+        run: pnpm tsx scripts/remake-hardening-live-benchmark.ts
+
+      - name: Upload benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: remake-hardening-live-benchmark
+          path: artifacts/remake-hardening-live-benchmark.json
+          if-no-files-found: warn
