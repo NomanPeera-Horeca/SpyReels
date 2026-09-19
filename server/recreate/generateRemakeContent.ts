@@ -11,6 +11,7 @@ import {
   validateRemakeFactRisk,
 } from "./remakeFactRisk";
 import { analyzeRemakeStructure } from "./remakeStructure";
+import { remakeCopyRisk } from "./remakeOriginality";
 
 function formatNiche(niche: string | null): string | null {
   if (!niche) return null;
@@ -108,6 +109,58 @@ function buildDeliveryCuesPromptSection(): string {
 Place a cue at the start of the line it applies to. Do not overuse them.`;
 }
 
+
+function buildFormatFidelityRules(
+  viralStructure: Record<string, unknown>
+): string {
+  const body = (viralStructure.body ?? {}) as Record<string, unknown>;
+  const hook = (viralStructure.hook ?? {}) as Record<string, unknown>;
+  const structure = String(body.structure ?? "");
+  const pacing = String(body.pacing ?? "");
+  const hookType = String(hook.type ?? "");
+  const tone = String(viralStructure.overallTone ?? "");
+  const combined = \`\${structure} \${pacing} \${hookType} \${tone}\`.toLowerCase();
+
+  const rules = [
+    "- Preserve the source Reel's presentation format, not just its topic and pacing.",
+    "- Do not convert an interaction-led or scene-led Reel into a generic talking-head explanation.",
+    "- Keep the opening energy level and curiosity mechanism at least as strong as the source.",
+    "- Every spoken line should sound natural for the source format: dialogue should sound like dialogue, narration like narration, Q&A like Q&A.",
+  ];
+
+  if (
+    /multi-clip|compilation|dialogue|conversation|workplace|candid|scene|prank/.test(
+      combined
+    )
+  ) {
+    rules.push(
+      "- This source is interaction/scene driven. Build multiple short candid beats or dialogue clips that escalate toward a payoff.",
+      "- Keep editorial explanation out of the body unless the source uses it. Let the scenes carry the meaning.",
+      "- If explanation is needed, put it in the caption/CTA rather than breaking the scene format."
+    );
+  }
+
+  if (/q&a|question|interview/.test(combined)) {
+    rules.push(
+      "- Preserve the question/answer or interview rhythm. Do not rewrite it as a monologue."
+    );
+  }
+
+  if (/pov/.test(combined)) {
+    rules.push(
+      "- Preserve the POV framing and experiential perspective. Do not turn it into detached advice."
+    );
+  }
+
+  if (/list|steps|tips|countdown/.test(combined)) {
+    rules.push(
+      "- Preserve the list/count structure and momentum. Do not flatten it into one long explanation."
+    );
+  }
+
+  return \`**FORMAT FIDELITY:**\\n\${rules.join("\\n")}\`;
+}
+
 function groundingRules(block: string, isSameTopic: boolean): string {
   if (!block.trim()) {
     return isSameTopic
@@ -125,6 +178,55 @@ ${block}
 - Never invent a founder story or named case study merely to imitate the source Reel's narrative shape.
 - Vague-but-honest beats precise-but-invented.
 ${AI_FACT_CLAIM_GUARDRAIL}`;
+}
+
+
+async function repairCopiedSameTopic(input: {
+  sourceTranscript: string;
+  script: string;
+  viralStructure: Record<string, unknown>;
+  scriptFormatClosing: string;
+  llmInvoker: typeof invokeLLM;
+}): Promise<string> {
+  const response = await input.llmInvoker({
+    messages: [
+      {
+        role: "system",
+        content: withAiFormattingRules(
+          "You are an originality editor for viral short-form scripts. Preserve topic and proven mechanics, but rebuild copied content into a genuinely new creative execution. Return only the rewritten spoken script."
+        ),
+      },
+      {
+        role: "user",
+        content: \`The script below keeps the correct topic but is too close to the source.
+
+SOURCE TRANSCRIPT
+<<<\${input.sourceTranscript}>>>
+
+CURRENT REMAKE
+<<<\${input.script}>>>
+
+VIRAL STRUCTURE
+\${JSON.stringify(input.viralStructure, null, 2)}
+
+REBUILD RULES
+- Keep the SAME topic and core message.
+- Keep the hook TYPE, pacing energy, transition mechanic, and CTA style.
+- Do NOT preserve the source scene-by-scene order.
+- Do NOT preserve nonessential supporting people, jokes, anecdotes, scene details, or punchlines.
+- Do NOT synonym-swap source sentences.
+- Reframe the story with a fresh opening, fresh sequence, and fresh wording.
+- Subject-critical factual anchors may remain when they define the topic, but surrounding creative execution must be new.
+- Never copy a long phrase from the source.
+- The result should feel like a different creator independently making a Reel on the same topic.
+
+\${input.scriptFormatClosing}\`,
+      },
+    ],
+    maxTokens: 3000,
+  });
+
+  return String(response.choices[0]?.message?.content ?? "").trim();
 }
 
 async function repairUnsupportedFacts(input: {
@@ -227,6 +329,7 @@ export async function generateRemakeContent(input: {
 
   const researchGroundingBlock = input.researchGroundingBlock?.trim() ?? "";
   const factsBlock = groundingRules(researchGroundingBlock, isSameTopic);
+  const formatFidelityBlock = buildFormatFidelityRules(viralStructure);
 
   const scriptPrompt = isSameTopic
     ? `You are an expert ${platformLabel} scriptwriter. Rewrite the following viral ${platformLabel} script on the SAME TOPIC and core message, but make it fresh and original.
@@ -239,6 +342,8 @@ ${v13Context}
 ${input.originalTranscript}
 
 ${factsBlock}
+
+${formatFidelityBlock}
 
 **READABILITY:**
 ${gradeLevelInstruction}
@@ -268,6 +373,8 @@ ${input.topic}
 ${hasExplicitUserAngleInTopic(input.topic) ? RECREATE_EXPLICIT_ANGLE_RULES : RECREATE_DEFAULT_TOPIC_RULES}
 
 ${factsBlock}
+
+${formatFidelityBlock}
 
 **READABILITY:**
 ${gradeLevelInstruction}
@@ -346,6 +453,46 @@ ${scriptFormatClosing}`;
 
     generatedScript = repairedScript;
     repaired = true;
+  }
+
+  if (isSameTopic) {
+    const initialCopyRisk = remakeCopyRisk({
+      source: input.originalTranscript,
+      remake: generatedScript,
+    });
+
+    if (!initialCopyRisk.safe) {
+      const originalityStarted = Date.now();
+      const rebuilt = await repairCopiedSameTopic({
+        sourceTranscript: input.originalTranscript,
+        script: generatedScript,
+        viralStructure,
+        scriptFormatClosing,
+        llmInvoker: runLlm,
+      });
+
+      const rebuiltRisk = remakeCopyRisk({
+        source: input.originalTranscript,
+        remake: rebuilt,
+      });
+
+      console.info(
+        "[RemakeLatency] originality_repair_ms",
+        Date.now() - originalityStarted,
+        {
+          initialLongestRunWords: initialCopyRisk.longestRunWords,
+          remainingLongestRunWords: rebuiltRisk.longestRunWords,
+        }
+      );
+
+      if (!rebuilt || !rebuiltRisk.safe) {
+        throw new Error(
+          "SpyReels could not produce a sufficiently original same-topic remake. Please try again."
+        );
+      }
+
+      generatedScript = rebuilt;
+    }
   }
 
   const readabilityAnalysis = analyzeRemakeReadability(generatedScript);
