@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 55
     env:
-      SPYREELS_BENCHMARK_PROXY_URL: https://spyreels.ai/api/internal/remake-benchmark
+      SPYREELS_BENCHMARK_PROXY_URL: https://spyreels.onrender.com/api/internal/remake-benchmark
 
     steps:
       - name: Checkout benchmark branch
