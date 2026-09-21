@@ -27,6 +27,7 @@ import { localObjectStorageDir } from "../storage";
 import { registerAiGatewayRoutes } from "../aiGateway/routes";
 import { registerRemakeBenchmarkProxy } from "../remakeBenchmarkProxy";
 import { BLOG_SLUG_REDIRECTS } from "@shared/blogRedirects";
+import { checkReadiness } from "../health";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -51,6 +52,18 @@ async function startServer() {
   registerServerErrorMonitoring();
   const app = express();
   const server = createServer(app);
+
+  app.get("/health/live", (_req, res) => {
+    res.set("Cache-Control", "no-store").status(200).json({ ok: true });
+  });
+
+  app.get("/health/ready", async (_req, res) => {
+    const readiness = await checkReadiness();
+    res
+      .set("Cache-Control", "no-store")
+      .status(readiness.ok ? 200 : 503)
+      .json(readiness);
+  });
 
   // Canonical host: apex spyreels.ai (matches SPYREELS_SITE_URL / OAUTH_SERVER_URL).
   // www and apex both resolve in DNS; without this, sessionStorage restore breaks
