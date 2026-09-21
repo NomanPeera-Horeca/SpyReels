@@ -6,14 +6,8 @@ import {
   recreatedScripts,
   scriptIdeas,
 } from "../../drizzle/schema";
-import { createGenerationTelemetryContext } from "../carousel/generationTelemetry";
 import type { CarouselGenerationEntryPoint } from "@shared/carouselGenerationMetrics";
-import { generateCarouselRemake } from "../carousel/generateCarouselRemake";
 import { getDb } from "../db";
-import { runCreatorDiscoveryJob } from "../routers/creatorDiscoveryRouter";
-import { processIdeaInBackground } from "../routers/ideasRouter";
-import { runScriptGeneration } from "../routers/recreateRouter";
-import { runFeaturedReelTranscription } from "../routers/_shared";
 import { registerDurableJobHandler } from "./handlers";
 import type { ClaimedJob } from "./types";
 
@@ -66,6 +60,7 @@ async function requireTerminalStatus(input: {
 }
 
 registerDurableJobHandler("script_generation", async (job: ClaimedJob) => {
+  const { processIdeaInBackground } = await import("../routers/ideasRouter");
   const { ideaId } = job.payload as { ideaId: number };
   await processIdeaInBackground(ideaId);
   await requireTerminalStatus({
@@ -77,6 +72,7 @@ registerDurableJobHandler("script_generation", async (job: ClaimedJob) => {
 });
 
 registerDurableJobHandler("remake_generation", async (job: ClaimedJob) => {
+  const { runScriptGeneration } = await import("../routers/recreateRouter");
   const payload = job.payload as RemakePayload;
   await runScriptGeneration(
     payload.scriptId,
@@ -99,6 +95,7 @@ registerDurableJobHandler("remake_generation", async (job: ClaimedJob) => {
 });
 
 registerDurableJobHandler("creator_discovery", async (job: ClaimedJob) => {
+  const { runCreatorDiscoveryJob } = await import("../routers/creatorDiscoveryRouter");
   const payload = job.payload as {
     jobId: number;
     userId: number;
@@ -118,6 +115,10 @@ registerDurableJobHandler("creator_discovery", async (job: ClaimedJob) => {
 });
 
 registerDurableJobHandler("carousel_generation", async (job: ClaimedJob) => {
+  const [{ createGenerationTelemetryContext }, { generateCarouselRemake }] = await Promise.all([
+    import("../carousel/generationTelemetry"),
+    import("../carousel/generateCarouselRemake"),
+  ]);
   const payload = job.payload as CarouselPayload;
   const telemetry = createGenerationTelemetryContext({
     entryPoint: payload.telemetryEntryPoint,
@@ -138,6 +139,7 @@ registerDurableJobHandler("carousel_generation", async (job: ClaimedJob) => {
 });
 
 registerDurableJobHandler("featured_reel_transcription", async (job: ClaimedJob) => {
+  const { runFeaturedReelTranscription } = await import("../routers/_shared");
   const { reel } = job.payload as {
     reel: { id: number; shortcode: string; videoUrl: string | null };
   };
