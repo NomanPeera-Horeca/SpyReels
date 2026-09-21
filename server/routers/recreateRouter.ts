@@ -13,6 +13,7 @@ import { getCreatorCoachProfile } from "../planCoachProfile";
 import { generateRemakeContent } from "../recreate/generateRemakeContent";
 import { analyzeRemakeStructure } from "../recreate/remakeStructure";
 import {
+import { dispatchPilotJob } from "../durableJobs/dispatch";
   formatResearchGroundingForPrompt,
   getResearchGrounding,
 } from "../studioResearchGrounding";
@@ -518,24 +519,42 @@ export const recreateRouter = router({
         const limitsGen = getPlanLimits(subGen.plan as PlanId);
         const effectiveAddCues = Boolean(input.addCues && limitsGen.hasAiCues);
 
-        // Run generation in background
-        runScriptGeneration(
-          scriptId,
-          ctx.user.id,
-          transcription.transcript,
-          transcription.segments,
-          caption,
-          reelForGeneration,
-          promptAngle,
-          input.gradeLevel,
-          effectiveAddCues,
+        const platformLabel =
           source === "tiktok"
-            ? "TikTok video"
+            ? "TikTok video" as const
             : source === "youtube"
-              ? "YouTube Short"
-              : "Instagram Reel"
-        ).catch((err: unknown) => {
-          console.error(`Script generation ${scriptId} failed:`, err);
+              ? "YouTube Short" as const
+              : "Instagram Reel" as const;
+        await dispatchPilotJob({
+          jobType: "remake_generation",
+          idempotencyKey: `remake_generation:${scriptId}`,
+          payload: {
+            scriptId,
+            userId: ctx.user.id,
+            originalTranscript: transcription.transcript,
+            segments: transcription.segments,
+            caption,
+            reel: reelForGeneration,
+            topic: promptAngle,
+            gradeLevel: input.gradeLevel,
+            addCues: effectiveAddCues,
+            platformLabel,
+          },
+          runInline: () =>
+            runScriptGeneration(
+              scriptId,
+              ctx.user.id,
+              transcription.transcript,
+              transcription.segments,
+              caption,
+              reelForGeneration,
+              promptAngle,
+              input.gradeLevel,
+              effectiveAddCues,
+              platformLabel
+            ),
+          onInlineError: (error) =>
+            console.error(`Script generation ${scriptId} failed:`, error),
         });
 
         return { scriptId, status: "processing" as const };
