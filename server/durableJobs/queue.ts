@@ -89,7 +89,7 @@ export async function claimNextDurableJob(input: {
     WHERE lockedBy = ${claimToken} AND status = 'running'
     LIMIT 1
   `);
-  const row = (rows[0] as Record<string, unknown>[])[0];
+  const row = (rows[0] as unknown as Record<string, unknown>[])[0];
   return row ? coerceJob(row, claimToken) : null;
 }
 
