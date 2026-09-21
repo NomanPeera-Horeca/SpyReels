@@ -5,6 +5,7 @@ import {
   SCRAPE_JOB_ZOMBIE_MESSAGE,
   SCRAPE_REFRESH_RECOVERED_MESSAGE,
   staleScrapeRecoveryForReelCount,
+  stalePlatformScrapeRecoveryForItemCount,
 } from "./scrapeJobSweeper";
 
 describe("stale scrape job recovery", () => {
@@ -25,6 +26,24 @@ describe("stale scrape job recovery", () => {
       progressPercent: 100,
       errorMessage: SCRAPE_REFRESH_RECOVERED_MESSAGE,
       failureReason: "unknown",
+    });
+  });
+
+  it("preserves TikTok and YouTube refresh data after interruption", () => {
+    expect(stalePlatformScrapeRecoveryForItemCount(57)).toEqual({
+      status: "completed",
+      currentStep: "complete",
+      progressPercent: 100,
+      errorMessage: SCRAPE_REFRESH_RECOVERED_MESSAGE,
+    });
+  });
+
+  it("fails a new TikTok or YouTube job with no stored videos", () => {
+    expect(stalePlatformScrapeRecoveryForItemCount(0)).toEqual({
+      status: "failed",
+      currentStep: "failed",
+      progressPercent: 0,
+      errorMessage: SCRAPE_JOB_ZOMBIE_MESSAGE,
     });
   });
 

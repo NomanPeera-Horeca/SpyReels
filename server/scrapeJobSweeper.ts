@@ -1,5 +1,11 @@
-import { and, eq, lt, or } from "drizzle-orm";
-import { scrapeJobs } from "../drizzle/schema";
+import { and, eq, lt, or, sql } from "drizzle-orm";
+import {
+  scrapeJobs,
+  tiktokScrapeJobs,
+  tiktokVideos,
+  youtubeScrapeJobs,
+  youtubeVideos,
+} from "../drizzle/schema";
 import {
   capturePostHogEvent,
   posthogDistinctIdForUser,
@@ -24,16 +30,20 @@ export type StaleScrapeRecovery = {
   failureReason: "unknown";
 };
 
-export function staleScrapeRecoveryForReelCount(
-  existingReelCount: number
-): StaleScrapeRecovery {
-  if (existingReelCount > 0) {
+export type StalePlatformScrapeRecovery = Omit<
+  StaleScrapeRecovery,
+  "failureReason"
+>;
+
+export function stalePlatformScrapeRecoveryForItemCount(
+  existingItemCount: number
+): StalePlatformScrapeRecovery {
+  if (existingItemCount > 0) {
     return {
       status: "completed",
       currentStep: "complete",
       progressPercent: 100,
       errorMessage: SCRAPE_REFRESH_RECOVERED_MESSAGE,
-      failureReason: "unknown",
     };
   }
   return {
@@ -41,8 +51,87 @@ export function staleScrapeRecoveryForReelCount(
     currentStep: "failed",
     progressPercent: 0,
     errorMessage: SCRAPE_JOB_ZOMBIE_MESSAGE,
+  };
+}
+
+export function staleScrapeRecoveryForReelCount(
+  existingReelCount: number
+): StaleScrapeRecovery {
+  return {
+    ...stalePlatformScrapeRecoveryForItemCount(existingReelCount),
     failureReason: "unknown",
   };
+}
+
+async function sweepPlatformScrapeJobs(
+  platform: "tiktok" | "youtube",
+  runningBefore: Date,
+  pendingBefore: Date
+): Promise<{ swept: number; restored: number; failed: number }> {
+  const db = await getDb();
+  if (!db) return { swept: 0, restored: 0, failed: 0 };
+
+  const jobs: any =
+    platform === "tiktok" ? tiktokScrapeJobs : youtubeScrapeJobs;
+  const videos: any = platform === "tiktok" ? tiktokVideos : youtubeVideos;
+  const rows = await db
+    .select({
+      id: jobs.id,
+      userId: jobs.userId,
+      workspaceId: jobs.workspaceId,
+      handle: jobs.handle,
+      status: jobs.status,
+      updatedAt: jobs.updatedAt,
+    })
+    .from(jobs)
+    .where(
+      or(
+        and(eq(jobs.status, "running"), lt(jobs.updatedAt, runningBefore)),
+        and(eq(jobs.status, "pending"), lt(jobs.updatedAt, pendingBefore))
+      )
+    );
+
+  let restored = 0;
+  let failed = 0;
+  for (const row of rows) {
+    const countRows = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(videos)
+      .where(eq(videos.jobId, row.id));
+    const itemCount = Number(countRows[0]?.count ?? 0);
+    const recovery = stalePlatformScrapeRecoveryForItemCount(itemCount);
+    const staleBefore =
+      row.status === "running" ? runningBefore : pendingBefore;
+    const result = await db
+      .update(jobs)
+      .set(recovery)
+      .where(
+        and(
+          eq(jobs.id, row.id),
+          eq(jobs.status, row.status),
+          lt(jobs.updatedAt, staleBefore)
+        )
+      );
+    if (Number(result[0]?.affectedRows ?? 0) === 0) continue;
+
+    if (recovery.status === "completed") restored += 1;
+    else failed += 1;
+
+    void capturePostHogEvent({
+      distinctId: posthogDistinctIdForUser(row.userId),
+      event: "scrape_job_zombie_swept",
+      properties: {
+        platform,
+        job_id: row.id,
+        handle: row.handle,
+        workspace_id: row.workspaceId,
+        stale_status: row.status,
+        existing_item_count: itemCount,
+        recovery_status: recovery.status,
+      },
+    });
+  }
+  return { swept: restored + failed, restored, failed };
 }
 
 /**
@@ -80,7 +169,19 @@ export async function sweepZombieScrapeJobs(): Promise<number> {
   for (const row of rows) {
     const existingReelCount = await countReelsForJob(row.id);
     const recovery = staleScrapeRecoveryForReelCount(existingReelCount);
-    await db.update(scrapeJobs).set(recovery).where(eq(scrapeJobs.id, row.id));
+    const staleBefore =
+      row.status === "running" ? runningBefore : pendingBefore;
+    const result = await db
+      .update(scrapeJobs)
+      .set(recovery)
+      .where(
+        and(
+          eq(scrapeJobs.id, row.id),
+          eq(scrapeJobs.status, row.status),
+          lt(scrapeJobs.updatedAt, staleBefore)
+        )
+      );
+    if (Number(result[0]?.affectedRows ?? 0) === 0) continue;
 
     if (recovery.status === "completed") restoredRefreshes += 1;
     else failedNewJobs += 1;
@@ -100,21 +201,29 @@ export async function sweepZombieScrapeJobs(): Promise<number> {
     });
   }
 
-  if (rows.length > 0) {
+  const [tiktok, youtube] = await Promise.all([
+    sweepPlatformScrapeJobs("tiktok", runningBefore, pendingBefore),
+    sweepPlatformScrapeJobs("youtube", runningBefore, pendingBefore),
+  ]);
+  restoredRefreshes += tiktok.restored + youtube.restored;
+  failedNewJobs += tiktok.failed + youtube.failed;
+  const total = restoredRefreshes + failedNewJobs;
+
+  if (total > 0) {
     console.log(
-      "[scrapeJobSweeper] recovered " + rows.length + " stale row(s): " +
+      "[scrapeJobSweeper] recovered " + total + " stale row(s): " +
         restoredRefreshes + " refresh(es) restored, " +
         failedNewJobs + " new job(s) failed"
     );
     alertOwnerThrottled({
       kind: "sweeper",
       message:
-        rows.length + " stale scrape job(s) recovered (" +
+        total + " stale scrape job(s) recovered (" +
         restoredRefreshes + " refreshes restored, " +
         failedNewJobs + " failed)",
     });
   }
-  return rows.length;
+  return total;
 }
 
 export function startScrapeJobZombieSweeper(): void {
