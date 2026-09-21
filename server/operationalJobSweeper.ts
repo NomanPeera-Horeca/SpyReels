@@ -1,15 +1,26 @@
 import { and, eq, inArray, lt } from "drizzle-orm";
 import {
+  carouselRemakes,
+  creatorDiscoveryJobs,
+  discoveryJobs,
   exportJobs,
+  recreatedScripts,
+  scriptIdeas,
   viralityDiagnosticJobs,
   videoBrollGenerations,
 } from "../drizzle/schema";
 import { getDb } from "./db";
 import { alertOwnerThrottled } from "./monitoring/alerts";
+import { decrementUsage } from "./stripe/stripe-service";
 
 export const OPERATIONAL_JOB_STALE_MS = 20 * 60 * 1000;
 export const OPERATIONAL_JOB_ZOMBIE_MESSAGE =
   "This job was interrupted. Please retry.";
+
+export const STALE_SCRIPT_IDEA_STATUSES = ["queued", "validating", "processing"] as const;
+export const STALE_RECREATED_SCRIPT_STATUSES = ["pending", "processing"] as const;
+export const STALE_DISCOVERY_STATUSES = ["pending", "running"] as const;
+export const STALE_CAROUSEL_STATUSES = ["pending", "processing"] as const;
 
 export type OperationalRecovery = {
   status: "failed";
@@ -56,6 +67,127 @@ export async function sweepZombieOperationalJobs(): Promise<number> {
           eq(exportJobs.id, row.id),
           eq(exportJobs.status, row.status),
           lt(exportJobs.updatedAt, before)
+        )
+      );
+    if (Number(result[0]?.affectedRows ?? 0) > 0) {
+      swept += 1;
+      await decrementUsage(row.userId, "exportCount");
+    }
+  }
+
+  const staleScriptIdeas = await db
+    .select({ id: scriptIdeas.id, status: scriptIdeas.status })
+    .from(scriptIdeas)
+    .where(
+      and(
+        inArray(scriptIdeas.status, [...STALE_SCRIPT_IDEA_STATUSES]),
+        lt(scriptIdeas.updatedAt, before)
+      )
+    );
+  for (const row of staleScriptIdeas) {
+    const result = await db
+      .update(scriptIdeas)
+      .set(staleOperationalJobRecovery())
+      .where(
+        and(
+          eq(scriptIdeas.id, row.id),
+          eq(scriptIdeas.status, row.status),
+          lt(scriptIdeas.updatedAt, before)
+        )
+      );
+    if (Number(result[0]?.affectedRows ?? 0) > 0) swept += 1;
+  }
+
+  const staleRecreatedScripts = await db
+    .select({ id: recreatedScripts.id, status: recreatedScripts.status })
+    .from(recreatedScripts)
+    .where(
+      and(
+        inArray(recreatedScripts.status, [...STALE_RECREATED_SCRIPT_STATUSES]),
+        lt(recreatedScripts.updatedAt, before)
+      )
+    );
+  for (const row of staleRecreatedScripts) {
+    const result = await db
+      .update(recreatedScripts)
+      .set(staleOperationalJobRecovery())
+      .where(
+        and(
+          eq(recreatedScripts.id, row.id),
+          eq(recreatedScripts.status, row.status),
+          lt(recreatedScripts.updatedAt, before)
+        )
+      );
+    if (Number(result[0]?.affectedRows ?? 0) > 0) swept += 1;
+  }
+
+  const staleCreatorDiscovery = await db
+    .select({ id: creatorDiscoveryJobs.id, status: creatorDiscoveryJobs.status })
+    .from(creatorDiscoveryJobs)
+    .where(
+      and(
+        inArray(creatorDiscoveryJobs.status, [...STALE_DISCOVERY_STATUSES]),
+        lt(creatorDiscoveryJobs.updatedAt, before)
+      )
+    );
+  for (const row of staleCreatorDiscovery) {
+    const result = await db
+      .update(creatorDiscoveryJobs)
+      .set(staleOperationalJobRecovery())
+      .where(
+        and(
+          eq(creatorDiscoveryJobs.id, row.id),
+          eq(creatorDiscoveryJobs.status, row.status),
+          lt(creatorDiscoveryJobs.updatedAt, before)
+        )
+      );
+    if (Number(result[0]?.affectedRows ?? 0) > 0) swept += 1;
+  }
+
+  const staleLegacyDiscovery = await db
+    .select({ id: discoveryJobs.id, status: discoveryJobs.status })
+    .from(discoveryJobs)
+    .where(
+      and(
+        inArray(discoveryJobs.status, [...STALE_DISCOVERY_STATUSES]),
+        lt(discoveryJobs.updatedAt, before)
+      )
+    );
+  for (const row of staleLegacyDiscovery) {
+    const result = await db
+      .update(discoveryJobs)
+      .set(staleOperationalJobRecovery())
+      .where(
+        and(
+          eq(discoveryJobs.id, row.id),
+          eq(discoveryJobs.status, row.status),
+          lt(discoveryJobs.updatedAt, before)
+        )
+      );
+    if (Number(result[0]?.affectedRows ?? 0) > 0) swept += 1;
+  }
+
+  const staleCarousels = await db
+    .select({ id: carouselRemakes.id, status: carouselRemakes.status })
+    .from(carouselRemakes)
+    .where(
+      and(
+        inArray(carouselRemakes.status, [...STALE_CAROUSEL_STATUSES]),
+        lt(carouselRemakes.updatedAt, before)
+      )
+    );
+  for (const row of staleCarousels) {
+    const result = await db
+      .update(carouselRemakes)
+      .set({
+        ...staleOperationalJobRecovery(),
+        progressStage: null,
+      })
+      .where(
+        and(
+          eq(carouselRemakes.id, row.id),
+          eq(carouselRemakes.status, row.status),
+          lt(carouselRemakes.updatedAt, before)
         )
       );
     if (Number(result[0]?.affectedRows ?? 0) > 0) swept += 1;
