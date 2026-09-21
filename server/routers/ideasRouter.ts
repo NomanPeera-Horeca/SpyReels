@@ -20,6 +20,7 @@ import { withAiFormattingRules } from "../utils/aiFormattingRules";
 import { sanitizeAiOutputDeep } from "../utils/sanitizeAiOutput";
 import { ONBOARDING_NICHES } from "@/data/onboardingNiches";
 import { formatIdeaScriptErrorForUser } from "@shared/ideaScriptErrors";
+import { dispatchPilotJob } from "../durableJobs/dispatch";
 import { HEIT_JUDGE_CRITERIA, buildHeitWriterRules, buildHeitStructurePrompt, HEIT_STRUCTURE_JSON_SCHEMA, normalizeHeitStructure, HEIT_FRAMEWORK, buildHeitDraftUserPrompt, readHeitHookType } from "@shared/ideaScriptHeit";
 import { buildIdeaScriptProgressSteps } from "@shared/ideaScriptProgress";
 import type { IdeaScriptProgressStepId } from "@shared/ideaScriptProgress";
@@ -764,7 +765,7 @@ async function getViralHookExamplesForIdea(
 }
 
 
-async function processIdeaInBackground(ideaId: number): Promise<void> {
+export async function processIdeaInBackground(ideaId: number): Promise<void> {
   try {
     await updateScriptIdea(ideaId, { status: "processing" } as any);
 
@@ -1130,6 +1131,18 @@ function coerceIdeaValidationText(value: unknown, fallback = ""): string {
 }
 
 
+async function dispatchIdeaScriptGeneration(ideaId: number): Promise<void> {
+  await dispatchPilotJob({
+    jobType: "script_generation",
+    idempotencyKey: `script_generation:${ideaId}`,
+    payload: { ideaId },
+    runInline: () => processIdeaInBackground(ideaId),
+    onInlineError: (error) =>
+      console.error(`[Ideas] Script generation failed for idea ${ideaId}:`, error),
+  });
+}
+
+
 async function proceedToIdeaScriptGeneration(ideaId: number, idea: { userId: number }): Promise<void> {
   const recreateCheck = await checkUsageLimit(idea.userId, "recreateCount");
   if (!recreateCheck.allowed) {
@@ -1140,9 +1153,7 @@ async function proceedToIdeaScriptGeneration(ideaId: number, idea: { userId: num
     return;
   }
   await incrementUsage(idea.userId, "recreateCount");
-  processIdeaInBackground(ideaId).catch((err) =>
-    console.error(`[Ideas] Script generation failed for idea ${ideaId}:`, err)
-  );
+  await dispatchIdeaScriptGeneration(ideaId);
 }
 
 
@@ -1414,9 +1425,7 @@ export const ideasRouter = router({
         }
 
         // Now generate the script (only for accept action)
-        processIdeaInBackground(input.ideaId).catch(err =>
-          console.error(`[Ideas] Background processing failed for idea ${input.ideaId}:`, err)
-        );
+        await dispatchIdeaScriptGeneration(input.ideaId);
 
         return { status: "queued" as const };
       }),
@@ -1460,9 +1469,7 @@ export const ideasRouter = router({
           });
           results.push({ id: ideaId, idea: item.idea });
           // Trigger background generation for each
-          processIdeaInBackground(ideaId).catch(err =>
-            console.error(`[Ideas] Background processing failed for idea ${ideaId}:`, err)
-          );
+          await dispatchIdeaScriptGeneration(ideaId);
         }
 
         return { submitted: results.length, ideas: results };
@@ -1624,9 +1631,7 @@ export const ideasRouter = router({
           );
         } else {
           await updateScriptIdea(input.id, { status: "queued", errorMessage: null } as any);
-          processIdeaInBackground(input.id).catch(err =>
-            console.error(`[Ideas] Retry failed for idea ${input.id}:`, err)
-          );
+          await dispatchIdeaScriptGeneration(input.id);
         }
         return { status: "queued" as const };
       }),

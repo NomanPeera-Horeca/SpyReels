@@ -10,9 +10,10 @@ import { firstDayOfNextMonthUtc } from "./_shared";
 import { getPlanLimits } from "../stripe/products";
 import type { PlanId } from "../stripe/products";
 import { getUserSubscription } from "../stripe/stripe-service";
+import { dispatchPilotJob } from "../durableJobs/dispatch";
 import { not, and, eq, desc, inArray } from "drizzle-orm";
 
-async function runCreatorDiscoveryJob(
+export async function runCreatorDiscoveryJob(
   jobId: number,
   userId: number,
   businessDescription: string
@@ -237,12 +238,22 @@ export const creatorDiscoveryRouter = router({
           });
         }
 
-        runCreatorDiscoveryJob(
-          jobId,
-          ctx.user.id,
-          input.businessDescription
-        ).catch((err) => {
-          console.error(`Creator discovery job ${jobId} failed:`, err);
+        await dispatchPilotJob({
+          jobType: "creator_discovery",
+          idempotencyKey: `creator_discovery:${jobId}`,
+          payload: {
+            jobId,
+            userId: ctx.user.id,
+            businessDescription: input.businessDescription,
+          },
+          runInline: () =>
+            runCreatorDiscoveryJob(
+              jobId,
+              ctx.user.id,
+              input.businessDescription
+            ),
+          onInlineError: (error) =>
+            console.error(`Creator discovery job ${jobId} failed:`, error),
         });
 
         return { jobId };

@@ -7,6 +7,7 @@ import { analyzeHook } from "../analyzeHook";
 import { assertUserScrapeReelInWorkspace } from "../assertUserScrapeReelInWorkspace";
 import { getFeaturedReelById, updateFeaturedReelTranscription, getDb, getTranscriptionByTiktokVideoId, createTranscription, getTranscriptionByYoutubeVideoId, getTranscriptionByReelId, getTranscriptionByFeaturedReelId } from "../db";
 import { runFeaturedReelTranscription, runTranscription } from "./_shared";
+import { dispatchPilotJob } from "../durableJobs/dispatch";
 import { checkUsageLimit, incrementUsage } from "../stripe/stripe-service";
 import { runTikTokTranscription } from "../tiktokScrape/runTranscription";
 import { getActiveTranscriptions, MAX_CONCURRENT_TRANSCRIPTIONS } from "../transcriptionSemaphore";
@@ -119,12 +120,18 @@ export const transcribeRouter = router({
             transcribedAt: new Date(),
           });
           await incrementUsage(ctx.user.id, "transcribeCount");
-          runFeaturedReelTranscription({
+          const featuredReel = {
             id: fr.id,
             shortcode: fr.reelShortcode,
             videoUrl: fr.videoUrl,
-          }).catch((err) => {
-            console.error(`Featured transcription ${fr.id} failed:`, err);
+          };
+          await dispatchPilotJob({
+            jobType: "featured_reel_transcription",
+            idempotencyKey: `featured_reel_transcription:${fr.id}`,
+            payload: { reel: featuredReel },
+            runInline: () => runFeaturedReelTranscription(featuredReel),
+            onInlineError: (error) =>
+              console.error(`Featured transcription ${fr.id} failed:`, error),
           });
           return {
             transcriptionId: fr.id,
