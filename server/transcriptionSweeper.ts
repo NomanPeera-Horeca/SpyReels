@@ -1,5 +1,5 @@
 import { and, eq, isNotNull, isNull, lt, or } from "drizzle-orm";
-import { transcriptions } from "../drizzle/schema";
+import { featuredReels, transcriptions } from "../drizzle/schema";
 import { getDb } from "./db";
 import { alertOwnerThrottled } from "./monitoring/alerts";
 
@@ -28,22 +28,54 @@ export async function sweepZombieTranscriptions(): Promise<number> {
         )
       )
     );
+  let swept = 0;
   for (const r of rows) {
-    await db
+    const result = await db
       .update(transcriptions)
       .set({ status: "failed", errorMessage: ZOMBIE_MESSAGE })
-      .where(eq(transcriptions.id, r.id));
+      .where(
+        and(
+          eq(transcriptions.id, r.id),
+          eq(transcriptions.status, "processing")
+        )
+      );
+    if (Number(result[0]?.affectedRows ?? 0) > 0) swept += 1;
   }
-  if (rows.length > 0) {
+
+  const featuredRows = await db
+    .select({ id: featuredReels.id })
+    .from(featuredReels)
+    .where(
+      and(
+        eq(featuredReels.transcriptionStatus, "processing"),
+        isNotNull(featuredReels.transcribedAt),
+        lt(featuredReels.transcribedAt, before)
+      )
+    );
+  for (const row of featuredRows) {
+    const result = await db
+      .update(featuredReels)
+      .set({ transcriptionStatus: "failed", transcribedAt: null })
+      .where(
+        and(
+          eq(featuredReels.id, row.id),
+          eq(featuredReels.transcriptionStatus, "processing"),
+          lt(featuredReels.transcribedAt, before)
+        )
+      );
+    if (Number(result[0]?.affectedRows ?? 0) > 0) swept += 1;
+  }
+
+  if (swept > 0) {
     console.log(
-      `[transcriptionSweeper] marked ${rows.length} stale processing row(s) as failed`
+      `[transcriptionSweeper] marked ${swept} stale processing row(s) as failed`
     );
     alertOwnerThrottled({
       kind: "sweeper",
-      message: `${rows.length} stale transcription(s) auto-failed (process likely died mid-run)`,
+      message: `${swept} stale transcription(s) auto-failed (process likely died mid-run)`,
     });
   }
-  return rows.length;
+  return swept;
 }
 
 export function startTranscriptionZombieSweeper(): void {
