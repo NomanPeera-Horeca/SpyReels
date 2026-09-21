@@ -1,9 +1,10 @@
-import { and, eq, inArray, lt } from "drizzle-orm";
+import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import {
   carouselRemakes,
   creatorDiscoveryJobs,
   discoveryJobs,
   exportJobs,
+  monthlyUsage,
   recreatedScripts,
   scriptIdeas,
   viralityDiagnosticJobs,
@@ -11,7 +12,6 @@ import {
 } from "../drizzle/schema";
 import { getDb } from "./db";
 import { alertOwnerThrottled } from "./monitoring/alerts";
-import { decrementUsage } from "./stripe/stripe-service";
 
 export const OPERATIONAL_JOB_STALE_MS = 20 * 60 * 1000;
 export const OPERATIONAL_JOB_ZOMBIE_MESSAGE =
@@ -46,7 +46,12 @@ export async function sweepZombieOperationalJobs(): Promise<number> {
   let swept = 0;
 
   const staleExports = await db
-    .select({ id: exportJobs.id, status: exportJobs.status })
+    .select({
+      id: exportJobs.id,
+      userId: exportJobs.userId,
+      status: exportJobs.status,
+      createdAt: exportJobs.createdAt,
+    })
     .from(exportJobs)
     .where(
       and(
@@ -55,24 +60,38 @@ export async function sweepZombieOperationalJobs(): Promise<number> {
       )
     );
   for (const row of staleExports) {
-    const result = await db
-      .update(exportJobs)
-      .set({
-        ...staleOperationalJobRecovery(),
-        currentStep: "failed",
-        progressLabel: "Export interrupted — retry",
-      })
-      .where(
-        and(
-          eq(exportJobs.id, row.id),
-          eq(exportJobs.status, row.status),
-          lt(exportJobs.updatedAt, before)
-        )
-      );
-    if (Number(result[0]?.affectedRows ?? 0) > 0) {
-      swept += 1;
-      await decrementUsage(row.userId, "exportCount");
-    }
+    const recovered = await db.transaction(async (tx) => {
+      const result = await tx
+        .update(exportJobs)
+        .set({
+          ...staleOperationalJobRecovery(),
+          currentStep: "failed",
+          progressLabel: "Export interrupted — retry",
+        })
+        .where(
+          and(
+            eq(exportJobs.id, row.id),
+            eq(exportJobs.status, row.status),
+            lt(exportJobs.updatedAt, before)
+          )
+        );
+      if (Number(result[0]?.affectedRows ?? 0) === 0) return false;
+
+      const usageMonth = row.createdAt.toISOString().slice(0, 7);
+      await tx
+        .update(monthlyUsage)
+        .set({
+          exportCount: sql`GREATEST(0, ${monthlyUsage.exportCount} - 1)`,
+        })
+        .where(
+          and(
+            eq(monthlyUsage.userId, row.userId),
+            eq(monthlyUsage.usageMonth, usageMonth)
+          )
+        );
+      return true;
+    });
+    if (recovered) swept += 1;
   }
 
   const staleScriptIdeas = await db
