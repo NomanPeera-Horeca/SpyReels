@@ -519,6 +519,7 @@ export const recreateRouter = router({
         const limitsGen = getPlanLimits(subGen.plan as PlanId);
         const effectiveAddCues = Boolean(input.addCues && limitsGen.hasAiCues);
 
+        const originalTranscript = transcription.transcript!;
         const platformLabel =
           source === "tiktok"
             ? "TikTok video" as const
@@ -531,7 +532,7 @@ export const recreateRouter = router({
           payload: {
             scriptId,
             userId: ctx.user.id,
-            originalTranscript: transcription.transcript,
+            originalTranscript,
             segments: transcription.segments,
             caption,
             reel: reelForGeneration,
@@ -544,7 +545,7 @@ export const recreateRouter = router({
             runScriptGeneration(
               scriptId,
               ctx.user.id,
-              transcription.transcript,
+              originalTranscript,
               transcription.segments,
               caption,
               reelForGeneration,
