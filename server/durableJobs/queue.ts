@@ -43,13 +43,13 @@ export async function enqueueDurableJob(input: {
       (${input.jobType}, ${input.idempotencyKey}, ${payload}, 'queued', ${maxAttempts}, ${availableAt})
     ON DUPLICATE KEY UPDATE
       id = LAST_INSERT_ID(id),
-      status = IF(status IN ('failed', 'dead'), 'queued', status),
       attempt = IF(status IN ('failed', 'dead'), 0, attempt),
       availableAt = IF(status IN ('failed', 'dead'), VALUES(availableAt), availableAt),
       leaseExpiresAt = IF(status IN ('failed', 'dead'), NULL, leaseExpiresAt),
       lockedBy = IF(status IN ('failed', 'dead'), NULL, lockedBy),
       lastError = IF(status IN ('failed', 'dead'), NULL, lastError),
-      completedAt = IF(status IN ('failed', 'dead'), NULL, completedAt)
+      completedAt = IF(status IN ('failed', 'dead'), NULL, completedAt),
+      status = IF(status IN ('failed', 'dead'), 'queued', status)
   `);
   return Number((result[0] as { insertId?: number }).insertId ?? 0);
 }
