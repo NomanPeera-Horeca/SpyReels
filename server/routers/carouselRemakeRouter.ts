@@ -68,6 +68,7 @@ import {
   planCarouselRemakeListQuery,
 } from "../carousel/carouselRemakeListQuery";
 import { generateCarouselRemake } from "../carousel/generateCarouselRemake";
+import { dispatchPilotJob } from "../durableJobs/dispatch";
 import { searchStockPhotos as searchStockPhotosLib } from "../carousel/searchStockPhotos";
 import {
   CarouselSourceUrlError,
@@ -82,6 +83,31 @@ import {
   withGenerationStage,
   type GenerationTelemetryContext,
 } from "../carousel/generationTelemetry";
+
+async function dispatchCarouselGeneration(
+  remakeId: number,
+  templateId: string,
+  niche: string,
+  options: NonNullable<Parameters<typeof generateCarouselRemake>[3]>,
+  telemetryEntryPoint: string
+): Promise<void> {
+  const { telemetry: _telemetry, ...durableOptions } = options;
+  await dispatchPilotJob({
+    jobType: "carousel_generation",
+    idempotencyKey: `carousel_generation:${remakeId}`,
+    payload: {
+      remakeId,
+      templateId,
+      niche,
+      options: durableOptions,
+      telemetryEntryPoint,
+    },
+    runInline: () => generateCarouselRemake(remakeId, templateId, niche, options),
+    onInlineError: (error) =>
+      console.error(`Carousel generation ${remakeId} failed:`, error),
+  });
+}
+
 
 /** Maps content-to-carousel style picker → curated template ids. */
 const CONTENT_STYLE_TO_TEMPLATE: Record<string, string> = {
@@ -399,15 +425,19 @@ async function createContentToCarouselRemake(
   if (telemetry) telemetry.remakeId = remakeId;
   await persistInProgressMetrics(remakeId, telemetry);
 
-  generateCarouselRemake(remakeId, templateId, nicheLabel, {
-    slideCountOption: middleCount,
-    sourceContent,
-    sourceImage,
-    sourceReelId,
-    telemetry,
-  }).catch((err: unknown) => {
-    console.error(`Carousel from content ${remakeId} failed:`, err);
-  });
+  await dispatchCarouselGeneration(
+    remakeId,
+    templateId,
+    nicheLabel,
+    {
+      slideCountOption: middleCount,
+      sourceContent,
+      sourceImage,
+      sourceReelId,
+      telemetry,
+    },
+    "carouselRemake.generateFromContent"
+  );
 
   return { remakeId, status: "processing" as const, templateId };
 }
@@ -487,14 +517,18 @@ export const carouselRemakeRouter = router({
       if (telemetry) telemetry.remakeId = remakeId;
       await persistInProgressMetrics(remakeId, telemetry);
 
-      generateCarouselRemake(remakeId, input.templateId, niche, {
-        slideCountOption: input.slideCount,
-        uploadedImageUrls: input.uploadedImageUrls,
-        uploadedImagePool: input.uploadedImagePool,
-        telemetry,
-      }).catch((err: unknown) => {
-        console.error(`Carousel remake ${remakeId} failed:`, err);
-      });
+      await dispatchCarouselGeneration(
+        remakeId,
+        input.templateId,
+        niche,
+        {
+          slideCountOption: input.slideCount,
+          uploadedImageUrls: input.uploadedImageUrls,
+          uploadedImagePool: input.uploadedImagePool,
+          telemetry,
+        },
+        "carouselRemake.start"
+      );
 
       return { remakeId, status: "processing" as const, niche };
     }),
@@ -1381,12 +1415,16 @@ export const carouselRemakeRouter = router({
       if (telemetry) telemetry.remakeId = remakeId;
       await persistInProgressMetrics(remakeId, telemetry);
 
-      generateCarouselRemake(remakeId, templateId, nicheLabel, {
-        analysisImageUrls: slideImages,
-        telemetry,
-      }).catch((err: unknown) => {
-        console.error(`Carousel from source ${remakeId} failed:`, err);
-      });
+      await dispatchCarouselGeneration(
+        remakeId,
+        templateId,
+        nicheLabel,
+        {
+          analysisImageUrls: slideImages,
+          telemetry,
+        },
+        "carouselRemake.generateFromSourceCarousel"
+      );
 
       return { remakeId, status: "processing" as const, templateId };
     }),
