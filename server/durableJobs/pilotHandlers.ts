@@ -7,6 +7,7 @@ import {
   scriptIdeas,
 } from "../../drizzle/schema";
 import { createGenerationTelemetryContext } from "../carousel/generationTelemetry";
+import type { CarouselGenerationEntryPoint } from "@shared/carouselGenerationMetrics";
 import { generateCarouselRemake } from "../carousel/generateCarouselRemake";
 import { getDb } from "../db";
 import { runCreatorDiscoveryJob } from "../routers/creatorDiscoveryRouter";
@@ -34,7 +35,7 @@ type CarouselPayload = {
   templateId: string;
   niche: string;
   options: Record<string, unknown>;
-  telemetryEntryPoint: string;
+  telemetryEntryPoint: CarouselGenerationEntryPoint;
 };
 
 async function readStatus(
@@ -121,7 +122,7 @@ registerDurableJobHandler("carousel_generation", async (job: ClaimedJob) => {
   const telemetry = createGenerationTelemetryContext({
     entryPoint: payload.telemetryEntryPoint,
   });
-  telemetry.remakeId = payload.remakeId;
+  if (telemetry) telemetry.remakeId = payload.remakeId;
   await generateCarouselRemake(
     payload.remakeId,
     payload.templateId,
