@@ -5,7 +5,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "NODE_ENV=development tsx watch server/_core/index.ts",
-    "build": "vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",
+    "build": "vite build && esbuild server/_core/index.ts server/durableJobs/worker.ts --platform=node --packages=external --bundle --format=esm --outdir=dist --entry-names=[name]",
     "start": "node scripts/ensure-creator-discovery-schema.mjs && NODE_ENV=production node dist/index.js",
     "check": "tsc --noEmit && node scripts/verify-resend-tags.mjs",
     "format": "prettier --write .",
@@ -18,7 +18,8 @@
     "mobile:assets": "tsx scripts/generate-mobile-brand-assets.ts",
     "viral-posts:refresh-pools": "tsx scripts/viral-posts-pool-refresh.ts",
     "watermark:cron": "tsx scripts/process-watermark-jobs.ts",
-    "watermark:worker": "tsx scripts/watermark-worker.ts"
+    "watermark:worker": "tsx scripts/watermark-worker.ts",
+    "queue:worker": "NODE_ENV=production node dist/worker.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
