@@ -409,8 +409,11 @@ async function runResyncJob(
       `[runResyncJob ${jobId}] start handle=@${cleanHandleForLog} reconciliationDays=${reconciliationDays}`
     );
     await updateScrapeJob(jobId, {
+      status: "running",
       currentStep: "connecting",
       progressPercent: 5,
+      errorMessage: null,
+      failureReason: null,
     });
     await updateScrapeJob(jobId, {
       currentStep: "fetching_profile",
