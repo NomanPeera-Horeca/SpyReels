@@ -7,6 +7,7 @@ import {
   heartbeatDurableJob,
 } from "./queue";
 import { getDurableJobHandler } from "./handlers";
+import "./pilotHandlers";
 
 const workerId = `${process.env.RENDER_SERVICE_ID ?? "local"}:${randomUUID()}`;
 const pollMs = Number(process.env.DURABLE_JOB_POLL_MS ?? 1_000);
