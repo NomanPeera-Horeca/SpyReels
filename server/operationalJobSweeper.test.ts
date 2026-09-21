@@ -7,6 +7,7 @@ import {
   STALE_RECREATED_SCRIPT_STATUSES,
   STALE_SCRIPT_IDEA_STATUSES,
   staleOperationalJobRecovery,
+  isMissingTableError,
 } from "./operationalJobSweeper";
 
 describe("operational background job recovery", () => {
@@ -33,5 +34,15 @@ describe("operational background job recovery", () => {
     ]);
     expect(STALE_DISCOVERY_STATUSES).toEqual(["pending", "running"]);
     expect(STALE_CAROUSEL_STATUSES).toEqual(["pending", "processing"]);
+  });
+
+  it("recognizes nested missing-table errors without hiding unrelated failures", () => {
+    expect(
+      isMissingTableError({
+        message: "query failed",
+        cause: { code: "ER_NO_SUCH_TABLE", message: "Table doesn't exist" },
+      })
+    ).toBe(true);
+    expect(isMissingTableError(new Error("connection reset"))).toBe(false);
   });
 });

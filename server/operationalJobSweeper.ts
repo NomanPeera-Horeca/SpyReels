@@ -22,6 +22,26 @@ export const STALE_RECREATED_SCRIPT_STATUSES = ["pending", "processing"] as cons
 export const STALE_DISCOVERY_STATUSES = ["pending", "running"] as const;
 export const STALE_CAROUSEL_STATUSES = ["pending", "processing"] as const;
 
+let creatorDiscoveryTableAvailable = true;
+
+export function isMissingTableError(error: unknown): boolean {
+  let current: unknown = error;
+  const seen = new Set<unknown>();
+  while (current && typeof current === "object" && !seen.has(current)) {
+    seen.add(current);
+    const value = current as { code?: unknown; message?: unknown; cause?: unknown };
+    if (value.code === "ER_NO_SUCH_TABLE") return true;
+    if (
+      typeof value.message === "string" &&
+      (value.message.includes("doesn't exist") || value.message.includes("ER_NO_SUCH_TABLE"))
+    ) {
+      return true;
+    }
+    current = value.cause;
+  }
+  return false;
+}
+
 export type OperationalRecovery = {
   status: "failed";
   errorMessage: string;
@@ -140,27 +160,44 @@ export async function sweepZombieOperationalJobs(): Promise<number> {
     if (Number(result[0]?.affectedRows ?? 0) > 0) swept += 1;
   }
 
-  const staleCreatorDiscovery = await db
-    .select({ id: creatorDiscoveryJobs.id, status: creatorDiscoveryJobs.status })
-    .from(creatorDiscoveryJobs)
-    .where(
-      and(
-        inArray(creatorDiscoveryJobs.status, [...STALE_DISCOVERY_STATUSES]),
-        lt(creatorDiscoveryJobs.updatedAt, before)
-      )
-    );
-  for (const row of staleCreatorDiscovery) {
-    const result = await db
-      .update(creatorDiscoveryJobs)
-      .set(staleOperationalJobRecovery())
-      .where(
-        and(
-          eq(creatorDiscoveryJobs.id, row.id),
-          eq(creatorDiscoveryJobs.status, row.status),
-          lt(creatorDiscoveryJobs.updatedAt, before)
-        )
+  if (creatorDiscoveryTableAvailable) {
+    try {
+      const staleCreatorDiscovery = await db
+        .select({ id: creatorDiscoveryJobs.id, status: creatorDiscoveryJobs.status })
+        .from(creatorDiscoveryJobs)
+        .where(
+          and(
+            inArray(creatorDiscoveryJobs.status, [...STALE_DISCOVERY_STATUSES]),
+            lt(creatorDiscoveryJobs.updatedAt, before)
+          )
+        );
+      for (const row of staleCreatorDiscovery) {
+        const result = await db
+          .update(creatorDiscoveryJobs)
+          .set(staleOperationalJobRecovery())
+          .where(
+            and(
+              eq(creatorDiscoveryJobs.id, row.id),
+              eq(creatorDiscoveryJobs.status, row.status),
+              lt(creatorDiscoveryJobs.updatedAt, before)
+            )
+          );
+        if (Number(result[0]?.affectedRows ?? 0) > 0) swept += 1;
+      }
+    } catch (error) {
+      if (!isMissingTableError(error)) throw error;
+      creatorDiscoveryTableAvailable = false;
+      console.warn(
+        "[operationalJobSweeper] creator_discovery_jobs is unavailable; " +
+          "continuing recovery for all other job families"
       );
-    if (Number(result[0]?.affectedRows ?? 0) > 0) swept += 1;
+      alertOwnerThrottled({
+        kind: "sweeper",
+        message:
+          "creator_discovery_jobs is unavailable; optional recovery disabled until restart",
+        error,
+      });
+    }
   }
 
   const staleLegacyDiscovery = await db
