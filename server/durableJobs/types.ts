@@ -4,6 +4,7 @@ export const PILOT_JOB_TYPES = [
   "creator_discovery",
   "carousel_generation",
   "featured_reel_transcription",
+  "queue_safety_probe",
 ] as const;
 
 export type PilotJobType = (typeof PILOT_JOB_TYPES)[number];
