@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS durable_jobs (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  jobType VARCHAR(64) NOT NULL,
+  idempotencyKey VARCHAR(191) NOT NULL,
+  payload JSON NOT NULL,
+  status ENUM('queued','running','succeeded','failed','dead') NOT NULL DEFAULT 'queued',
+  attempt INT UNSIGNED NOT NULL DEFAULT 0,
+  maxAttempts INT UNSIGNED NOT NULL DEFAULT 3,
+  availableAt TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  leaseExpiresAt TIMESTAMP(3) NULL,
+  lockedBy VARCHAR(191) NULL,
+  lastError TEXT NULL,
+  completedAt TIMESTAMP(3) NULL,
+  createdAt TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updatedAt TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (id),
+  UNIQUE KEY uniq_durable_jobs_idempotency (idempotencyKey),
+  KEY idx_durable_jobs_claim (status, availableAt, leaseExpiresAt),
+  KEY idx_durable_jobs_type_status (jobType, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
