@@ -114,6 +114,9 @@ export const transcribeRouter = router({
             getActiveTranscriptions() >= MAX_CONCURRENT_TRANSCRIPTIONS;
           await updateFeaturedReelTranscription(fr.id, {
             transcriptionStatus: "processing",
+            // While processing this is the heartbeat/start timestamp. Terminal
+            // writes replace it with the actual completion timestamp.
+            transcribedAt: new Date(),
           });
           await incrementUsage(ctx.user.id, "transcribeCount");
           runFeaturedReelTranscription({
