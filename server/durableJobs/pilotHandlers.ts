@@ -149,3 +149,19 @@ registerDurableJobHandler("featured_reel_transcription", async (job: ClaimedJob)
     label: "Featured reel transcription",
   });
 });
+
+
+registerDurableJobHandler("queue_safety_probe", async (job: ClaimedJob) => {
+  if (process.env.DURABLE_QUEUE_SAFETY_PROBE_ENABLED !== "true") {
+    throw new Error("Queue safety probes are disabled");
+  }
+  const payload = job.payload as { sleepMs?: number; failUntilAttempt?: number };
+  const sleepMs = Math.max(0, Math.min(Number(payload.sleepMs ?? 0), 120_000));
+  const failUntilAttempt = Math.max(0, Number(payload.failUntilAttempt ?? 0));
+  if (sleepMs > 0) {
+    await new Promise((resolve) => setTimeout(resolve, sleepMs));
+  }
+  if (job.attempt <= failUntilAttempt) {
+    throw new Error(`Intentional queue safety probe failure on attempt ${job.attempt}`);
+  }
+});
