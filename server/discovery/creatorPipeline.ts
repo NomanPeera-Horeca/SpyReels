@@ -7,10 +7,16 @@ import Anthropic from "@anthropic-ai/sdk";
 import { routeNiche } from "../ai/prompts/niche-routing";
 import { reportDirectAnthropicUsage } from "../_core/llmMeasured";
 import {
+  fetchDiscoveryProfile,
   searchReelsByKeyword,
   type SearchReelData,
 } from "../instagram";
-import { type ParsedReel, type ScoredReel, scoreReel } from "./scoring";
+import {
+  type ParsedReel,
+  type ScoredReel,
+  scoreReel,
+  scoreReelRelaxed,
+} from "./scoring";
 
 const SONNET_MODEL = "claude-sonnet-4-6";
 const HAIKU_MODEL = "claude-haiku-4-5-20251001";
@@ -18,6 +24,10 @@ const CREATOR_MIN_FOLLOWERS = 10_000;
 const TOPICS_TARGET = 24;
 const MAX_RESULTS_PER_TOPIC = 40;
 const CREATOR_PROVIDER_TIMEOUT_MS = 20_000;
+const CREATOR_ENRICHMENT_LIMIT = 30;
+const CREATOR_ENRICHMENT_CONCURRENCY = 4;
+const CREATOR_PROFILE_TIMEOUT_MS = 8_000;
+const CREATOR_ENRICHMENT_BUDGET_MS = 45_000;
 const PEER_SCORE_BATCH = 15;
 
 export interface CreatorDiscoveryPillar {
@@ -66,7 +76,14 @@ export interface CreatorDiscoveryResult {
 }
 
 export type CreatorDiscoveryProgressUpdate = {
-  phase: "routing" | "topics" | "searching" | "collapsed" | "peer_score" | "done";
+  phase:
+    | "routing"
+    | "topics"
+    | "searching"
+    | "collapsed"
+    | "enriching"
+    | "peer_score"
+    | "done";
   topicsTotal?: number;
   topicsSearched?: number;
   reelsKept?: number;
@@ -148,10 +165,8 @@ function scoreSearchReel(
   r: SearchReelData,
   foundVia: CreatorDiscoveryTopic
 ): InternalScoredHit | null {
-  const scored = scoreReel(searchReelToParsedReel(r));
-  if (!scored) return null;
-  if (scored.owner.followers < CREATOR_MIN_FOLLOWERS) return null;
-  return { scored, foundVia };
+  const scored = scoreReelRelaxed(searchReelToParsedReel(r));
+  return scored ? { scored, foundVia } : null;
 }
 
 function collapseToCreators(hits: InternalScoredHit[]): InternalScoredHit[] {
@@ -171,6 +186,86 @@ function sortHits(hits: InternalScoredHit[]): InternalScoredHit[] {
     if (a.scored.tier !== b.scored.tier) return a.scored.tier - b.scored.tier;
     return b.scored.viralScore - a.scored.viralScore;
   });
+}
+
+async function enrichCreatorCandidates(
+  hits: InternalScoredHit[]
+): Promise<InternalScoredHit[]> {
+  const candidates = sortHits(hits).slice(0, CREATOR_ENRICHMENT_LIMIT);
+  const deadlineAt = Date.now() + CREATOR_ENRICHMENT_BUDGET_MS;
+  const enriched: InternalScoredHit[] = [];
+  let nextIndex = 0;
+  let attempted = 0;
+  let profilesWithFollowers = 0;
+
+  const worker = async (): Promise<void> => {
+    while (true) {
+      const index = nextIndex++;
+      if (index >= candidates.length) return;
+
+      const remainingMs = deadlineAt - Date.now();
+      if (remainingMs <= 0) return;
+
+      const hit = candidates[index];
+      attempted++;
+      try {
+        const profile = await fetchDiscoveryProfile(
+          hit.scored.owner.username,
+          Math.min(CREATOR_PROFILE_TIMEOUT_MS, remainingMs)
+        );
+        if (!Number.isFinite(profile.followerCount) || profile.followerCount <= 0) {
+          console.warn(
+            `[creatorPipeline] profile @${hit.scored.owner.username} omitted follower metadata`
+          );
+          continue;
+        }
+        profilesWithFollowers++;
+
+        const rescored = scoreReel({
+          ...hit.scored,
+          owner: {
+            ...hit.scored.owner,
+            username: profile.username || hit.scored.owner.username,
+            fullName: profile.fullName || hit.scored.owner.fullName,
+            followers: profile.followerCount,
+            isVerified: profile.isVerified,
+            isPrivate: profile.isPrivate,
+            biography: profile.biography,
+            profilePicUrl:
+              profile.profilePicUrl || hit.scored.owner.profilePicUrl,
+          },
+        });
+        if (rescored && rescored.owner.followers >= CREATOR_MIN_FOLLOWERS) {
+          enriched.push({ scored: rescored, foundVia: hit.foundVia });
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(
+          `[creatorPipeline] profile enrichment skipped @${hit.scored.owner.username}: ${message}`
+        );
+      }
+    }
+  };
+
+  await Promise.all(
+    Array.from(
+      {
+        length: Math.min(CREATOR_ENRICHMENT_CONCURRENCY, candidates.length),
+      },
+      () => worker()
+    )
+  );
+
+  if (candidates.length > 0 && profilesWithFollowers === 0) {
+    throw new Error(
+      `Creator discovery could not enrich follower metadata (attempted ${attempted} of ${candidates.length} shortlisted creators)`
+    );
+  }
+
+  console.log(
+    `[creatorPipeline] enriched follower metadata for ${profilesWithFollowers}/${attempted} attempted creators; ${enriched.length} passed strict scoring`
+  );
+  return enriched;
 }
 
 function toCreatorEntry(
@@ -462,9 +557,27 @@ export async function runCreatorDiscoveryPipeline(
     ),
   });
 
+  const enriched = await enrichCreatorCandidates(collapsed);
+
+  await safeProgress(onProgress, {
+    phase: "enriching",
+    topicsTotal: topicsUsed.length,
+    topicsSearched,
+    reelsKept: allHits.length,
+    creatorsFound: enriched.length,
+    partial: buildResult(
+      businessDescription,
+      routedNiche,
+      pillarsUsed,
+      topicsUsed,
+      hitsToPrePeerRanked(enriched),
+      []
+    ),
+  });
+
   const verdictByUsername = new Map<string, PeerVerdict>();
-  for (let i = 0; i < collapsed.length; i += PEER_SCORE_BATCH) {
-    const batch = collapsed.slice(i, i + PEER_SCORE_BATCH);
+  for (let i = 0; i < enriched.length; i += PEER_SCORE_BATCH) {
+    const batch = enriched.slice(i, i + PEER_SCORE_BATCH);
     const verdicts = await peerScoreBatch(
       anthropic,
       businessDescription,
@@ -480,7 +593,7 @@ export async function runCreatorDiscoveryPipeline(
   const keptHits: InternalScoredHit[] = [];
   const droppedHits: InternalScoredHit[] = [];
 
-  for (const hit of collapsed) {
+  for (const hit of enriched) {
     const key = hit.scored.owner.username.toLowerCase();
     const verdict = verdictByUsername.get(key);
     const keep = verdict ? verdict.keep : true;
@@ -527,7 +640,7 @@ export async function runCreatorDiscoveryPipeline(
     topicsTotal: topicsUsed.length,
     topicsSearched,
     reelsKept: allHits.length,
-    creatorsFound: collapsed.length,
+    creatorsFound: enriched.length,
     partial: finalResult,
   });
 
@@ -536,7 +649,7 @@ export async function runCreatorDiscoveryPipeline(
     topicsTotal: topicsUsed.length,
     topicsSearched,
     reelsKept: allHits.length,
-    creatorsFound: collapsed.length,
+    creatorsFound: enriched.length,
     partial: finalResult,
   });
 
