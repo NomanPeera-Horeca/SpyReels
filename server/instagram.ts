@@ -2091,9 +2091,17 @@ export async function searchReelsByKeyword(
       break;
     }
 
-    if (status === 404 || status === 400) {
+    if (status === 404) {
+      console.info(
+        `[Instagram] Keyword search returned no matches for "${keyword}" on page ${page}`
+      );
+      break;
+    }
+    if (status === 400) {
       if (required) {
-        throw new Error(`No results found for "${keyword}". Try a different keyword or hashtag.`);
+        throw new Error(
+          `Instagram keyword search rejected "${keyword}" with HTTP 400`
+        );
       }
       break;
     }
@@ -2106,10 +2114,18 @@ export async function searchReelsByKeyword(
       );
       break;
     }
-    if (status !== 200 || !data?.reels?.length) {
+    if (status !== 200) {
       if (required) {
-        throw new Error(`No results found for "${keyword}". Try a different keyword or hashtag.`);
+        throw new Error(
+          `Instagram keyword search failed with HTTP ${status} for "${keyword}"`
+        );
       }
+      break;
+    }
+    if (!data?.reels?.length) {
+      console.info(
+        `[Instagram] Keyword search returned no matches for "${keyword}" on page ${page}`
+      );
       break;
     }
 
