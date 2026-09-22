@@ -1983,7 +1983,8 @@ function parseSearchReelApiItem(r: any): SearchReelData | null {
 export async function searchReelsByKeyword(
   keyword: string,
   maxResults: number = 50,
-  onProgress?: (count: number) => void
+  onProgress?: (count: number) => void,
+  timeoutMs?: number
 ): Promise<SearchReelData[]> {
   const cleanKeyword = keyword.replace(/[#@]/g, "").trim().toLowerCase().replace(/\s+/g, "");
 
@@ -1993,19 +1994,49 @@ export async function searchReelsByKeyword(
 
   const allReels: SearchReelData[] = [];
   const seenShortcodes = new Set<string>();
+  const deadlineAt =
+    timeoutMs !== undefined ? Date.now() + Math.max(1, timeoutMs) : null;
+
+  const remainingMs = (): number | undefined => {
+    if (deadlineAt === null) return undefined;
+    const remaining = deadlineAt - Date.now();
+    if (remaining <= 0) {
+      throw new Error(
+        `Instagram keyword search timed out after ${timeoutMs}ms for "${keyword}"`
+      );
+    }
+    return remaining;
+  };
 
   let page = 1;
   const maxPages = 15;
 
   while (allReels.length < maxResults && page <= maxPages) {
     if (page > 1) {
-      await sleep(1500 + Math.random() * 1000);
+      const delayMs = 1500 + Math.random() * 1000;
+      const remaining = remainingMs();
+      if (remaining !== undefined && remaining <= delayMs) {
+        throw new Error(
+          `Instagram keyword search timed out after ${timeoutMs}ms for "${keyword}"`
+        );
+      }
+      await sleep(delayMs);
     }
 
-    const { status, data } = await scGet("/v2/instagram/reels/search", {
-      query: cleanKeyword,
-      page: String(page),
-    });
+    const { status, data } = await scGet(
+      "/v2/instagram/reels/search",
+      {
+        query: cleanKeyword,
+        page: String(page),
+      },
+      { timeoutMs: remainingMs() }
+    );
+
+    if (status === 408) {
+      throw new Error(
+        `Instagram keyword search timed out after ${timeoutMs}ms for "${keyword}"`
+      );
+    }
 
     if (status === 404 || status === 400) {
       if (page === 1) {
