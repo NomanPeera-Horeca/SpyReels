@@ -1997,58 +1997,84 @@ export async function searchReelsByKeyword(
   const deadlineAt =
     timeoutMs !== undefined ? Date.now() + Math.max(1, timeoutMs) : null;
 
-  const remainingMs = (): number | undefined => {
+  const remainingMs = (required: boolean): number | undefined => {
     if (deadlineAt === null) return undefined;
     const remaining = deadlineAt - Date.now();
-    if (remaining <= 0) {
+    if (remaining <= 0 && required) {
       throw new Error(
         `Instagram keyword search timed out after ${timeoutMs}ms for "${keyword}"`
       );
     }
-    return remaining;
+    return Math.max(0, remaining);
   };
 
   let page = 1;
   const maxPages = 15;
 
   while (allReels.length < maxResults && page <= maxPages) {
-    if (page > 1) {
+    const required = page === 1;
+
+    if (!required) {
       const delayMs = 1500 + Math.random() * 1000;
-      const remaining = remainingMs();
+      const remaining = remainingMs(false);
       if (remaining !== undefined && remaining <= delayMs) {
-        throw new Error(
-          `Instagram keyword search timed out after ${timeoutMs}ms for "${keyword}"`
+        console.info(
+          `[Instagram] Optional pagination stopped at page ${page} for "${keyword}": deadline budget exhausted`
         );
+        break;
       }
       await sleep(delayMs);
     }
 
-    const { status, data } = await scGet(
-      "/v2/instagram/reels/search",
-      {
-        query: cleanKeyword,
-        page: String(page),
-      },
-      { timeoutMs: remainingMs() }
-    );
+    let status: number;
+    let data: any;
+    try {
+      ({ status, data } = await scGet(
+        "/v2/instagram/reels/search",
+        {
+          query: cleanKeyword,
+          page: String(page),
+        },
+        { timeoutMs: remainingMs(required) }
+      ));
+    } catch (err) {
+      if (required) throw err;
+      console.warn(
+        `[Instagram] Optional pagination failed at page ${page} for "${keyword}":`,
+        err
+      );
+      break;
+    }
 
     if (status === 408) {
-      throw new Error(
-        `Instagram keyword search timed out after ${timeoutMs}ms for "${keyword}"`
+      if (required) {
+        throw new Error(
+          `Instagram keyword search timed out after ${timeoutMs}ms for "${keyword}"`
+        );
+      }
+      console.info(
+        `[Instagram] Optional pagination timed out at page ${page} for "${keyword}"; keeping ${allReels.length} first-page reels`
       );
+      break;
     }
 
     if (status === 404 || status === 400) {
-      if (page === 1) {
+      if (required) {
         throw new Error(`No results found for "${keyword}". Try a different keyword or hashtag.`);
       }
       break;
     }
     if (status === 429) {
-      throw new Error("Instagram rate limit reached. Please wait a few minutes and try again.");
+      if (required) {
+        throw new Error("Instagram rate limit reached. Please wait a few minutes and try again.");
+      }
+      console.info(
+        `[Instagram] Optional pagination rate-limited at page ${page} for "${keyword}"; keeping ${allReels.length} first-page reels`
+      );
+      break;
     }
     if (status !== 200 || !data?.reels?.length) {
-      if (page === 1) {
+      if (required) {
         throw new Error(`No results found for "${keyword}". Try a different keyword or hashtag.`);
       }
       break;
@@ -2061,6 +2087,12 @@ export async function searchReelsByKeyword(
         allReels.push(reel);
         if (allReels.length >= maxResults) break;
       }
+    }
+
+    if (required && allReels.length === 0) {
+      throw new Error(
+        `Instagram keyword search returned no usable reels for "${keyword}"`
+      );
     }
 
     if (onProgress) {
