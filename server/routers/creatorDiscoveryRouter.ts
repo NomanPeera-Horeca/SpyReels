@@ -19,12 +19,31 @@ export async function runCreatorDiscoveryJob(
   businessDescription: string
 ): Promise<void> {
   const db = await getDb();
-  if (!db) return;
+  if (!db) {
+    throw new Error("Database not available");
+  }
+
+  const existing = await db
+    .select({ status: creatorDiscoveryJobs.status })
+    .from(creatorDiscoveryJobs)
+    .where(eq(creatorDiscoveryJobs.id, jobId))
+    .limit(1);
+  if (existing[0]?.status === "completed") {
+    return;
+  }
 
   try {
     await db
       .update(creatorDiscoveryJobs)
-      .set({ status: "running" })
+      .set({
+        status: "running",
+        routedNiche: null,
+        topicsTotal: 0,
+        topicsSearched: 0,
+        creatorsFound: 0,
+        partialJson: null,
+        errorMessage: null,
+      })
       .where(eq(creatorDiscoveryJobs.id, jobId));
 
     const { runCreatorDiscoveryPipeline } = await import(
@@ -111,18 +130,12 @@ export async function runCreatorDiscoveryJob(
       })),
     };
 
-    await db
-      .update(creatorDiscoveryJobs)
-      .set({
-        status: "completed",
-        routedNiche: mirroredResult.routedNiche || null,
-        creatorsFound: mirroredResult.rankedCreators.length,
-        partialJson: mirroredResult,
-      })
-      .where(eq(creatorDiscoveryJobs.id, jobId));
+    if (mirroredResult.rankedCreators.length === 0) {
+      throw new Error("Creator discovery completed with zero ranked creators");
+    }
 
-    try {
-      await db.insert(creatorDiscoverySearches).values({
+    await db.transaction(async (tx) => {
+      await tx.insert(creatorDiscoverySearches).values({
         userId,
         businessDescription,
         routedNiche: mirroredResult.routedNiche || null,
@@ -130,6 +143,19 @@ export async function runCreatorDiscoveryJob(
         resultJson: mirroredResult,
       });
 
+      await tx
+        .update(creatorDiscoveryJobs)
+        .set({
+          status: "completed",
+          routedNiche: mirroredResult.routedNiche || null,
+          creatorsFound: mirroredResult.rankedCreators.length,
+          partialJson: mirroredResult,
+          errorMessage: null,
+        })
+        .where(eq(creatorDiscoveryJobs.id, jobId));
+    });
+
+    try {
       const kept = await db
         .select({ id: creatorDiscoverySearches.id })
         .from(creatorDiscoverySearches)
@@ -148,7 +174,7 @@ export async function runCreatorDiscoveryJob(
       }
     } catch (err) {
       console.warn(
-        `[runCreatorDiscoveryJob ${jobId}] history save failed:`,
+        `[runCreatorDiscoveryJob ${jobId}] history cleanup failed:`,
         err
       );
     }
@@ -169,9 +195,9 @@ export async function runCreatorDiscoveryJob(
         updateErr
       );
     }
+    throw err;
   }
 }
-
 
 function userFacingCreatorDiscoveryJobError(err: unknown): string {
   const raw = err instanceof Error ? err.message : String(err);
