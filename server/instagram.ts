@@ -928,6 +928,39 @@ export async function fetchProfile(handle: string): Promise<ProfileInfo> {
   );
 }
 
+/**
+ * Single-attempt, deadline-bounded profile lookup for creator discovery.
+ * Search results do not include follower counts, so discovery enriches only
+ * a capped shortlist of unique handles. Unlike interactive profile lookup,
+ * this deliberately does not retry or fall back to extra provider calls.
+ */
+export async function fetchDiscoveryProfile(
+  handle: string,
+  timeoutMs: number
+): Promise<ProfileInfo> {
+  const cleanHandle = normalizeInstagramHandle(handle);
+  if (!cleanHandle) {
+    throw new Error("Creator discovery profile enrichment requires a handle");
+  }
+
+  const { status, data } = await scGet(
+    "/v1/instagram/profile",
+    { handle: cleanHandle },
+    { timeoutMs: Math.max(1, timeoutMs) }
+  );
+  const user = data?.data?.user;
+
+  if (status !== 200 || !user) {
+    const { vendorError, vendorMsg } = readVendorEnvelope(data);
+    const detail = `${vendorError} ${vendorMsg}`.trim();
+    throw new Error(
+      `Creator discovery profile enrichment failed for @${cleanHandle}: HTTP ${status}${detail ? ` (${detail})` : ""}`
+    );
+  }
+
+  return profileFromGraphUser(user, cleanHandle);
+}
+
 /* ------------------------------------------------------------------ */
 /*  User reels pagination                                              */
 /* ------------------------------------------------------------------ */
