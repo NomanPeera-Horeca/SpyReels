@@ -394,16 +394,23 @@ export async function runCreatorDiscoveryPipeline(
     ),
   });
 
+  if (topicsUsed.length === 0) {
+    throw new Error("Creator discovery generated no searchable topics");
+  }
+
   const allHits: InternalScoredHit[] = [];
   let topicsSearched = 0;
 
   for (const topic of topicsUsed) {
-    let results: SearchReelData[] = [];
+    let results: SearchReelData[];
     try {
       results = await searchReelsByKeyword(topic.phrase, MAX_RESULTS_PER_TOPIC);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      console.log(`[creatorPipeline] keyword "${topic.phrase}" failed: ${message}`);
+      throw new Error(
+        `Creator discovery provider failed for topic "${topic.phrase}": ${message}`,
+        { cause: err }
+      );
     }
 
     for (const raw of results) {
@@ -504,6 +511,10 @@ export async function runCreatorDiscoveryPipeline(
     rankedCreators,
     droppedCollisions
   );
+
+  if (rankedCreators.length === 0) {
+    throw new Error("Creator discovery completed with zero ranked creators");
+  }
 
   await safeProgress(onProgress, {
     phase: "peer_score",
