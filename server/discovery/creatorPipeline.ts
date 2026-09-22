@@ -17,6 +17,7 @@ const HAIKU_MODEL = "claude-haiku-4-5-20251001";
 const CREATOR_MIN_FOLLOWERS = 10_000;
 const TOPICS_TARGET = 24;
 const MAX_RESULTS_PER_TOPIC = 40;
+const CREATOR_PROVIDER_TIMEOUT_MS = 20_000;
 const PEER_SCORE_BATCH = 15;
 
 export interface CreatorDiscoveryPillar {
@@ -404,7 +405,12 @@ export async function runCreatorDiscoveryPipeline(
   for (const topic of topicsUsed) {
     let results: SearchReelData[];
     try {
-      results = await searchReelsByKeyword(topic.phrase, MAX_RESULTS_PER_TOPIC);
+      results = await searchReelsByKeyword(
+        topic.phrase,
+        MAX_RESULTS_PER_TOPIC,
+        undefined,
+        CREATOR_PROVIDER_TIMEOUT_MS
+      );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       throw new Error(
