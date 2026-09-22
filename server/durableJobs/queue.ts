@@ -54,6 +54,31 @@ export async function enqueueDurableJob(input: {
   return Number((result[0] as { insertId?: number }).insertId ?? 0);
 }
 
+export async function requeueDeadDurableJobByKey(input: {
+  jobType: PilotJobType;
+  idempotencyKey: string;
+}): Promise<boolean> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.execute(sql`
+    UPDATE durable_jobs
+    SET
+      status = 'queued',
+      attempt = 0,
+      availableAt = NOW(3),
+      leaseExpiresAt = NULL,
+      lockedBy = NULL,
+      lastError = NULL,
+      completedAt = NULL,
+      updatedAt = NOW(3)
+    WHERE
+      jobType = ${input.jobType}
+      AND idempotencyKey = ${input.idempotencyKey}
+      AND status IN ('failed', 'dead')
+  `);
+  return Number((result[0] as { affectedRows?: number }).affectedRows ?? 0) === 1;
+}
+
 export async function claimNextDurableJob(input: {
   workerId: string;
   leaseSeconds?: number;

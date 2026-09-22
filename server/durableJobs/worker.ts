@@ -5,6 +5,7 @@ import {
   completeDurableJob,
   failDurableJob,
   heartbeatDurableJob,
+  requeueDeadDurableJobByKey,
 } from "./queue";
 import { getDurableJobHandler } from "./handlers";
 import "./pilotHandlers";
@@ -43,6 +44,19 @@ async function processNext(): Promise<boolean> {
 
 async function run(): Promise<void> {
   console.info(`[durableJobs] worker started ${workerId}`);
+
+  const replayJobId = Number(
+    process.env.CREATOR_DISCOVERY_CANARY_REPLAY_JOB_ID ?? 0
+  );
+  if (Number.isSafeInteger(replayJobId) && replayJobId > 0) {
+    const replayed = await requeueDeadDurableJobByKey({
+      jobType: "creator_discovery",
+      idempotencyKey: `creator_discovery:${replayJobId}`,
+    });
+    console.info(
+      `[durableJobs] creator canary replay jobId=${replayJobId} replayed=${replayed}`
+    );
+  }
   while (!draining) {
     const worked = await processNext();
     if (!worked) await delay(pollMs);
