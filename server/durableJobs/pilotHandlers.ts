@@ -120,6 +120,14 @@ registerDurableJobHandler("carousel_generation", async (job: ClaimedJob) => {
     import("../carousel/generateCarouselRemake"),
   ]);
   const payload = job.payload as CarouselPayload;
+  const existingStatus = await readStatus(carouselRemakes, payload.remakeId);
+  if (!existingStatus) {
+    throw new Error(`Carousel ${payload.remakeId} disappeared`);
+  }
+  if (existingStatus === "completed") {
+    return;
+  }
+
   const telemetry = createGenerationTelemetryContext({
     entryPoint: payload.telemetryEntryPoint,
   });
