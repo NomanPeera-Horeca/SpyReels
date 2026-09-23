@@ -10,11 +10,16 @@ const FLAG_BY_JOB_TYPE: Record<PilotJobType, string> = {
   queue_safety_probe: "DURABLE_QUEUE_SAFETY_PROBE_ENABLED",
 };
 
-const CREATOR_DISCOVERY_ROLLOUT_PERCENT_ENV =
-  "DURABLE_QUEUE_CREATOR_DISCOVERY_ROLLOUT_PERCENT";
+const ROLLOUT_PERCENT_ENV_BY_JOB_TYPE: Partial<Record<PilotJobType, string>> = {
+  creator_discovery: "DURABLE_QUEUE_CREATOR_DISCOVERY_ROLLOUT_PERCENT",
+  carousel_generation: "DURABLE_QUEUE_CAROUSEL_ROLLOUT_PERCENT",
+};
 
-function creatorDiscoveryRolloutPercent(): number {
-  const raw = process.env[CREATOR_DISCOVERY_ROLLOUT_PERCENT_ENV]?.trim();
+function rolloutPercent(jobType: PilotJobType): number | null {
+  const envName = ROLLOUT_PERCENT_ENV_BY_JOB_TYPE[jobType];
+  if (!envName) return null;
+
+  const raw = process.env[envName]?.trim();
   if (!raw || !/^\d+$/.test(raw)) return 0;
 
   const percent = Number(raw);
@@ -42,11 +47,8 @@ export function isPilotQueueEnabled(
     return false;
   }
 
-  if (jobType !== "creator_discovery") {
-    return true;
-  }
-
-  const percent = creatorDiscoveryRolloutPercent();
+  const percent = rolloutPercent(jobType);
+  if (percent === null) return true;
   if (percent === 0 || !rolloutKey) return false;
   if (percent === 100) return true;
 
