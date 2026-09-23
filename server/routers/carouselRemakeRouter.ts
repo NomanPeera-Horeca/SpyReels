@@ -93,7 +93,7 @@ async function dispatchCarouselGeneration(
   telemetryEntryPoint: string
 ): Promise<void> {
   const { telemetry: _telemetry, ...durableOptions } = options;
-  await dispatchPilotJob({
+  const dispatchRoute = await dispatchPilotJob({
     jobType: "carousel_generation",
     idempotencyKey: `carousel_generation:${remakeId}`,
     rolloutKey: String(userId),
@@ -108,6 +108,7 @@ async function dispatchCarouselGeneration(
     onInlineError: (error) =>
       console.error(`Carousel generation ${remakeId} failed:`, error),
   });
+  console.info(`Carousel generation ${remakeId} routed ${dispatchRoute}`);
 }
 
 
