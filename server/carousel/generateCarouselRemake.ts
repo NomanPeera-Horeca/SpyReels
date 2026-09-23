@@ -963,18 +963,6 @@ export async function generateCarouselRemake(
   }
 
   try {
-    const existing = await db
-      .select({ status: carouselRemakes.status })
-      .from(carouselRemakes)
-      .where(eq(carouselRemakes.id, remakeId))
-      .limit(1);
-    if (!existing[0]) {
-      throw new Error(`Carousel remake ${remakeId} disappeared`);
-    }
-    if (existing[0].status === "completed") {
-      return;
-    }
-
     await db
       .update(carouselRemakes)
       .set({
