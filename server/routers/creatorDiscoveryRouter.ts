@@ -264,9 +264,10 @@ export const creatorDiscoveryRouter = router({
           });
         }
 
-        await dispatchPilotJob({
+        const dispatchRoute = await dispatchPilotJob({
           jobType: "creator_discovery",
           idempotencyKey: `creator_discovery:${jobId}`,
+          rolloutKey: String(ctx.user.id),
           payload: {
             jobId,
             userId: ctx.user.id,
@@ -281,6 +282,10 @@ export const creatorDiscoveryRouter = router({
           onInlineError: (error) =>
             console.error(`Creator discovery job ${jobId} failed:`, error),
         });
+
+        console.info(
+          `Creator discovery job ${jobId} routed ${dispatchRoute}`
+        );
 
         return { jobId };
       }),
