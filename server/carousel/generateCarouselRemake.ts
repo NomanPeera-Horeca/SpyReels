@@ -959,11 +959,19 @@ export async function generateCarouselRemake(
   let visionSourceStills: string[] = [];
   const db = await getDb();
   if (!db) {
-    console.error(`[carouselRemake] ${remakeId}: database unavailable`);
-    return;
+    throw new Error("Database not available");
   }
 
   try {
+    await db
+      .update(carouselRemakes)
+      .set({
+        status: "processing",
+        progressStage: null,
+        errorMessage: null,
+      })
+      .where(eq(carouselRemakes.id, remakeId));
+
     const template = CAROUSEL_TEMPLATES_BY_ID.get(templateId);
     if (!template) {
       const errorMessage = `Unknown carousel template: ${templateId}`;
