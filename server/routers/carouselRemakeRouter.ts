@@ -86,6 +86,7 @@ import {
 
 async function dispatchCarouselGeneration(
   remakeId: number,
+  userId: number,
   templateId: string,
   niche: string,
   options: NonNullable<Parameters<typeof generateCarouselRemake>[3]>,
@@ -95,6 +96,7 @@ async function dispatchCarouselGeneration(
   await dispatchPilotJob({
     jobType: "carousel_generation",
     idempotencyKey: `carousel_generation:${remakeId}`,
+    rolloutKey: String(userId),
     payload: {
       remakeId,
       templateId,
@@ -427,6 +429,7 @@ async function createContentToCarouselRemake(
 
   await dispatchCarouselGeneration(
     remakeId,
+    ctx.user.id,
     templateId,
     nicheLabel,
     {
@@ -519,6 +522,7 @@ export const carouselRemakeRouter = router({
 
       await dispatchCarouselGeneration(
         remakeId,
+        ctx.user.id,
         input.templateId,
         niche,
         {
@@ -1417,6 +1421,7 @@ export const carouselRemakeRouter = router({
 
       await dispatchCarouselGeneration(
         remakeId,
+        ctx.user.id,
         templateId,
         nicheLabel,
         {
