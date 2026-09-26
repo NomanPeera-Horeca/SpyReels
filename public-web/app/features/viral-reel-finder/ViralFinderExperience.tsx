@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { InstagramMark } from "../../../../shared/ui/PlatformMarks";
+import { resolvePublicAppOrigin } from "../../../lib/appOrigin";
 import { trackPublicWeb } from "../../../lib/trackPublicWeb";
 import interactionStyles from "./interaction.module.css";
 import styles from "./page.module.css";
@@ -69,12 +70,10 @@ function hookPreview(caption: string): string {
 }
 
 function appOrigin(): string {
-  const configured = process.env.NEXT_PUBLIC_SPYREELS_APP_ORIGIN?.trim();
-  if (configured) return configured.replace(/\/$/, "");
-  if (typeof window !== "undefined" && window.location.hostname === "spyreels.ai") {
-    return window.location.origin;
-  }
-  return "https://spyreels.ai";
+  return resolvePublicAppOrigin({
+    configured: process.env.NEXT_PUBLIC_SPYREELS_APP_ORIGIN,
+    hostname: typeof window !== "undefined" ? window.location.hostname : null,
+  });
 }
 
 function handoffToResearch(handle: string, source: "form" | "selected_reel") {

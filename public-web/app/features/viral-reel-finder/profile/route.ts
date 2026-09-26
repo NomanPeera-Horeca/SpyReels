@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { resolveServerAppOrigin } from "@/lib/appOrigin";
 
 export const dynamic = "force-dynamic";
 
@@ -13,11 +14,7 @@ function validHandle(handle: string): boolean {
 }
 
 function appOrigin(): string {
-  return (
-    process.env.SPYREELS_APP_ORIGIN ??
-    process.env.NEXT_PUBLIC_SPYREELS_APP_ORIGIN ??
-    "https://spyreels.ai"
-  ).replace(/\/$/, "");
+  return resolveServerAppOrigin();
 }
 
 function readTrpcData(payload: unknown): unknown {
