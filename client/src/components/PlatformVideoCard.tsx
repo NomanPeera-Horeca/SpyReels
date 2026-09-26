@@ -70,7 +70,13 @@ export function PlatformVideoCard({
       thumbnailUrl={video.thumbnailUrl}
       videoUrl={playableUrl}
       reelId={video.id}
-      mediaPlatform={config.platform === "tiktok" ? "tiktok" : "instagram"}
+      mediaPlatform={
+        config.platform === "tiktok"
+          ? "tiktok"
+          : config.platform === "youtube"
+            ? "youtube"
+            : "instagram"
+      }
       duration={video.durationSec}
       reelUrl={video.videoPageUrl}
       onMediaClick={onMediaClick}

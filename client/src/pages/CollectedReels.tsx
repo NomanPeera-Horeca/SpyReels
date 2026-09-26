@@ -1369,9 +1369,7 @@ export default function CollectedReels() {
                 onInlinePlayStop={() =>
                   setInlinePlayingId((cur) => (cur === reel.id ? null : cur))
                 }
-                mediaPlatform={
-                  collectedPlatform(reel) === "tiktok" ? "tiktok" : "instagram"
-                }
+                mediaPlatform={collectedPlatform(reel)}
                 mediaFallback={
                   <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-muted/40 p-4 text-center">
                     {isPending ? (

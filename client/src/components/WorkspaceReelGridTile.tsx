@@ -14,8 +14,11 @@ export type WorkspaceReelGridTileProps = {
   videoUrl?: string | null;
   shortcode?: string | null;
   reelId?: number;
-  /** Platform for inline URL refresh (Instagram shortcode vs TikTok video id). */
-  mediaPlatform?: "instagram" | "tiktok";
+  /**
+   * Inline playback platform. YouTube has no durable MP4 in Collected, so we
+   * open the original page instead of faking an Instagram refresh.
+   */
+  mediaPlatform?: "instagram" | "tiktok" | "youtube";
   engagementRate?: number;
   duration?: number | null;
   reelUrl?: string | null;
@@ -87,9 +90,29 @@ export function WorkspaceReelGridTile({
   const showEngagement =
     !quiet && engagementRate > 0 && !(highlightBanner && index === 0);
   const hasThumb = (thumbnailUrl ?? "").trim().length > 0;
-  const showInlinePlayer = interactiveMedia && inlinePlaying && hasThumb;
+  const isYouTube = mediaPlatform === "youtube";
+  const originalUrl = (reelUrl ?? "").trim();
+  /** YouTube Shorts are not mirrored as MP4; open the source page instead. */
+  const supportsInlineMp4 = !isYouTube;
+  const showInlinePlayer =
+    interactiveMedia && inlinePlaying && hasThumb && supportsInlineMp4;
+
+  const openOriginal = () => {
+    if (!originalUrl) return;
+    window.open(originalUrl, "_blank", "noopener,noreferrer");
+  };
 
   const handleMediaAreaClick = () => {
+    // YouTube Shorts are not mirrored as MP4. Never route them through
+    // Instagram/TikTok URL refresh — open the source page when we have it.
+    if (isYouTube) {
+      if (originalUrl) {
+        openOriginal();
+        return;
+      }
+      onMediaClick?.();
+      return;
+    }
     if (interactiveMedia) {
       if (!inlinePlaying) onInlinePlayRequest?.();
       return;
@@ -137,7 +160,8 @@ export function WorkspaceReelGridTile({
                 videoUrl={videoUrl}
                 shortcode={shortcode}
                 reelId={reelId}
-                platform={mediaPlatform}
+                platform={mediaPlatform === "tiktok" ? "tiktok" : "instagram"}
+                videoPageUrl={reelUrl}
                 autoStart
                 onPlayingChange={(playing) => {
                   if (!playing) onInlinePlayStop?.();
@@ -162,19 +186,27 @@ export function WorkspaceReelGridTile({
               className="pointer-events-none absolute bottom-2.5 left-2.5 z-20 grid h-[30px] w-[30px] place-items-center rounded-full border border-white/20 bg-black/55 text-white"
               aria-hidden
             >
-              <Play className="h-3 w-3 translate-x-px fill-current" />
+              {isYouTube ? (
+                <ExternalLink className="h-3 w-3" />
+              ) : (
+                <Play className="h-3 w-3 translate-x-px fill-current" />
+              )}
             </div>
           ) : (
             <div
               className={cn(
                 "absolute left-1/2 top-1/2 z-20 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/35 bg-black/55 text-white shadow-lg backdrop-blur transition-opacity duration-150",
-                interactiveMedia
+                interactiveMedia || isYouTube
                   ? "opacity-90 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100"
                   : "pointer-events-none opacity-75 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100"
               )}
-              aria-hidden={!interactiveMedia}
+              aria-hidden={!(interactiveMedia || isYouTube)}
             >
-              <Play className="h-5 w-5 translate-x-0.5 fill-current" />
+              {isYouTube ? (
+                <ExternalLink className="h-5 w-5" />
+              ) : (
+                <Play className="h-5 w-5 translate-x-0.5 fill-current" />
+              )}
             </div>
           )
         ) : null}
