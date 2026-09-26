@@ -2,6 +2,8 @@ import type { Express, NextFunction, Request, Response } from "express";
 import http from "node:http";
 import https from "node:https";
 import { COOKIE_NAME } from "../../shared/const";
+import { parse as parseCookieHeader } from "cookie";
+import { sdk } from "./sdk";
 
 export const VIRAL_REEL_FINDER_PILOT_PATH = "/features/viral-reel-finder";
 export const VIRAL_REEL_FINDER_DEMO_PATH = "/features/viral-reel-finder/demo";
@@ -191,16 +193,25 @@ export function registerPublicWebPilotProxy(
     `[PublicWeb] Pilot routing enabled for ${VIRAL_REEL_FINDER_PILOT_PATH}${config.homepageEnabled ? " and /" : ""} -> ${config.origin}`
   );
 
-  app.use((req, res, next) => {
+  app.use(async (req, res, next) => {
     if (req.path === "/" && (req.query.signup === "1" || req.query.login === "1")) {
       next();
       return;
     }
-    // Signed-in visitors still own / in the product SPA. Cookie presence is
-    // only a routing hint; the SPA validates the session as before.
-    if (req.path === "/" && req.headers.cookie?.split(";").some((part) => part.trim().startsWith(`${COOKIE_NAME}=`))) {
-      next();
-      return;
+    // A cookie by itself does not prove a visitor is signed in. Route only a
+    // verified session to the product; stale cookies still see the public page.
+    if (req.path === "/" && req.headers.cookie) {
+      const token = parseCookieHeader(req.headers.cookie)[COOKIE_NAME];
+      if (token) {
+        try {
+          if (await sdk.verifySession(token)) {
+            next();
+            return;
+          }
+        } catch (error) {
+          console.warn("[PublicWeb] Session check failed; serving public homepage:", error);
+        }
+      }
     }
     if (!isPublicWebPilotRequest(req.path, req.method, config)) {
       next();

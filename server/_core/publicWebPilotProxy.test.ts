@@ -1,6 +1,7 @@
 import express from "express";
 import http from "node:http";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { sdk } from "./sdk";
 import {
   VIRAL_REEL_FINDER_DEMO_PATH,
   VIRAL_REEL_FINDER_PILOT_PATH,
@@ -13,6 +14,7 @@ import {
 const servers: http.Server[] = [];
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(
     servers.splice(0).map(
       (server) =>
@@ -122,6 +124,11 @@ describe("publicWebPilotProxy", () => {
     expect(await (await fetch(`http://127.0.0.1:${proxyPort}/`)).text()).toBe("next-home");
     expect(await (await fetch(`http://127.0.0.1:${proxyPort}/?signup=1`)).text()).toBe("legacy-home");
     expect(await (await fetch(`http://127.0.0.1:${proxyPort}/?login=1`)).text()).toBe("legacy-home");
+    const verify = vi.spyOn(sdk, "verifySession").mockResolvedValue(null);
+    expect(await (await fetch(`http://127.0.0.1:${proxyPort}/`, {
+      headers: { cookie: "app_session_id=stale-session" },
+    })).text()).toBe("next-home");
+    verify.mockResolvedValue({ openId: "user-1", appId: "spyreels", name: "User" });
     expect(await (await fetch(`http://127.0.0.1:${proxyPort}/`, {
       headers: { cookie: "app_session_id=existing-session" },
     })).text()).toBe("legacy-home");
