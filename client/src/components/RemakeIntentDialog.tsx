@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/dialog";
 import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
 import { ReelGridThumbnail } from "@/components/ReelGridThumbnail";
+import { ReelSourcePlatformMark } from "@/components/ReelSourcePlatformMark";
 import { YouTubeInlineEmbed } from "@/components/YouTubeInlineEmbed";
 import {
   clearPendingRemakeIntentMedia,
@@ -202,6 +203,17 @@ export function RemakeIntentDialog({
                     </div>
                   </div>
                 )}
+                {hasSourceMedia ? (
+                  <ReelSourcePlatformMark
+                    platform={
+                      platform === "tiktok"
+                        ? "tiktok"
+                        : platform === "youtube"
+                          ? "youtube"
+                          : "instagram"
+                    }
+                  />
+                ) : null}
               </div>
             </div>
 

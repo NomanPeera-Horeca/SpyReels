@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Copy, Maximize2, Film } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
+import { ReelSourcePlatformMark } from "@/components/ReelSourcePlatformMark";
 import { SourceReelHashtagChips } from "@/components/SourceReelHashtagChips";
 import { formatNumber, formatPostedTime } from "@/components/InlineWorkflow";
 import { copyToClipboard } from "@/lib/copyToClipboard";
@@ -91,6 +92,7 @@ export function SourceReelCard({
             className="absolute inset-0 h-full w-full"
             size="compact"
           />
+          <ReelSourcePlatformMark platform="instagram" />
         </div>
       ) : (
         <div className="flex items-center justify-center rounded-md border border-dashed border-border bg-muted/30 py-6">

@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { ExternalLink, Play } from "lucide-react";
 import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
 import { ReelGridThumbnail } from "@/components/ReelGridThumbnail";
+import { ReelSourcePlatformMark } from "@/components/ReelSourcePlatformMark";
 import { YouTubeInlineEmbed } from "@/components/YouTubeInlineEmbed";
 import { cn } from "@/lib/utils";
 import { formatWorkspaceReelDuration } from "@/lib/workspaceReelGridLayout";
@@ -203,9 +204,14 @@ export function WorkspaceReelGridTile({
           )
         ) : null}
 
+        {/* Keep source branding visible while playing (Shorts-style). */}
+        {(hasThumb || showInlinePlayer) && !mediaLabel ? (
+          <ReelSourcePlatformMark platform={mediaPlatform} />
+        ) : null}
+
         {!quiet ? (
           <>
-            <div className="absolute left-2 top-2 z-10 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-white">
+            <div className="absolute left-2 top-10 z-10 rounded bg-black/70 px-1.5 py-0.5 font-mono text-[10px] text-white">
               #{index + 1}
             </div>
 

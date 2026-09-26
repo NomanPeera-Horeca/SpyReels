@@ -1,4 +1,5 @@
 import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
+import { ReelSourcePlatformMark } from "@/components/ReelSourcePlatformMark";
 import { cn } from "@/lib/utils";
 import {
   formatPostedAge,
@@ -12,8 +13,8 @@ type ViralPostPreviewProps = {
   className?: string;
   compact?: boolean;
   /**
-   * Quiet media-first mode: no hook overlay, trend chips, or platform badges.
-   * Used by the mature Viral Posts cards and details drawer.
+   * Quiet media-first mode: no hook overlay or trend chips.
+   * Source platform mark stays on the media while idle and playing.
    */
   quiet?: boolean;
   /** Vertical short-form frame for the details drawer. */
@@ -24,12 +25,6 @@ function platformLabel(platform: ViralPost["platform"]): string {
   if (platform === "tiktok") return "TikTok";
   if (platform === "youtube") return "YouTube";
   return "Instagram";
-}
-
-function platformGlyph(platform: ViralPost["platform"]): string {
-  if (platform === "tiktok") return "♪";
-  if (platform === "youtube") return "▶";
-  return "◎";
 }
 
 function defaultHook(post: ViralPost): string {
@@ -51,6 +46,12 @@ export function ViralPostPreview({
   const age = formatPostedAge(post.publishedAt, post.ageHours);
   const hook = defaultHook(post);
   const isYouTube = post.platform === "youtube";
+  const sourcePlatform =
+    post.platform === "tiktok"
+      ? ("tiktok" as const)
+      : post.platform === "youtube"
+        ? ("youtube" as const)
+        : ("instagram" as const);
   const mediaPlatform =
     post.platform === "tiktok" ? ("tiktok" as const) : ("instagram" as const);
 
@@ -122,17 +123,15 @@ export function ViralPostPreview({
         />
       )}
 
+      {/* Shorts-style: keep source mark visible while the media plays. */}
+      <ReelSourcePlatformMark platform={sourcePlatform} className="z-[3]" />
+
       {!quiet ? (
         <>
           <div
             className="pointer-events-none absolute inset-0 z-[1] bg-gradient-to-t from-black/80 via-black/25 to-black/10"
             aria-hidden
           />
-
-          <div className="pointer-events-none absolute left-2.5 top-2.5 z-[3] inline-flex items-center gap-1 rounded-full border border-white/15 bg-black/45 px-2 py-1 text-[10px] font-bold text-white backdrop-blur-sm">
-            <span aria-hidden>{platformGlyph(post.platform)}</span>
-            {platformLabel(post.platform)}
-          </div>
 
           {post.trendStatus !== "unknown" ? (
             <div

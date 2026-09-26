@@ -7,6 +7,7 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
+import { ReelSourcePlatformMark } from "@/components/ReelSourcePlatformMark";
 import { SourceReelHashtagChips } from "@/components/SourceReelHashtagChips";
 import { formatNumber, formatPostedTime } from "@/components/InlineWorkflow";
 import { copyToClipboard } from "@/lib/copyToClipboard";
@@ -79,6 +80,7 @@ export function SourceReelModal({
                   shortcode={sourceReel.shortcode}
                   className="absolute inset-0 h-full w-full"
                 />
+                <ReelSourcePlatformMark platform="instagram" />
               </div>
             ) : (
               <div className="flex h-48 w-full items-center justify-center text-sm text-muted-foreground lg:h-full lg:min-h-[280px]">
