@@ -12,6 +12,7 @@ const TESTIMONIALS = [
     name: "Maya Chen",
     meta: "@mayamakes",
     color: "#7c3aed",
+    avatarSrc: "/marketing/17d74cf5b9b4.webp",
   },
   {
     quote:
@@ -19,6 +20,7 @@ const TESTIMONIALS = [
     name: "Priya Sharma",
     meta: "@priyacooks",
     color: "#0d9488",
+    avatarSrc: "/marketing/f4f2be43966c.webp",
   },
   {
     quote:
@@ -26,6 +28,7 @@ const TESTIMONIALS = [
     name: "Rafael Mendes",
     meta: "Senior Strategist, Pivot Co.",
     color: "#2563eb",
+    avatarSrc: "/marketing/ceff676b111f.webp",
   },
   {
     quote:
@@ -33,6 +36,7 @@ const TESTIMONIALS = [
     name: "Jordan Reyes",
     meta: "Head of Social, Northline",
     color: "#db2777",
+    avatarSrc: "/marketing/3e709ab99b48.webp",
   },
   {
     quote:
@@ -40,6 +44,7 @@ const TESTIMONIALS = [
     name: "Nina Flores",
     meta: "@ninacuts",
     color: "#ea580c",
+    avatarSrc: "/marketing/e1740faf9a91.webp",
   },
   {
     quote:
@@ -47,8 +52,11 @@ const TESTIMONIALS = [
     name: "Sofia Lane",
     meta: "@sofiamoves",
     color: "#4f46e5",
+    avatarSrc: "/marketing/10be69f1cbcb.webp",
   },
 ] as const;
+
+const TESTIMONIALS_LOOP = [...TESTIMONIALS, ...TESTIMONIALS];
 
 function googleAuthUrl(returnTo?: string): string {
   const payload = {
@@ -369,16 +377,23 @@ export function HomepageAuthDialog({
           </h3>
           <div className={styles.proofScroll}>
             <div className={styles.proofGrid}>
-              {TESTIMONIALS.map((item) => (
-                <article className={styles.card} key={`${item.name}-${item.meta}`}>
+              {TESTIMONIALS_LOOP.map((item, index) => (
+                <article className={styles.card} key={`${item.name}-${item.meta}-${index}`}>
                   <div className={styles.stars} aria-label="5 stars">
                     ★★★★★
                   </div>
                   <p className={styles.quote}>{item.quote}</p>
                   <div className={styles.person}>
-                    <span className={styles.avatar} style={{ background: item.color }} aria-hidden>
-                      {item.name.charAt(0)}
-                    </span>
+                    <img
+                      className={styles.avatarImg}
+                      src={item.avatarSrc}
+                      alt=""
+                      width={32}
+                      height={32}
+                      loading="lazy"
+                      decoding="async"
+                      style={{ background: item.color }}
+                    />
                     <div>
                       <strong>{item.name}</strong>
                       <small>{item.meta}</small>

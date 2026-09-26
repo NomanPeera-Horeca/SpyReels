@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 
 type AuthMode = "login" | "signup" | "forgot";
 
-/** Placeholder social proof (swap for real quotes later). Matches signup mockup. */
+/** Placeholder social proof (swap for real quotes later). Matches signup mockup + homepage faces. */
 const AUTH_TESTIMONIALS = [
   {
     quote:
@@ -20,6 +20,7 @@ const AUTH_TESTIMONIALS = [
     name: "Maya Chen",
     meta: "@mayamakes",
     color: "#7c3aed",
+    avatarSrc: "/marketing/17d74cf5b9b4.webp",
   },
   {
     quote:
@@ -28,6 +29,7 @@ const AUTH_TESTIMONIALS = [
     name: "Priya Sharma",
     meta: "@priyacooks",
     color: "#0d9488",
+    avatarSrc: "/marketing/f4f2be43966c.webp",
   },
   {
     quote:
@@ -36,6 +38,7 @@ const AUTH_TESTIMONIALS = [
     name: "Rafael Mendes",
     meta: "Senior Strategist, Pivot Co.",
     color: "#2563eb",
+    avatarSrc: "/marketing/ceff676b111f.webp",
   },
   {
     quote:
@@ -44,6 +47,7 @@ const AUTH_TESTIMONIALS = [
     name: "Jordan Reyes",
     meta: "Head of Social, Northline",
     color: "#db2777",
+    avatarSrc: "/marketing/3e709ab99b48.webp",
   },
   {
     quote:
@@ -52,6 +56,7 @@ const AUTH_TESTIMONIALS = [
     name: "Nina Flores",
     meta: "@ninacuts",
     color: "#ea580c",
+    avatarSrc: "/marketing/e1740faf9a91.webp",
   },
   {
     quote:
@@ -60,6 +65,7 @@ const AUTH_TESTIMONIALS = [
     name: "Sofia Lane",
     meta: "@sofiamoves",
     color: "#4f46e5",
+    avatarSrc: "/marketing/10be69f1cbcb.webp",
   },
   {
     quote:
@@ -68,6 +74,7 @@ const AUTH_TESTIMONIALS = [
     name: "Kiara Moon",
     meta: "@kiarablends",
     color: "#0891b2",
+    avatarSrc: "/marketing/cf5eb132b440.jpg",
   },
   {
     quote:
@@ -76,6 +83,7 @@ const AUTH_TESTIMONIALS = [
     name: "Cam Brooks",
     meta: "Strategy Lead, Current",
     color: "#7c3aed",
+    avatarSrc: "/marketing/44677859a117.jpg",
   },
   {
     quote:
@@ -84,6 +92,7 @@ const AUTH_TESTIMONIALS = [
     name: "Dev Patel",
     meta: "@devteaches",
     color: "#16a34a",
+    avatarSrc: "/marketing/2d6477ed3f11.jpg",
   },
   {
     quote:
@@ -92,6 +101,7 @@ const AUTH_TESTIMONIALS = [
     name: "Omar Haddad",
     meta: "Performance Lead, Lantern",
     color: "#9333ea",
+    avatarSrc: "/marketing/cc92da159730.jpg",
   },
 ] as const;
 
@@ -461,13 +471,16 @@ export function AuthDialog({
                       {renderQuote(t.quote, t.highlight)}
                     </p>
                     <div className="flex items-center gap-2.5">
-                      <div
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+                      <img
+                        src={t.avatarSrc}
+                        alt=""
+                        width={32}
+                        height={32}
+                        className="h-8 w-8 shrink-0 rounded-full object-cover"
                         style={{ background: t.color }}
-                        aria-hidden
-                      >
-                        {t.name.charAt(0)}
-                      </div>
+                        loading="lazy"
+                        decoding="async"
+                      />
                       <div className="min-w-0">
                         <p className="truncate text-[13px] font-semibold text-zinc-900">
                           {t.name}

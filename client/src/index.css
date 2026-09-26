@@ -231,10 +231,7 @@
 
   .auth-testimonial-masonry {
     animation: auth-testimonial-drift 48s linear infinite;
-  }
-
-  .auth-testimonial-masonry:hover {
-    animation-play-state: paused;
+    will-change: transform;
   }
 
   @media (prefers-reduced-motion: reduce) {
