@@ -1,6 +1,7 @@
 import { coachScriptDownReasonLabel } from "@shared/coachScriptFeedback";
 import type { CoachScriptJudgeMeta } from "@shared/coachScriptSections";
 import { countWords, scriptHookPreview, truncateForAnalytics } from "@shared/scriptGenerationAnalytics";
+import { appOrigin } from "@shared/spyreelsOrigins";
 
 export type CoachScriptQualityRow = {
   id: number;
@@ -135,7 +136,7 @@ export function buildCoachScriptQualityHtml(args: {
   const summary = buildCoachScriptQualitySummary(args.rows);
   const sections = args.rows
     .map((row) => {
-      const studioUrl = `https://spyreels.ai/studio?script=${row.id}`;
+      const studioUrl = `${appOrigin()}/studio?script=${row.id}`;
       const judge = row.judge;
       const judgeLine =
         typeof judge.overallScore === "number"
@@ -221,7 +222,7 @@ export function buildCoachScriptQualityCsv(rows: CoachScriptQualityRow[]): strin
       row.feedbackRating ?? "",
       row.feedbackReason ? coachScriptDownReasonLabel(row.feedbackReason) : "",
       row.feedbackNote ?? "",
-      `https://spyreels.ai/studio?script=${row.id}`,
+      `${appOrigin()}/studio?script=${row.id}`,
     ]
       .map(escapeCsv)
       .join(",");

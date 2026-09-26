@@ -52,6 +52,7 @@ const PRIVATE_PATH_PREFIXES = [
   "/broll-library",
   "/video-broll-upload-test",
   "/my-virality-report",
+  "/viral-posts",
   "/more",
   "/workspace",
   "/invitations",

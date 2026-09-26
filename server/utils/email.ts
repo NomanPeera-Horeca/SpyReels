@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { appOrigin } from "@shared/spyreelsOrigins";
 
 let resendClient: Resend | null = null;
 
@@ -113,7 +114,7 @@ ${hooksBlock}
 
 These are AI-generated based on viral Reels patterns we've analyzed. If you want to save these or generate more, you can do that on your dashboard:
 
-https://spyreels.ai/dashboard
+${appOrigin()}/dashboard
 
 Cheers,
 Noah
@@ -130,13 +131,14 @@ SpyReels.ai`;
     })
     .join("");
 
+  const dashboardUrl = `${appOrigin()}/dashboard`;
   const html = `<div style="font-family: Arial, Helvetica, sans-serif; font-size: 15px; line-height: 1.5; color: #111;">
 <p style="margin: 0 0 16px;">Hi,</p>
 <p style="margin: 0 0 16px;">Here are the viral hook ideas from your spyreels.ai search.</p>
 <p style="margin: 0 0 16px; color: #555;">Generated for ${escapeHtml(targetAudience)}</p>
 ${hooksHtml}
 <p style="margin: 16px 0;">These are AI-generated based on viral Reels patterns we've analyzed. If you want to save these or generate more, you can do that on your dashboard:</p>
-<p style="margin: 0 0 16px;"><a href="https://spyreels.ai/dashboard" style="color: #111;">https://spyreels.ai/dashboard</a></p>
+<p style="margin: 0 0 16px;"><a href="${dashboardUrl}" style="color: #111;">${dashboardUrl}</a></p>
 <p style="margin: 0;">Cheers,<br>Noah<br>SpyReels.ai</p>
 </div>`;
 
@@ -310,7 +312,7 @@ export async function sendCoachScriptFeedbackEmail(args: {
   const displayName = args.userName?.trim() || "SpyReels user";
   const replyTo = args.userEmail?.trim() || FEATURE_REQUEST_INBOX;
   const ratingLabel = args.rating === "up" ? "Thumbs up" : "Thumbs down";
-  const studioUrl = `https://spyreels.ai/studio?script=${args.scriptId}`;
+  const studioUrl = `${appOrigin()}/studio?script=${args.scriptId}`;
 
   const text = [
     `AI Coach script feedback: ${ratingLabel}`,

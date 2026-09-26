@@ -1,7 +1,8 @@
 import styles from "./PublicSiteChrome.module.css";
+import { resolvePublicSiteOrigin } from "../lib/appOrigin";
 
-const APP_ORIGIN = "https://spyreels.ai";
-const LOGO_URL = `${APP_ORIGIN}/brand/spyreels-logo.png`;
+const SITE_ORIGIN = resolvePublicSiteOrigin();
+const LOGO_URL = `${SITE_ORIGIN}/brand/spyreels-logo.png`;
 
 const COLUMNS = [
   [
@@ -62,7 +63,7 @@ export function PublicSiteFooter() {
       <div className={styles.footerInner}>
         <div className={styles.footerGrid}>
           <div className={styles.footerBrandBlock}>
-            <a className={styles.footerBrand} href={`${APP_ORIGIN}/`}>
+            <a className={styles.footerBrand} href={`${SITE_ORIGIN}/`}>
               <img className={styles.logo} src={LOGO_URL} alt="SpyReels" width={28} height={28} />
               <span>SpyReels</span>
             </a>
@@ -75,7 +76,7 @@ export function PublicSiteFooter() {
             <div className={styles.footerColumn} key={title}>
               <h3>{title}</h3>
               {links.map(([label, path]) => (
-                <a href={`${APP_ORIGIN}${path}`} key={path}>{label}</a>
+                <a href={`${SITE_ORIGIN}${path}`} key={path}>{label}</a>
               ))}
             </div>
           ))}

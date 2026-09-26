@@ -6,6 +6,12 @@ import {
   legacyHomepageAuthMode,
   publicAuthHandoffPath,
 } from "../../shared/publicAuthHandoff";
+import {
+  appAbsoluteUrl,
+  isAppHostSplitEnabled,
+  isSpyReelsAppHost,
+  normalizeRequestHost,
+} from "../../shared/spyreelsOrigins";
 import { parse as parseCookieHeader } from "cookie";
 import { sdk } from "./sdk";
 
@@ -213,6 +219,17 @@ export function registerPublicWebPilotProxy(
   }
 
   app.use(async (req, res, next) => {
+    const requestHost = normalizeRequestHost(
+      Array.isArray(req.headers["x-forwarded-host"])
+        ? req.headers["x-forwarded-host"][0]
+        : req.headers["x-forwarded-host"] || req.headers.host || ""
+    );
+    // Product host never serves Next marketing HTML.
+    if (isAppHostSplitEnabled() && isSpyReelsAppHost(requestHost)) {
+      next();
+      return;
+    }
+
     // Legacy ChatGPT homepage CTAs used /?login=1 and /?signup=1. Redirect onto
     // the Next homepage auth query so AuthDialog opens over the new landing,
     // instead of the retired Vite shell or SPA /pricing chrome.
@@ -230,6 +247,10 @@ export function registerPublicWebPilotProxy(
       if (token) {
         try {
           if (await sdk.authenticateRequest(req)) {
+            if (isAppHostSplitEnabled()) {
+              res.redirect(302, appAbsoluteUrl("/research"));
+              return;
+            }
             next();
             return;
           }

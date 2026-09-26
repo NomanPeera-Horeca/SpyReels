@@ -1,17 +1,22 @@
 import { publicAuthHandoffPath } from "../../shared/publicAuthHandoff";
+import {
+  resolvePublicAppOrigin,
+  resolvePublicSiteOrigin,
+} from "../lib/appOrigin";
 import styles from "./PublicSiteChrome.module.css";
 
-const APP_ORIGIN = "https://spyreels.ai";
-const LOGO_URL = `${APP_ORIGIN}/brand/spyreels-logo.png`;
+const SITE_ORIGIN = resolvePublicSiteOrigin();
+const APP_ORIGIN = resolvePublicAppOrigin();
+const LOGO_URL = `${SITE_ORIGIN}/brand/spyreels-logo.png`;
 
 const NAV_LINKS = [
-  ["Features", `${APP_ORIGIN}/#features`],
-  ["Free Tools", `${APP_ORIGIN}/free-tools`],
-  ["How It Works", `${APP_ORIGIN}/#how-it-works`],
-  ["Pricing", `${APP_ORIGIN}/pricing#plans`],
-  ["FAQ", `${APP_ORIGIN}/#faq`],
-  ["Blog", `${APP_ORIGIN}/blog`],
-  ["Earn 20%", `${APP_ORIGIN}/affiliate`],
+  ["Features", `${SITE_ORIGIN}/#features`],
+  ["Free Tools", `${SITE_ORIGIN}/free-tools`],
+  ["How It Works", `${SITE_ORIGIN}/#how-it-works`],
+  ["Pricing", `${SITE_ORIGIN}/pricing#plans`],
+  ["FAQ", `${SITE_ORIGIN}/#faq`],
+  ["Blog", `${SITE_ORIGIN}/blog`],
+  ["Earn 20%", `${SITE_ORIGIN}/affiliate`],
 ] as const;
 
 const LOGIN_URL = `${APP_ORIGIN}${publicAuthHandoffPath("login")}`;
@@ -21,7 +26,7 @@ export function PublicSiteHeader() {
   return (
     <header className={styles.header}>
       <div className={styles.headerInner}>
-        <a className={styles.brand} href={`${APP_ORIGIN}/`}>
+        <a className={styles.brand} href={`${SITE_ORIGIN}/`}>
           <img className={styles.logo} src={LOGO_URL} alt="SpyReels" width={36} height={36} />
           <span>SpyReels</span>
         </a>

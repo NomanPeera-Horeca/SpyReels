@@ -1,4 +1,8 @@
 import type { CookieOptions, Request } from "express";
+import {
+  isSpyReelsProductionHost,
+  normalizeRequestHost,
+} from "../../shared/spyreelsOrigins";
 
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
 
@@ -21,30 +25,38 @@ function isSecureRequest(req: Request) {
   return protoList.some(proto => proto.trim().toLowerCase() === "https");
 }
 
+function requestHostname(req: Request): string {
+  const raw = (
+    req.headers["x-forwarded-host"] ||
+    req.headers.host ||
+    req.hostname ||
+    ""
+  )
+    .toString()
+    .split(",")[0]
+    ?.trim()
+    .toLowerCase();
+  return normalizeRequestHost(raw);
+}
+
 export function getSessionCookieOptions(
   req: Request
 ): Pick<CookieOptions, "domain" | "httpOnly" | "path" | "sameSite" | "secure"> {
-  // const hostname = req.hostname;
-  // const shouldSetDomain =
-  //   hostname &&
-  //   !LOCAL_HOSTS.has(hostname) &&
-  //   !isIpAddress(hostname) &&
-  //   hostname !== "127.0.0.1" &&
-  //   hostname !== "::1";
+  const hostname = requestHostname(req);
+  const shouldShareParentDomain =
+    Boolean(hostname) &&
+    !LOCAL_HOSTS.has(hostname) &&
+    !isIpAddress(hostname) &&
+    isSpyReelsProductionHost(hostname);
 
-  // const domain =
-  //   shouldSetDomain && !hostname.startsWith(".")
-  //     ? `.${hostname}`
-  //     : shouldSetDomain
-  //       ? hostname
-  //       : undefined;
-
+  // Parent domain so apex marketing and app.spyreels.ai share the session.
   // SameSite=Lax blocks cross-site (CSRF) requests from sending the cookie on
   // state-changing POSTs, while still allowing same-site navigation (OAuth
   // callbacks are top-level navigations, which Lax permits). The Chrome
   // extension authenticates with a Bearer token, not this cookie, so nothing
   // in this app relies on cross-site cookie delivery.
   return {
+    domain: shouldShareParentDomain ? ".spyreels.ai" : undefined,
     httpOnly: true,
     path: "/",
     sameSite: "lax",

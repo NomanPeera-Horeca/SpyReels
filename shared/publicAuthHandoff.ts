@@ -1,9 +1,10 @@
 /**
- * Canonical auth handoff for public marketing CTAs on the Next homepage.
+ * Canonical auth handoff for public marketing CTAs.
  *
- * Keep users on `/` (public-web Next) and open auth via `?auth=login|signup`.
- * Do not send them to SPA marketing shells like /pricing behind the dialog.
- * Do not use /?login=1 or /?signup=1 (legacy flags that used to dump into Vite).
+ * Relative path is `/?auth=login|signup&returnTo=…`.
+ * When SPYREELS_APP_HOST_SPLIT is on, callers should prefix with the product
+ * origin (https://app.spyreels.ai) so OAuth and session stay on the app host.
+ * Apex Express also 302s `/?auth=` to the app host as a safety net.
  */
 
 export const PUBLIC_AUTH_HANDOFF_PATH = "/";

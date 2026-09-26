@@ -1,0 +1,140 @@
+import { isPrivateAppPath, normalizePublicPathname } from "./publicPageMeta";
+
+/**
+ * Site (marketing) vs app (product) origins for the SpyReels host split.
+ *
+ * When SPYREELS_APP_HOST_SPLIT=true:
+ *   - Marketing: https://spyreels.ai
+ *   - Product + OAuth: https://app.spyreels.ai
+ *
+ * When the flag is off (default), both stay on apex for backward compatibility.
+ */
+
+export const SPYREELS_SITE_ORIGIN = "https://spyreels.ai";
+export const SPYREELS_APP_HOST = "app.spyreels.ai";
+export const SPYREELS_APP_ORIGIN_DEFAULT = `https://${SPYREELS_APP_HOST}`;
+
+export function isAppHostSplitEnabled(
+  env: NodeJS.ProcessEnv = process.env
+): boolean {
+  const raw = env.SPYREELS_APP_HOST_SPLIT?.trim().toLowerCase();
+  return raw === "1" || raw === "true" || raw === "yes";
+}
+
+function stripTrailingSlash(url: string): string {
+  return url.replace(/\/$/, "");
+}
+
+function hostnameOf(raw: string | null | undefined): string | null {
+  if (!raw?.trim()) return null;
+  try {
+    const url = new URL(raw.includes("://") ? raw : `https://${raw}`);
+    return url.hostname.replace(/^www\./, "").toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+export function normalizeRequestHost(rawHost: string | null | undefined): string {
+  if (!rawHost) return "";
+  return (
+    rawHost
+      .toString()
+      .split(",")[0]
+      ?.trim()
+      .toLowerCase()
+      .replace(/:\d+$/, "")
+      .replace(/^www\./, "") ?? ""
+  );
+}
+
+export function isSpyReelsApexHost(host: string): boolean {
+  return normalizeRequestHost(host) === "spyreels.ai";
+}
+
+export function isSpyReelsAppHost(host: string): boolean {
+  return normalizeRequestHost(host) === SPYREELS_APP_HOST;
+}
+
+export function isSpyReelsProductionHost(host: string): boolean {
+  const h = normalizeRequestHost(host);
+  return h === "spyreels.ai" || h === SPYREELS_APP_HOST;
+}
+
+/** Marketing / SEO canonical origin (always apex in production). */
+export function siteOrigin(env: NodeJS.ProcessEnv = process.env): string {
+  const configured = env.SPYREELS_SITE_URL?.trim();
+  if (configured) {
+    const host = hostnameOf(configured);
+    if (host === "spyreels.ai" || host === "www.spyreels.ai") {
+      return SPYREELS_SITE_ORIGIN;
+    }
+    return stripTrailingSlash(
+      configured.includes("://") ? configured : `https://${configured}`
+    );
+  }
+  return SPYREELS_SITE_ORIGIN;
+}
+
+/**
+ * Product / OAuth origin.
+ * Split on → app.spyreels.ai (or SPYREELS_APP_ORIGIN).
+ * Split off → apex (legacy single-host).
+ */
+export function appOrigin(env: NodeJS.ProcessEnv = process.env): string {
+  if (!isAppHostSplitEnabled(env)) {
+    const oauth = env.OAUTH_SERVER_URL?.trim();
+    if (oauth) return stripTrailingSlash(oauth);
+    return siteOrigin(env);
+  }
+
+  const configured = env.SPYREELS_APP_ORIGIN?.trim();
+  if (configured) {
+    const host = hostnameOf(configured);
+    if (host === SPYREELS_APP_HOST || host === "spyreels.ai") {
+      return SPYREELS_APP_ORIGIN_DEFAULT;
+    }
+    return stripTrailingSlash(
+      configured.includes("://") ? configured : `https://${configured}`
+    );
+  }
+
+  return SPYREELS_APP_ORIGIN_DEFAULT;
+}
+
+/** Absolute URL on the product host. */
+export function appAbsoluteUrl(
+  pathAndQuery: string,
+  env: NodeJS.ProcessEnv = process.env
+): string {
+  const path =
+    pathAndQuery.startsWith("/") || pathAndQuery === ""
+      ? pathAndQuery || "/"
+      : `/${pathAndQuery}`;
+  return `${appOrigin(env)}${path}`;
+}
+
+/**
+ * Paths that must run on the product host when the split is enabled.
+ * Includes private app routes, /api, and /?auth= handoffs.
+ */
+export function shouldRedirectApexPathToApp(
+  pathname: string,
+  search: string = ""
+): boolean {
+  const normalized = normalizePublicPathname(pathname);
+
+  if (normalized === "/") {
+    const params = new URLSearchParams(
+      search.startsWith("?") ? search.slice(1) : search
+    );
+    const auth = params.get("auth");
+    return auth === "login" || auth === "signup" || auth === "forgot";
+  }
+
+  if (normalized === "/viral-posts" || normalized.startsWith("/viral-posts/")) {
+    return true;
+  }
+
+  return isPrivateAppPath(normalized);
+}

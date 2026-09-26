@@ -93,6 +93,19 @@ export function csrfOriginGuard(req: Request, res: Response, next: NextFunction)
   const canonicalHost = canonical ? hostFromUrl(canonical) : null;
   if (canonicalHost) allowedHosts.add(canonicalHost);
 
+  const siteUrl = process.env.SPYREELS_SITE_URL;
+  const siteHost = siteUrl ? hostFromUrl(siteUrl) : null;
+  if (siteHost) allowedHosts.add(siteHost);
+
+  const appUrl = process.env.SPYREELS_APP_ORIGIN;
+  const appHost = appUrl ? hostFromUrl(appUrl) : null;
+  if (appHost) allowedHosts.add(appHost);
+
+  // Always allow both production first-party hosts during / after the split.
+  allowedHosts.add("spyreels.ai");
+  allowedHosts.add("www.spyreels.ai");
+  allowedHosts.add("app.spyreels.ai");
+
   if (process.env.NODE_ENV !== "production") {
     for (const devHost of DEV_HOSTS) allowedHosts.add(devHost);
   }

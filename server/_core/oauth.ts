@@ -1,4 +1,5 @@
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+import { appOrigin } from "@shared/spyreelsOrigins";
 import type { Express, Request, Response } from "express";
 import * as db from "../db";
 import { getSessionCookieOptions } from "./cookies";
@@ -45,9 +46,9 @@ function getQueryParam(req: Request, key: string): string | undefined {
 }
 
 const getBaseUrl = (): string => {
-  // Must match the apex canonical host (www redirects to spyreels.ai).
-  // Set OAUTH_SERVER_URL=https://spyreels.ai in production; never www.
-  const url = process.env.OAUTH_SERVER_URL || "https://spyreels.ai";
+  // When SPYREELS_APP_HOST_SPLIT is on, OAuth lives on app.spyreels.ai.
+  // Prefer OAUTH_SERVER_URL when set; otherwise use appOrigin().
+  const url = process.env.OAUTH_SERVER_URL?.trim() || appOrigin();
   return url.replace(/\/$/, "");
 };
 

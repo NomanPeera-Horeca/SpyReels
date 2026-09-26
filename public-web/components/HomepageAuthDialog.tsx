@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { resolvePublicAppOrigin } from "../lib/appOrigin";
 import styles from "./HomepageAuthDialog.module.css";
 
 type AuthMode = "login" | "signup" | "forgot";
@@ -66,7 +67,18 @@ function googleAuthUrl(returnTo?: string): string {
     firstReferrer: typeof document !== "undefined" ? document.referrer || null : null,
   };
   const state = btoa(JSON.stringify(payload));
-  return `/api/auth/google?state=${encodeURIComponent(state)}`;
+  const path = `/api/auth/google?state=${encodeURIComponent(state)}`;
+  const origin = resolvePublicAppOrigin({
+    hostname: typeof window !== "undefined" ? window.location.hostname : null,
+  });
+  if (
+    typeof window !== "undefined" &&
+    origin &&
+    origin !== window.location.origin
+  ) {
+    return `${origin}${path}`;
+  }
+  return path;
 }
 
 function signupAttributionBody() {

@@ -27,6 +27,12 @@ import { localObjectStorageDir } from "../storage";
 import { registerAiGatewayRoutes } from "../aiGateway/routes";
 import { registerRemakeBenchmarkProxy } from "../remakeBenchmarkProxy";
 import { BLOG_SLUG_REDIRECTS } from "@shared/blogRedirects";
+import {
+  appAbsoluteUrl,
+  isAppHostSplitEnabled,
+  isSpyReelsApexHost,
+  shouldRedirectApexPathToApp,
+} from "@shared/spyreelsOrigins";
 import { checkReadiness } from "../health";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -65,9 +71,9 @@ async function startServer() {
       .json(readiness);
   });
 
-  // Canonical host: apex spyreels.ai (matches SPYREELS_SITE_URL / OAUTH_SERVER_URL).
-  // www and apex both resolve in DNS; without this, sessionStorage restore breaks
-  // when OAuth or other redirects cross hosts.
+  // Canonical hosts:
+  // - www → apex marketing
+  // - When SPYREELS_APP_HOST_SPLIT=true: apex product paths → app.spyreels.ai
   app.use((req, res, next) => {
     const rawHost = (
       req.headers["x-forwarded-host"] ||
@@ -83,6 +89,16 @@ async function startServer() {
       const pathAndQuery = req.originalUrl || "/";
       return res.redirect(301, `https://spyreels.ai${pathAndQuery}`);
     }
+
+    if (
+      isAppHostSplitEnabled() &&
+      isSpyReelsApexHost(host) &&
+      shouldRedirectApexPathToApp(req.path, req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "")
+    ) {
+      const pathAndQuery = req.originalUrl || "/";
+      return res.redirect(302, appAbsoluteUrl(pathAndQuery));
+    }
+
     next();
   });
 
