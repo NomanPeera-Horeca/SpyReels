@@ -94,6 +94,36 @@ describe("publicWebPilotProxy", () => {
     expect(config.timeoutMs).toBe(2500);
   });
 
+  it("opts the homepage and its static media in only with the dedicated flag", () => {
+    const env = {
+      SPYREELS_PUBLIC_WEB_PILOT: "true",
+      SPYREELS_PUBLIC_WEB_ORIGIN: "http://127.0.0.1:3100",
+      SPYREELS_PUBLIC_WEB_HOME: "true",
+    };
+    const config = getPublicWebPilotConfig(env);
+    expect(isPublicWebPilotRequest("/", "GET", config)).toBe(true);
+    expect(isPublicWebPilotRequest("/marketing/logo.png", "GET", config)).toBe(true);
+    expect(isPublicWebPilotRequest("/pricing", "GET", config)).toBe(false);
+    expect(isPublicWebPilotRequest("/", "POST", config)).toBe(false);
+    expect(isPublicWebPilotRequest("/", "GET", { ...config, homepageEnabled: false })).toBe(false);
+  });
+
+  it("keeps signup and login query links on the legacy homepage", async () => {
+    const upstream = http.createServer((_req, res) => res.end("next-home"));
+    const upstreamPort = await listen(upstream);
+    const app = express();
+    registerPublicWebPilotProxy(app, {
+      enabled: true, homepageEnabled: true,
+      origin: `http://127.0.0.1:${upstreamPort}`, timeoutMs: 400,
+    });
+    app.get("/", (_req, res) => res.send("legacy-home"));
+    const proxy = http.createServer(app);
+    const proxyPort = await listen(proxy);
+    expect(await (await fetch(`http://127.0.0.1:${proxyPort}/`)).text()).toBe("next-home");
+    expect(await (await fetch(`http://127.0.0.1:${proxyPort}/?signup=1`)).text()).toBe("legacy-home");
+    expect(await (await fetch(`http://127.0.0.1:${proxyPort}/?login=1`)).text()).toBe("legacy-home");
+  });
+
   it("falls back to the safe timeout when the configured value is invalid", () => {
     const config = getPublicWebPilotConfig({
       SPYREELS_PUBLIC_WEB_TIMEOUT_MS: "not-a-number",

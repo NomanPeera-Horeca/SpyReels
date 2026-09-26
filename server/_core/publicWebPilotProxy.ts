@@ -6,6 +6,7 @@ export const VIRAL_REEL_FINDER_PILOT_PATH = "/features/viral-reel-finder";
 export const VIRAL_REEL_FINDER_DEMO_PATH = "/features/viral-reel-finder/demo";
 export const VIRAL_REEL_FINDER_PROFILE_PATH = "/features/viral-reel-finder/profile";
 const NEXT_ASSET_PREFIX = "/_next/";
+const HOMEPAGE_ASSET_PREFIX = "/marketing/";
 
 const HOP_BY_HOP_HEADERS = new Set([
   "connection",
@@ -20,6 +21,7 @@ const HOP_BY_HOP_HEADERS = new Set([
 
 export type PublicWebPilotConfig = {
   enabled: boolean;
+  homepageEnabled?: boolean;
   origin: string | null;
   timeoutMs: number;
 };
@@ -32,6 +34,7 @@ export function getPublicWebPilotConfig(
 
   return {
     enabled: env.SPYREELS_PUBLIC_WEB_PILOT === "true",
+    homepageEnabled: env.SPYREELS_PUBLIC_WEB_HOME === "true",
     origin: rawOrigin ? rawOrigin.replace(/\/$/, "") : null,
     timeoutMs: Number.isFinite(rawTimeout) && rawTimeout > 0 ? rawTimeout : 5000,
   };
@@ -52,10 +55,12 @@ export function isPublicWebPilotRequest(
 
   const path = normalizedPath(pathname);
   return (
+    (config.homepageEnabled === true && path === "/") ||
     path === VIRAL_REEL_FINDER_PILOT_PATH ||
     path === VIRAL_REEL_FINDER_DEMO_PATH ||
     path === VIRAL_REEL_FINDER_PROFILE_PATH ||
-    pathname.startsWith(NEXT_ASSET_PREFIX)
+    pathname.startsWith(NEXT_ASSET_PREFIX) ||
+    (config.homepageEnabled === true && pathname.startsWith(HOMEPAGE_ASSET_PREFIX))
   );
 }
 
@@ -122,7 +127,8 @@ function proxyRequest(
     },
     (upstreamResponse) => {
       if (
-        normalizedPath(req.path) === VIRAL_REEL_FINDER_PILOT_PATH &&
+        (normalizedPath(req.path) === VIRAL_REEL_FINDER_PILOT_PATH ||
+          (config.homepageEnabled && normalizedPath(req.path) === "/")) &&
         (upstreamResponse.statusCode ?? 500) >= 500
       ) {
         upstreamResponse.resume();
@@ -165,8 +171,8 @@ function proxyRequest(
  *   SPYREELS_PUBLIC_WEB_PILOT=true
  *   SPYREELS_PUBLIC_WEB_ORIGIN=http(s)://<public-web-service>
  *
- * Only the Viral Reel Finder page, its demo/profile routes, and its Next.js assets
- * are proxied during the pilot.
+ * The homepage is opted in separately with SPYREELS_PUBLIC_WEB_HOME=true.
+ * Authentication query links stay on the existing SPA until auth is migrated.
  */
 export function registerPublicWebPilotProxy(
   app: Express,
@@ -181,10 +187,14 @@ export function registerPublicWebPilotProxy(
   }
 
   console.log(
-    `[PublicWeb] Pilot routing enabled for ${VIRAL_REEL_FINDER_PILOT_PATH} -> ${config.origin}`
+    `[PublicWeb] Pilot routing enabled for ${VIRAL_REEL_FINDER_PILOT_PATH}${config.homepageEnabled ? " and /" : ""} -> ${config.origin}`
   );
 
   app.use((req, res, next) => {
+    if (req.path === "/" && (req.query.signup === "1" || req.query.login === "1")) {
+      next();
+      return;
+    }
     if (!isPublicWebPilotRequest(req.path, req.method, config)) {
       next();
       return;

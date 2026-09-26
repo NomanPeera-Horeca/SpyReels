@@ -320,14 +320,22 @@ export default function LandingPage() {
     };
   }, []);
 
-  const [showLoginModal, setShowLoginModal] = useState(false);
+  // The server-rendered marketing homepage links here until the auth dialog
+  // becomes an independent route. Keep the existing signup flow intact.
+  const [showLoginModal, setShowLoginModal] = useState(() =>
+    typeof window !== "undefined" &&
+    (["signup", "login"] as const).some((key) => new URLSearchParams(window.location.search).get(key) === "1")
+  );
   const handleGetStarted = () => {
     setShowLoginModal(true);
   };
   const handleGoogleLogin = () => {
     window.location.href = getLoginUrl();
   };
-  const [authMode, setAuthMode] = useState<"login" | "signup" | "forgot">("login");
+  const [authMode, setAuthMode] = useState<"login" | "signup" | "forgot">(() =>
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("signup") === "1"
+      ? "signup" : "login"
+  );
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authName, setAuthName] = useState("");
