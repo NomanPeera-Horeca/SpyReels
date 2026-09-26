@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
+import { getMarketingHomeUrl, isProductAppHost } from "@/lib/marketingOrigin";
 import {
   Film, Search, FileText, Mic, Calendar,
   ArrowRight, Zap, Shield, Clock, ChevronDown, ChevronUp,
@@ -476,7 +477,7 @@ export default function LandingPage() {
 
       {isMarketingAuthEntry && (
         <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#f8f7fb] px-6 text-center text-[#111116]">
-          <a href="/" className="text-2xl font-bold tracking-tight">SpyReels</a>
+          <a href={isProductAppHost() ? getMarketingHomeUrl() : "/"} className="text-2xl font-bold tracking-tight">SpyReels</a>
           <p className="text-sm text-[#72717e]">Find what works. Remake it in your voice.</p>
         </div>
       )}

@@ -15,6 +15,10 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { applyLandingAuthHandoff } from "@/lib/researchPendingHandle";
+import {
+  getMarketingHomeUrl,
+  isProductAppHost,
+} from "@/lib/marketingOrigin";
 
 const PUBLIC_NAV_LINKS = [
   { href: "/#features", label: "Features", type: "anchor" as const },
@@ -62,7 +66,7 @@ export function PublicHeader({
     setAuthMode(handoff.auth);
 
     if (user) {
-      window.location.href = handoff.returnTo || "/";
+      window.location.href = handoff.returnTo || "/research";
       return;
     }
 
@@ -79,7 +83,7 @@ export function PublicHeader({
   const handleStart = (mode: "login" | "signup") => {
     posthog?.capture("public_header_cta_clicked", { path: pathname, mode });
     if (user) {
-      window.location.href = "/";
+      window.location.href = "/research";
       return;
     }
     onBeforeAuthOpen?.();
@@ -197,7 +201,10 @@ export function PublicHeader({
                   </div>
                 </SheetContent>
               </Sheet>
-              <Link href="/" className="flex min-w-0 items-center gap-2 sm:gap-3">
+              <a
+                href={isProductAppHost() ? getMarketingHomeUrl() : "/"}
+                className="flex min-w-0 items-center gap-2 sm:gap-3"
+              >
                 <img
                   src={SPYREELS_LOGO_PATH}
                   alt="SpyReels logo, Instagram Reels spy tool"
@@ -210,7 +217,7 @@ export function PublicHeader({
                 <span className="truncate text-lg font-semibold tracking-tight">
                   SpyReels
                 </span>
-              </Link>
+              </a>
             </div>
 
             <div className="hidden items-center gap-7 md:flex">

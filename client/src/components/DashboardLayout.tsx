@@ -500,7 +500,11 @@ function DashboardLayoutContent({
                   <PanelLeft className="h-4 w-4 text-muted-foreground" />
                 )}
               </button>
-              {!isCollapsed ? <SpyReelsWordmark /> : null}
+              {!isCollapsed ? (
+                <Link href="/research" className="min-w-0 hover:opacity-90">
+                  <SpyReelsWordmark />
+                </Link>
+              ) : null}
             </div>
           </SidebarHeader>
 

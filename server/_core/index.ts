@@ -27,13 +27,18 @@ import { localObjectStorageDir } from "../storage";
 import { registerAiGatewayRoutes } from "../aiGateway/routes";
 import { registerRemakeBenchmarkProxy } from "../remakeBenchmarkProxy";
 import { BLOG_SLUG_REDIRECTS } from "@shared/blogRedirects";
+import { COOKIE_NAME } from "@shared/const";
 import {
   appAbsoluteUrl,
   isAppHostSplitEnabled,
   isSpyReelsApexHost,
+  isSpyReelsAppHost,
   shouldRedirectApexPathToApp,
+  siteOrigin,
 } from "@shared/spyreelsOrigins";
+import { parse as parseCookieHeader } from "cookie";
 import { checkReadiness } from "../health";
+import { sdk } from "./sdk";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -100,6 +105,48 @@ async function startServer() {
     }
 
     next();
+  });
+
+  // Product host root is never a marketing page.
+  // Logged in → /research. Logged out / auth query → apex marketing homepage.
+  app.use(async (req, res, next) => {
+    if (!isAppHostSplitEnabled()) return next();
+    if (req.method !== "GET" && req.method !== "HEAD") return next();
+    if (req.path !== "/") return next();
+
+    const rawHost = (
+      req.headers["x-forwarded-host"] ||
+      req.headers.host ||
+      ""
+    )
+      .toString()
+      .split(",")[0]
+      ?.trim()
+      .toLowerCase();
+    const host = rawHost?.replace(/:\d+$/, "") ?? "";
+    if (!isSpyReelsAppHost(host)) return next();
+
+    const search = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+    const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
+    const auth = params.get("auth");
+    if (auth === "login" || auth === "signup" || auth === "forgot") {
+      return res.redirect(302, `${siteOrigin()}/${search}`);
+    }
+
+    if (req.headers.cookie) {
+      const token = parseCookieHeader(req.headers.cookie)[COOKIE_NAME];
+      if (token) {
+        try {
+          if (await sdk.authenticateRequest(req)) {
+            return res.redirect(302, "/research");
+          }
+        } catch (error) {
+          console.warn("[Hosts] App-root session check failed; sending to marketing:", error);
+        }
+      }
+    }
+
+    return res.redirect(302, `${siteOrigin()}/`);
   });
 
   // CSRF origin guard: reject cross-site state-changing /api requests.

@@ -64,6 +64,7 @@ After DNS + Render custom domain + Google OAuth URI are ready:
 - Apex product paths (`/research`, `/studio`, `/api` except `/api/auth` + `/api/oauth`, etc.) → **302** to `https://app.spyreels.ai` + path/query
 - Apex `/?auth=login|signup` stays on marketing (Next homepage modal)
 - `app.spyreels.ai` never serves Next marketing HTML
+- `app.spyreels.ai/` → `/research` if signed in, else `https://spyreels.ai/`
 - Signed-in visits to apex `/` → 302 to `https://app.spyreels.ai/research`
 
 ## Smoke test
