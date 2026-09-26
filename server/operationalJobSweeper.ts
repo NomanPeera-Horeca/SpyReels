@@ -200,27 +200,36 @@ export async function sweepZombieOperationalJobs(): Promise<number> {
     }
   }
 
-  const staleLegacyDiscovery = await db
-    .select({ id: discoveryJobs.id, status: discoveryJobs.status })
-    .from(discoveryJobs)
-    .where(
-      and(
-        inArray(discoveryJobs.status, [...STALE_DISCOVERY_STATUSES]),
-        lt(discoveryJobs.updatedAt, before)
-      )
-    );
-  for (const row of staleLegacyDiscovery) {
-    const result = await db
-      .update(discoveryJobs)
-      .set(staleOperationalJobRecovery())
+  try {
+    const staleLegacyDiscovery = await db
+      .select({ id: discoveryJobs.id, status: discoveryJobs.status })
+      .from(discoveryJobs)
       .where(
         and(
-          eq(discoveryJobs.id, row.id),
-          eq(discoveryJobs.status, row.status),
+          inArray(discoveryJobs.status, [...STALE_DISCOVERY_STATUSES]),
           lt(discoveryJobs.updatedAt, before)
         )
       );
-    if (Number(result[0]?.affectedRows ?? 0) > 0) swept += 1;
+    for (const row of staleLegacyDiscovery) {
+      const result = await db
+        .update(discoveryJobs)
+        .set(staleOperationalJobRecovery())
+        .where(
+          and(
+            eq(discoveryJobs.id, row.id),
+            eq(discoveryJobs.status, row.status),
+            lt(discoveryJobs.updatedAt, before)
+          )
+        );
+      if (Number(result[0]?.affectedRows ?? 0) > 0) swept += 1;
+    }
+  } catch (error) {
+    if (!isMissingTableError(error)) {
+      console.warn(
+        "[operationalJobSweeper] discovery_jobs sweep failed; continuing:",
+        error instanceof Error ? error.message : error
+      );
+    }
   }
 
   const staleCarousels = await db

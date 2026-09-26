@@ -17,6 +17,7 @@ import {
   extractAllCollectedVideoUrlsAsync,
   type ParsedCollectedVideoUrl,
 } from "./socialVideoUrl";
+import { appAbsoluteUrl, siteOrigin } from "@shared/spyreelsOrigins";
 
 const TELEGRAM_API = "https://api.telegram.org/bot";
 
@@ -147,7 +148,7 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
       );
     } else {
       await sendMessage(chatId,
-        `❌ <b>Not connected</b>\n\nGo to <a href="https://spyreels.ai/settings">spyreels.ai/settings</a> to get your link code, then send it here.`
+        `❌ <b>Not connected</b>\n\nGo to <a href="${siteOrigin()}/settings">spyreels.ai/settings</a> to get your link code, then send it here.`
       );
     }
     return;
@@ -173,12 +174,12 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
     const connection = await getTelegramConnectionByLinkCode(code);
 
     if (!connection) {
-      await sendMessage(chatId, `❌ Invalid or expired link code. Please generate a new one from <a href="https://spyreels.ai/settings">spyreels.ai/settings</a>.`);
+      await sendMessage(chatId, `❌ Invalid or expired link code. Please generate a new one from <a href="${siteOrigin()}/settings">spyreels.ai/settings</a>.`);
       return;
     }
 
     if (connection.linkCodeExpiresAt < new Date()) {
-      await sendMessage(chatId, `⏰ This link code has expired. Please generate a new one from <a href="https://spyreels.ai/settings">spyreels.ai/settings</a>.`);
+      await sendMessage(chatId, `⏰ This link code has expired. Please generate a new one from <a href="${siteOrigin()}/settings">spyreels.ai/settings</a>.`);
       return;
     }
 
@@ -206,13 +207,13 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
     if (looksLikeVideo) {
       await sendMessage(chatId,
         `🔗 I see a video link, but you need to connect your SpyReels account first!\n\n` +
-        `1. Go to <a href="https://spyreels.ai/settings">spyreels.ai/settings</a>\n` +
+        `1. Go to <a href="${siteOrigin()}/settings">spyreels.ai/settings</a>\n` +
         `2. Click "Connect Telegram"\n` +
         `3. Send me the 6-digit code`
       );
     } else {
       await sendMessage(chatId,
-        `Please connect your SpyReels account first. Go to <a href="https://spyreels.ai/settings">spyreels.ai/settings</a> and send me your link code.`
+        `Please connect your SpyReels account first. Go to <a href="${siteOrigin()}/settings">spyreels.ai/settings</a> and send me your link code.`
       );
     }
     return;
@@ -275,7 +276,7 @@ export async function handleTelegramUpdate(update: any): Promise<void> {
 
   let reply = parts.join("\n");
   if (saved > 0) {
-    reply += `\n\n📊 View in <a href="https://spyreels.ai/collected">Collected Reels</a> to remake into your voice!`;
+    reply += `\n\n📊 View in <a href="${appAbsoluteUrl("/collected")}">Collected Reels</a> to remake into your voice!`;
   }
 
   await sendMessage(chatId, reply);

@@ -44,6 +44,8 @@ describe("spyreelsOrigins", () => {
     expect(shouldRedirectApexPathToApp("/research")).toBe(true);
     expect(shouldRedirectApexPathToApp("/studio")).toBe(true);
     expect(shouldRedirectApexPathToApp("/viral-posts")).toBe(true);
+    expect(shouldRedirectApexPathToApp("/api/telegram/webhook")).toBe(false);
+    expect(shouldRedirectApexPathToApp("/api/stripe/webhook")).toBe(false);
     expect(shouldRedirectApexPathToApp("/api/trpc")).toBe(true);
     expect(shouldRedirectApexPathToApp("/api/auth/login")).toBe(false);
     expect(shouldRedirectApexPathToApp("/api/oauth/callback")).toBe(false);

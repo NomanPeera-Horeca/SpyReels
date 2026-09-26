@@ -143,6 +143,15 @@ export function shouldRedirectApexPathToApp(
     return false;
   }
 
+  // External webhook receivers (Telegram does not follow 302 on POST).
+  if (
+    normalized === "/api/telegram/webhook" ||
+    normalized === "/api/stripe/webhook" ||
+    normalized === "/api/resend/webhook"
+  ) {
+    return false;
+  }
+
   if (normalized === "/viral-posts" || normalized.startsWith("/viral-posts/")) {
     return true;
   }

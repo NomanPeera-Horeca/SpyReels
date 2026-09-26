@@ -30,6 +30,7 @@ import { BLOG_SLUG_REDIRECTS } from "@shared/blogRedirects";
 import { COOKIE_NAME } from "@shared/const";
 import {
   appAbsoluteUrl,
+  appOrigin,
   isAppHostSplitEnabled,
   isSpyReelsApexHost,
   isSpyReelsAppHost,
@@ -409,7 +410,12 @@ async function startServer() {
 
     // Set up Telegram webhook after server starts (non-blocking)
     if (process.env.NODE_ENV === "production") {
-      setupTelegramWebhook("https://spyreels.ai").catch((err) => {
+      // Prefer the product host when the split is on; Telegram must not hit an
+      // apex URL that 302s (bots often drop redirected POST webhook bodies).
+      const webhookBase = isAppHostSplitEnabled()
+        ? appOrigin()
+        : siteOrigin();
+      setupTelegramWebhook(webhookBase).catch((err) => {
         console.error("[Telegram] Webhook setup failed:", err);
       });
     }
