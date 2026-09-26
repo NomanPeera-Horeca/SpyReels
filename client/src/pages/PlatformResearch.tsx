@@ -12,8 +12,6 @@ import {
   Share2,
   List,
   Grid3X3,
-  Bookmark,
-  BookmarkCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { TRPCClientError } from "@trpc/client";
@@ -1003,21 +1001,7 @@ export default function PlatformResearch({
             <div className="space-y-3">
               <div className={WORKSPACE_REEL_GRID_CLASS}>
                 {sortedVideos.map((video, index) => {
-                  const tx = txStatusById[video.id];
-                  const hasTranscription = tx?.status === "completed";
-                  const isNoSpeech =
-                    hasTranscription &&
-                    !String(tx?.transcript ?? "").trim() &&
-                    !(
-                      Array.isArray(tx?.segments) && tx.segments.length > 0
-                    );
-                  const isProcessing = isVideoProcessing(video.id);
-                  const isFailed = tx?.status === "failed";
                   const isSaved = !!savedMap[video.id];
-                  const batchEntry = recreateMap[video.id] as
-                    | RecreateBatchEntry
-                    | undefined;
-                  const recreateSt = videoRecreateState(batchEntry);
 
                   return (
                     <PlatformVideoCard
@@ -1026,13 +1010,9 @@ export default function PlatformResearch({
                       index={index}
                       config={config}
                       isModalOpen={gridModalVideoId === video.id}
-                      userTimezone={userTimezone}
-                      hasTranscription={hasTranscription}
-                      isProcessing={isProcessing}
-                      isFailed={!!isFailed}
-                      isNoSpeech={!!isNoSpeech}
+                      creatorHandle={displayHandle}
+                      followerCount={audienceCount}
                       isSaved={isSaved}
-                      recreateState={recreateSt}
                       oneClickRemake={buildOneClick(video)}
                       interactiveMedia
                       inlinePlaying={inlinePlayingId === video.id}
@@ -1042,35 +1022,6 @@ export default function PlatformResearch({
                           cur === video.id ? null : cur
                         )
                       }
-                      topRight={
-                        <button
-                          type="button"
-                          className={`flex h-10 w-10 items-center justify-center rounded-full backdrop-blur transition-colors ${
-                            isSaved
-                              ? "bg-emerald-500/90 text-white hover:bg-emerald-500"
-                              : "bg-black/55 text-white/90 hover:bg-black/75"
-                          }`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (config.platform === "tiktok") {
-                              toggleSave.mutate({ tiktokVideoId: video.id });
-                            } else {
-                              toggleSave.mutate({ youtubeVideoId: video.id });
-                            }
-                          }}
-                          disabled={toggleSave.isPending}
-                          title={isSaved ? "Remove from saved" : "Save reel"}
-                          aria-label={
-                            isSaved ? "Remove from saved" : "Save reel"
-                          }
-                        >
-                          {isSaved ? (
-                            <BookmarkCheck className="h-4 w-4" />
-                          ) : (
-                            <Bookmark className="h-4 w-4" />
-                          )}
-                        </button>
-                      }
                       onMediaClick={() => setGridModalVideoId(video.id)}
                       onToggleSave={() => {
                         if (config.platform === "tiktok") {
@@ -1079,19 +1030,7 @@ export default function PlatformResearch({
                           toggleSave.mutate({ youtubeVideoId: video.id });
                         }
                       }}
-                      onTranscribe={() => runTranscribe(video.id)}
                       onExpand={() => setGridModalVideoId(video.id)}
-                      onMakeVersion={() => triggerRecreatePulse(video.id)}
-                      onOpenMyScript={() => {
-                        if (batchEntry?.latestScriptId) {
-                          triggerOpenMyScript(
-                            video.id,
-                            batchEntry.latestScriptId
-                          );
-                        } else {
-                          setGridModalVideoId(video.id);
-                        }
-                      }}
                       saveBusy={toggleSave.isPending}
                     />
                   );

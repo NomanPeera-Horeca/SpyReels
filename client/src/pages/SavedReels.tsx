@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/select";
 import {
   Bookmark,
-  BookmarkCheck,
   Eye,
   Heart,
   MessageCircle,
@@ -57,6 +56,13 @@ import { WorkspaceReelGridTile } from "@/components/WorkspaceReelGridTile";
 import { WorkspaceReelGridSkeleton } from "@/components/WorkspaceReelGridSkeleton";
 import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
 import { GridReelWorkflowDialog } from "@/components/GridReelWorkflowDialog";
+import {
+  QuietCreatorButton,
+  QuietReelCaption,
+  QuietReelMetrics,
+  QuietRemakeActions,
+} from "@/components/QuietWorkspaceReelChrome";
+import { useOpenCreatorInApp } from "@/hooks/useOpenCreatorInApp";
 import {
   ReelActionButtons,
   type ReelActionSource,
@@ -194,6 +200,8 @@ export default function SavedReels() {
   const [gridModalSavedId, setGridModalSavedId] = useState<number | null>(null);
   /** Freeze-safe: only one grid tile mounts an inline player at a time. */
   const [inlinePlayingId, setInlinePlayingId] = useState<number | null>(null);
+  const [quietMoreId, setQuietMoreId] = useState<number | null>(null);
+  const { openCreator } = useOpenCreatorInApp("saved");
   const viewModeRef = useRef(viewMode);
   viewModeRef.current = viewMode;
 
@@ -1005,17 +1013,8 @@ export default function SavedReels() {
                     const reel = item.reel;
                     const engagementRate = engagementPercent(item);
                     const isModalOpen = gridModalSavedId === item.id;
-                    const pKey = txPendingKey(item);
                     const hasTranscription = !!item.transcription && item.transcription.status === "completed";
                     const isNoSpeech = transcriptionIsNoSpeech(item.transcription);
-                    const isProcessing =
-                      item.transcription?.status === "processing" || !!(pKey && pendingTranscriptions.has(pKey));
-                    const isFailed =
-                      item.transcription?.status === "failed" && !(pKey && pendingTranscriptions.has(pKey));
-                    const isTxQueued =
-                      isProcessing &&
-                      (item.source === "scraped" || item.source === "discover") &&
-                      (item.transcription?.status !== "processing" || !item.transcription?.startedAt);
                     const recreateSt = reelRecreateState(
                       recreateEntryForItem(item, scrapedRecreateMap, featuredRecreateMap)
                     );
@@ -1026,12 +1025,6 @@ export default function SavedReels() {
                       recreateSt === "none";
 
                     const librarySource = savedItemToLibraryRemakeSource(item);
-                    const hookState =
-                      librarySource != null
-                        ? getRemakeState(libraryRemakeKey(librarySource))
-                        : null;
-                    const isProcessingForStrip =
-                      isProcessing || hookState?.stage === "transcribing";
                     const batchEntry = recreateEntryForItem(
                       item,
                       scrapedRecreateMap,
@@ -1062,13 +1055,13 @@ export default function SavedReels() {
                     return (
                       <WorkspaceReelGridTile
                         key={item.id}
+                        chrome="quiet"
                         index={index}
                         isActive={isModalOpen}
                         thumbnailUrl={reel.thumbnailUrl}
                         videoUrl={reel.videoUrl}
                         shortcode={reel.shortcode}
                         reelId={item.source === "scraped" ? reel.id : undefined}
-                        engagementRate={engagementRate}
                         duration={reel.duration}
                         reelUrl={reel.reelUrl}
                         interactiveMedia
@@ -1077,106 +1070,110 @@ export default function SavedReels() {
                         onInlinePlayStop={() =>
                           setInlinePlayingId((cur) => (cur === item.id ? null : cur))
                         }
-                        topRight={
-                          <button
-                            type="button"
-                            className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/90 text-white backdrop-blur transition-colors hover:bg-emerald-500"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onToggleSave(item);
-                            }}
-                            disabled={toggleSave.isPending}
-                            title="Remove from saved"
-                            aria-label="Remove from saved"
-                          >
-                            <BookmarkCheck className="h-4 w-4" />
-                          </button>
-                        }
-                        statusChip={
-                          hasTranscription && !isNoSpeech ? (
-                            <span className="rounded bg-emerald-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950">
-                              Transcribed
-                            </span>
-                          ) : isNoSpeech ? (
-                            <span className="rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white/90">
-                              No voice
-                            </span>
-                          ) : isProcessingForStrip ? (
-                            <span className="animate-pulse rounded bg-amber-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-amber-950">
-                              Processing
-                            </span>
-                          ) : null
-                        }
-                        badges={
-                          <BrandCoachBadge
-                            source={
-                              item.source === "featured" && item.featuredReelId != null
-                                ? { kind: "featured", featuredReelId: item.featuredReelId }
-                                : { kind: "reel", reelId: reel.id }
-                            }
-                            hasTranscript={hasTranscription && !isNoSpeech}
-                            prefetchedScore={brandCoachPrefetchedScore(item)}
-                          />
-                        }
                         caption={
-                          <p className="line-clamp-2 min-h-[2rem] text-xs text-foreground">
-                            {reel.caption || <span className="italic text-muted-foreground">No caption</span>}
-                          </p>
+                          <QuietReelCaption>
+                            {reel.caption || (
+                              <span className="italic text-[#a8a3b3]">No caption</span>
+                            )}
+                          </QuietReelCaption>
+                        }
+                        creator={
+                          <QuietCreatorButton
+                            handle={item.job.handle}
+                            onOpen={() =>
+                              void openCreator({
+                                handle: item.job.handle,
+                                platform: "instagram",
+                              })
+                            }
+                          />
                         }
                         stats={
-                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
-                            <span>{formatNumber(reel.viewCount)} views</span>
-                            {engagementRate > 0 && (
-                              <>
-                                <span aria-hidden>·</span>
-                                <span className="font-medium text-emerald-400">
-                                  {engagementRate.toFixed(2)}%
-                                </span>
-                              </>
-                            )}
-                            <span className="hidden sm:inline" aria-hidden>
-                              ·
-                            </span>
-                            <span className="hidden sm:inline">
-                              {formatNumber(reel.likeCount)} likes
-                            </span>
-                            <span className="hidden md:inline" aria-hidden>
-                              ·
-                            </span>
-                            <span className="hidden md:inline">
-                              {formatNumber(reel.commentCount)} comments
-                            </span>
-                            <span className="hidden sm:inline" aria-hidden>
-                              ·
-                            </span>
-                            <span className="hidden sm:inline text-muted-foreground">
-                              {formatPostedTime(reel.postedAt, userTimezone)}
-                            </span>
-                          </div>
+                          <QuietReelMetrics
+                            views={reel.viewCount}
+                            engagementPct={engagementRate}
+                            reachViews={reel.viewCount}
+                            reachFollowers={
+                              item.job.followerCount && item.job.followerCount > 0
+                                ? item.job.followerCount
+                                : null
+                            }
+                            postedAt={
+                              reel.postedAt instanceof Date
+                                ? reel.postedAt.toISOString()
+                                : reel.postedAt
+                            }
+                          />
                         }
                         actions={
-                          <ReelActionButtons
-                            source={reelActionSource(item)}
-                            reelId={reel.id}
-                            reelUrl={reel.reelUrl}
-                            isSaved
-                            hasTranscription={hasTranscription}
-                            isProcessing={isProcessingForStrip}
-                            isFailed={isFailed}
-                            recreateState={recreateSt}
-                            saveBusy={toggleSave.isPending}
-                            isQueued={isTxQueued}
-                            isNoSpeech={isNoSpeech}
-                            oneClickRemake={oneClickRemake}
-                            compact
-                            hideBookmark
-                            hideExternalLink
-                            onToggleSave={() => onToggleSave(item)}
-                            onTranscribe={() => {}}
-                            onExpand={() => setGridModalSavedId(item.id)}
-                            onMakeVersion={() => {}}
-                            onOpenMyScript={() => {}}
-                          />
+                          oneClickRemake ? (
+                            <QuietRemakeActions
+                              remakeLabel={oneClickRemake.label}
+                              remakeDisabled={oneClickRemake.disabled}
+                              remakeBusy={oneClickRemake.loading}
+                              onRemake={() => oneClickRemake.onClick()}
+                              saved
+                              onToggleSave={() => onToggleSave(item)}
+                              moreOpen={quietMoreId === item.id}
+                              onToggleMore={() =>
+                                setQuietMoreId((cur) =>
+                                  cur === item.id ? null : item.id
+                                )
+                              }
+                              moreMenu={
+                                quietMoreId === item.id ? (
+                                  <div className="absolute bottom-11 right-0 z-30 grid min-w-[160px] gap-0.5 rounded-[12px] border border-[#2b2739] bg-[#1d1b24] p-1.5 shadow-[0_18px_50px_rgba(0,0,0,.45)]">
+                                    <button
+                                      type="button"
+                                      className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-white/[0.06] hover:text-white"
+                                      onClick={() => {
+                                        setQuietMoreId(null);
+                                        setGridModalSavedId(item.id);
+                                      }}
+                                    >
+                                      View details
+                                    </button>
+                                    {item.job.handle ? (
+                                      <button
+                                        type="button"
+                                        className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-white/[0.06] hover:text-white"
+                                        onClick={() => {
+                                          setQuietMoreId(null);
+                                          void openCreator({
+                                            handle: item.job.handle,
+                                            platform: "instagram",
+                                          });
+                                        }}
+                                      >
+                                        Open creator
+                                      </button>
+                                    ) : null}
+                                    {reel.reelUrl ? (
+                                      <a
+                                        href={reel.reelUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-white/[0.06] hover:text-white"
+                                        onClick={() => setQuietMoreId(null)}
+                                      >
+                                        Open source
+                                      </a>
+                                    ) : null}
+                                    <button
+                                      type="button"
+                                      className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-[rgba(255,107,122,.08)] hover:text-[#ffb4bd]"
+                                      onClick={() => {
+                                        setQuietMoreId(null);
+                                        onToggleSave(item);
+                                      }}
+                                    >
+                                      Remove from saved
+                                    </button>
+                                  </div>
+                                ) : null
+                              }
+                            />
+                          ) : null
                         }
                       />
                     );

@@ -560,9 +560,6 @@ export default function Dashboard() {
       : cachedJobForStale.status === "pending" || cachedJobForStale.status === "running"
         ? 0
         : DASHBOARD_SNAPSHOT_STALE_MS;
-  const billingSubscriptionQuery = trpc.billing.subscription.useQuery(undefined, {
-    enabled: !!jobId || isFeaturedView,
-  });
 
   const featuredDataQuery = trpc.featured.getDashboardData.useQuery(
     {
@@ -716,8 +713,6 @@ export default function Dashboard() {
     return "";
   }, [isFeaturedView, featuredData, scrapeJobData, featuredHandleContext.data]);
 
-  const billingPlan = billingSubscriptionQuery.data?.plan ?? "free";
-  const hideUpgradeSidebarPanel = billingPlan === "business" || billingPlan === "agency";
   const jobComplete = isFeaturedView ? !!featuredData : job?.status === "completed";
 
   const goingViralSlugs = useMemo(
@@ -2959,11 +2954,6 @@ export default function Dashboard() {
                   ))}
                 </div>
               </div>
-              <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
-                <div className="h-4 w-44 bg-primary/20 rounded animate-pulse" />
-                <div className="h-3 w-full bg-primary/15 rounded mt-3 animate-pulse" />
-                <div className="h-9 w-full bg-primary/25 rounded mt-4 animate-pulse" />
-              </div>
             </>
           ) : (
             <>
@@ -3166,43 +3156,6 @@ export default function Dashboard() {
                     </div>
                   </div>
                 )
-              )}
-
-              {/* Upgrade */}
-              {!hideUpgradeSidebarPanel && (
-                <div className="rounded-xl border border-primary/25 bg-gradient-to-br from-primary/15 via-fuchsia-500/10 to-transparent p-4 text-center">
-                  {billingPlan === "pro" ? (
-                    <>
-                      <h3 className="font-serif text-base font-normal text-foreground">Thanks for being on Pro</h3>
-                      <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
-                        You have full access to deep creator research and script workflows.
-                      </p>
-                      <p className="mt-2 text-[11px] text-muted-foreground">
-                        Need team seats and higher limits?{" "}
-                        <button
-                          type="button"
-                          className="font-medium text-primary underline-offset-2 hover:underline"
-                          onClick={() => setLocation("/billing")}
-                        >
-                          Go Business
-                        </button>
-                      </p>
-                      <Button size="sm" variant="outline" className="mt-3 w-full" onClick={() => setLocation("/billing")}>
-                        Manage billing
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <h3 className="font-serif text-base font-normal text-foreground">Unlock unlimited spying</h3>
-                      <p className="mt-1 text-[11px] text-muted-foreground leading-relaxed">
-                        Upgrade for unlimited creator research and more script generations each month.
-                      </p>
-                      <Button size="sm" className="mt-3 w-full" onClick={() => setLocation("/billing")}>
-                        View plans & billing
-                      </Button>
-                    </>
-                  )}
-                </div>
               )}
             </>
           )}

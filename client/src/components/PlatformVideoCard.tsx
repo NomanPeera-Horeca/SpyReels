@@ -1,11 +1,13 @@
-import type { ReactNode } from "react";
+import { useState } from "react";
 import { WorkspaceReelGridTile } from "@/components/WorkspaceReelGridTile";
-import { formatNumber, formatPostedTime } from "@/components/InlineWorkflow";
 import {
-  ReelActionButtons,
-  type OneClickRemakeAction,
-  type ReelActionSource,
-} from "@/components/ReelActionButtons";
+  QuietCreatorButton,
+  QuietReelCaption,
+  QuietReelMetrics,
+  QuietRemakeActions,
+} from "@/components/QuietWorkspaceReelChrome";
+import { useOpenCreatorInApp } from "@/hooks/useOpenCreatorInApp";
+import type { OneClickRemakeAction } from "@/components/ReelActionButtons";
 import type {
   PlatformResearchConfig,
   PlatformVideoLike,
@@ -16,21 +18,13 @@ export function PlatformVideoCard({
   index,
   config,
   isModalOpen,
-  userTimezone,
-  hasTranscription,
-  isProcessing,
-  isFailed,
-  isNoSpeech,
+  creatorHandle,
+  followerCount,
   isSaved,
-  recreateState,
   oneClickRemake,
-  topRight,
   onMediaClick,
   onToggleSave,
-  onTranscribe,
   onExpand,
-  onMakeVersion,
-  onOpenMyScript,
   saveBusy,
   interactiveMedia = false,
   inlinePlaying = false,
@@ -41,21 +35,13 @@ export function PlatformVideoCard({
   index: number;
   config: PlatformResearchConfig;
   isModalOpen: boolean;
-  userTimezone: string;
-  hasTranscription: boolean;
-  isProcessing: boolean;
-  isFailed: boolean;
-  isNoSpeech: boolean;
+  creatorHandle?: string | null;
+  followerCount?: number | null;
   isSaved: boolean;
-  recreateState: "none" | "generating" | "ready" | "failed";
   oneClickRemake?: OneClickRemakeAction;
-  topRight?: ReactNode;
   onMediaClick: () => void;
   onToggleSave: () => void;
-  onTranscribe: () => void;
   onExpand: () => void;
-  onMakeVersion: () => void;
-  onOpenMyScript: () => void;
   saveBusy?: boolean;
   /** When true, media click plays inline when a URL exists or TikTok can refresh via reel id. */
   interactiveMedia?: boolean;
@@ -63,6 +49,10 @@ export function PlatformVideoCard({
   onInlinePlayRequest?: () => void;
   onInlinePlayStop?: () => void;
 }) {
+  const [moreOpen, setMoreOpen] = useState(false);
+  const { openCreator } = useOpenCreatorInApp(
+    config.platform === "tiktok" ? "tiktok" : "youtube"
+  );
   const captionText = config.getCaption(video);
   const playableUrl = config.getVideoUrl(video);
   // TikTok: allow mount/play request with empty videoUrl; DashboardReelGridMedia refreshes via reelId.
@@ -70,20 +60,17 @@ export function PlatformVideoCard({
     interactiveMedia &&
     (Boolean(playableUrl?.trim()) ||
       (config.platform === "tiktok" && video.id != null));
-  const actionSource: ReelActionSource =
-    config.platform === "tiktok"
-      ? { source: "tiktok", tiktokVideoId: video.id }
-      : { source: "youtube", youtubeVideoId: video.id };
+  const remake = oneClickRemake;
 
   return (
     <WorkspaceReelGridTile
+      chrome="quiet"
       index={index}
       isActive={isModalOpen}
       thumbnailUrl={video.thumbnailUrl}
       videoUrl={playableUrl}
       reelId={video.id}
       mediaPlatform={config.platform === "tiktok" ? "tiktok" : "instagram"}
-      engagementRate={video.engagementRate}
       duration={video.durationSec}
       reelUrl={video.videoPageUrl}
       onMediaClick={onMediaClick}
@@ -91,94 +78,93 @@ export function PlatformVideoCard({
       inlinePlaying={inlinePlaying}
       onInlinePlayRequest={onInlinePlayRequest}
       onInlinePlayStop={onInlinePlayStop}
-      topRight={topRight}
-      statusChip={
-        hasTranscription && !isNoSpeech ? (
-          <span className="rounded bg-emerald-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950">
-            Transcribed
-          </span>
-        ) : isNoSpeech ? (
-          <span className="rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white/90">
-            No voice
-          </span>
-        ) : isProcessing ? (
-          <span className="animate-pulse rounded bg-amber-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-amber-950">
-            Processing
-          </span>
-        ) : null
-      }
       caption={
-        <p className="line-clamp-2 min-h-[2rem] text-xs text-foreground">
+        <QuietReelCaption>
           {captionText || (
-            <span className="italic text-muted-foreground">
-              {config.emptyCaptionLabel}
-            </span>
+            <span className="italic text-[#a8a3b3]">{config.emptyCaptionLabel}</span>
           )}
-        </p>
+        </QuietReelCaption>
+      }
+      creator={
+        <QuietCreatorButton
+          handle={creatorHandle}
+          onOpen={() =>
+            void openCreator({
+              handle: creatorHandle,
+              platform: config.platform === "tiktok" ? "tiktok" : "youtube",
+            })
+          }
+        />
       }
       stats={
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
-          <span>{formatNumber(video.viewCount)} views</span>
-          {video.engagementRate > 0 ? (
-            <>
-              <span aria-hidden>·</span>
-              <span className="font-medium text-emerald-400">
-                {video.engagementRate.toFixed(2)}%
-              </span>
-            </>
-          ) : null}
-          <span className="hidden sm:inline" aria-hidden>
-            ·
-          </span>
-          <span className="hidden sm:inline">
-            {formatNumber(video.likeCount)} likes
-          </span>
-          <span className="hidden md:inline" aria-hidden>
-            ·
-          </span>
-          <span className="hidden md:inline">
-            {formatNumber(video.commentCount)} comments
-          </span>
-          {config.hasShares ? (
-            <>
-              <span className="hidden md:inline" aria-hidden>
-                ·
-              </span>
-              <span className="hidden md:inline">
-                {formatNumber(video.shareCount ?? 0)} shares
-              </span>
-            </>
-          ) : null}
-          <span className="hidden sm:inline" aria-hidden>
-            ·
-          </span>
-          <span className="hidden sm:inline text-muted-foreground">
-            {formatPostedTime(video.postedAt, userTimezone)}
-          </span>
-        </div>
+        <QuietReelMetrics
+          views={video.viewCount}
+          engagementPct={video.engagementRate}
+          reachViews={video.viewCount}
+          reachFollowers={followerCount && followerCount > 0 ? followerCount : null}
+          postedAt={
+            video.postedAt instanceof Date
+              ? video.postedAt.toISOString()
+              : String(video.postedAt ?? "")
+          }
+        />
       }
       actions={
-        <ReelActionButtons
-          source={actionSource}
-          reelId={video.id}
-          reelUrl={video.videoPageUrl}
-          isSaved={isSaved}
-          hasTranscription={hasTranscription}
-          isProcessing={isProcessing}
-          isFailed={isFailed}
-          recreateState={recreateState}
-          isNoSpeech={isNoSpeech}
-          compact
-          hideBookmark
-          hideExternalLink
-          oneClickRemake={oneClickRemake}
-          onToggleSave={onToggleSave}
-          onTranscribe={onTranscribe}
-          onExpand={onExpand}
-          onMakeVersion={onMakeVersion}
-          onOpenMyScript={onOpenMyScript}
-          saveBusy={saveBusy}
-        />
+        remake ? (
+          <QuietRemakeActions
+            remakeLabel={remake.label}
+            remakeDisabled={remake.disabled || saveBusy}
+            remakeBusy={remake.loading}
+            onRemake={() => remake.onClick()}
+            saved={isSaved}
+            onToggleSave={onToggleSave}
+            moreOpen={moreOpen}
+            onToggleMore={() => setMoreOpen((open) => !open)}
+            moreMenu={
+              moreOpen ? (
+                <div className="absolute bottom-11 right-0 z-30 grid min-w-[160px] gap-0.5 rounded-[12px] border border-[#2b2739] bg-[#1d1b24] p-1.5 shadow-[0_18px_50px_rgba(0,0,0,.45)]">
+                  <button
+                    type="button"
+                    className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-white/[0.06] hover:text-white"
+                    onClick={() => {
+                      setMoreOpen(false);
+                      onExpand();
+                    }}
+                  >
+                    View details
+                  </button>
+                  {creatorHandle ? (
+                    <button
+                      type="button"
+                      className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-white/[0.06] hover:text-white"
+                      onClick={() => {
+                        setMoreOpen(false);
+                        void openCreator({
+                          handle: creatorHandle,
+                          platform:
+                            config.platform === "tiktok" ? "tiktok" : "youtube",
+                        });
+                      }}
+                    >
+                      Open creator
+                    </button>
+                  ) : null}
+                  {video.videoPageUrl ? (
+                    <a
+                      href={video.videoPageUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-white/[0.06] hover:text-white"
+                      onClick={() => setMoreOpen(false)}
+                    >
+                      Open source
+                    </a>
+                  ) : null}
+                </div>
+              ) : null
+            }
+          />
+        ) : null
       }
       mediaFallback={<div className="absolute inset-0 h-full w-full bg-muted" />}
     />

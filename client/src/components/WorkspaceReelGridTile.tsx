@@ -50,9 +50,9 @@ export type WorkspaceReelGridTileProps = {
 };
 
 /**
- * Canonical vertical reel tile used on Dashboard (Creator Radar drill-down).
- * Collected Reels, Saved Reels, and other grid views should use this shell
- * so rank overlays, stats, and action placement stay consistent.
+ * Canonical vertical reel tile (quiet chrome by default).
+ * Dashboard, Collected, Saved, and platform spy grids should share this shell
+ * so caption, metrics, and Remake actions stay consistent.
  */
 export function WorkspaceReelGridTile({
   className,
@@ -77,7 +77,7 @@ export function WorkspaceReelGridTile({
   stats,
   actions,
   mediaFallback,
-  chrome = "dense",
+  chrome = "quiet",
   interactiveMedia = false,
   inlinePlaying = false,
   onInlinePlayRequest,
