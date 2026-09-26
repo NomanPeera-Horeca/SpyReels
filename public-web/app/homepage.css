@@ -204,7 +204,7 @@
   .nav-choice small,.nav-role small{display:block;margin-top:2px;font-size:11px;line-height:1.35;color:#777280}
   .nav-choice-arrow{margin-left:auto;color:#918a9d;font-size:13px}
   .solutions-menu .nav-panel-list{grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 8px}
-  .nav-role{display:flex;align-items:flex-start;gap:10px;padding:12px 10px;min-width:0}
+  .nav-role{display:flex;align-items:flex-start;gap:10px;padding:12px 10px;min-width:0;text-decoration:none;color:inherit;cursor:pointer}.nav-role:hover{background:#f6f4fa;border-radius:11px}
   .icon-instagram{background:#fce9f0;color:#ca4280}.icon-tiktok{background:#e6f6f5;color:#17888b}.icon-shorts{background:#ffebea;color:#d4524b}
   .icon-creator{background:#eaf3ff;color:#3975d6}.icon-manager{background:#f2ecff;color:#7651c9}.icon-agency{background:#fff0df;color:#c9832e}.icon-brand{background:#e9f6ed;color:#379765}
   .icon-book{background:#f0eaff;color:#7152dc}.icon-help{background:#eaf3ff;color:#3975d6}.icon-shield{background:#e9f6ed;color:#379765}
