@@ -207,7 +207,7 @@
   .nav-role{display:flex;align-items:flex-start;gap:10px;padding:12px 10px;min-width:0;text-decoration:none;color:inherit;cursor:pointer}.nav-role:hover{background:#f6f4fa;border-radius:11px}
   .icon-instagram{background:#fce9f0;color:#ca4280}.icon-tiktok{background:#e6f6f5;color:#17888b}.icon-shorts{background:#ffebea;color:#d4524b}
   .icon-creator{background:#eaf3ff;color:#3975d6}.icon-manager{background:#f2ecff;color:#7651c9}.icon-agency{background:#fff0df;color:#c9832e}.icon-brand{background:#e9f6ed;color:#379765}
-  .icon-book{background:#f0eaff;color:#7152dc}.icon-help{background:#eaf3ff;color:#3975d6}.icon-shield{background:#e9f6ed;color:#379765}
+  .icon-blog{background:#fff4e8;color:#c46b1a}.icon-book{background:#f0eaff;color:#7152dc}.icon-help{background:#eaf3ff;color:#3975d6}.icon-shield{background:#e9f6ed;color:#379765}
   @media(max-width:1040px){
     .nav-inner.menu-open .product-menu .mega,.nav-inner.menu-open .nav-panel.mega{position:static;transform:none;width:auto;max-width:none;box-shadow:none;background:#fff;border:0;border-top:1px solid #eeeaf5;border-radius:0;margin:0;padding:10px 4px}
   }
