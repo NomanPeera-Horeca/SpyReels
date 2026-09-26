@@ -16,12 +16,14 @@ import {
 } from "@/components/ui/dialog";
 import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
 import { ReelGridThumbnail } from "@/components/ReelGridThumbnail";
+import { YouTubeInlineEmbed } from "@/components/YouTubeInlineEmbed";
 import {
   clearPendingRemakeIntentMedia,
   getPendingRemakeIntentMedia,
   type RemakeIntent,
   type RemakeIntentMedia,
 } from "@/lib/remakeIntent";
+import { resolveYouTubeVideoId } from "@/lib/youtubeVideoId";
 
 export function RemakeIntentDialog({
   open,
@@ -68,6 +70,13 @@ export function RemakeIntentDialog({
 
   const platform = media?.platform ?? "instagram";
   const originalUrl = media?.originalUrl?.trim() || media?.videoPageUrl?.trim() || "";
+  const youtubeVideoId =
+    platform === "youtube"
+      ? resolveYouTubeVideoId({
+          shortcode: media?.shortcode,
+          reelUrl: originalUrl || media?.videoPageUrl,
+        })
+      : null;
   const hasSourceMedia = Boolean(
     media &&
       ((media.thumbnailUrl ?? "").trim() ||
@@ -161,24 +170,20 @@ export function RemakeIntentDialog({
                     videoPageUrl={media?.videoPageUrl ?? media?.originalUrl}
                     fallbackLabel="Source Reel"
                   />
+                ) : hasSourceMedia && youtubeVideoId ? (
+                  <YouTubeInlineEmbed
+                    className="h-full w-full"
+                    videoId={youtubeVideoId}
+                  />
                 ) : hasSourceMedia && media?.thumbnailUrl ? (
-                  <a
-                    href={originalUrl || undefined}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group relative block h-full w-full"
-                    aria-label="Open original Reel"
-                  >
+                  <div className="relative h-full w-full">
                     <ReelGridThumbnail
                       className="h-full w-full"
                       thumbnailUrl={media.thumbnailUrl}
                       width={360}
                       height={560}
                     />
-                    <span className="absolute left-1/2 top-1/2 grid h-14 w-14 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-white/30 bg-black/60 text-white shadow-xl backdrop-blur group-hover:bg-black/75">
-                      <ExternalLink className="h-5 w-5" />
-                    </span>
-                  </a>
+                  </div>
                 ) : (
                   <div className="flex h-full items-center justify-center px-6 text-center">
                     <div>

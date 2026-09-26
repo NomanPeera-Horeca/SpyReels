@@ -2,9 +2,11 @@ import type { ReactNode } from "react";
 import { ExternalLink, Play } from "lucide-react";
 import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
 import { ReelGridThumbnail } from "@/components/ReelGridThumbnail";
+import { YouTubeInlineEmbed } from "@/components/YouTubeInlineEmbed";
 import { cn } from "@/lib/utils";
 import { formatWorkspaceReelDuration } from "@/lib/workspaceReelGridLayout";
 import { setPendingRemakeIntentMedia } from "@/lib/remakeIntent";
+import { resolveYouTubeVideoId } from "@/lib/youtubeVideoId";
 
 export type WorkspaceReelGridTileProps = {
   className?: string;
@@ -15,8 +17,8 @@ export type WorkspaceReelGridTileProps = {
   shortcode?: string | null;
   reelId?: number;
   /**
-   * Inline playback platform. YouTube has no durable MP4 in Collected, so we
-   * open the original page instead of faking an Instagram refresh.
+   * Inline playback platform. YouTube has no durable MP4, so tiles embed the
+   * Short in-app instead of bouncing to youtube.com or faking an IG refresh.
    */
   mediaPlatform?: "instagram" | "tiktok" | "youtube";
   engagementRate?: number;
@@ -91,29 +93,21 @@ export function WorkspaceReelGridTile({
     !quiet && engagementRate > 0 && !(highlightBanner && index === 0);
   const hasThumb = (thumbnailUrl ?? "").trim().length > 0;
   const isYouTube = mediaPlatform === "youtube";
-  const originalUrl = (reelUrl ?? "").trim();
-  /** YouTube Shorts are not mirrored as MP4; open the source page instead. */
-  const supportsInlineMp4 = !isYouTube;
+  const youtubeVideoId = isYouTube
+    ? resolveYouTubeVideoId({ shortcode, reelUrl })
+    : null;
+  const canPlayYouTubeInline = Boolean(youtubeVideoId);
   const showInlinePlayer =
-    interactiveMedia && inlinePlaying && hasThumb && supportsInlineMp4;
-
-  const openOriginal = () => {
-    if (!originalUrl) return;
-    window.open(originalUrl, "_blank", "noopener,noreferrer");
-  };
+    interactiveMedia &&
+    inlinePlaying &&
+    (isYouTube ? canPlayYouTubeInline : hasThumb);
 
   const handleMediaAreaClick = () => {
-    // YouTube Shorts are not mirrored as MP4. Never route them through
-    // Instagram/TikTok URL refresh — open the source page when we have it.
-    if (isYouTube) {
-      if (originalUrl) {
-        openOriginal();
+    if (interactiveMedia) {
+      if (isYouTube && !canPlayYouTubeInline) {
+        onMediaClick?.();
         return;
       }
-      onMediaClick?.();
-      return;
-    }
-    if (interactiveMedia) {
       if (!inlinePlaying) onInlinePlayRequest?.();
       return;
     }
@@ -152,7 +146,13 @@ export function WorkspaceReelGridTile({
           (e.g. 300x400) leave a black gap under the image.
         */}
         <div className="absolute inset-0">
-          {hasThumb ? (
+          {showInlinePlayer && isYouTube && youtubeVideoId ? (
+            <YouTubeInlineEmbed
+              className="h-full w-full"
+              videoId={youtubeVideoId}
+              onStop={onInlinePlayStop}
+            />
+          ) : hasThumb ? (
             showInlinePlayer ? (
               <DashboardReelGridMedia
                 className="h-full w-full"
@@ -186,27 +186,19 @@ export function WorkspaceReelGridTile({
               className="pointer-events-none absolute bottom-2.5 left-2.5 z-20 grid h-[30px] w-[30px] place-items-center rounded-full border border-white/20 bg-black/55 text-white"
               aria-hidden
             >
-              {isYouTube ? (
-                <ExternalLink className="h-3 w-3" />
-              ) : (
-                <Play className="h-3 w-3 translate-x-px fill-current" />
-              )}
+              <Play className="h-3 w-3 translate-x-px fill-current" />
             </div>
           ) : (
             <div
               className={cn(
                 "absolute left-1/2 top-1/2 z-20 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/35 bg-black/55 text-white shadow-lg backdrop-blur transition-opacity duration-150",
-                interactiveMedia || isYouTube
+                interactiveMedia
                   ? "opacity-90 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100"
                   : "pointer-events-none opacity-75 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100"
               )}
-              aria-hidden={!(interactiveMedia || isYouTube)}
+              aria-hidden={!interactiveMedia}
             >
-              {isYouTube ? (
-                <ExternalLink className="h-5 w-5" />
-              ) : (
-                <Play className="h-5 w-5 translate-x-0.5 fill-current" />
-              )}
+              <Play className="h-5 w-5 translate-x-0.5 fill-current" />
             </div>
           )
         ) : null}
