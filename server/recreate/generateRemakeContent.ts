@@ -12,6 +12,11 @@ import {
 } from "./remakeFactRisk";
 import { analyzeRemakeStructure } from "./remakeStructure";
 import { remakeCopyRisk } from "./remakeOriginality";
+import {
+  buildRemakeOutputLanguageRules,
+  DEFAULT_REMAKE_OUTPUT_LANGUAGE,
+  remakeOutputLanguageSystemClause,
+} from "./remakeOutputLanguage";
 
 function formatNiche(niche: string | null): string | null {
   if (!niche) return null;
@@ -186,14 +191,16 @@ async function repairCopiedSameTopic(input: {
   script: string;
   viralStructure: Record<string, unknown>;
   scriptFormatClosing: string;
+  outputLanguage: string;
   llmInvoker: typeof invokeLLM;
 }): Promise<string> {
+  const languageRules = buildRemakeOutputLanguageRules(input.outputLanguage);
   const response = await input.llmInvoker({
     messages: [
       {
         role: "system",
         content: withAiFormattingRules(
-          "You are an originality editor for viral short-form scripts. Preserve topic and proven mechanics, but rebuild copied content into a genuinely new creative execution. Return only the rewritten spoken script."
+          `You are an originality editor for viral short-form scripts. Preserve topic and proven mechanics, but rebuild copied content into a genuinely new creative execution. ${remakeOutputLanguageSystemClause(input.outputLanguage)} Return only the rewritten spoken script.`
         ),
       },
       {
@@ -220,6 +227,8 @@ REBUILD RULES
 - Never copy a long phrase from the source.
 - The result should feel like a different creator independently making a Reel on the same topic.
 
+${languageRules}
+
 ${input.scriptFormatClosing}`,
       },
     ],
@@ -234,14 +243,16 @@ async function repairUnsupportedFacts(input: {
   risksText: string;
   trustedGrounding: string;
   scriptFormatClosing: string;
+  outputLanguage: string;
   llmInvoker: typeof invokeLLM;
 }): Promise<string> {
+  const languageRules = buildRemakeOutputLanguageRules(input.outputLanguage);
   const response = await input.llmInvoker({
     messages: [
       {
         role: "system",
         content: withAiFormattingRules(
-          "You are a factual-integrity editor for short-form scripts. Remove unsupported specificity without weakening the hook or pacing. Never add replacement facts. Return only the repaired spoken script."
+          `You are a factual-integrity editor for short-form scripts. Remove unsupported specificity without weakening the hook or pacing. Never add replacement facts. ${remakeOutputLanguageSystemClause(input.outputLanguage)} Return only the repaired spoken script.`
         ),
       },
       {
@@ -263,6 +274,8 @@ RULES
 - Preserve the viral structure, hook pattern, pacing, and core lesson.
 - A hypothetical example must be explicitly generic, not presented as a true story.
 - Do not add citations or structural labels to the spoken script.
+
+${languageRules}
 
 ${input.scriptFormatClosing}`,
       },
@@ -295,10 +308,15 @@ export async function generateRemakeContent(input: {
   researchGroundingBlock?: string;
   trustedResearchTexts?: string[];
   platformLabel?: "Instagram Reel" | "TikTok video" | "YouTube Short";
+  /** Spoken remake language. Defaults to English for the creator's camera script. */
+  outputLanguage?: string;
   viralStructureOverride?: Record<string, unknown>;
   llmInvoker?: typeof invokeLLM;
 }): Promise<GeneratedRemakeContent> {
   const platformLabel = input.platformLabel ?? "Instagram Reel";
+  const outputLanguage =
+    input.outputLanguage?.trim() || DEFAULT_REMAKE_OUTPUT_LANGUAGE;
+  const languageRules = buildRemakeOutputLanguageRules(outputLanguage);
   const runLlm = input.llmInvoker ?? invokeLLM;
   const analyzed = input.viralStructureOverride
     ? { structure: input.viralStructureOverride, cacheHit: true }
@@ -338,12 +356,14 @@ export async function generateRemakeContent(input: {
 ${JSON.stringify(viralStructure, null, 2)}
 ${v13Context}
 
-**ORIGINAL VIRAL TRANSCRIPT:**
+**ORIGINAL VIRAL TRANSCRIPT (may be non-English — use for meaning and structure only):**
 ${input.originalTranscript}
 
 ${factsBlock}
 
 ${formatFidelityBlock}
+
+${languageRules}
 
 **READABILITY:**
 ${gradeLevelInstruction}
@@ -364,7 +384,7 @@ ${scriptFormatClosing}`
 ${JSON.stringify(viralStructure, null, 2)}
 ${v13Context}
 
-**SOURCE TRANSCRIPT — STRUCTURE AND PACING REFERENCE ONLY, NOT A FACT SOURCE FOR THE NEW TOPIC:**
+**SOURCE TRANSCRIPT — STRUCTURE AND PACING REFERENCE ONLY, NOT A FACT SOURCE FOR THE NEW TOPIC (may be non-English):**
 ${input.originalTranscript}
 
 **CREATOR DIRECTION:**
@@ -375,6 +395,8 @@ ${hasExplicitUserAngleInTopic(input.topic) ? RECREATE_EXPLICIT_ANGLE_RULES : REC
 ${factsBlock}
 
 ${formatFidelityBlock}
+
+${languageRules}
 
 **READABILITY:**
 ${gradeLevelInstruction}
@@ -396,7 +418,7 @@ ${scriptFormatClosing}`;
       {
         role: "system",
         content: withAiFormattingRules(
-          `You are an expert ${platformLabel} scriptwriter. Write natural, spoken scripts that preserve proven viral mechanics and factual integrity.`
+          `You are an expert ${platformLabel} scriptwriter. Write natural, spoken scripts that preserve proven viral mechanics and factual integrity. ${remakeOutputLanguageSystemClause(outputLanguage)}`
         ),
       },
       { role: "user", content: scriptPrompt },
@@ -432,6 +454,7 @@ ${scriptFormatClosing}`;
       risksText: formatFactRisksForRepair(initialRisk.risks),
       trustedGrounding: trustedTexts.filter(Boolean).join("\n\n"),
       scriptFormatClosing,
+      outputLanguage,
       llmInvoker: runLlm,
     });
 
@@ -468,6 +491,7 @@ ${scriptFormatClosing}`;
         script: generatedScript,
         viralStructure,
         scriptFormatClosing,
+        outputLanguage,
         llmInvoker: runLlm,
       });
 

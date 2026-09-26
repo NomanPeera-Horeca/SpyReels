@@ -93,6 +93,8 @@ Analyze the following viral ${platformLabel} transcript and identify its exact s
 **Full Transcript:**
 ${input.originalTranscript}
 
+The transcript may be in any language. Write every string field in English (summarize hook/body/keyPoints/cta in English). Keep the original mechanics.
+
 Return ONLY valid JSON, no markdown formatting.`;
 
   const response = await (input.llmInvoker ?? invokeLLM)({

@@ -67,6 +67,14 @@ describe("generateRemakeContent hardening", () => {
     });
 
     expect(mocks.invokeLLM).toHaveBeenCalledTimes(1);
+    const writerCall = mocks.invokeLLM.mock.calls[0]?.[0] as {
+      messages: Array<{ role: string; content: string }>;
+    };
+    const system = writerCall.messages.find((m) => m.role === "system")?.content ?? "";
+    const user = writerCall.messages.find((m) => m.role === "user")?.content ?? "";
+    expect(system).toContain("Always write the spoken remake script in English");
+    expect(user).toContain("OUTPUT LANGUAGE (HARD RULE)");
+    expect(user).toContain("may be non-English");
     expect(result.readabilityAnalysis.wordCount).toBeGreaterThan(10);
     expect(result.factIntegrity.repaired).toBe(false);
   });
