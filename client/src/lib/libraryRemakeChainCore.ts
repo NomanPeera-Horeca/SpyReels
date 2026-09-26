@@ -188,7 +188,7 @@ export function evaluateRemakeabilityGate(
   };
 }
 
-export const LIBRARY_REMAKE_CTA_LABEL = "Remake this into your voice";
+export const LIBRARY_REMAKE_CTA_LABEL = "Remake";
 export const READY_TO_FILM_CTA_LABEL = "Open remake";
 
 export function libraryRemakeButtonLabel(state: LibraryRemakeState): string {

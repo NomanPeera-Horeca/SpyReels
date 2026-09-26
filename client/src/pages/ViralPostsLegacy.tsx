@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { toast } from "sonner";
+import { TRPCClientError } from "@trpc/client";
 import { Loader2 } from "lucide-react";
 import { RemakeHowSpyReelsWritesDialog } from "@/components/RemakeHowSpyReelsWritesDialog";
 import { ExploreSearchLoading } from "@/components/viral-posts/ExploreSearchLoading";
@@ -14,6 +15,12 @@ import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import { useLibraryRemakeChain } from "@/hooks/useLibraryRemakeChain";
 import { ingestUrlAndStartLibraryRemake } from "@/lib/ingestUrlAndStartLibraryRemake";
+import { navigateAfterScrapeStart } from "@/lib/scrapeNavigation";
+import {
+  findOpenableCreatorJob,
+  normalizeCreatorHandle,
+  pathForCreatorResearchJob,
+} from "@/lib/openCreatorInApp";
 import {
   EXPLORE_SUGGESTED_SEARCHES,
 } from "@/lib/viralPosts/viralPostsService";
@@ -87,6 +94,27 @@ export default function ViralPosts() {
   const utils = trpc.useUtils();
   const addByUrlMutation = trpc.collected.addByUrl.useMutation();
   const { startRemake, RemakeDialogs } = useLibraryRemakeChain();
+  const [creatorOpenBusy, setCreatorOpenBusy] = useState(false);
+
+  const startInstagramScrape = trpc.scrape.start.useMutation({
+    onSuccess: (data) => {
+      navigateAfterScrapeStart(data, setLocation, "viral-posts");
+    },
+  });
+  const startTikTokScrape = trpc.tiktokScrape.start.useMutation({
+    onSuccess: (data) => {
+      setLocation(
+        `/tiktok-scraping?jobId=${data.jobId}&from=viral-posts`
+      );
+    },
+  });
+  const startYouTubeScrape = trpc.youtubeScrape.start.useMutation({
+    onSuccess: (data) => {
+      setLocation(
+        `/youtube-scraping?jobId=${data.jobId}&from=viral-posts`
+      );
+    },
+  });
 
   const [feed, setFeed] = useState<{
     items: ViralPost[];
@@ -481,10 +509,132 @@ export default function ViralPosts() {
     setWhyOpen(true);
   }, []);
 
+  const openCreator = useCallback(
+    async (post: ViralPost) => {
+      const handle = normalizeCreatorHandle(post.creatorHandle || post.creatorName);
+      if (!handle) {
+        toast.error("This post has no creator handle to open.");
+        return;
+      }
+      if (creatorOpenBusy) return;
+      setCreatorOpenBusy(true);
+      const toastId = toast.loading(`Opening @${handle} in SpyReels…`);
+      try {
+        if (post.platform === "instagram") {
+          const jobs = await utils.scrape.list.fetch();
+          const existing = findOpenableCreatorJob(jobs, handle);
+          if (existing) {
+            setLocation(
+              pathForCreatorResearchJob(
+                { id: existing.id, platform: "instagram" },
+                "viral-posts"
+              )
+            );
+            toast.success(`Opened @${handle}`, { id: toastId });
+            return;
+          }
+          try {
+            const data = await startInstagramScrape.mutateAsync({
+              handle,
+              timeframeDays: 30,
+            });
+            navigateAfterScrapeStart(data, setLocation, "viral-posts");
+            toast.success(`Researching @${handle}`, { id: toastId });
+          } catch (err) {
+            if (err instanceof TRPCClientError && err.data?.code === "CONFLICT") {
+              const refreshed = await utils.scrape.list.fetch();
+              const again = findOpenableCreatorJob(refreshed, handle);
+              if (again) {
+                setLocation(
+                  pathForCreatorResearchJob(
+                    { id: again.id, platform: "instagram" },
+                    "viral-posts"
+                  )
+                );
+                toast.success(`Opened @${handle}`, { id: toastId });
+                return;
+              }
+              setLocation("/history");
+              toast.message(err.message, { id: toastId });
+              return;
+            }
+            throw err;
+          }
+          return;
+        }
+
+        if (post.platform === "tiktok") {
+          const jobs = await utils.tiktokScrape.list.fetch();
+          const existing = findOpenableCreatorJob(
+            jobs.map((j) => ({ ...j, platform: "tiktok" as const })),
+            handle
+          );
+          if (existing) {
+            setLocation(
+              pathForCreatorResearchJob(
+                { id: existing.id, platform: "tiktok" },
+                "viral-posts"
+              )
+            );
+            toast.success(`Opened @${handle}`, { id: toastId });
+            return;
+          }
+          const data = await startTikTokScrape.mutateAsync({
+            handle,
+            timeframe: "30",
+          });
+          setLocation(`/tiktok-scraping?jobId=${data.jobId}&from=viral-posts`);
+          toast.success(`Researching @${handle}`, { id: toastId });
+          return;
+        }
+
+        const ytJobs = await utils.youtubeScrape.list.fetch();
+        const existingYt = findOpenableCreatorJob(
+          ytJobs.map((j) => ({ ...j, platform: "youtube" as const })),
+          handle
+        );
+        if (existingYt) {
+          setLocation(
+            pathForCreatorResearchJob(
+              { id: existingYt.id, platform: "youtube" },
+              "viral-posts"
+            )
+          );
+          toast.success(`Opened @${handle}`, { id: toastId });
+          return;
+        }
+        const data = await startYouTubeScrape.mutateAsync({
+          handle,
+          timeframe: "30",
+        });
+        setLocation(`/youtube-scraping?jobId=${data.jobId}&from=viral-posts`);
+        toast.success(`Researching @${handle}`, { id: toastId });
+      } catch (err) {
+        toast.error(
+          err instanceof Error ? err.message : "Could not open creator.",
+          { id: toastId }
+        );
+      } finally {
+        setCreatorOpenBusy(false);
+      }
+    },
+    [
+      creatorOpenBusy,
+      setLocation,
+      startInstagramScrape,
+      startTikTokScrape,
+      startYouTubeScrape,
+      utils.scrape.list,
+      utils.tiktokScrape.list,
+      utils.youtubeScrape.list,
+    ]
+  );
+
   const cardHandlers = {
     onRemake: (post: ViralPost) => void openRemake(post),
     onToggleSave: (post: ViralPost) => void handleToggleSave(post),
     onWhyItWorks: openWhy,
+    onOpenCreator: (post: ViralPost) => void openCreator(post),
     onMoreLikeThis: (post: ViralPost) => void handleMoreLikeThis(post),
     onNotRelevant: (post: ViralPost) => void handleNotRelevant(post),
     onHideCreator: (post: ViralPost) => void handleHideCreator(post),
@@ -918,6 +1068,7 @@ export default function ViralPosts() {
         onOpenChange={setWhyOpen}
         post={whyPost}
         onRemake={(post) => void openRemake(post)}
+        onOpenCreator={(post) => void openCreator(post)}
       />
       <RemakeHowSpyReelsWritesDialog
         open={adjustOpen}

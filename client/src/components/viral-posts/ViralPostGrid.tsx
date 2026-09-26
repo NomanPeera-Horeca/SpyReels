@@ -9,6 +9,7 @@ type ViralPostGridProps = {
   onRemake: (post: ViralPost) => void;
   onToggleSave: (post: ViralPost) => void;
   onWhyItWorks: (post: ViralPost) => void;
+  onOpenCreator: (post: ViralPost) => void;
   onMoreLikeThis: (post: ViralPost) => void;
   onNotRelevant: (post: ViralPost) => void;
   onHideCreator: (post: ViralPost) => void;
@@ -80,6 +81,7 @@ export function ViralPostGrid({
   onRemake,
   onToggleSave,
   onWhyItWorks,
+  onOpenCreator,
   onMoreLikeThis,
   onNotRelevant,
   onHideCreator,
@@ -115,6 +117,7 @@ export function ViralPostGrid({
           onRemake={onRemake}
           onToggleSave={onToggleSave}
           onWhyItWorks={onWhyItWorks}
+          onOpenCreator={onOpenCreator}
           onMoreLikeThis={onMoreLikeThis}
           onNotRelevant={onNotRelevant}
           onHideCreator={onHideCreator}

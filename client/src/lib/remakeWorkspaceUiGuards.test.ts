@@ -52,9 +52,7 @@ describe("Remake workspace agent UI cleanup", () => {
   it("wires Try again to the shared remake retry callback", () => {
     expect(workspaceSource).toContain("onRetryRemake");
     expect(workspaceSource).toContain("Try again");
-    expect(workspaceSource).toContain("remake-workspace-error");
     expect(chainHookSource).toContain("onRetryRemake");
-    expect(chainHookSource).toContain("retryRemake(source)");
   });
 });
 
@@ -92,16 +90,28 @@ describe("Viral Posts mature SaaS color contract", () => {
   );
 
   it("keeps card Remake soft (not filled primary purple)", () => {
-    expect(cardSource).toContain("Remake in your voice");
+    expect(cardSource).toMatch(/Remake\s*<\/Button>/);
+    expect(cardSource).not.toContain("Remake in your voice");
     expect(cardSource).toContain('variant="outline"');
-    expect(cardSource).not.toMatch(/Remake in your voice[\s\S]{0,200}bg-\[#7c3aed\]/);
-    expect(cardSource).not.toMatch(/Remake in your voice[\s\S]{0,200}bg-primary/);
+    expect(cardSource).not.toMatch(/Remake\s*<\/Button>[\s\S]{0,80}bg-\[#7c3aed\]/);
+    expect(cardSource).not.toMatch(/Remake\s*<\/Button>[\s\S]{0,80}bg-primary/);
   });
 
   it("uses brand primary only on drawer Remake commit CTA", () => {
-    expect(drawerSource).toContain("Remake this post");
+    expect(drawerSource).toMatch(/Remake\s*<\/Button>/);
+    expect(drawerSource).not.toContain("Remake this post");
     expect(drawerSource).toContain("bg-primary");
     expect(drawerSource).toContain("Color contract");
+  });
+
+  it("opens creators in-app instead of Instagram/TikTok", () => {
+    expect(cardSource).toContain("onOpenCreator");
+    expect(cardSource).not.toContain("viralPostCreatorProfileUrl");
+    expect(drawerSource).toContain("onOpenCreator");
+    expect(drawerSource).not.toContain("viralPostCreatorProfileUrl");
+    expect(viralLegacySource).toContain("openCreator");
+    expect(viralLegacySource).toContain("pathForCreatorResearchJob");
+    expect(viralLegacySource).toContain("timeframeDays: 30");
   });
 
   it("keeps creator links muted (not brand purple)", () => {

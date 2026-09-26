@@ -10,7 +10,6 @@ import {
   formatEngagementPct,
   formatNicheSignal,
   formatShortPostDate,
-  viralPostCreatorProfileUrl,
 } from "@/lib/viralPosts/format";
 import type { ViralPost } from "@/lib/viralPosts/types";
 
@@ -19,6 +18,7 @@ type ViralPostCardProps = {
   onRemake: (post: ViralPost) => void;
   onToggleSave: (post: ViralPost) => void;
   onWhyItWorks: (post: ViralPost) => void;
+  onOpenCreator: (post: ViralPost) => void;
   onMoreLikeThis: (post: ViralPost) => void;
   onNotRelevant: (post: ViralPost) => void;
   onHideCreator: (post: ViralPost) => void;
@@ -65,6 +65,7 @@ export function ViralPostCard({
   onRemake,
   onToggleSave,
   onWhyItWorks,
+  onOpenCreator,
   onMoreLikeThis,
   onNotRelevant,
   onHideCreator,
@@ -81,7 +82,6 @@ export function ViralPostCard({
   const handle = formatCreatorHandle(
     post.creatorHandle || post.creatorName
   );
-  const creatorHref = viralPostCreatorProfileUrl(post);
   const { leading: metricParts, signal, date } = cardMetricsLine(post);
   const caption = cardCaption(post);
 
@@ -175,22 +175,17 @@ export function ViralPostCard({
         </p>
 
         <div className="grid gap-1">
-          {creatorHref ? (
-            <a
-              href={creatorHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-fit text-[12px] font-medium text-[#a8a3b3] hover:text-[#f5f3f8] hover:underline"
-              title="Open creator profile"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {handle}
-            </a>
-          ) : (
-            <span className="text-[12px] font-medium text-[#a8a3b3]">
-              {handle}
-            </span>
-          )}
+          <button
+            type="button"
+            className="w-fit text-left text-[12px] font-medium text-[#a8a3b3] hover:text-[#f5f3f8] hover:underline"
+            title="Open creator in SpyReels"
+            onClick={(e) => {
+              e.stopPropagation();
+              onOpenCreator(post);
+            }}
+          >
+            {handle}
+          </button>
           {(metricParts.length > 0 || signal || date) && (
             <p className="text-[11px] leading-snug text-[#a8a3b3]">
               {metricParts.join(" · ")}
@@ -220,7 +215,7 @@ export function ViralPostCard({
               onRemake(post);
             }}
           >
-            Remake in your voice
+            Remake
           </Button>
           <button
             type="button"
@@ -293,17 +288,16 @@ export function ViralPostCard({
           >
             View details
           </button>
-          {creatorHref ? (
-            <a
-              href={creatorHref}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-white/[0.06] hover:text-white"
-              onClick={() => setMenuOpen(false)}
-            >
-              Open creator
-            </a>
-          ) : null}
+          <button
+            type="button"
+            className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-white/[0.06] hover:text-white"
+            onClick={() => {
+              setMenuOpen(false);
+              onOpenCreator(post);
+            }}
+          >
+            Open creator
+          </button>
           <button
             type="button"
             className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-white/[0.06] hover:text-white"

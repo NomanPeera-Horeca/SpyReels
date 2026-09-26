@@ -14,7 +14,6 @@ import {
   formatEngagementPct,
   formatNicheSignal,
   formatShortPostDate,
-  viralPostCreatorProfileUrl,
   whyItWorksBullets,
 } from "@/lib/viralPosts/format";
 import type { ViralPost } from "@/lib/viralPosts/types";
@@ -25,6 +24,7 @@ type ViralPostDetailsDrawerProps = {
   post: ViralPost | null;
   loading?: boolean;
   onRemake: (post: ViralPost) => void;
+  onOpenCreator: (post: ViralPost) => void;
 };
 
 function platformOpenLabel(platform: ViralPost["platform"]): string {
@@ -71,11 +71,11 @@ export function ViralPostDetailsDrawer({
   post,
   loading = false,
   onRemake,
+  onOpenCreator,
 }: ViralPostDetailsDrawerProps) {
   const handle = post
     ? formatCreatorHandle(post.creatorHandle || post.creatorName)
     : "";
-  const creatorHref = post ? viralPostCreatorProfileUrl(post) : null;
   const date = post ? formatShortPostDate(post.publishedAt) : null;
   const metrics = post ? drawerMetrics(post) : null;
   const works = post ? whyItWorksBullets(post) : [];
@@ -115,18 +115,13 @@ export function ViralPostDetailsDrawer({
             </p>
 
             <div className="flex items-center justify-between gap-2.5 text-xs text-[#a8a3b3]">
-              {creatorHref ? (
-                <a
-                  href={creatorHref}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-medium text-[#a8a3b3] hover:text-[#f5f3f8] hover:underline"
-                >
-                  {handle}
-                </a>
-              ) : (
-                <span className="font-medium">{handle}</span>
-              )}
+              <button
+                type="button"
+                className="font-medium text-[#a8a3b3] hover:text-[#f5f3f8] hover:underline"
+                onClick={() => onOpenCreator(post)}
+              >
+                {handle}
+              </button>
               {date ? <span>{date}</span> : null}
             </div>
 
@@ -173,7 +168,7 @@ export function ViralPostDetailsDrawer({
                   onRemake(post);
                 }}
               >
-                Remake this post
+                Remake
               </Button>
               <div className="grid grid-cols-2 gap-2">
                 {post.sourceUrl ? (
@@ -194,22 +189,14 @@ export function ViralPostDetailsDrawer({
                 ) : (
                   <span />
                 )}
-                {creatorHref ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="h-10 border-[#2b2739] bg-transparent text-[12px] font-semibold text-[#e8e2f4] hover:bg-white/[0.04]"
-                    asChild
-                  >
-                    <a
-                      href={creatorHref}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      Open creator
-                    </a>
-                  </Button>
-                ) : null}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-10 border-[#2b2739] bg-transparent text-[12px] font-semibold text-[#e8e2f4] hover:bg-white/[0.04]"
+                  onClick={() => onOpenCreator(post)}
+                >
+                  Open creator
+                </Button>
               </div>
             </div>
           </div>

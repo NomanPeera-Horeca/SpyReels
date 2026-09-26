@@ -643,8 +643,8 @@
       <section id="current" class="grid dense hidden" aria-label="Current Viral Posts grid"></section>
 
       <div class="note" id="noteProposed">
-        <strong style="color:var(--fg)">Polish v3</strong><br>
-        Card CTA: Remake in your voice · drawer: Remake this post ·
+        <strong style="color:var(--fg)">Polish v4</strong><br>
+        Card CTA: Remake · drawer: Remake · Open creator stays in-app (Creator Radar / research) ·
         metrics include one relative cue (× niche avg) without badges.
       </div>
       <div class="note hidden" id="noteCurrent">
@@ -900,7 +900,7 @@
               <div class="metrics">${p.cardMetrics} · <span class="signal">${p.signal}</span> · ${p.date}</div>
             </div>
             <div class="actions">
-              <button class="btn soft" type="button" onclick="toast('Remake in your voice → shared remake chain')">Remake in your voice</button>
+              <button class="btn soft" type="button" onclick="toast('Remake → shared remake chain')">Remake</button>
               <button class="icon-btn ${saved.has(p.id) ? "on" : ""}" type="button" title="Save" onclick="toggleSave(${p.id})">${saved.has(p.id) ? "★" : "☆"}</button>
               <button class="icon-btn" type="button" title="More" onclick="toggleMenu(${p.id}, event)">⋯</button>
             </div>
