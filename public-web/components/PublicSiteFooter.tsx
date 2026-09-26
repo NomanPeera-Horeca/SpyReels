@@ -80,7 +80,7 @@ export function PublicSiteFooter() {
             </div>
           ))}
         </div>
-        <div className={styles.copyright}>© {new Date().getFullYear()} SpyReels. All rights reserved.</div>
+        <div className={styles.copyright}>© {new Date().getFullYear()} SpyReels by Spyreels Inc. All rights reserved.</div>
       </div>
     </footer>
   );
