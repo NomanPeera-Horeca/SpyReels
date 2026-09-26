@@ -1,6 +1,7 @@
 import type { Express, NextFunction, Request, Response } from "express";
 import http from "node:http";
 import https from "node:https";
+import { COOKIE_NAME } from "../../shared/const";
 
 export const VIRAL_REEL_FINDER_PILOT_PATH = "/features/viral-reel-finder";
 export const VIRAL_REEL_FINDER_DEMO_PATH = "/features/viral-reel-finder/demo";
@@ -192,6 +193,12 @@ export function registerPublicWebPilotProxy(
 
   app.use((req, res, next) => {
     if (req.path === "/" && (req.query.signup === "1" || req.query.login === "1")) {
+      next();
+      return;
+    }
+    // Signed-in visitors still own / in the product SPA. Cookie presence is
+    // only a routing hint; the SPA validates the session as before.
+    if (req.path === "/" && req.headers.cookie?.split(";").some((part) => part.trim().startsWith(`${COOKIE_NAME}=`))) {
       next();
       return;
     }

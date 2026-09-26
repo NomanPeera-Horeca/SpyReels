@@ -122,6 +122,9 @@ describe("publicWebPilotProxy", () => {
     expect(await (await fetch(`http://127.0.0.1:${proxyPort}/`)).text()).toBe("next-home");
     expect(await (await fetch(`http://127.0.0.1:${proxyPort}/?signup=1`)).text()).toBe("legacy-home");
     expect(await (await fetch(`http://127.0.0.1:${proxyPort}/?login=1`)).text()).toBe("legacy-home");
+    expect(await (await fetch(`http://127.0.0.1:${proxyPort}/`, {
+      headers: { cookie: "app_session_id=existing-session" },
+    })).text()).toBe("legacy-home");
   });
 
   it("falls back to the safe timeout when the configured value is invalid", () => {
