@@ -110,7 +110,7 @@ describe("publicWebPilotProxy", () => {
     expect(isPublicWebPilotRequest("/", "GET", { ...config, homepageEnabled: false })).toBe(false);
   });
 
-  it("keeps signup and login query links on the legacy homepage", async () => {
+  it("redirects legacy signup and login query links to the auth handoff", async () => {
     const upstream = http.createServer((_req, res) => res.end("next-home"));
     const upstreamPort = await listen(upstream);
     const app = express();
@@ -122,8 +122,23 @@ describe("publicWebPilotProxy", () => {
     const proxy = http.createServer(app);
     const proxyPort = await listen(proxy);
     expect(await (await fetch(`http://127.0.0.1:${proxyPort}/`)).text()).toBe("next-home");
-    expect(await (await fetch(`http://127.0.0.1:${proxyPort}/?signup=1`)).text()).toBe("legacy-home");
-    expect(await (await fetch(`http://127.0.0.1:${proxyPort}/?login=1`)).text()).toBe("legacy-home");
+
+    const signup = await fetch(`http://127.0.0.1:${proxyPort}/?signup=1`, {
+      redirect: "manual",
+    });
+    expect(signup.status).toBe(302);
+    expect(signup.headers.get("location")).toBe(
+      "/pricing?auth=signup&returnTo=%2Fresearch"
+    );
+
+    const login = await fetch(`http://127.0.0.1:${proxyPort}/?login=1`, {
+      redirect: "manual",
+    });
+    expect(login.status).toBe(302);
+    expect(login.headers.get("location")).toBe(
+      "/pricing?auth=login&returnTo=%2Fresearch"
+    );
+
     const verify = vi.spyOn(sdk, "authenticateRequest").mockRejectedValue(new Error("stale session"));
     expect(await (await fetch(`http://127.0.0.1:${proxyPort}/`, {
       headers: { cookie: "app_session_id=stale-session" },

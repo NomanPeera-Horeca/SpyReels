@@ -2,6 +2,10 @@ import type { Express, NextFunction, Request, Response } from "express";
 import http from "node:http";
 import https from "node:https";
 import { COOKIE_NAME } from "../../shared/const";
+import {
+  legacyHomepageAuthMode,
+  publicAuthHandoffPath,
+} from "../../shared/publicAuthHandoff";
 import { parse as parseCookieHeader } from "cookie";
 import { sdk } from "./sdk";
 
@@ -209,9 +213,15 @@ export function registerPublicWebPilotProxy(
   }
 
   app.use(async (req, res, next) => {
-    if (req.path === "/" && (req.query.signup === "1" || req.query.login === "1")) {
-      next();
-      return;
+    // Legacy ChatGPT homepage CTAs used /?login=1 and /?signup=1. Redirect to a
+    // SPA public page that mounts AuthDialog via ?auth=, instead of the retired
+    // Vite homepage shell.
+    if (req.path === "/" && (req.method === "GET" || req.method === "HEAD")) {
+      const mode = legacyHomepageAuthMode(req.query as Record<string, unknown>);
+      if (mode) {
+        res.redirect(302, publicAuthHandoffPath(mode));
+        return;
+      }
     }
     // A signed token alone does not prove the account still exists. Use the
     // same authentication check as product APIs before routing into the SPA.

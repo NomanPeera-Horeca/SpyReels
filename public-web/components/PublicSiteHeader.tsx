@@ -1,3 +1,4 @@
+import { publicAuthHandoffPath } from "../../shared/publicAuthHandoff";
 import styles from "./PublicSiteChrome.module.css";
 
 const APP_ORIGIN = "https://spyreels.ai";
@@ -13,8 +14,8 @@ const NAV_LINKS = [
   ["Earn 20%", `${APP_ORIGIN}/affiliate`],
 ] as const;
 
-const LOGIN_URL = `${APP_ORIGIN}/?auth=login&returnTo=${encodeURIComponent("/research")}`;
-const SIGNUP_URL = `${APP_ORIGIN}/?auth=signup&returnTo=${encodeURIComponent("/research")}`;
+const LOGIN_URL = `${APP_ORIGIN}${publicAuthHandoffPath("login")}`;
+const SIGNUP_URL = `${APP_ORIGIN}${publicAuthHandoffPath("signup")}`;
 
 export function PublicSiteHeader() {
   return (
