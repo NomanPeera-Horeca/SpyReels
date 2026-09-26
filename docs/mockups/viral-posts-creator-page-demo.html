@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Creator · SpyReels mockup</title>
+  <style>
+    :root {
+      --bg: #1c1a22;
+      --fg: #f5f3f8;
+      --card: #2a2732;
+      --muted-fg: #a8a3b3;
+      --border: rgba(120, 112, 140, 0.32);
+      --primary: #9b6cff;
+      --sidebar: #16141c;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--fg); min-height: 100vh; }
+    .wrap { max-width: 960px; margin: 0 auto; padding: 28px 20px 60px; }
+    .banner {
+      border: 1px solid color-mix(in srgb, var(--primary) 40%, var(--border));
+      background: color-mix(in srgb, var(--primary) 10%, transparent);
+      color: var(--muted-fg);
+      border-radius: 12px;
+      padding: 12px 14px;
+      font-size: 13px;
+      margin-bottom: 20px;
+      line-height: 1.45;
+    }
+    .banner strong { color: var(--fg); }
+    .head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    h1 { margin: 0; font-size: 28px; }
+    .meta { color: var(--muted-fg); font-size: 13px; margin-top: 6px; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      margin-left: 8px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--primary) 22%, transparent);
+      color: #efe8ff;
+      font-size: 11px;
+      font-weight: 700;
+      vertical-align: middle;
+    }
+    .btn {
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--fg);
+      border-radius: 10px;
+      padding: 9px 12px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      text-decoration: none;
+      display: inline-flex;
+    }
+    .btn.primary { background: var(--primary); border-color: transparent; color: #fff; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 14px;
+    }
+    .tile {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    .media { aspect-ratio: 9/14; background: #121018; }
+    .media img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: .9; }
+    .body { padding: 11px; display: grid; gap: 8px; }
+    .caption {
+      font-size: 13px; line-height: 1.35;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .stats { font-size: 11px; color: var(--muted-fg); }
+    .actions { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+    .icon {
+      width: 34px; height: 34px; border-radius: 10px;
+      border: 1px solid var(--border); background: transparent; color: var(--muted-fg); cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="banner">
+      <strong>Mock creator page</strong> · opened in a new tab from Viral Posts.
+      In product this maps to existing Creator Radar / dashboard research for that handle.
+      Viral Posts stays open in the previous tab.
+    </div>
+
+    <div class="head">
+      <div>
+        <h1 id="handle">@creator <span class="pill">Creator Radar</span></h1>
+        <div class="meta" id="sub">Instagram · research session · same Remake path as Collected / Saved</div>
+      </div>
+      <a class="btn" href="./viral-posts-mature-saas-proposal.html">Back to Viral Posts mockup</a>
+    </div>
+
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <script>
+    const params = new URLSearchParams(location.search);
+    const handle = params.get("handle") || "@creator";
+    document.getElementById("handle").firstChild.textContent = handle + " ";
+    document.title = handle + " · Creator Radar mockup";
+    document.getElementById("sub").textContent =
+      handle + " · Creator Radar research · click Remake uses the shared remake chain";
+
+    const samples = [
+      ["https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=500&q=80", "Hook about menu pricing trust.", "18.4K views · 2.1% eng · Sep 12"],
+      ["https://images.unsplash.com/photo-1559339352-11d035aa65de?w=500&q=80", "Distribution problem for great food.", "9.2K views · 3.4% eng · Sep 8"],
+      ["https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=500&q=80", "Batch content systems for restaurants.", "41K views · 2.8% eng · Aug 30"],
+      ["https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=500&q=80", "Shoot one dish four ways.", "2.2K views · 5.0% eng · Aug 22"],
+    ];
+
+    document.getElementById("grid").innerHTML = samples.map(([img, caption, stats]) => `
+      <article class="tile">
+        <div class="media"><img src="${img}" alt="" /></div>
+        <div class="body">
+          <div class="caption">${caption}</div>
+          <div class="stats">${stats}</div>
+          <div class="actions">
+            <button class="btn primary" type="button" onclick="alert('Remake → same shared remake workspace')">Remake</button>
+            <button class="icon" type="button" title="Save">☆</button>
+          </div>
+        </div>
+      </article>
+    `).join("");
+  </script>
+</body>
+</html>

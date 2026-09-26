@@ -85,6 +85,93 @@ export function whyFitBody(reason: string): string {
     .replace(/^Your audience /i, "Your audience ");
 }
 
+/** Engagement rate is stored as a 0-1 fraction. */
+export function formatEngagementPct(
+  rate: number | null | undefined
+): string | null {
+  if (rate == null || !Number.isFinite(rate) || rate < 0) return null;
+  const pct = rate <= 1 ? rate * 100 : rate;
+  const rounded = Math.round(pct * 10) / 10;
+  const label = Number.isInteger(rounded)
+    ? String(rounded)
+    : rounded.toFixed(1);
+  return `${label}% eng`;
+}
+
+/**
+ * Relative performance cue for cards/drawer.
+ * Uses reachMultiplier (views / followers) as the quiet "so what" signal.
+ */
+export function formatNicheSignal(
+  reachMultiplier: number | null | undefined
+): string | null {
+  if (
+    reachMultiplier == null ||
+    !Number.isFinite(reachMultiplier) ||
+    reachMultiplier <= 0
+  ) {
+    return null;
+  }
+  const rounded = Math.round(reachMultiplier * 10) / 10;
+  const label = Number.isInteger(rounded)
+    ? String(rounded)
+    : rounded.toFixed(1);
+  return `${label}x niche avg`;
+}
+
+export function formatShortPostDate(
+  iso: string | null | undefined
+): string | null {
+  if (!iso) return null;
+  const date = new Date(iso);
+  if (!Number.isFinite(date.getTime())) return null;
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+export function viralPostCreatorProfileUrl(post: {
+  platform: "instagram" | "tiktok" | "youtube";
+  creatorHandle?: string | null;
+}): string | null {
+  const raw = (post.creatorHandle || "").replace(/^@/, "").trim();
+  if (!raw) return null;
+  if (post.platform === "tiktok") {
+    return `https://www.tiktok.com/@${encodeURIComponent(raw)}`;
+  }
+  if (post.platform === "youtube") return null;
+  return `https://www.instagram.com/${encodeURIComponent(raw)}/`;
+}
+
+export function whyItWorksBullets(post: {
+  hookMechanism?: string | null;
+  format?: string | null;
+  adaptabilityReason?: string | null;
+  trendStatus?: ViralTrendStatus | null;
+}): string[] {
+  const bullets: string[] = [];
+  if (post.hookMechanism?.trim()) bullets.push(post.hookMechanism.trim());
+  if (post.format?.trim()) bullets.push(`${post.format.trim()} format`);
+  if (post.adaptabilityReason?.trim()) {
+    bullets.push(post.adaptabilityReason.trim());
+  }
+  if (
+    bullets.length === 0 &&
+    post.trendStatus &&
+    post.trendStatus !== "unknown"
+  ) {
+    bullets.push(trendStatusLabel(post.trendStatus));
+  }
+  if (bullets.length === 0) {
+    bullets.push("Clear hook and structure worth remaking in your voice");
+  }
+  return bullets.slice(0, 4);
+}
+
+export function formatCreatorHandle(handle: string | null | undefined): string {
+  const raw = (handle || "").trim();
+  if (!raw) return "Unknown creator";
+  return raw.startsWith("@") ? raw : `@${raw}`;
+}
+
 /** Local calendar date YYYY-MM-DD for the user's browser timezone. */
 export function localDateString(d = new Date()): string {
   const y = d.getFullYear();

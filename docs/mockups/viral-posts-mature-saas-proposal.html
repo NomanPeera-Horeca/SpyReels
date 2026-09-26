@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SpyReels Viral Posts UI Proposal (interactive)</title>
+  <style>
+    :root {
+      --bg: #1c1a22;
+      --fg: #f5f3f8;
+      --card: #2a2732;
+      --muted: #32303b;
+      --muted-fg: #a8a3b3;
+      --border: rgba(120, 112, 140, 0.32);
+      --primary: #9b6cff;
+      --primary-fg: #fff;
+      --sidebar: #16141c;
+      --danger: #f07178;
+      --ok: #4ade80;
+      --radius: 14px;
+      --shadow: 0 8px 32px rgba(0,0,0,.35);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      min-height: 100vh;
+    }
+    button, input { font: inherit; }
+    .app {
+      display: grid;
+      grid-template-columns: 240px 1fr;
+      min-height: 100vh;
+    }
+    .sidebar {
+      background: var(--sidebar);
+      border-right: 1px solid var(--border);
+      padding: 16px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      padding: 4px 8px 12px;
+    }
+    .brand .mark {
+      width: 28px; height: 28px; border-radius: 999px;
+      background: radial-gradient(circle at 35% 35%, #c4a6ff, var(--primary));
+      display: grid; place-items: center;
+      color: white; font-size: 12px;
+    }
+    .niche {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      font-size: 12px;
+    }
+    .niche strong { display: block; font-size: 13px; margin-top: 2px; }
+    .nav-label {
+      font-size: 10px;
+      letter-spacing: .08em;
+      color: var(--muted-fg);
+      padding: 8px 10px 4px;
+      text-transform: uppercase;
+    }
+    .nav a {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      color: var(--muted-fg);
+      text-decoration: none;
+      padding: 9px 10px;
+      border-radius: 10px;
+      font-size: 13px;
+    }
+    .nav a.active {
+      background: color-mix(in srgb, var(--primary) 18%, transparent);
+      color: #efe8ff;
+    }
+    .badge-new {
+      font-size: 9px;
+      font-weight: 700;
+      color: #cfc4e8;
+      background: transparent;
+      border: 1px solid color-mix(in srgb, var(--primary) 35%, var(--border));
+      border-radius: 999px;
+      padding: 1px 6px;
+      letter-spacing: .02em;
+    }
+    .main { padding: 20px 24px 48px; }
+    .review-bar {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      margin: -20px -24px 18px;
+      padding: 12px 24px;
+      background: color-mix(in srgb, #0f0e14 92%, transparent);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .review-bar h1 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--muted-fg);
+    }
+    .toggle {
+      display: inline-flex;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 3px;
+      gap: 2px;
+    }
+    .toggle button {
+      border: 0;
+      background: transparent;
+      color: var(--muted-fg);
+      padding: 7px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .toggle button.on {
+      background: var(--primary);
+      color: white;
+    }
+    .page-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+    .page-head h2 {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .page-head p {
+      margin: 4px 0 0;
+      color: var(--muted-fg);
+      font-size: 13px;
+    }
+    .btn {
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--fg);
+      border-radius: 10px;
+      padding: 8px 12px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .btn:hover { border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); }
+    .btn.primary {
+      background: var(--primary);
+      border-color: transparent;
+      color: white;
+    }
+    .btn.ghost {
+      background: transparent;
+    }
+    .btn.soft {
+      background: transparent;
+      border-color: var(--border);
+      color: #e8e2f4;
+      font-weight: 600;
+      font-size: 11px;
+      padding: 8px 10px;
+      white-space: nowrap;
+    }
+    .btn.soft:hover {
+      border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+      color: #fff;
+      background: color-mix(in srgb, var(--primary) 8%, transparent);
+    }
+    .metrics .signal {
+      color: #d4c6f5;
+      font-weight: 600;
+    }
+    .btn.linkish {
+      background: transparent;
+      border-color: transparent;
+      color: var(--muted-fg);
+      font-weight: 600;
+      padding-left: 4px;
+      padding-right: 4px;
+    }
+    .btn.linkish:hover {
+      color: var(--fg);
+      border-color: transparent;
+      text-decoration: underline;
+    }
+    .btn.full { width: 100%; }
+    .tabs {
+      display: inline-flex;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 3px;
+      margin-bottom: 14px;
+    }
+    .tabs button {
+      border: 0;
+      background: transparent;
+      color: var(--muted-fg);
+      padding: 8px 14px;
+      border-radius: 9px;
+      cursor: pointer;
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .tabs button.on {
+      background: color-mix(in srgb, var(--primary) 20%, var(--card));
+      color: #f3eeff;
+    }
+    .status {
+      color: var(--muted-fg);
+      font-size: 12px;
+      margin: 0 0 16px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 16px;
+    }
+    .grid.dense {
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    }
+
+    /* Proposed quiet card = workspace tile language */
+    .tile {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: calc(var(--radius) + 2px);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: transform .15s ease, border-color .15s ease;
+    }
+    .tile:hover {
+      transform: translateY(-1px);
+      border-color: color-mix(in srgb, var(--primary) 35%, var(--border));
+    }
+    .media {
+      position: relative;
+      aspect-ratio: 9 / 14;
+      background: #121018;
+      overflow: hidden;
+      cursor: pointer;
+    }
+    .media img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      opacity: .92;
+    }
+    .media .play {
+      position: absolute;
+      inset: auto auto 10px 10px;
+      width: 30px; height: 30px;
+      border-radius: 999px;
+      background: rgba(0,0,0,.55);
+      border: 1px solid rgba(255,255,255,.2);
+      display: grid; place-items: center;
+      color: white;
+      font-size: 11px;
+    }
+    .chip {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: rgba(20,16,28,.78);
+      border: 1px solid rgba(255,255,255,.12);
+      color: #efe8ff;
+    }
+    .chip.rising { color: #bbf7d0; border-color: rgba(74,222,128,.35); }
+    .body { padding: 12px; display: flex; flex-direction: column; gap: 8px; flex: 1; }
+    .caption {
+      font-size: 13px;
+      line-height: 1.35;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      min-height: 2.7em;
+    }
+    .meta {
+      font-size: 11px;
+      color: var(--muted-fg);
+      display: grid;
+      gap: 4px;
+    }
+    .creator-link {
+      color: #d7c7ff;
+      text-decoration: none;
+      font-weight: 600;
+      width: fit-content;
+    }
+    .creator-link:hover {
+      color: #fff;
+      text-decoration: underline;
+    }
+    .metrics {
+      color: var(--muted-fg);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 6px;
+      margin-top: auto;
+    }
+    .icon-btn {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted-fg);
+      cursor: pointer;
+    }
+    .icon-btn:hover, .icon-btn.on {
+      color: var(--fg);
+      border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+    }
+    .menu {
+      position: absolute;
+      right: 10px;
+      bottom: 48px;
+      background: #1d1b24;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      min-width: 170px;
+      padding: 6px;
+      box-shadow: var(--shadow);
+      z-index: 5;
+      display: none;
+    }
+    .menu.open { display: block; }
+    .menu button {
+      width: 100%;
+      text-align: left;
+      border: 0;
+      background: transparent;
+      color: var(--fg);
+      padding: 8px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .menu button:hover { background: var(--muted); }
+
+    /* Current dense card for comparison */
+    .dense-card {
+      background: #171522;
+      border: 1px solid #2b2739;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 18px 50px rgba(0,0,0,.45);
+    }
+    .dense-media {
+      position: relative;
+      aspect-ratio: 9 / 11.2;
+      background: #111;
+    }
+    .dense-media img { width: 100%; height: 100%; object-fit: cover; opacity: .85; }
+    .dense-overlay {
+      position: absolute;
+      left: 12px; right: 12px; bottom: 12px;
+      font-size: 18px;
+      font-weight: 800;
+      line-height: 1.15;
+      text-shadow: 0 2px 10px rgba(0,0,0,.8);
+    }
+    .dense-body { padding: 12px 14px 14px; display: grid; gap: 8px; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: 11px;
+      background: color-mix(in srgb, var(--primary) 18%, transparent);
+      color: #dccdff;
+      width: fit-content;
+    }
+    .why {
+      font-size: 12px;
+      color: var(--muted-fg);
+      line-height: 1.4;
+    }
+    .dense-actions {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+    }
+    .dense-foot {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: #9b6cff;
+    }
+
+    .drawer-backdrop, .toast {
+      position: fixed;
+      z-index: 50;
+    }
+    .drawer-backdrop {
+      inset: 0;
+      background: rgba(0,0,0,.55);
+      display: none;
+      align-items: stretch;
+      justify-content: flex-end;
+    }
+    .drawer-backdrop.open { display: flex; }
+    .drawer {
+      width: min(420px, 100%);
+      background: #1a1821;
+      border-left: 1px solid var(--border);
+      padding: 18px;
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .drawer h3 { margin: 0; font-size: 16px; font-weight: 700; }
+    .drawer-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+    }
+    .drawer-preview-wrap {
+      display: flex;
+      justify-content: center;
+      padding: 4px 0 2px;
+    }
+    .drawer-preview {
+      position: relative;
+      width: min(220px, 58%);
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: #121018;
+      aspect-ratio: 9 / 16;
+      cursor: pointer;
+      box-shadow: 0 12px 28px rgba(0,0,0,.35);
+    }
+    .drawer-preview img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      opacity: .92;
+    }
+    .drawer-preview .play {
+      position: absolute;
+      left: 10px;
+      bottom: 10px;
+      width: 28px;
+      height: 28px;
+      border-radius: 999px;
+      background: rgba(0,0,0,.55);
+      border: 1px solid rgba(255,255,255,.2);
+      display: grid;
+      place-items: center;
+      color: white;
+      font-size: 10px;
+    }
+    .drawer-actions-secondary {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .drawer-actions-secondary .btn {
+      justify-content: center;
+      text-align: center;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+    }
+    .drawer-caption {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.35;
+      color: var(--fg);
+    }
+    .drawer-section {
+      border: 1px solid var(--border);
+      background: color-mix(in srgb, var(--card) 80%, #15131b);
+      border-radius: 14px;
+      padding: 12px;
+    }
+    .drawer-section h4 {
+      margin: 0 0 8px;
+      font-size: 11px;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--muted-fg);
+      font-weight: 700;
+    }
+    .drawer-section p {
+      margin: 0;
+      color: var(--muted-fg);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .drawer-section ul {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted-fg);
+      font-size: 13px;
+      line-height: 1.45;
+      display: grid;
+      gap: 6px;
+    }
+    .drawer-actions {
+      display: grid;
+      gap: 8px;
+      margin-top: auto;
+      padding-top: 4px;
+    }
+    .drawer-foot {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      font-size: 12px;
+      color: var(--muted-fg);
+    }
+    .toast {
+      left: 50%;
+      bottom: 24px;
+      transform: translateX(-50%) translateY(20px);
+      opacity: 0;
+      pointer-events: none;
+      background: #121018;
+      border: 1px solid var(--border);
+      color: var(--fg);
+      padding: 10px 14px;
+      border-radius: 999px;
+      font-size: 13px;
+      transition: .2s ease;
+      box-shadow: var(--shadow);
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    .note {
+      margin-top: 18px;
+      padding: 12px 14px;
+      border: 1px dashed color-mix(in srgb, var(--primary) 35%, var(--border));
+      border-radius: 12px;
+      color: var(--muted-fg);
+      font-size: 12px;
+      line-height: 1.5;
+      background: color-mix(in srgb, var(--primary) 6%, transparent);
+    }
+    .hidden { display: none !important; }
+    @media (max-width: 900px) {
+      .app { grid-template-columns: 1fr; }
+      .sidebar { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand"><span class="mark">▶</span> SpyReels</div>
+      <div class="niche">YOUR NICHE<strong>Restaurants-cafes</strong><span style="color:var(--muted-fg)">Short-form video creators</span></div>
+      <div class="nav">
+        <div class="nav-label">Create</div>
+        <a href="#">Agent</a>
+        <a href="#">30-Day Plan</a>
+        <a href="#">Carousels</a>
+        <a href="#">My Scripts</a>
+        <div class="nav-label">Discover</div>
+        <a href="#">Spy Viral Reels</a>
+        <a class="active" href="#">Viral Posts</a>
+        <a href="#">Collected Reels</a>
+        <a href="#">Creator Radar</a>
+        <a href="#">Saved Reels</a>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="review-bar">
+        <h1>Interactive review mockup · not live product</h1>
+        <div class="toggle" role="tablist" aria-label="Design version">
+          <button type="button" id="btnProposed" class="on" onclick="setMode('proposed')">Proposed (extend existing)</button>
+          <button type="button" id="btnCurrent" onclick="setMode('current')">Current (dense)</button>
+        </div>
+      </div>
+
+      <div class="page-head">
+        <div>
+          <h2>Viral Posts</h2>
+          <p id="subtitle">Posts matching your niche</p>
+        </div>
+        <button class="btn ghost" type="button" onclick="toast('Adjust recommendations')">Adjust recommendations</button>
+      </div>
+
+      <div class="tabs" role="tablist">
+        <button type="button" class="on" data-tab="foryou" onclick="setTab(this)">For You</button>
+        <button type="button" data-tab="explore" onclick="setTab(this)">Explore</button>
+        <button type="button" data-tab="saved" onclick="setTab(this)">Saved</button>
+      </div>
+      <p class="status" id="statusLine">5 fresh posts for you today</p>
+
+      <!-- PROPOSED -->
+      <section id="proposed" class="grid" aria-label="Proposed Viral Posts grid"></section>
+
+      <!-- CURRENT -->
+      <section id="current" class="grid dense hidden" aria-label="Current Viral Posts grid"></section>
+
+      <div class="note" id="noteProposed">
+        <strong style="color:var(--fg)">Polish v3</strong><br>
+        Card CTA: Remake in your voice · drawer: Remake this post ·
+        metrics include one relative cue (× niche avg) without badges.
+      </div>
+      <div class="note hidden" id="noteCurrent">
+        <strong style="color:var(--fg)">Current problem</strong><br>
+        Every card shows hook overlay + relevance + Why it fits + Remake/Save + Why it works + feedback.
+        Feels like a feed of explainers, not a mature SaaS opportunity library.
+      </div>
+    </main>
+  </div>
+
+  <div class="drawer-backdrop" id="drawer" onclick="closeDrawer(event)">
+    <aside class="drawer" onclick="event.stopPropagation()">
+      <div class="drawer-head">
+        <h3>Post details</h3>
+        <button class="icon-btn" type="button" onclick="closeDrawer()">✕</button>
+      </div>
+
+      <div class="drawer-preview-wrap">
+        <div class="drawer-preview" id="drawerPreview" onclick="toast('Play preview (same player as cards)')">
+          <img id="drawerImage" src="" alt="" />
+          <span class="play">▶</span>
+        </div>
+      </div>
+
+      <p class="drawer-caption" id="drawerCaption"></p>
+
+      <div class="drawer-foot">
+        <a class="creator-link" id="drawerCreator" href="#" target="_blank" rel="noopener noreferrer"></a>
+        <span id="drawerDate"></span>
+      </div>
+
+      <div class="metrics" id="drawerMetrics" style="font-size:12px"></div>
+
+      <div class="drawer-section">
+        <h4>Why it fits</h4>
+        <p id="drawerFits"></p>
+      </div>
+
+      <div class="drawer-section">
+        <h4>Why it works</h4>
+        <ul id="drawerWorks"></ul>
+      </div>
+
+      <div class="drawer-actions">
+        <button class="btn primary full" type="button" onclick="toast('Remake started → shared remake chain'); closeDrawer()">Remake this post</button>
+        <div class="drawer-actions-secondary">
+          <button class="btn soft" type="button" id="drawerOpenSource" onclick="toast('Opened source on TikTok')">Open on TikTok</button>
+          <a class="btn soft" id="drawerOpenCreator" href="#" target="_blank" rel="noopener noreferrer">Open creator</a>
+        </div>
+      </div>
+    </aside>
+  </div>
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const posts = [
+      {
+        id: 1,
+        img: "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=80",
+        caption: "Do not eat at this restaurant!!! Menu pricing that kills trust.",
+        handle: "@captain.t.roll",
+        metrics: "18.4K views · 820 likes · 64 comments · 2.1% eng",
+        cardMetrics: "18.4K views · 2.1% eng",
+        signal: "1.4x niche avg",
+        date: "Sep 12",
+        works: [
+          "Sharp contrarian hook stops the scroll",
+          "Receipt visual makes the claim feel concrete",
+          "Speaks to a clear restaurant owner pain",
+        ],
+        why: "Matches menu engineering. Uses a receipt visual and a sharp claim to stop the scroll, then explains pricing pain restaurants feel.",
+      },
+      {
+        id: 2,
+        img: "https://images.unsplash.com/photo-1559339352-11d035aa65de?w=600&q=80",
+        caption: "200 views is the problem. Great food deserves distribution.",
+        handle: "@elevate_mediaagency",
+        metrics: "9.2K views · 410 likes · 38 comments · 3.4% eng",
+        cardMetrics: "9.2K views · 3.4% eng",
+        signal: "2.1x niche avg",
+        date: "Sep 8",
+        works: [
+          "Names the exact failure state (200 views)",
+          "Empathy first, then a distribution angle",
+          "Easy to remake for any local restaurant brand",
+        ],
+        why: "Matches restaurant marketing. Speaks directly to owners who post and get ignored, then promises a fix.",
+      },
+      {
+        id: 3,
+        img: "https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=600&q=80",
+        caption: "A month of content in 3 hours. Restaurant shoot systems.",
+        handle: "@rianneandclay",
+        metrics: "41K views · 2.1K likes · 120 comments · 2.8% eng",
+        cardMetrics: "41K views · 2.8% eng",
+        signal: "1.9x niche avg",
+        date: "Aug 30",
+        works: [
+          "Big outcome promise in the first line",
+          "Systems framing feels practical, not hype",
+          "Strong remake path for social managers",
+        ],
+        why: "Matches restaurant marketing. Batch-filming angle is practical for busy operators and social managers.",
+      },
+      {
+        id: 4,
+        img: "https://images.unsplash.com/photo-1559339352-11d035aa65de?w=600&q=80&sat=-20",
+        caption: "Restaurant food cost mistakes that quietly destroy profit.",
+        handle: "@hub.burritos",
+        metrics: "30.7K views · 1.4K likes · 61 comments · 127 shares · 4.1% eng",
+        cardMetrics: "30.7K views · 4.1% eng",
+        signal: "2.6x niche avg",
+        date: "Sep 4",
+        works: [
+          "High-stakes profit problem in the hook",
+          "Educational payoff keeps watch time",
+          "Easy niche remake for operators",
+        ],
+        why: "Matches restaurant profitability. Educational format with clear stakes and concrete costing details.",
+      },
+      {
+        id: 5,
+        img: "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600&q=80",
+        caption: "If you manage restaurant social, shoot one dish four ways.",
+        handle: "@shi.creative",
+        metrics: "2.2K views · 96 likes · 4 comments · 10 shares · 5.0% eng",
+        cardMetrics: "2.2K views · 5.0% eng",
+        signal: "3.1x niche avg",
+        date: "Aug 22",
+        works: [
+          "Direct audience callout in the hook",
+          "Tactical how-to format",
+          "High save potential for creators",
+        ],
+        why: "Matches restaurant marketing. Teaches production technique for food photography and Reels variety.",
+      },
+    ];
+
+    function creatorHref(handle) {
+      return `./viral-posts-creator-page-demo.html?handle=${encodeURIComponent(handle)}`;
+    }
+
+    const saved = new Set();
+    let openMenuId = null;
+
+    function toast(msg) {
+      const el = document.getElementById("toast");
+      el.textContent = msg;
+      el.classList.add("show");
+      clearTimeout(window.__t);
+      window.__t = setTimeout(() => el.classList.remove("show"), 1800);
+    }
+
+    function setMode(mode) {
+      document.getElementById("proposed").classList.toggle("hidden", mode !== "proposed");
+      document.getElementById("current").classList.toggle("hidden", mode !== "current");
+      document.getElementById("noteProposed").classList.toggle("hidden", mode !== "proposed");
+      document.getElementById("noteCurrent").classList.toggle("hidden", mode !== "current");
+      document.getElementById("btnProposed").classList.toggle("on", mode === "proposed");
+      document.getElementById("btnCurrent").classList.toggle("on", mode === "current");
+      document.getElementById("subtitle").textContent =
+        mode === "proposed"
+          ? "Posts matching your niche"
+          : "Fresh Instagram and TikTok posts selected for your niche · current dense card UI";
+    }
+
+    function setTab(btn) {
+      document.querySelectorAll(".tabs button").forEach((b) => b.classList.remove("on"));
+      btn.classList.add("on");
+      const tab = btn.dataset.tab;
+      document.getElementById("statusLine").textContent =
+        tab === "foryou" ? "5 fresh posts for you today" :
+        tab === "explore" ? "Explore viral posts in your niche" :
+        "Saved posts";
+      toast(tab === "saved" ? "Saved tab (same quieter cards)" : tab === "explore" ? "Explore tab" : "For You tab");
+    }
+
+    function toggleSave(id) {
+      if (saved.has(id)) {
+        saved.delete(id);
+        toast("Removed from Saved");
+      } else {
+        saved.add(id);
+        toast("Saved");
+      }
+      renderProposed();
+    }
+
+    function openDetails(id) {
+      const p = posts.find((x) => x.id === id);
+      if (!p) return;
+      const href = creatorHref(p.handle);
+      document.getElementById("drawerImage").src = p.img;
+      document.getElementById("drawerImage").alt = p.caption;
+      document.getElementById("drawerCaption").textContent = p.caption;
+      const creator = document.getElementById("drawerCreator");
+      creator.textContent = p.handle;
+      creator.href = href;
+      document.getElementById("drawerDate").textContent = p.date;
+      document.getElementById("drawerMetrics").innerHTML =
+        `${p.metrics} · <span class="signal">${p.signal}</span>`;
+      document.getElementById("drawerFits").textContent = p.why;
+      document.getElementById("drawerWorks").innerHTML = (p.works || [])
+        .map((w) => `<li>${w}</li>`)
+        .join("");
+      const openCreator = document.getElementById("drawerOpenCreator");
+      openCreator.href = href;
+      document.getElementById("drawer").classList.add("open");
+    }
+
+    function closeDrawer(e) {
+      if (e && e.target && e.target.id !== "drawer" && e.type === "click" && e.currentTarget === e.target) {
+        document.getElementById("drawer").classList.remove("open");
+        return;
+      }
+      if (!e || e.type === "click" || !e) document.getElementById("drawer").classList.remove("open");
+      if (!e) document.getElementById("drawer").classList.remove("open");
+      document.getElementById("drawer").classList.remove("open");
+    }
+
+    function toggleMenu(id, event) {
+      event.stopPropagation();
+      openMenuId = openMenuId === id ? null : id;
+      renderProposed();
+    }
+
+    document.addEventListener("click", () => {
+      if (openMenuId != null) {
+        openMenuId = null;
+        renderProposed();
+      }
+    });
+
+    function renderProposed() {
+      const root = document.getElementById("proposed");
+      root.innerHTML = posts.map((p) => `
+        <article class="tile" style="position:relative">
+          <div class="media" onclick="toast('Preview / play (same as Collected)')">
+            <img src="${p.img}" alt="" />
+            <span class="play">▶</span>
+          </div>
+          <div class="body">
+            <div class="caption">${p.caption}</div>
+            <div class="meta">
+              <a
+                class="creator-link"
+                href="${creatorHref(p.handle)}"
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open creator in Creator Radar (new tab)"
+                onclick="event.stopPropagation()"
+              >${p.handle}</a>
+              <div class="metrics">${p.cardMetrics} · <span class="signal">${p.signal}</span> · ${p.date}</div>
+            </div>
+            <div class="actions">
+              <button class="btn soft" type="button" onclick="toast('Remake in your voice → shared remake chain')">Remake in your voice</button>
+              <button class="icon-btn ${saved.has(p.id) ? "on" : ""}" type="button" title="Save" onclick="toggleSave(${p.id})">${saved.has(p.id) ? "★" : "☆"}</button>
+              <button class="icon-btn" type="button" title="More" onclick="toggleMenu(${p.id}, event)">⋯</button>
+            </div>
+          </div>
+          <div class="menu ${openMenuId === p.id ? "open" : ""}" onclick="event.stopPropagation()">
+            <button type="button" onclick="openDetails(${p.id})">View details</button>
+            <a class="creator-link" style="display:block;padding:8px 10px;border-radius:8px" href="${creatorHref(p.handle)}" target="_blank" rel="noopener noreferrer">Open creator</a>
+            <button type="button" onclick="toast('More like this')">More like this</button>
+            <button type="button" onclick="toast('Not relevant')">Not relevant</button>
+            <button type="button" onclick="toast('Hide creator')">Hide creator</button>
+          </div>
+        </article>
+      `).join("");
+    }
+
+    function renderCurrent() {
+      const root = document.getElementById("current");
+      root.innerHTML = posts.slice(0, 4).map((p) => `
+        <article class="dense-card">
+          <div class="dense-media">
+            <img src="${p.img}" alt="" />
+            <span class="chip">Proven format</span>
+            <div class="dense-overlay">${p.caption.split(".")[0]}</div>
+          </div>
+          <div class="dense-body">
+            <div style="font-size:12px;color:var(--muted-fg)">${p.handle} · 128 followers</div>
+            <span class="pill">Matches restaurant marketing</span>
+            <div style="font-size:12px;color:var(--muted-fg)">${p.metrics} · ${p.signal} · ${p.date}</div>
+            <div class="why"><strong style="color:#cbb8ff">Why it fits:</strong> ${p.why}</div>
+            <a href="#" style="color:#7aa2ff;font-size:12px;text-decoration:none">Open on TikTok</a>
+            <div class="dense-actions">
+              <button class="btn primary" type="button">Remake</button>
+              <button class="btn" type="button">Save</button>
+            </div>
+            <div class="dense-foot">
+              <span>Why it works →</span>
+              <span>👍 👎 ⋯</span>
+            </div>
+          </div>
+        </article>
+      `).join("");
+    }
+
+    renderProposed();
+    renderCurrent();
+    setMode("proposed");
+  </script>
+</body>
+</html>

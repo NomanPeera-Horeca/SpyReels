@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
 import { toast } from "sonner";
-import { Flame, Loader2, Zap } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { RemakeHowSpyReelsWritesDialog } from "@/components/RemakeHowSpyReelsWritesDialog";
 import { ExploreSearchLoading } from "@/components/viral-posts/ExploreSearchLoading";
 import { SavedPostFilters } from "@/components/viral-posts/SavedPostFilters";
 import { ViralPostFilters } from "@/components/viral-posts/ViralPostFilters";
 import { ViralPostGrid } from "@/components/viral-posts/ViralPostGrid";
-import { WhyItWorksModal } from "@/components/viral-posts/WhyItWorksModal";
+import { ViralPostDetailsDrawer } from "@/components/viral-posts/ViralPostDetailsDrawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -513,23 +513,19 @@ export default function ViralPosts() {
     <div className="mx-auto max-w-[1400px] p-3 sm:p-6" data-testid="viral-posts-page">
       <header className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <div className="mb-1 flex items-center gap-2">
-            <Flame className="h-5 w-5 text-[#9b6cff]" aria-hidden />
-            <h1 className="text-2xl font-extrabold tracking-tight text-[#f6f4fb]">
-              Viral Posts
-            </h1>
-          </div>
-          <p className="max-w-xl text-sm text-[#a9a4b8]">
-            Fresh Instagram and TikTok posts selected for your niche.
+          <h1 className="text-2xl font-bold tracking-tight text-[#f5f3f8]">
+            Viral Posts
+          </h1>
+          <p className="mt-1 max-w-xl text-sm text-[#a8a3b3]">
+            Posts matching your niche
           </p>
         </div>
         <Button
           type="button"
           variant="outline"
-          className="shrink-0 border-[#2b2739] bg-[#171522] text-[#f6f4fb] hover:bg-[#1d1a2a]"
+          className="shrink-0 border-[#2b2739] bg-transparent text-[#f5f3f8] hover:bg-white/[0.04]"
           onClick={() => setAdjustOpen(true)}
         >
-          <Zap className="mr-1.5 h-4 w-4 text-[#9b6cff]" />
           Adjust recommendations
         </Button>
       </header>
@@ -551,8 +547,8 @@ export default function ViralPosts() {
             role="tab"
             aria-selected={tab === id}
             className={cn(
-              "whitespace-nowrap rounded-lg px-4 py-2 text-sm font-bold text-[#a9a4b8] hover:text-white",
-              tab === id && "bg-white/[0.08] text-white"
+              "whitespace-nowrap rounded-lg px-4 py-2 text-sm font-semibold text-[#a8a3b3] hover:text-white",
+              tab === id && "bg-white/[0.08] text-[#f5f3f8]"
             )}
             onClick={() => setTab(id)}
           >
@@ -917,7 +913,7 @@ export default function ViralPosts() {
         </section>
       ) : null}
 
-      <WhyItWorksModal
+      <ViralPostDetailsDrawer
         open={whyOpen}
         onOpenChange={setWhyOpen}
         post={whyPost}
