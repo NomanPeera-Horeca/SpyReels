@@ -124,11 +124,11 @@ describe("publicWebPilotProxy", () => {
     expect(await (await fetch(`http://127.0.0.1:${proxyPort}/`)).text()).toBe("next-home");
     expect(await (await fetch(`http://127.0.0.1:${proxyPort}/?signup=1`)).text()).toBe("legacy-home");
     expect(await (await fetch(`http://127.0.0.1:${proxyPort}/?login=1`)).text()).toBe("legacy-home");
-    const verify = vi.spyOn(sdk, "verifySession").mockResolvedValue(null);
+    const verify = vi.spyOn(sdk, "authenticateRequest").mockRejectedValue(new Error("stale session"));
     expect(await (await fetch(`http://127.0.0.1:${proxyPort}/`, {
       headers: { cookie: "app_session_id=stale-session" },
     })).text()).toBe("next-home");
-    verify.mockResolvedValue({ openId: "user-1", appId: "spyreels", name: "User" });
+    verify.mockResolvedValue({ id: 1 } as unknown as Awaited<ReturnType<typeof sdk.authenticateRequest>>);
     expect(await (await fetch(`http://127.0.0.1:${proxyPort}/`, {
       headers: { cookie: "app_session_id=existing-session" },
     })).text()).toBe("legacy-home");

@@ -198,13 +198,13 @@ export function registerPublicWebPilotProxy(
       next();
       return;
     }
-    // A cookie by itself does not prove a visitor is signed in. Route only a
-    // verified session to the product; stale cookies still see the public page.
+    // A signed token alone does not prove the account still exists. Use the
+    // same authentication check as product APIs before routing into the SPA.
     if (req.path === "/" && req.headers.cookie) {
       const token = parseCookieHeader(req.headers.cookie)[COOKIE_NAME];
       if (token) {
         try {
-          if (await sdk.verifySession(token)) {
+          if (await sdk.authenticateRequest(req)) {
             next();
             return;
           }
