@@ -60,6 +60,13 @@ import {
 } from "@/components/InlineWorkflow";
 import { ReelGridThumbnail } from "@/components/ReelGridThumbnail";
 import { WorkspaceReelGridTile } from "@/components/WorkspaceReelGridTile";
+import {
+  QuietCreatorButton,
+  QuietReelCaption,
+  QuietReelMetrics,
+  QuietRemakeActions,
+} from "@/components/QuietWorkspaceReelChrome";
+import { useOpenCreatorInApp } from "@/hooks/useOpenCreatorInApp";
 import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
 import {
   REEL_LIBRARY_INITIAL_VISIBLE,
@@ -163,6 +170,8 @@ export default function CollectedReels() {
   const posthog = usePostHog();
   const utils = trpc.useUtils();
   const transcribeGate = useUsageGate("transcribeCount");
+  const { openCreator } = useOpenCreatorInApp("collected");
+  const [quietMoreId, setQuietMoreId] = useState<number | null>(null);
 
   const collectedQuery = trpc.collected.list.useQuery(undefined, {
     refetchInterval: (query) => {
@@ -1290,16 +1299,68 @@ export default function CollectedReels() {
                 : null;
             const hasThumb = isReady && !!(reel.thumbnailUrl ?? "").trim();
 
+            const recreateSt =
+              mappedReelId != null
+                ? reelRecreateState(
+                    recreateMap[mappedReelId as keyof typeof recreateMap] as
+                      | RecreateBatchEntry
+                      | undefined
+                  )
+                : "none";
+            const transcriptionShape =
+              hasTranscription && !isNoSpeech
+                ? {
+                    status: "completed" as const,
+                    transcript: "word ".repeat(8).trimEnd(),
+                    segments: [] as const,
+                  }
+                : null;
+            const listRemakeHint = mergeRemakeability(
+              transcriptionShape,
+              reel as ReelClassificationLike
+            );
+            const idleNotRemakeable =
+              listRemakeHint.notRemakeable &&
+              hasTranscription &&
+              !isNoSpeech &&
+              recreateSt === "none";
+            const librarySource = collectedRowToLibraryRemakeSource(reel, mappedReelId);
+            const hookState = getRemakeState(libraryRemakeKey(librarySource));
+            const batchEntry =
+              mappedReelId != null
+                ? (recreateMap[mappedReelId as keyof typeof recreateMap] as
+                    | RecreateBatchEntry
+                    | undefined)
+                : undefined;
+            const oneClickRemakeForQuiet = isReady
+              ? buildLibraryOneClickRemake({
+                  openScriptReelId: mappedReelId ?? hookState.reelId ?? null,
+                  isNoSpeech,
+                  alreadyTranscribed: mappedReelId != null && hasTranscription && !isNoSpeech,
+                  idleNotRemakeable,
+                  classificationReason: reel.classificationReason ?? undefined,
+                  classification: reelClassificationFromRow(reel),
+                  batchRecreateSt: recreateSt,
+                  batchEntry,
+                  hookState,
+                  librarySource,
+                  startRemake,
+                  retryRemake,
+                  startInspirationSave,
+                  openRemakeWorkspace,
+                })
+              : null;
+
             return (
               <WorkspaceReelGridTile
                 key={reel.id}
+                chrome="quiet"
                 index={index}
                 isActive={isReady && gridModalCollectedId === reel.id}
                 thumbnailUrl={hasThumb ? reel.thumbnailUrl : null}
                 videoUrl={hasThumb ? reel.videoUrl : null}
                 shortcode={reel.shortcode}
                 reelId={mappedReelId ?? undefined}
-                engagementRate={isReady ? engagementRate : 0}
                 duration={isReady ? reel.duration : null}
                 reelUrl={isReady ? reel.reelUrl : null}
                 interactiveMedia={isReady && hasThumb}
@@ -1310,27 +1371,6 @@ export default function CollectedReels() {
                 }
                 mediaPlatform={
                   collectedPlatform(reel) === "tiktok" ? "tiktok" : "instagram"
-                }
-                topRight={renderGridSaveAndRemove(reel)}
-                mediaLabel={
-                  <span className="inline-flex items-center gap-0.5 rounded bg-black/70 px-1 py-0.5 font-mono text-[9px] text-white">
-                    <SourcePlatformBadge reel={reel} />
-                  </span>
-                }
-                statusChip={
-                  isReady && hasTranscription && !isNoSpeech ? (
-                    <span className="rounded bg-emerald-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-950">
-                      Transcribed
-                    </span>
-                  ) : isReady && isNoSpeech ? (
-                    <span className="rounded bg-black/70 px-1.5 py-0.5 text-[10px] font-medium text-white/90">
-                      No voice
-                    </span>
-                  ) : isReady && isProcessing ? (
-                    <span className="animate-pulse rounded bg-amber-500/85 px-1.5 py-0.5 text-[10px] font-semibold text-amber-950">
-                      Processing
-                    </span>
-                  ) : null
                 }
                 mediaFallback={
                   <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-muted/40 p-4 text-center">
@@ -1346,74 +1386,136 @@ export default function CollectedReels() {
                     </span>
                   </div>
                 }
-                badges={
-                  isReady && mappedReelId != null ? (
-                    <BrandCoachBadge
-                      source={{ kind: "reel", reelId: mappedReelId }}
-                      hasTranscript={hasTranscription && !isNoSpeech}
-                      prefetchedScore={brandCoachBatch.prefetchedForReel(mappedReelId)}
-                    />
-                  ) : null
-                }
                 caption={
-                  <p className="line-clamp-2 min-h-[2rem] text-xs text-foreground">
+                  <QuietReelCaption>
                     {!isReady ? (
                       statusMessage
                     ) : reel.caption ? (
                       reel.caption
                     ) : (
-                      <span className="italic text-muted-foreground">No caption</span>
+                      <span className="italic text-[#a8a3b3]">No caption</span>
                     )}
-                  </p>
+                  </QuietReelCaption>
+                }
+                creator={
+                  isReady ? (
+                    <QuietCreatorButton
+                      handle={reel.ownerUsername}
+                      onOpen={() =>
+                        void openCreator({
+                          handle: reel.ownerUsername,
+                          platform:
+                            collectedPlatform(reel) === "tiktok"
+                              ? "tiktok"
+                              : collectedPlatform(reel) === "youtube"
+                                ? "youtube"
+                                : "instagram",
+                        })
+                      }
+                    />
+                  ) : null
                 }
                 stats={
                   isReady ? (
-                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[10px] text-muted-foreground">
-                      {effectiveViews > 0 ? (
-                        <span>{formatNumber(effectiveViews)} views</span>
-                      ) : null}
-                      {engagementRate > 0 ? (
-                        <>
-                          {effectiveViews > 0 ? <span aria-hidden>·</span> : null}
-                          <span className="font-medium text-emerald-400">
-                            {engagementRate.toFixed(2)}%
-                          </span>
-                        </>
-                      ) : null}
-                      {(effectiveViews > 0 || engagementRate > 0) ? (
-                        <span className="hidden sm:inline" aria-hidden>
-                          ·
-                        </span>
-                      ) : null}
-                      <span className="hidden sm:inline">
-                        {formatNumber(reel.likeCount || 0)} likes
-                      </span>
-                      <span className="hidden md:inline" aria-hidden>
-                        ·
-                      </span>
-                      <span className="hidden md:inline">
-                        {formatNumber(reel.commentCount || 0)} comments
-                      </span>
-                      {reel.postedAt ? (
-                        <>
-                          <span className="hidden sm:inline" aria-hidden>
-                            ·
-                          </span>
-                          <span className="hidden sm:inline">
-                            {formatPostedTime(reel.postedAt, userTimezone)}
-                          </span>
-                        </>
-                      ) : null}
-                    </div>
+                    <QuietReelMetrics
+                      views={effectiveViews}
+                      engagementPct={engagementRate}
+                      reachViews={effectiveViews}
+                      reachFollowers={
+                        reel.monitoredFollowerCount || reel.ownerFollowerCount
+                      }
+                      postedAt={
+                        reel.postedAt instanceof Date
+                          ? reel.postedAt.toISOString()
+                          : reel.postedAt
+                      }
+                    />
                   ) : (
                     <div className="min-h-[0.875rem]" aria-hidden />
                   )
                 }
-                actions={renderCollectedActions(reel, {
-                  mappedReelId,
-                  hideExternal: true,
-                  gridTile: true,
-                })}
+                actions={
+                  isReady && oneClickRemakeForQuiet ? (
+                    <QuietRemakeActions
+                      remakeLabel={oneClickRemakeForQuiet.label}
+                      remakeDisabled={oneClickRemakeForQuiet.disabled}
+                      remakeBusy={oneClickRemakeForQuiet.loading}
+                      onRemake={() => oneClickRemakeForQuiet.onClick()}
+                      saved={isCollectedSaved(reel)}
+                      onToggleSave={() => {
+                        if (reel.status !== "ready") return;
+                        toggleCollectedSave.mutate({ collectedReelId: reel.id });
+                      }}
+                      moreOpen={quietMoreId === reel.id}
+                      onToggleMore={() =>
+                        setQuietMoreId((cur) => (cur === reel.id ? null : reel.id))
+                      }
+                      moreMenu={
+                        quietMoreId === reel.id ? (
+                          <div className="absolute bottom-11 right-0 z-30 grid min-w-[160px] gap-0.5 rounded-[12px] border border-[#2b2739] bg-[#1d1b24] p-1.5 shadow-[0_18px_50px_rgba(0,0,0,.45)]">
+                            <button
+                              type="button"
+                              className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-white/[0.06] hover:text-white"
+                              onClick={() => {
+                                setQuietMoreId(null);
+                                setGridModalCollectedId(reel.id);
+                              }}
+                            >
+                              View details
+                            </button>
+                            {reel.ownerUsername ? (
+                              <button
+                                type="button"
+                                className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-white/[0.06] hover:text-white"
+                                onClick={() => {
+                                  setQuietMoreId(null);
+                                  void openCreator({
+                                    handle: reel.ownerUsername,
+                                    platform:
+                                      collectedPlatform(reel) === "tiktok"
+                                        ? "tiktok"
+                                        : collectedPlatform(reel) === "youtube"
+                                          ? "youtube"
+                                          : "instagram",
+                                  });
+                                }}
+                              >
+                                Open creator
+                              </button>
+                            ) : null}
+                            {reel.reelUrl ? (
+                              <a
+                                href={reel.reelUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-white/[0.06] hover:text-white"
+                                onClick={() => setQuietMoreId(null)}
+                              >
+                                Open source
+                              </a>
+                            ) : null}
+                            <button
+                              type="button"
+                              className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-[rgba(255,107,122,.08)] hover:text-[#ffb4bd]"
+                              onClick={() => {
+                                setQuietMoreId(null);
+                                deleteMutation.mutate({ id: reel.id });
+                              }}
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        ) : null
+                      }
+                    />
+                  ) : (
+                    renderCollectedActions(reel, {
+                      mappedReelId,
+                      hideExternal: true,
+                      gridTile: true,
+                    })
+                  )
+                }
               />
             );
           })}
