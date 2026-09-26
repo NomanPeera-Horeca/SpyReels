@@ -4,6 +4,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { UpgradeProvider } from "@/components/UpgradeSidesheet";
 import OnboardingGate from "@/components/OnboardingGate";
 import { Route, Switch, Redirect, useLocation } from "wouter";
+import { useAuth } from "@/_core/hooks/useAuth";
+import { isAdminPanelClient } from "@/admin/isAdminClient";
 import { isDiscoveryV1Enabled } from "@/lib/featureFlags";
 import { lazyWithRetry } from "@/lib/lazyWithRetry";
 import ErrorBoundary from "./components/ErrorBoundary";
@@ -133,6 +135,14 @@ function MobileHomeRedirect() {
   return <Redirect to="/plan" />;
 }
 
+/** Unpolished product surfaces: admin email only until ready for everyone. */
+function AdminEmailOnly({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return null;
+  if (!isAdminPanelClient(user)) return <Redirect to="/studio" />;
+  return <>{children}</>;
+}
+
 function MobileCreateRouter() {
   return (
     <MobileAppLayout>
@@ -185,7 +195,9 @@ function DesktopDashboardRouter() {
             )}
           </Route>
           <Route path="/my-virality-report">
-            <ViralityDiagnostic />
+            <AdminEmailOnly>
+              <ViralityDiagnostic />
+            </AdminEmailOnly>
           </Route>
           <Route path="/viral-posts" component={ViralPosts} />
           <Route path="/saved" component={SavedReels} />
@@ -196,12 +208,24 @@ function DesktopDashboardRouter() {
           <Route path="/ideas">{() => <Redirect to="/studio" />}</Route>
           <Route path="/plan" component={ThirtyDayPlan} />
           <Route path="/studio" component={AiCoach} />
-          <Route path="/carousels/library" component={CarouselLibrary} />
-          <Route path="/carousels" component={Carousels} />
+          <Route path="/carousels/library">
+            <AdminEmailOnly>
+              <CarouselLibrary />
+            </AdminEmailOnly>
+          </Route>
+          <Route path="/carousels">
+            <AdminEmailOnly>
+              <Carousels />
+            </AdminEmailOnly>
+          </Route>
           <Route path="/carousel-library">
             <Redirect to="/carousels/library" />
           </Route>
-          <Route path="/broll-library" component={BrollLibrary} />
+          <Route path="/broll-library">
+            <AdminEmailOnly>
+              <BrollLibrary />
+            </AdminEmailOnly>
+          </Route>
           <Route path="/video-broll-upload-test" component={VideoBrollUploadTest} />
           <Route path="/paste" component={PasteScript} />
           <Route path="/history" component={History} />
@@ -325,18 +349,24 @@ function Router() {
         {/* Focused Carousel editor: full-bleed, belongs to /carousels. */}
         <Route path="/carousels/new">
           <OnboardingGate>
-            <CarouselEditor />
+            <AdminEmailOnly>
+              <CarouselEditor />
+            </AdminEmailOnly>
           </OnboardingGate>
         </Route>
         <Route path="/carousels/:remakeId/edit">
           <OnboardingGate>
-            <CarouselEditor />
+            <AdminEmailOnly>
+              <CarouselEditor />
+            </AdminEmailOnly>
           </OnboardingGate>
         </Route>
         {/* Legacy Studio URL: redirect into the Carousels product. */}
         <Route path="/carousel-studio">
           <OnboardingGate>
-            <CarouselStudio />
+            <AdminEmailOnly>
+              <CarouselStudio />
+            </AdminEmailOnly>
           </OnboardingGate>
         </Route>
         {/* Everything else goes through DashboardLayout (which shows landing page if not auth'd) */}

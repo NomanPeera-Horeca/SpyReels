@@ -76,6 +76,7 @@ import {
   useTheme,
 } from "@/contexts/ThemeContext";
 import { isCarouselsNavActive } from "@/components/carousel-studio/carouselsHub";
+import { isAdminPanelClient } from "@/admin/isAdminClient";
 import { isDiscoveryV1Enabled } from "@/lib/featureFlags";
 import { PwaInstallBanner } from "@/components/PwaInstallBanner";
 import { getCurrentAppPath, recordAppNavigation } from "@shared/appNavigation";
@@ -136,7 +137,11 @@ type SidebarNavSection = {
   items: SidebarNavItem[];
 };
 
-function buildNavSections(): SidebarNavSection[] {
+/**
+ * Carousels, B-Roll Library, and My Virality Report stay admin-only until polished.
+ * Gate with the same email check as `/admin` (`VITE_ADMIN_EMAIL`).
+ */
+function buildNavSections(showUnpolishedTools: boolean): SidebarNavSection[] {
   return [
     {
       id: "create",
@@ -145,8 +150,17 @@ function buildNavSections(): SidebarNavSection[] {
         { icon: Sparkles, label: "Agent", path: "/studio", badge: "new", featured: true },
         { icon: CalendarDays, label: "30-Day Plan", path: "/plan" },
         // { icon: Lightbulb, label: "Idea to Script", path: "/ideas" },
-        { icon: Images, label: "Carousels", path: "/carousels", badge: "new" },
-        { icon: Clapperboard, label: "B-Roll Library", path: "/broll-library", badge: "new" },
+        ...(showUnpolishedTools
+          ? [
+              { icon: Images, label: "Carousels", path: "/carousels", badge: "new" as const },
+              {
+                icon: Clapperboard,
+                label: "B-Roll Library",
+                path: "/broll-library",
+                badge: "new" as const,
+              },
+            ]
+          : []),
         { icon: FileText, label: "My Scripts", path: "/scripts" },
         { icon: ClipboardPaste, label: "Paste Script", path: "/paste" },
       ],
@@ -175,11 +189,15 @@ function buildNavSections(): SidebarNavSection[] {
         { icon: Inbox, label: "Collected Reels", path: "/collected" },
         { icon: Radar, label: "Creator Radar", path: "/history" },
         { icon: Bookmark, label: "Saved Reels", path: "/saved" },
-        {
-          icon: TrendingUp,
-          label: "My Virality Report",
-          path: "/my-virality-report" as const,
-        },
+        ...(showUnpolishedTools
+          ? [
+              {
+                icon: TrendingUp,
+                label: "My Virality Report",
+                path: "/my-virality-report" as const,
+              },
+            ]
+          : []),
       ],
     },
     {
@@ -351,7 +369,7 @@ function DashboardLayoutContent({
   const sidebarRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
   const { themePreference, setThemePreference, switchable } = useTheme();
-  const navSections = buildNavSections();
+  const navSections = buildNavSections(isAdminPanelClient(user));
   const flatNavItems = navSections.flatMap((section) => section.items);
 
   const onboardingStateQuery = trpc.onboarding.getState.useQuery(undefined, {
