@@ -2,6 +2,7 @@ import { useAuth } from "@/_core/hooks/useAuth";
 import ExportJobTracker from "@/components/ExportJobTracker";
 import LandingPage from "@/pages/LandingPage";
 import { MobileAppLayoutSkeleton } from "@/components/MobileAppLayoutSkeleton";
+import { redirectSignedOutToMarketing } from "@/lib/marketingOrigin";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import { getCurrentAppPath, recordAppNavigation } from "@shared/appNavigation";
@@ -103,6 +104,9 @@ export default function MobileAppLayout({ children }: { children: React.ReactNod
   }
 
   if (!user) {
+    if (redirectSignedOutToMarketing()) {
+      return <MobileAppLayoutSkeleton />;
+    }
     return <LandingPage />;
   }
 

@@ -12,6 +12,7 @@ import {
 import { CAROUSEL_EDITOR_DOCUMENT_TITLE } from "@/components/carousel-studio/carouselPageMeta";
 import { useCarouselDocumentTitle } from "@/components/carousel-studio/useCarouselDocumentTitle";
 import LandingPage from "@/pages/LandingPage";
+import { redirectSignedOutToMarketing } from "@/lib/marketingOrigin";
 
 export default function CarouselEditor() {
   const { user, loading } = useAuth();
@@ -29,6 +30,13 @@ export default function CarouselEditor() {
   }
 
   if (!user) {
+    if (redirectSignedOutToMarketing()) {
+      return (
+        <div className="flex min-h-screen items-center justify-center text-muted-foreground">
+          Loading…
+        </div>
+      );
+    }
     return <LandingPage />;
   }
 

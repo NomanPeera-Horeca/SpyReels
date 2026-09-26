@@ -1,6 +1,7 @@
 import { getLoginUrl } from "@/const";
 import { identifyClarityUser } from "@/lib/clarity";
 import { identifyLogRocketUser } from "@/lib/logrocket";
+import { redirectSignedOutToMarketing } from "@/lib/marketingOrigin";
 import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
 import posthog from "posthog-js";
@@ -51,6 +52,8 @@ export function useAuth(options?: UseAuthOptions) {
     } finally {
       utils.auth.me.setData(undefined, null);
       await utils.auth.me.invalidate();
+      // App host must not fall back to the retired Vite marketing page.
+      redirectSignedOutToMarketing();
     }
   }, [logoutMutation, utils]);
 

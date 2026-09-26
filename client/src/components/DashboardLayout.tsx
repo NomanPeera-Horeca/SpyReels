@@ -60,6 +60,7 @@ import {
   Flame,
 } from "lucide-react";
 import LandingPage from "@/pages/LandingPage";
+import { redirectSignedOutToMarketing } from "@/lib/marketingOrigin";
 import { CSSProperties, Fragment, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
@@ -330,6 +331,9 @@ export default function DashboardLayout({
   }
 
   if (!user) {
+    if (redirectSignedOutToMarketing()) {
+      return <DashboardLayoutSkeleton />;
+    }
     return <LandingPage />;
   }
 
