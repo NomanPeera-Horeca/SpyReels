@@ -102,7 +102,20 @@ export type TranscribeStatusFetch = (
   status: string;
   transcript?: string | null;
   segments?: unknown;
+  errorMessage?: string | null;
 } | null>;
+
+export function transcriptionFailureMessage(
+  tx: { errorMessage?: string | null } | null | undefined,
+  fallback = "Transcription failed. Try again."
+): string {
+  const msg = String(tx?.errorMessage ?? "").trim();
+  return msg || fallback;
+}
+
+export function isNoCaptionsOrNoVoiceFailure(message: string): boolean {
+  return /no captions|no voice|spoken audio|no narration/i.test(message);
+}
 
 export type TranscribeStatusInput =
   | { reelId: number }
@@ -150,7 +163,7 @@ export async function waitForLibraryTranscriptionReady(
       throw new Error("No voice detected on this reel. Pick one with narration to remake.");
     }
     if (tx?.status === "failed") {
-      throw new Error("Transcription failed. Try again.");
+      throw new Error(transcriptionFailureMessage(tx));
     }
     if (attempt < max) await new Promise((r) => setTimeout(r, pollMs));
   }
@@ -171,7 +184,7 @@ export async function assertLibraryTranscriptionReadyOnce(
     throw new Error("No voice detected on this reel. Pick one with narration to remake.");
   }
   if (tx?.status === "failed") {
-    throw new Error("Transcription failed. Try again.");
+    throw new Error(transcriptionFailureMessage(tx));
   }
   throw new Error("Transcription is not ready yet. Try again.");
 }

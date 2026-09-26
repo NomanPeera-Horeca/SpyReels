@@ -514,74 +514,77 @@ export async function fetchYouTubeTranscript(
   const url = videoPageUrl.trim();
   if (!url) return null;
 
-  const maxTries = 5;
-  for (let attempt = 1; attempt <= maxTries; attempt++) {
-    try {
-      const { status, data } = await scGet("/v1/youtube/video/transcript", {
-        url,
-        language: "en",
-      });
+  // Some Shorts only expose auto-captions without a language pin; try en then any.
+  for (const language of ["en", undefined] as const) {
+    const maxTries = language === "en" ? 3 : 2;
+    for (let attempt = 1; attempt <= maxTries; attempt++) {
+      try {
+        const { status, data } = await scGet("/v1/youtube/video/transcript", {
+          url,
+          language,
+        });
 
-      if (status === 404 || responseLooksNotFound(status, data)) {
-        return null;
-      }
-
-      if (
-        status === 200 &&
-        data &&
-        typeof data === "object" &&
-        (data as any).success !== false
-      ) {
-        const rawTranscript = (data as any).transcript;
-        const combined = (data as any).transcript_only_text;
-
-        if (rawTranscript == null || combined == null) {
-          return null;
+        if (status === 404 || responseLooksNotFound(status, data)) {
+          break;
         }
 
-        if (!Array.isArray(rawTranscript)) {
-          return null;
+        if (
+          status === 200 &&
+          data &&
+          typeof data === "object" &&
+          (data as any).success !== false
+        ) {
+          const rawTranscript = (data as any).transcript;
+          const combined = (data as any).transcript_only_text;
+
+          if (rawTranscript == null || combined == null) {
+            break;
+          }
+
+          if (!Array.isArray(rawTranscript)) {
+            break;
+          }
+
+          const segments = rawTranscript
+            .map((segment: any) => {
+              const text = String(segment?.text ?? "").trim();
+              const startMs = toFiniteNumber(segment?.startMs);
+              const endMs = toFiniteNumber(segment?.endMs);
+              if (!text) return null;
+              return {
+                start: startMs / 1000,
+                end: endMs / 1000,
+                text,
+              };
+            })
+            .filter(
+              (
+                segment: { start: number; end: number; text: string } | null
+              ): segment is { start: number; end: number; text: string } =>
+                segment !== null
+            );
+
+          const transcript = String(combined).trim();
+          if (!transcript || segments.length === 0) {
+            break;
+          }
+
+          return { transcript, segments };
         }
 
-        const segments = rawTranscript
-          .map((segment: any) => {
-            const text = String(segment?.text ?? "").trim();
-            const startMs = toFiniteNumber(segment?.startMs);
-            const endMs = toFiniteNumber(segment?.endMs);
-            if (!text) return null;
-            return {
-              start: startMs / 1000,
-              end: endMs / 1000,
-              text,
-            };
-          })
-          .filter(
-            (
-              segment: { start: number; end: number; text: string } | null
-            ): segment is { start: number; end: number; text: string } =>
-              segment !== null
+        if (attempt < maxTries) {
+          await sleep(status === 429 ? 2000 * attempt : 1000 * attempt);
+        }
+      } catch (error) {
+        if (attempt >= maxTries) {
+          console.warn(
+            `[YouTube] Failed to fetch transcript for ${url}:`,
+            error instanceof Error ? error.message : error
           );
-
-        const transcript = String(combined).trim();
-        if (!transcript || segments.length === 0) {
-          return null;
+          break;
         }
-
-        return { transcript, segments };
+        await sleep(1000 * attempt);
       }
-
-      if (attempt < maxTries) {
-        await sleep(status === 429 ? 2000 * attempt : 1000 * attempt);
-      }
-    } catch (error) {
-      if (attempt >= maxTries) {
-        console.warn(
-          `[YouTube] Failed to fetch transcript for ${url}:`,
-          error instanceof Error ? error.message : error
-        );
-        return null;
-      }
-      await sleep(1000 * attempt);
     }
   }
 

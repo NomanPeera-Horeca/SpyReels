@@ -4,6 +4,7 @@ import type { ReelClassificationLike } from "@/lib/remakeability";
 import {
   assertLibraryTranscriptionReadyOnce,
   evaluateRemakeabilityGate,
+  isNoCaptionsOrNoVoiceFailure,
   libraryEasedPercent,
   libraryRemakeButtonLabel,
   libraryRemakeKey,
@@ -316,6 +317,26 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
             progressPercent: 25,
             ...resolveLibraryIds(source, reelId),
           });
+          if (result.status === "failed") {
+            const message =
+              ("errorMessage" in result &&
+                String((result as { errorMessage?: string }).errorMessage ?? "").trim()) ||
+              "Transcription failed. Try again.";
+            if (isNoCaptionsOrNoVoiceFailure(message)) {
+              runningRef.current.delete(key);
+              setIntentPrompt((current) => (current?.key === key ? null : current));
+              patchState(source, {
+                stage: "inspiration",
+                progressPercent: 100,
+                classificationReason: message,
+                ...resolveLibraryIds(source, reelId),
+              });
+              setWorkspaceOpen(false);
+              toast.message(message);
+              return;
+            }
+            throw new Error(message);
+          }
           if (result.status !== "completed") {
             await waitForLibraryTranscriptionReady(
               fetchTranscribeStatus,
@@ -577,7 +598,20 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
       } catch (err) {
         if (cancelledRef.current.has(key)) return;
         setIntentPrompt((current) => (current?.key === key ? null : current));
-        failRemake(source, formatIdeaScriptErrorForUser(err, "remake"));
+        const message = formatIdeaScriptErrorForUser(err, "remake");
+        if (isNoCaptionsOrNoVoiceFailure(message)) {
+          runningRef.current.delete(key);
+          patchState(source, {
+            stage: "inspiration",
+            progressPercent: 100,
+            classificationReason: message,
+            ...resolveLibraryIds(source, reelId),
+          });
+          setWorkspaceOpen(false);
+          toast.message(message);
+          return;
+        }
+        failRemake(source, message);
         openWorkspaceForSource(source, { reelId: reelId ?? null });
       }
     },

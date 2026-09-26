@@ -409,7 +409,13 @@ export const collectedRouter = router({
               queuedAt: new Date(),
               startedAt: new Date(),
             });
-            return { reelId, transcriptionId, status: "failed" as const };
+            return {
+              reelId,
+              transcriptionId,
+              status: "failed" as const,
+              errorMessage:
+                "No captions available for this YouTube Short. Pick one with captions or spoken audio.",
+            };
           }
 
           const hookAnalysis = await analyzeHook(
