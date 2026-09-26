@@ -438,6 +438,16 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
         if (cancelledRef.current.has(key)) return;
 
         const statusInput = transcribeStatusInput(source, reelId, featuredReelId);
+        // YouTube / collected used to return status=completed with an empty
+        // transcript when captions were missing. That skipped the wait loop and
+        // failed later with "Reel must be transcribed first". Always require a
+        // non-empty transcript before generate.
+        await assertLibraryTranscriptionReadyOnce(
+          fetchTranscribeStatus,
+          statusInput
+        );
+        if (cancelledRef.current.has(key)) return;
+
         const tx = await fetchTranscribeStatus(statusInput);
         const gate = evaluateRemakeabilityGate(
           tx

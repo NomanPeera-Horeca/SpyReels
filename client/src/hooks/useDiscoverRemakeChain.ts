@@ -70,7 +70,7 @@ type IngestTranscribeDeps = {
   addByUrl: (url: string) => Promise<{ id: number; duplicate: boolean }>;
   transcribe: (collectedReelId: number) => Promise<{
     reelId: number;
-    status: "completed" | "processing";
+    status: "completed" | "processing" | "failed";
   }>;
   fetchCollectedList: () => Promise<Array<{ id: number; status: string }>>;
   fetchTranscribeStatus: (
@@ -153,6 +153,12 @@ export async function runDiscoverIngestAndTranscribe(
 
   const transcribeResult = await deps.transcribe(collectedReelId);
   if (deps.isCancelled()) throw new Error("Cancelled");
+
+  if (transcribeResult.status === "failed") {
+    throw new Error(
+      "No captions available for this video. Pick one with spoken audio to remake."
+    );
+  }
 
   const reelId = transcribeResult.reelId;
   await waitForTranscriptionReady(reelId, deps, (attempt) => {

@@ -356,11 +356,42 @@ export const collectedRouter = router({
         const reelId = await ensureCollectedMirrorReel(reel);
 
         const existingTranscription = await getTranscriptionByReelId(reelId);
-        if (existingTranscription && existingTranscription.status === "completed") {
-          return { reelId, transcriptionId: existingTranscription.id, status: "completed" as const };
+        const existingText = String(existingTranscription?.transcript ?? "").trim();
+        if (
+          existingTranscription &&
+          existingTranscription.status === "completed" &&
+          existingText
+        ) {
+          return {
+            reelId,
+            transcriptionId: existingTranscription.id,
+            status: "completed" as const,
+          };
         }
-        if (existingTranscription && existingTranscription.status === "processing") {
-          return { reelId, transcriptionId: existingTranscription.id, status: "processing" as const };
+        if (
+          existingTranscription &&
+          existingTranscription.status === "processing"
+        ) {
+          return {
+            reelId,
+            transcriptionId: existingTranscription.id,
+            status: "processing" as const,
+          };
+        }
+
+        // Empty "completed" YouTube rows (no captions) used to block remake forever
+        // because we short-circuited on status alone. Clear them so we can retry.
+        if (
+          existingTranscription &&
+          (existingTranscription.status === "failed" ||
+            (existingTranscription.status === "completed" && !existingText))
+        ) {
+          const dbClear = await getDb();
+          if (dbClear) {
+            await dbClear
+              .delete(transcriptions)
+              .where(eq(transcriptions.id, existingTranscription.id));
+          }
         }
 
         // YouTube: caption track via ScrapeCreators (no MP4 download)
@@ -372,11 +403,13 @@ export const collectedRouter = router({
               transcript: "",
               segments: [],
               hookAnalysis: "",
-              status: "completed",
+              status: "failed",
+              errorMessage:
+                "No captions available for this YouTube Short. Pick one with captions or spoken audio.",
               queuedAt: new Date(),
               startedAt: new Date(),
             });
-            return { reelId, transcriptionId, status: "completed" as const };
+            return { reelId, transcriptionId, status: "failed" as const };
           }
 
           const hookAnalysis = await analyzeHook(

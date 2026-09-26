@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useId, useMemo } from "react"
 import { createPortal } from "react-dom";
 import { usePostHog } from "@posthog/react";
 import { Loader2, Maximize2, Play, X } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { needsVideoUrlRefresh } from "@shared/mediaUrl";
 import { trpc } from "@/lib/trpc";
@@ -61,6 +62,7 @@ export function DashboardReelGridMedia({
   const enlargedVideoRef = useRef<HTMLVideoElement>(null);
   const userPausedRef = useRef(false);
   const programmaticPauseRef = useRef(false);
+  const mediaErrorRetryRef = useRef(false);
   const fallbackId = useId();
   const playerId = useMemo(() => {
     if (platform === "tiktok" && reelId != null) return `tiktok-${reelId}`;
@@ -243,6 +245,7 @@ export function DashboardReelGridMedia({
         capturePreviewEvent("reel_preview_play_failed", { reason: "no_playable_url" });
         setVideoFailed(true);
         setPlaying(false);
+        toast.error("Preview failed. Tap to try again.");
         return;
       }
       requestGridVideoPlay(playerId);
@@ -256,6 +259,7 @@ export function DashboardReelGridMedia({
   useEffect(() => {
     if (!playing) {
       pauseVideoElement(true);
+      mediaErrorRetryRef.current = false;
     }
   }, [playing, pauseVideoElement]);
 
@@ -381,9 +385,27 @@ export function DashboardReelGridMedia({
   };
 
   const handleVideoError = () => {
+    // One automatic remount / refresh helps with flaky CDN or transient network
+    // errors. After that, show the tap-to-retry affordance.
+    if (!mediaErrorRetryRef.current) {
+      mediaErrorRetryRef.current = true;
+      const previous = resolvedSrc;
+      capturePreviewEvent("reel_preview_play_failed", {
+        reason: "video_element_error_retrying",
+      });
+      stopPlayback();
+      void (async () => {
+        if (previous && needsVideoUrlRefresh(previous)) {
+          setResolvedSrc("");
+        }
+        await startPlayback();
+      })();
+      return;
+    }
     capturePreviewEvent("reel_preview_play_failed", { reason: "video_element_error" });
     setVideoFailed(true);
     stopPlayback();
+    toast.error("Preview failed. Tap to try again.");
   };
 
   const handleVideoEnded = () => {
