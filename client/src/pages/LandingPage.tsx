@@ -320,11 +320,13 @@ export default function LandingPage() {
     };
   }, []);
 
-  // The server-rendered marketing homepage links here until the auth dialog
-  // becomes an independent route. Keep the existing signup flow intact.
-  const [showLoginModal, setShowLoginModal] = useState(() =>
+  // The server-rendered marketing homepage links here for the existing auth
+  // flow. Show a clean auth backdrop instead of the retired SPA homepage.
+  const isMarketingAuthEntry =
     typeof window !== "undefined" &&
-    (["signup", "login"] as const).some((key) => new URLSearchParams(window.location.search).get(key) === "1")
+    (["signup", "login"] as const).some((key) => new URLSearchParams(window.location.search).get(key) === "1");
+  const [showLoginModal, setShowLoginModal] = useState(() =>
+    isMarketingAuthEntry
   );
   const handleGetStarted = () => {
     setShowLoginModal(true);
@@ -396,7 +398,10 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
-      <Dialog open={showLoginModal} onOpenChange={setShowLoginModal}>
+      <Dialog open={showLoginModal} onOpenChange={(open) => {
+        setShowLoginModal(open);
+        if (!open && isMarketingAuthEntry) window.location.href = "/";
+      }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-center text-2xl font-bold">Welcome to SpyReels</DialogTitle>
@@ -469,6 +474,13 @@ export default function LandingPage() {
         </DialogContent>
       </Dialog>
 
+      {isMarketingAuthEntry && (
+        <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#f8f7fb] px-6 text-center text-[#111116]">
+          <a href="/" className="text-2xl font-bold tracking-tight">SpyReels</a>
+          <p className="text-sm text-[#72717e]">Find what works. Remake it in your voice.</p>
+        </div>
+      )}
+      <div hidden={isMarketingAuthEntry}>
       <PublicHeader />
 
       {/* Hero */}
@@ -890,6 +902,7 @@ export default function LandingPage() {
 
       {/* Footer */}
       <PublicFooter />
+      </div>
     </div>
   );
 }
