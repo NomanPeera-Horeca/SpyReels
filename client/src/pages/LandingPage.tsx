@@ -368,7 +368,7 @@ export default function LandingPage() {
       if (!res.ok) {
         setAuthError(data.error || "Something went wrong");
       } else {
-        window.location.href = "/";
+        window.location.href = "/research";
       }
     } catch {
       setAuthError("Network error. Please try again.");
@@ -401,7 +401,7 @@ export default function LandingPage() {
     <div className="min-h-screen overflow-x-hidden bg-background text-foreground">
       <Dialog open={showLoginModal} onOpenChange={(open) => {
         setShowLoginModal(open);
-        if (!open && isMarketingAuthEntry) window.location.href = "/";
+        if (!open && isMarketingAuthEntry) window.location.href = getMarketingHomeUrl();
       }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>

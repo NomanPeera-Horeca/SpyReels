@@ -6,6 +6,7 @@ import {
   isSpyReelsAppHost,
   isSpyReelsApexHost,
   shouldRedirectApexPathToApp,
+  shouldRedirectAppPathToSite,
   siteOrigin,
   SPYREELS_APP_ORIGIN_DEFAULT,
   SPYREELS_SITE_ORIGIN,
@@ -53,5 +54,17 @@ describe("spyreelsOrigins", () => {
     expect(shouldRedirectApexPathToApp("/pricing")).toBe(false);
     expect(shouldRedirectApexPathToApp("/blog")).toBe(false);
     expect(shouldRedirectApexPathToApp("/features/viral-reel-finder")).toBe(false);
+  });
+
+  it("redirects marketing paths from app host to apex", () => {
+    expect(shouldRedirectAppPathToSite("/pricing")).toBe(true);
+    expect(shouldRedirectAppPathToSite("/blog")).toBe(true);
+    expect(shouldRedirectAppPathToSite("/blog/some-post")).toBe(true);
+    expect(shouldRedirectAppPathToSite("/free-tools/viral-hooks")).toBe(true);
+    expect(shouldRedirectAppPathToSite("/features/viral-reel-finder")).toBe(true);
+    expect(shouldRedirectAppPathToSite("/affiliate")).toBe(true);
+    expect(shouldRedirectAppPathToSite("/research")).toBe(false);
+    expect(shouldRedirectAppPathToSite("/studio")).toBe(false);
+    expect(shouldRedirectAppPathToSite("/")).toBe(false);
   });
 });

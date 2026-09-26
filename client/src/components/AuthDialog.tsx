@@ -183,7 +183,7 @@ export function AuthDialog({
       if (!res.ok) {
         setAuthError(data.error || "Something went wrong");
       } else {
-        window.location.href = returnTo || "/";
+        window.location.href = returnTo || "/research";
       }
     } catch {
       setAuthError("Network error. Please try again.");

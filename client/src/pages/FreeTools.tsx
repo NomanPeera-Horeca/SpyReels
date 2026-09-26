@@ -200,7 +200,7 @@ export default function FreeTools() {
   function openSignup() {
     if (authLoading) return;
     if (user) {
-      window.location.href = "/";
+      window.location.href = "/research";
       return;
     }
     setAuthOpen(true);

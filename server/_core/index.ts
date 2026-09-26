@@ -34,6 +34,7 @@ import {
   isSpyReelsApexHost,
   isSpyReelsAppHost,
   shouldRedirectApexPathToApp,
+  shouldRedirectAppPathToSite,
   siteOrigin,
 } from "@shared/spyreelsOrigins";
 import { parse as parseCookieHeader } from "cookie";
@@ -109,10 +110,10 @@ async function startServer() {
 
   // Product host root is never a marketing page.
   // Logged in → /research. Logged out / auth query → apex marketing homepage.
+  // Other marketing paths on app → apex (so Upgrade → /pricing never shows Vite chrome).
   app.use(async (req, res, next) => {
     if (!isAppHostSplitEnabled()) return next();
     if (req.method !== "GET" && req.method !== "HEAD") return next();
-    if (req.path !== "/") return next();
 
     const rawHost = (
       req.headers["x-forwarded-host"] ||
@@ -128,25 +129,35 @@ async function startServer() {
 
     const search = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
     const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
-    const auth = params.get("auth");
-    if (auth === "login" || auth === "signup" || auth === "forgot") {
-      return res.redirect(302, `${siteOrigin()}/${search}`);
-    }
 
-    if (req.headers.cookie) {
-      const token = parseCookieHeader(req.headers.cookie)[COOKIE_NAME];
-      if (token) {
-        try {
-          if (await sdk.authenticateRequest(req)) {
-            return res.redirect(302, "/research");
+    if (req.path === "/") {
+      const auth = params.get("auth");
+      if (auth === "login" || auth === "signup" || auth === "forgot") {
+        return res.redirect(302, `${siteOrigin()}/${search}`);
+      }
+
+      if (req.headers.cookie) {
+        const token = parseCookieHeader(req.headers.cookie)[COOKIE_NAME];
+        if (token) {
+          try {
+            if (await sdk.authenticateRequest(req)) {
+              return res.redirect(302, "/research");
+            }
+          } catch (error) {
+            console.warn("[Hosts] App-root session check failed; sending to marketing:", error);
           }
-        } catch (error) {
-          console.warn("[Hosts] App-root session check failed; sending to marketing:", error);
         }
       }
+
+      return res.redirect(302, `${siteOrigin()}/`);
     }
 
-    return res.redirect(302, `${siteOrigin()}/`);
+    if (shouldRedirectAppPathToSite(req.path)) {
+      const pathAndQuery = req.originalUrl || req.path;
+      return res.redirect(302, `${siteOrigin()}${pathAndQuery}`);
+    }
+
+    next();
   });
 
   // CSRF origin guard: reject cross-site state-changing /api requests.

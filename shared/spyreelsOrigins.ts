@@ -1,4 +1,5 @@
 import { isPrivateAppPath, normalizePublicPathname } from "./publicPageMeta";
+import { isPublicWebPath } from "./publicRouteOwnership";
 
 /**
  * Site (marketing) vs app (product) origins for the SpyReels host split.
@@ -147,4 +148,17 @@ export function shouldRedirectApexPathToApp(
   }
 
   return isPrivateAppPath(normalized);
+}
+
+/**
+ * Marketing paths that must not render on the product host.
+ * Redirect to apex so app.spyreels.ai never shows Vite marketing chrome.
+ */
+export function shouldRedirectAppPathToSite(pathname: string): boolean {
+  const normalized = normalizePublicPathname(pathname);
+  if (normalized === "/") return false; // handled separately (research vs marketing home)
+  if (isPublicWebPath(normalized)) return true;
+  // Legacy / alias marketing entry that still appears in product chrome.
+  if (normalized === "/hooks" || normalized.startsWith("/hooks/")) return true;
+  return false;
 }

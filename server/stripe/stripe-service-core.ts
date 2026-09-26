@@ -9,6 +9,7 @@ import {
   capturePostHogEvent,
   posthogDistinctIdForUser,
 } from "../analytics/posthogServer";
+import { appOrigin, siteOrigin } from "@shared/spyreelsOrigins";
 
 function resolveStripeSecretKey(): string {
   const key = process.env.STRIPE_SECRET_KEY?.trim();
@@ -128,8 +129,8 @@ export async function createCheckoutSession(opts: {
     customer: stripeCustomerId,
     mode: "subscription",
     line_items: [{ price: priceId, quantity: 1 }],
-    success_url: `${origin}/billing?success=true&plan=${planId}`,
-    cancel_url: `${origin}/pricing?canceled=true`,
+    success_url: `${appOrigin()}/billing?success=true&plan=${planId}`,
+    cancel_url: `${siteOrigin()}/pricing?canceled=true`,
     allow_promotion_codes: true,
     ...(referralId ? { client_reference_id: referralId } : {}),
     metadata: {
