@@ -20,12 +20,12 @@ describe("legacyHomepageAuthMode", () => {
 });
 
 describe("publicAuthHandoffPath", () => {
-  it("builds pricing auth handoff with returnTo", () => {
+  it("builds homepage auth handoff with returnTo", () => {
     expect(publicAuthHandoffPath("login")).toBe(
-      "/pricing?auth=login&returnTo=%2Fresearch"
+      "/?auth=login&returnTo=%2Fresearch"
     );
     expect(publicAuthHandoffPath("signup")).toBe(
-      "/pricing?auth=signup&returnTo=%2Fresearch"
+      "/?auth=signup&returnTo=%2Fresearch"
     );
   });
 });

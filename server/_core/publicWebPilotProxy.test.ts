@@ -128,7 +128,7 @@ describe("publicWebPilotProxy", () => {
     });
     expect(signup.status).toBe(302);
     expect(signup.headers.get("location")).toBe(
-      "/pricing?auth=signup&returnTo=%2Fresearch"
+      "/?auth=signup&returnTo=%2Fresearch"
     );
 
     const login = await fetch(`http://127.0.0.1:${proxyPort}/?login=1`, {
@@ -136,7 +136,7 @@ describe("publicWebPilotProxy", () => {
     });
     expect(login.status).toBe(302);
     expect(login.headers.get("location")).toBe(
-      "/pricing?auth=login&returnTo=%2Fresearch"
+      "/?auth=login&returnTo=%2Fresearch"
     );
 
     const verify = vi.spyOn(sdk, "authenticateRequest").mockRejectedValue(new Error("stale session"));

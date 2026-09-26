@@ -1,12 +1,12 @@
 /**
- * Canonical auth handoff for public marketing CTAs.
+ * Canonical auth handoff for public marketing CTAs on the Next homepage.
  *
- * AuthDialog lives on SPA public pages that mount PublicHeader (e.g. /pricing),
- * opened via ?auth=login|signup. Do not use /?login=1 or /?signup=1; those used
- * to dump users onto the retired Vite homepage shell.
+ * Keep users on `/` (public-web Next) and open auth via `?auth=login|signup`.
+ * Do not send them to SPA marketing shells like /pricing behind the dialog.
+ * Do not use /?login=1 or /?signup=1 (legacy flags that used to dump into Vite).
  */
 
-export const PUBLIC_AUTH_HANDOFF_PATH = "/pricing";
+export const PUBLIC_AUTH_HANDOFF_PATH = "/";
 export const PUBLIC_AUTH_DEFAULT_RETURN_TO = "/research";
 
 export type PublicAuthMode = "login" | "signup";

@@ -213,9 +213,9 @@ export function registerPublicWebPilotProxy(
   }
 
   app.use(async (req, res, next) => {
-    // Legacy ChatGPT homepage CTAs used /?login=1 and /?signup=1. Redirect to a
-    // SPA public page that mounts AuthDialog via ?auth=, instead of the retired
-    // Vite homepage shell.
+    // Legacy ChatGPT homepage CTAs used /?login=1 and /?signup=1. Redirect onto
+    // the Next homepage auth query so AuthDialog opens over the new landing,
+    // instead of the retired Vite shell or SPA /pricing chrome.
     if (req.path === "/" && (req.method === "GET" || req.method === "HEAD")) {
       const mode = legacyHomepageAuthMode(req.query as Record<string, unknown>);
       if (mode) {
