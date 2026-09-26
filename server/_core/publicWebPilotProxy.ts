@@ -193,6 +193,21 @@ export function registerPublicWebPilotProxy(
     `[PublicWeb] Pilot routing enabled for ${VIRAL_REEL_FINDER_PILOT_PATH}${config.homepageEnabled ? " and /" : ""} -> ${config.origin}`
   );
 
+  if (config.homepageEnabled) {
+    // An older PWA worker cached the SPA navigation shell. Its script URL now
+    // falls through to that shell, so it cannot update itself and continues to
+    // intercept visits to /. Replace it with a network-only worker. Product
+    // routes remain available online through the existing Express app.
+    app.get("/sw.js", (_req, res) => {
+      res.setHeader("Content-Type", "application/javascript; charset=utf-8");
+      res.setHeader("Cache-Control", "no-store, max-age=0");
+      res.send(
+        "self.addEventListener('install', () => self.skipWaiting());\n" +
+          "self.addEventListener('activate', event => event.waitUntil(self.clients.claim()));\n"
+      );
+    });
+  }
+
   app.use(async (req, res, next) => {
     if (req.path === "/" && (req.query.signup === "1" || req.query.login === "1")) {
       next();
