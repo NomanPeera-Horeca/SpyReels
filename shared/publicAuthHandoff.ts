@@ -1,10 +1,9 @@
 /**
  * Canonical auth handoff for public marketing CTAs.
  *
- * Relative path is `/?auth=login|signup&returnTo=…`.
- * When SPYREELS_APP_HOST_SPLIT is on, callers should prefix with the product
- * origin (https://app.spyreels.ai) so OAuth and session stay on the app host.
- * Apex Express also 302s `/?auth=` to the app host as a safety net.
+ * Relative path is `/?auth=login|signup&returnTo=…` on the marketing host
+ * (https://spyreels.ai) so the Next homepage modal opens over the new UI.
+ * After login, the client sends users to the product host (app.spyreels.ai).
  */
 
 export const PUBLIC_AUTH_HANDOFF_PATH = "/";

@@ -1,12 +1,10 @@
 import { publicAuthHandoffPath } from "../../shared/publicAuthHandoff";
 import {
-  resolvePublicAppOrigin,
   resolvePublicSiteOrigin,
 } from "../lib/appOrigin";
 import styles from "./PublicSiteChrome.module.css";
 
 const SITE_ORIGIN = resolvePublicSiteOrigin();
-const APP_ORIGIN = resolvePublicAppOrigin();
 const LOGO_URL = `${SITE_ORIGIN}/brand/spyreels-logo.png`;
 
 const NAV_LINKS = [
@@ -19,8 +17,9 @@ const NAV_LINKS = [
   ["Earn 20%", `${SITE_ORIGIN}/affiliate`],
 ] as const;
 
-const LOGIN_URL = `${APP_ORIGIN}${publicAuthHandoffPath("login")}`;
-const SIGNUP_URL = `${APP_ORIGIN}${publicAuthHandoffPath("signup")}`;
+// Auth stays on the marketing host so the Next homepage modal is shown.
+const LOGIN_URL = `${SITE_ORIGIN}${publicAuthHandoffPath("login")}`;
+const SIGNUP_URL = `${SITE_ORIGIN}${publicAuthHandoffPath("signup")}`;
 
 export function PublicSiteHeader() {
   return (

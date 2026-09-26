@@ -116,7 +116,11 @@ export function appAbsoluteUrl(
 
 /**
  * Paths that must run on the product host when the split is enabled.
- * Includes private app routes, /api, and /?auth= handoffs.
+ * Includes private app routes and /api (except auth endpoints used by the
+ * marketing homepage modal on apex).
+ *
+ * Auth query on `/` stays on apex so the Next homepage modal opens over the
+ * new marketing UI; after login the client sends users to the app host.
  */
 export function shouldRedirectApexPathToApp(
   pathname: string,
@@ -125,11 +129,17 @@ export function shouldRedirectApexPathToApp(
   const normalized = normalizePublicPathname(pathname);
 
   if (normalized === "/") {
-    const params = new URLSearchParams(
-      search.startsWith("?") ? search.slice(1) : search
-    );
-    const auth = params.get("auth");
-    return auth === "login" || auth === "signup" || auth === "forgot";
+    return false;
+  }
+
+  // Marketing auth modal posts to these from apex; keep them same-origin.
+  if (
+    normalized === "/api/auth" ||
+    normalized.startsWith("/api/auth/") ||
+    normalized === "/api/oauth" ||
+    normalized.startsWith("/api/oauth/")
+  ) {
+    return false;
   }
 
   if (normalized === "/viral-posts" || normalized.startsWith("/viral-posts/")) {

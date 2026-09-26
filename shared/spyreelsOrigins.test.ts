@@ -39,13 +39,15 @@ describe("spyreelsOrigins", () => {
     expect(isSpyReelsAppHost("spyreels.ai")).toBe(false);
   });
 
-  it("redirects product and auth handoff paths from apex", () => {
+  it("redirects product paths from apex but keeps marketing auth on apex", () => {
     expect(shouldRedirectApexPathToApp("/research")).toBe(true);
     expect(shouldRedirectApexPathToApp("/studio")).toBe(true);
     expect(shouldRedirectApexPathToApp("/viral-posts")).toBe(true);
     expect(shouldRedirectApexPathToApp("/api/trpc")).toBe(true);
+    expect(shouldRedirectApexPathToApp("/api/auth/login")).toBe(false);
+    expect(shouldRedirectApexPathToApp("/api/oauth/callback")).toBe(false);
     expect(shouldRedirectApexPathToApp("/", "?auth=signup&returnTo=%2Fresearch")).toBe(
-      true
+      false
     );
     expect(shouldRedirectApexPathToApp("/")).toBe(false);
     expect(shouldRedirectApexPathToApp("/pricing")).toBe(false);

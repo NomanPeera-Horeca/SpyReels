@@ -20,11 +20,13 @@ Mature SaaS pattern: acquisition on the apex domain, product on `app.`.
 OAuth callbacks and AuthDialog redirects that cross unrelated hosts wipe
 `sessionStorage`; keeping OAuth on the product host avoids that.
 
-## Express behavior (split on)
+## Auth UX
 
-- Apex product paths (`/research`, `/studio`, `/api`, `/?auth=…`, etc.) → **302** to `https://app.spyreels.ai` + path/query
-- `app.spyreels.ai` never serves Next marketing HTML
-- Signed-in visits to apex `/` → 302 to `https://app.spyreels.ai/research`
+- Log in / Start free stay on **apex** (`/?auth=…`) so the Next homepage modal opens over the new marketing UI.
+- Email auth APIs (`/api/auth/*`) are allowed on apex (not redirected).
+- Google OAuth still starts/finishes on **app** (`OAUTH_SERVER_URL`).
+- After email login, the client navigates to `https://app.spyreels.ai` + returnTo.
+- Session cookie uses `Domain=.spyreels.ai` so both hosts share login.
 
 ## Env checklist (cutover)
 
@@ -57,11 +59,18 @@ After DNS + Render custom domain + Google OAuth URI are ready:
 3. Wait for TLS certificate
 4. Flip env flags and redeploy SpyReels + public-web
 
+## Express behavior (split on)
+
+- Apex product paths (`/research`, `/studio`, `/api` except `/api/auth` + `/api/oauth`, etc.) → **302** to `https://app.spyreels.ai` + path/query
+- Apex `/?auth=login|signup` stays on marketing (Next homepage modal)
+- `app.spyreels.ai` never serves Next marketing HTML
+- Signed-in visits to apex `/` → 302 to `https://app.spyreels.ai/research`
+
 ## Smoke test
 
 1. `dig app.spyreels.ai` resolves
 2. `https://spyreels.ai/` still Next homepage
 3. `https://spyreels.ai/research` → 302 → `https://app.spyreels.ai/research`
-4. `https://spyreels.ai/?auth=signup` → 302 → app with auth query
-5. Google login completes on `app.spyreels.ai`
+4. `https://spyreels.ai/?auth=signup` stays on apex and opens the Next auth modal
+5. After login, user lands on `app.spyreels.ai/research`
 6. Session cookie is set for `.spyreels.ai`

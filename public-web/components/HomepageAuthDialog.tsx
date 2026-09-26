@@ -182,7 +182,14 @@ export function HomepageAuthDialog({
       if (!res.ok) {
         setAuthError(data.error || "Something went wrong");
       } else {
-        window.location.href = returnTo || "/research";
+        const path =
+          returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//")
+            ? returnTo
+            : "/research";
+        const productOrigin = resolvePublicAppOrigin({
+          hostname: window.location.hostname,
+        });
+        window.location.href = `${productOrigin}${path}`;
       }
     } catch {
       setAuthError("Network error. Please try again.");
