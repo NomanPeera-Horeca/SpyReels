@@ -15,7 +15,7 @@ import { checkUsageLimit, incrementUsage, decrementUsage } from "../stripe/strip
 import { normalizeInstagramHandle, isValidInstagramHandleNormalized, INSTAGRAM_HANDLE_INVALID_MESSAGE } from "@shared/instagramHandle";
 import { and, not, sql, eq, inArray, or } from "drizzle-orm";
 import { maybeMarkFirstSpyCompleted } from "./_shared";
-import { enqueueCreatorRadarRefresh } from "../creatorRadarRefreshQueue";
+import { scheduleCreatorRadarRefresh } from "../creatorRadarRefreshQueue";
 import { getCreatorRadarReconciliationDays } from "../creatorRadarReconciliation";
 
 async function uploadReelThumbnailsBounded(
@@ -398,7 +398,7 @@ async function runScrapeJobInner(
 }
 
 
-async function runResyncJob(
+export async function runResyncJob(
   jobId: number,
   handle: string,
   reconciliationDays: number
@@ -834,20 +834,30 @@ export const scrapeRouter = router({
           failureReason: null,
         });
 
-        const queued = enqueueCreatorRadarRefresh(() =>
-          runResyncJob(input.jobId, job.handle, reconciliationDays)
-        );
-        if (!queued) {
-          await updateScrapeJob(input.jobId, {
-            status: "completed",
-            currentStep: "complete",
-            progressPercent: 100,
-            errorMessage: "Refresh queue is busy. Please try again shortly.",
+        try {
+          await scheduleCreatorRadarRefresh({
+            payload: {
+              platform: "instagram",
+              jobId: input.jobId,
+              handle: job.handle,
+              reconciliationDays,
+            },
+            runInline: () =>
+              runResyncJob(input.jobId, job.handle, reconciliationDays),
           });
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: "Too many refreshes are queued. Please try again shortly.",
-          });
+        } catch (error) {
+          if (
+            error instanceof TRPCError &&
+            error.code === "TOO_MANY_REQUESTS"
+          ) {
+            await updateScrapeJob(input.jobId, {
+              status: "completed",
+              currentStep: "complete",
+              progressPercent: 100,
+              errorMessage: "Refresh queue is busy. Please try again shortly.",
+            });
+          }
+          throw error;
         }
 
         return {

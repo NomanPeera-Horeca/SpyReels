@@ -160,6 +160,58 @@ registerDurableJobHandler("featured_reel_transcription", async (job: ClaimedJob)
   });
 });
 
+registerDurableJobHandler("creator_radar_refresh", async (job: ClaimedJob) => {
+  const payload = job.payload as {
+    platform: "instagram" | "tiktok" | "youtube";
+    jobId: number;
+    handle: string;
+    reconciliationDays?: number;
+    userId?: number;
+    workspaceId?: string;
+    timeframeDays?: number;
+  };
+
+  if (payload.platform === "instagram") {
+    const { runResyncJob } = await import("../routers/scrapeRouter");
+    await runResyncJob(
+      payload.jobId,
+      payload.handle,
+      Number(payload.reconciliationDays ?? 30)
+    );
+    return;
+  }
+
+  if (!payload.workspaceId) {
+    throw new Error(`creator_radar_refresh ${payload.platform} missing workspaceId`);
+  }
+
+  if (payload.platform === "tiktok") {
+    const { runTikTokScrapeJob } = await import("../tiktokScrape/runJob");
+    await runTikTokScrapeJob(
+      payload.jobId,
+      Number(payload.userId),
+      payload.workspaceId,
+      payload.handle,
+      {
+        timeframeDays: Number(payload.timeframeDays ?? 30),
+        replaceExisting: true,
+      }
+    );
+    return;
+  }
+
+  const { runYouTubeScrapeJob } = await import("../youtubeScrape/runJob");
+  await runYouTubeScrapeJob(
+    payload.jobId,
+    Number(payload.userId),
+    payload.workspaceId,
+    payload.handle,
+    {
+      timeframeDays: Number(payload.timeframeDays ?? 30),
+      replaceExisting: true,
+    }
+  );
+});
 
 registerDurableJobHandler("queue_safety_probe", async (job: ClaimedJob) => {
   if (process.env.DURABLE_QUEUE_SAFETY_PROBE_ENABLED !== "true") {

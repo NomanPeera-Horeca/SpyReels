@@ -7,6 +7,7 @@ const FLAG_BY_JOB_TYPE: Record<PilotJobType, string> = {
   creator_discovery: "DURABLE_QUEUE_CREATOR_DISCOVERY_ENABLED",
   carousel_generation: "DURABLE_QUEUE_CAROUSEL_ENABLED",
   featured_reel_transcription: "DURABLE_QUEUE_FEATURED_TRANSCRIPTION_ENABLED",
+  creator_radar_refresh: "DURABLE_QUEUE_CREATOR_RADAR_REFRESH_ENABLED",
   queue_safety_probe: "DURABLE_QUEUE_SAFETY_PROBE_ENABLED",
 };
 
@@ -41,9 +42,18 @@ export function isPilotQueueEnabled(
   jobType: PilotJobType,
   rolloutKey?: string
 ): boolean {
-  if (
-    process.env[FLAG_BY_JOB_TYPE[jobType]]?.trim().toLowerCase() !== "true"
-  ) {
+  const flagValue = process.env[FLAG_BY_JOB_TYPE[jobType]]?.trim().toLowerCase();
+
+  // Creator Radar refresh defaults ON so deploys cannot strand Queued jobs.
+  // Set DURABLE_QUEUE_CREATOR_RADAR_REFRESH_ENABLED=false to force inline.
+  if (jobType === "creator_radar_refresh") {
+    if (flagValue === "false" || flagValue === "0" || flagValue === "off") {
+      return false;
+    }
+    return true;
+  }
+
+  if (flagValue !== "true") {
     return false;
   }
 

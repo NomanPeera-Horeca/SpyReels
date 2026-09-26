@@ -37,12 +37,14 @@ describe("Creator Radar platform actions", () => {
     expect(youtubeRunner).toContain("db.transaction");
   });
 
-  it("serializes provider refreshes through one bounded queue", () => {
+  it("serializes provider refreshes through one bounded durable queue", () => {
     expect(refreshQueue).toContain("MAX_QUEUED_REFRESHES");
-    expect(refreshQueue).toContain("refreshTail.then(task, task)");
-    expect(instagramRouter).toContain("enqueueCreatorRadarRefresh");
-    expect(tiktokRouter).toContain("enqueueCreatorRadarRefresh");
-    expect(youtubeRouter).toContain("enqueueCreatorRadarRefresh");
+    expect(refreshQueue).toContain("scheduleCreatorRadarRefresh");
+    expect(refreshQueue).toContain("creator_radar_refresh");
+    expect(refreshQueue).toContain("startCreatorRadarRefreshWorker");
+    expect(instagramRouter).toContain("scheduleCreatorRadarRefresh");
+    expect(tiktokRouter).toContain("scheduleCreatorRadarRefresh");
+    expect(youtubeRouter).toContain("scheduleCreatorRadarRefresh");
   });
 
   it("preserves valid sessions and exposes retry after provider failure", () => {

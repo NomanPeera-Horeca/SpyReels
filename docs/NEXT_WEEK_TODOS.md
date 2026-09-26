@@ -139,6 +139,11 @@ These three channels are **critical** for SpyReels distribution and Facebook ads
 
 ## P2 — product polish / bugs
 
+- [x] **Creator Radar refresh → durable jobs** (reliability; exposed by host-split deploy churn Sep 26)
+  - Shipped: `creator_radar_refresh` on `durable_jobs`; API enqueues; serial web claimer resumes after deploy; scrape tables stay UI source of truth
+  - Docs: `docs/deploy-notes/creator-radar-durable-refresh.md`
+  - Rollback: `DURABLE_QUEUE_CREATOR_RADAR_REFRESH_ENABLED=false`
+  - Optional later: dedicated worker + `CREATOR_RADAR_REFRESH_WEB_WORKER=false`
 - [ ] **B-Roll Library in-app redesign** (`/b-roll` or Create → B-Roll Library)
   - Landing / marketing page is fine; **in-app UI is raw** (plain script list, no visual hierarchy, feels unfinished)
   - [ ] Competitive + UX research (how top B-roll / stock-match tools present script → beats → clips)
@@ -179,6 +184,7 @@ These three channels are **critical** for SpyReels distribution and Facebook ads
 
 ## Done recently (do not re-open unless regressing)
 
+- [x] **Host split live** (Sep 26): `spyreels.ai` marketing vs `app.spyreels.ai` product; OAuth/cookies/CSRF; Telegram webhook on app origin; stuck Creator Radar jobs manually recovered
 - [x] GSC indexing harden: 404 junk URLs, absolute blog 301s, crawl paths (`459b23c`)
 - [x] TikTok/YouTube remake parity + multi-platform research reliability (`bd9cd41`)
 - [x] Finder mobile hero polish + shared `FinderHandleForm` (`4696dd7`)

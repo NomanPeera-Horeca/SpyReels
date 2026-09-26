@@ -4,6 +4,7 @@ export const PILOT_JOB_TYPES = [
   "creator_discovery",
   "carousel_generation",
   "featured_reel_transcription",
+  "creator_radar_refresh",
   "queue_safety_probe",
 ] as const;
 

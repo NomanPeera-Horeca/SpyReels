@@ -83,3 +83,21 @@ describe("carousel durable queue rollout", () => {
     expect(isPilotQueueEnabled("carousel_generation", "1")).toBe(false);
   });
 });
+
+describe("creator radar refresh durable queue", () => {
+  const FLAG = "DURABLE_QUEUE_CREATOR_RADAR_REFRESH_ENABLED";
+
+  afterEach(() => {
+    delete process.env[FLAG];
+  });
+
+  it("defaults on so deploys cannot strand refreshes in memory", () => {
+    delete process.env[FLAG];
+    expect(isPilotQueueEnabled("creator_radar_refresh")).toBe(true);
+  });
+
+  it("can be forced back to inline with an explicit off flag", () => {
+    process.env[FLAG] = "false";
+    expect(isPilotQueueEnabled("creator_radar_refresh")).toBe(false);
+  });
+});

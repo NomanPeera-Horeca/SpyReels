@@ -18,7 +18,13 @@ let draining = false;
 const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function processNext(): Promise<boolean> {
-  const job = await claimNextDurableJob({ workerId, leaseSeconds });
+  const job = await claimNextDurableJob({
+    workerId,
+    leaseSeconds,
+    // Creator Radar refreshes are claimed by the web serial poller by default
+    // so provider scrapes stay rate-limited and survive deploys independently.
+    excludeJobTypes: ["creator_radar_refresh"],
+  });
   if (!job) return false;
 
   const heartbeat = setInterval(() => {

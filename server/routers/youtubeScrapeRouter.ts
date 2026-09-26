@@ -5,7 +5,7 @@ import { youtubeScrapeJobs, youtubeVideos } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { checkUsageLimit, incrementUsage } from "../stripe/stripe-service";
 import { runYouTubeScrapeJob } from "../youtubeScrape/runJob";
-import { enqueueCreatorRadarRefresh } from "../creatorRadarRefreshQueue";
+import { scheduleCreatorRadarRefresh } from "../creatorRadarRefreshQueue";
 import { not, eq, desc, sql, and, inArray } from "drizzle-orm";
 
 
@@ -276,32 +276,44 @@ export const youtubeScrapeRouter = router({
           })
           .where(eq(youtubeScrapeJobs.id, job.id));
 
-        const queued = enqueueCreatorRadarRefresh(() =>
-          runYouTubeScrapeJob(
-            job.id,
-            ctx.user.id,
-            ctx.workspaceId,
-            job.handle,
-            {
+        try {
+          await scheduleCreatorRadarRefresh({
+            payload: {
+              platform: "youtube",
+              jobId: job.id,
+              userId: ctx.user.id,
+              workspaceId: ctx.workspaceId,
+              handle: job.handle,
               timeframeDays: job.timeframeDays ?? 30,
-              replaceExisting: true,
-            }
-          )
-        );
-        if (!queued) {
-          await db
-            .update(youtubeScrapeJobs)
-            .set({
-              status: "completed",
-              currentStep: "complete",
-              progressPercent: 100,
-              errorMessage: "Refresh queue is busy. Please try again shortly.",
-            })
-            .where(eq(youtubeScrapeJobs.id, job.id));
-          throw new TRPCError({
-            code: "TOO_MANY_REQUESTS",
-            message: "Too many refreshes are queued. Please try again shortly.",
+            },
+            runInline: () =>
+              runYouTubeScrapeJob(
+                job.id,
+                ctx.user.id,
+                ctx.workspaceId,
+                job.handle,
+                {
+                  timeframeDays: job.timeframeDays ?? 30,
+                  replaceExisting: true,
+                }
+              ),
           });
+        } catch (error) {
+          if (
+            error instanceof TRPCError &&
+            error.code === "TOO_MANY_REQUESTS"
+          ) {
+            await db
+              .update(youtubeScrapeJobs)
+              .set({
+                status: "completed",
+                currentStep: "complete",
+                progressPercent: 100,
+                errorMessage: "Refresh queue is busy. Please try again shortly.",
+              })
+              .where(eq(youtubeScrapeJobs.id, job.id));
+          }
+          throw error;
         }
 
         return { jobId: job.id, daysSinceSync, queued: true as const };

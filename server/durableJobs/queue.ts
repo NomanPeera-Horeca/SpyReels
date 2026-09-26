@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   DEFAULT_LEASE_SECONDS,
@@ -23,18 +23,45 @@ function coerceJob(row: Record<string, unknown>, claimToken?: string): ClaimedJo
   };
 }
 
+function jobTypeListSql(types: PilotJobType[]): SQL {
+  return sql.join(
+    types.map((type) => sql`${type}`),
+    sql`, `
+  );
+}
+
+function claimTypeFilterSql(input: {
+  includeJobTypes?: PilotJobType[];
+  excludeJobTypes?: PilotJobType[];
+}): SQL {
+  if (input.includeJobTypes && input.includeJobTypes.length > 0) {
+    return sql`AND jobType IN (${jobTypeListSql(input.includeJobTypes)})`;
+  }
+  if (input.excludeJobTypes && input.excludeJobTypes.length > 0) {
+    return sql`AND jobType NOT IN (${jobTypeListSql(input.excludeJobTypes)})`;
+  }
+  return sql``;
+}
+
 export async function enqueueDurableJob(input: {
   jobType: PilotJobType;
   idempotencyKey: string;
   payload: unknown;
   maxAttempts?: number;
   availableAt?: Date;
+  /**
+   * Creator Radar refreshes are intentionally re-runnable. When true, a new
+   * enqueue after succeeded/failed/dead (or still queued) updates payload and
+   * returns the job to queued. Active running leases are left alone.
+   */
+  requeueIfTerminal?: boolean;
 }): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const payload = JSON.stringify(input.payload);
   const maxAttempts = input.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
   const availableAt = input.availableAt ?? new Date();
+  const requeue = Boolean(input.requeueIfTerminal);
 
   const result = await db.execute(sql`
     INSERT INTO durable_jobs
@@ -43,15 +70,69 @@ export async function enqueueDurableJob(input: {
       (${input.jobType}, ${input.idempotencyKey}, ${payload}, 'queued', ${maxAttempts}, ${availableAt})
     ON DUPLICATE KEY UPDATE
       id = LAST_INSERT_ID(id),
-      attempt = IF(status IN ('failed', 'dead'), 0, attempt),
-      availableAt = IF(status IN ('failed', 'dead'), VALUES(availableAt), availableAt),
-      leaseExpiresAt = IF(status IN ('failed', 'dead'), NULL, leaseExpiresAt),
-      lockedBy = IF(status IN ('failed', 'dead'), NULL, lockedBy),
-      lastError = IF(status IN ('failed', 'dead'), NULL, lastError),
-      completedAt = IF(status IN ('failed', 'dead'), NULL, completedAt),
-      status = IF(status IN ('failed', 'dead'), 'queued', status)
+      payload = IF(
+        ${requeue} AND status IN ('queued', 'failed', 'dead', 'succeeded'),
+        VALUES(payload),
+        payload
+      ),
+      attempt = IF(
+        (${requeue} AND status IN ('failed', 'dead', 'succeeded'))
+          OR status IN ('failed', 'dead'),
+        0,
+        attempt
+      ),
+      availableAt = IF(
+        (${requeue} AND status IN ('queued', 'failed', 'dead', 'succeeded'))
+          OR status IN ('failed', 'dead'),
+        VALUES(availableAt),
+        availableAt
+      ),
+      leaseExpiresAt = IF(
+        (${requeue} AND status IN ('failed', 'dead', 'succeeded'))
+          OR status IN ('failed', 'dead'),
+        NULL,
+        leaseExpiresAt
+      ),
+      lockedBy = IF(
+        (${requeue} AND status IN ('failed', 'dead', 'succeeded'))
+          OR status IN ('failed', 'dead'),
+        NULL,
+        lockedBy
+      ),
+      lastError = IF(
+        (${requeue} AND status IN ('failed', 'dead', 'succeeded'))
+          OR status IN ('failed', 'dead'),
+        NULL,
+        lastError
+      ),
+      completedAt = IF(
+        (${requeue} AND status IN ('failed', 'dead', 'succeeded'))
+          OR status IN ('failed', 'dead'),
+        NULL,
+        completedAt
+      ),
+      status = IF(
+        (${requeue} AND status IN ('failed', 'dead', 'succeeded'))
+          OR status IN ('failed', 'dead'),
+        'queued',
+        status
+      )
   `);
   return Number((result[0] as { insertId?: number }).insertId ?? 0);
+}
+
+export async function countActiveDurableJobs(
+  jobType: PilotJobType
+): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const rows = await db.execute(sql`
+    SELECT COUNT(*) AS activeCount
+    FROM durable_jobs
+    WHERE jobType = ${jobType} AND status IN ('queued', 'running')
+  `);
+  const row = (rows[0] as unknown as Array<{ activeCount?: number | string }>)[0];
+  return Number(row?.activeCount ?? 0);
 }
 
 export async function requeueDeadDurableJobByKey(input: {
@@ -82,11 +163,14 @@ export async function requeueDeadDurableJobByKey(input: {
 export async function claimNextDurableJob(input: {
   workerId: string;
   leaseSeconds?: number;
+  includeJobTypes?: PilotJobType[];
+  excludeJobTypes?: PilotJobType[];
 }): Promise<ClaimedJob | null> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const leaseSeconds = input.leaseSeconds ?? DEFAULT_LEASE_SECONDS;
   const claimToken = `${input.workerId}:${randomUUID()}`;
+  const typeFilter = claimTypeFilterSql(input);
 
   const result = await db.execute(sql`
     UPDATE durable_jobs
@@ -107,6 +191,7 @@ export async function claimNextDurableJob(input: {
           )
           AND availableAt <= NOW(3)
           AND attempt < maxAttempts
+          ${typeFilter}
         ORDER BY availableAt ASC, id ASC
         LIMIT 1
       ) AS claimable

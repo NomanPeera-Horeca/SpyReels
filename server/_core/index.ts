@@ -19,6 +19,7 @@ import { startCollectedReelIngestSweeper } from "../collectedReelWorker";
 import { startTranscriptionZombieSweeper } from "../transcriptionSweeper";
 import { startScrapeJobZombieSweeper } from "../scrapeJobSweeper";
 import { startOperationalJobZombieSweeper } from "../operationalJobSweeper";
+import { startCreatorRadarRefreshWorker } from "../creatorRadarRefreshQueue";
 import { startViralPostsPoolRefresher } from "../viralPosts/poolRefresh";
 import { expressAlertErrorHandler, alertOwnerThrottled } from "../monitoring/alerts";
 import { registerPublicScriptShareRoutes } from "../publicScriptShareRoute";
@@ -401,6 +402,7 @@ async function startServer() {
     startCollectedReelIngestSweeper();
     startScrapeJobZombieSweeper();
     startOperationalJobZombieSweeper();
+    startCreatorRadarRefreshWorker();
     startViralPostsPoolRefresher();
 
     alertOwnerThrottled({
