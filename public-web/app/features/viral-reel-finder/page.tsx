@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
-import { PublicSiteFooter } from "../../../components/PublicSiteFooter";
-import { PublicSiteHeader } from "../../../components/PublicSiteHeader";
+import Script from "next/script";
+import { MarketingFinderMotion, MarketingFooter, MarketingHeader } from "../../../components/MarketingChrome";
 import { RelatedTools } from "./RelatedTools";
 import ViralFinderExperience from "./ViralFinderExperience";
+import "../../homepage.css";
 import styles from "./page.module.css";
 
 const SITE_URL = "https://spyreels.ai";
 const CANONICAL = `${SITE_URL}/features/viral-reel-finder`;
-const TITLE = "Instagram Reel Spy Tool - Find Any Account's Viral Reels Free";
+const TITLE = "Viral Reel Finder for Instagram | SpyReels";
 const DESCRIPTION =
-  "Search any Instagram creator's Reels, compare the strongest posts by views and engagement, then carry the useful ideas into your own script workflow.";
+  "Find viral Instagram Reels in your niche. Search a public creator, explore standout Reel examples, and turn what works into original scripts in your voice with SpyReels.";
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -36,7 +37,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "Can I search any public Instagram account?",
-    a: "The page can identify public Instagram profiles before you continue. The live preview uses a small set of accounts already available in SpyReels; researching another account continues inside the SpyReels app.",
+    a: "Search any public Instagram profile here. You can explore Reel examples from the creators shown on this page. For another account, continue its research in your SpyReels workspace.",
   },
   {
     q: "What does SpyReels do after I find a strong Reel?",
@@ -66,7 +67,7 @@ const breadcrumbJsonLd = {
 const softwareJsonLd = {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  name: "SpyReels Instagram Reel Spy Tool",
+  name: "SpyReels Viral Reel Finder for Instagram",
   alternateName: ["Instagram Reel Finder", "Viral Reel Finder", "Reel Spy Tool", "Reels Finder"],
   applicationCategory: "MultimediaApplication",
   operatingSystem: "Web Browser",
@@ -101,31 +102,34 @@ export default function ViralReelFinderPilotPage() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(softwareJsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(faqJsonLd) }} />
 
-      <PublicSiteHeader />
+      <MarketingHeader />
 
       <main>
         <section className={`${styles.shell} ${styles.hero}`}>
-          <div className={styles.eyebrow}>
-            <span className={styles.eyebrowDot} aria-hidden />
-            Free Instagram Reel Finder
-          </div>
+          <div className={styles.eyebrow}>Viral Reel Finder</div>
           <h1>
-            Any Instagram account&apos;s viral Reels, <span className={styles.accent}>ranked by what worked.</span>
+            Find viral Instagram Reels in your niche. <span className={styles.accent}>Make the next idea yours.</span>
           </h1>
           <p className={styles.heroLead}>
-            Paste a public Instagram handle. See the Reels that performed best. Then decide if you want SpyReels to do more.
+            Search a public creator. Find the posts worth studying. Turn what works into a script in your voice.
           </p>
           <ViralFinderExperience />
+        </section>
+
+        <section className={styles.motionStage} aria-label="See the SpyReels workflow">
+          <div className={styles.motionFrame}>
+            <MarketingFinderMotion />
+          </div>
         </section>
 
         <section className={`${styles.shell} ${styles.simpleSteps}`} id="how-it-works">
           <div className={styles.sectionCopy}>
             <span className={styles.sectionEyebrow}>How it works</span>
-            <h2>Three steps from competitor account to a useful content direction.</h2>
+            <h2>From Reel research to your next script.</h2>
           </div>
           <div className={styles.stepRow}>
             <article><small>01</small><h3>Paste a public handle</h3><p>Confirm the actual Instagram profile before starting research.</p></article>
-            <article><small>02</small><h3>Study the strongest Reels</h3><p>Compare the posts by real view and engagement data instead of scrolling blindly.</p></article>
+            <article><small>02</small><h3>Study the strongest Reels</h3><p>Explore Reel examples here, then research your chosen account in SpyReels.</p></article>
             <article><small>03</small><h3>Continue into creation</h3><p>Transcribe the Reel and move the useful pattern into your own script workflow.</p></article>
           </div>
         </section>
@@ -160,14 +164,15 @@ export default function ViralReelFinderPilotPage() {
         </section>
 
         <section className={`${styles.shell} ${styles.finalCta}`}>
-          <span className={styles.sectionEyebrow}>One next step</span>
-          <h2>Enter a handle you care about.</h2>
-          <p>Rank example Reels here. Rank your own account in SpyReels.</p>
-          <a className={styles.primaryLink} href="#live-demo">Find an account</a>
+          <span className={styles.sectionEyebrow}>Get started</span>
+          <h2>Find your next idea in the Reels already working.</h2>
+          <p>Search a creator, study their best ideas, and make your next script your own.</p>
+          <a className={styles.primaryLink} href="#live-demo">Find viral Reels</a>
         </section>
       </main>
 
-      <PublicSiteFooter />
+      <MarketingFooter />
+      <Script src="/marketing/chrome.js" strategy="afterInteractive" />
     </div>
   );
 }
