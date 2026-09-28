@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Script from "next/script";
 import { MarketingFinderMotion, MarketingFooter, MarketingHeader } from "../../../components/MarketingChrome";
-import { RelatedTools } from "./RelatedTools";
+import { finderNextTools, MarketingFaq, MarketingFinalCta, MarketingPlatformStrip, MarketingWorkspace } from "../../../components/MarketingPageSections";
 import ViralFinderExperience from "./ViralFinderExperience";
 import "../../homepage.css";
 import styles from "./page.module.css";
@@ -122,6 +122,8 @@ export default function ViralReelFinderPilotPage() {
           </div>
         </section>
 
+        <MarketingPlatformStrip />
+
         <section className={`${styles.shell} ${styles.simpleSteps}`} id="how-it-works">
           <div className={styles.sectionCopy}>
             <span className={styles.sectionEyebrow}>How it works</span>
@@ -134,22 +136,7 @@ export default function ViralReelFinderPilotPage() {
           </div>
         </section>
 
-        <section className={`${styles.shell} ${styles.faqSection}`} id="faq">
-          <div className={styles.sectionCopy}>
-            <span className={styles.sectionEyebrow}>FAQ</span>
-            <h2>Questions about the Instagram Reel Finder</h2>
-          </div>
-          <div className={styles.faqList}>
-            {FAQ_ITEMS.map((item) => (
-              <details key={item.q}>
-                <summary>{item.q}</summary>
-                <p>{item.a}</p>
-              </details>
-            ))}
-          </div>
-        </section>
-
-        <RelatedTools />
+        <MarketingWorkspace title="Find a Reel. Make the next one yours." tools={finderNextTools} />
 
         <section className={`${styles.shell} ${styles.relatedStrip}`}>
           <div>
@@ -163,12 +150,9 @@ export default function ViralReelFinderPilotPage() {
           </nav>
         </section>
 
-        <section className={`${styles.shell} ${styles.finalCta}`}>
-          <span className={styles.sectionEyebrow}>Get started</span>
-          <h2>Find your next idea in the Reels already working.</h2>
-          <p>Search a creator, study their best ideas, and make your next script your own.</p>
-          <a className={styles.primaryLink} href="#live-demo">Find viral Reels</a>
-        </section>
+        <MarketingFaq title="Questions about finding viral Reels." description="Search a public creator, study standout Reel examples, and bring a promising idea into your own script workflow." items={FAQ_ITEMS} />
+
+        <MarketingFinalCta title="Your next idea starts with a Reel worth studying." description="Search a creator. Find a strong idea. Turn it into a script in your voice." label="Find viral Reels" href="#live-demo" />
       </main>
 
       <MarketingFooter />
