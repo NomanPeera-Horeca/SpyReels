@@ -3,6 +3,7 @@ import Script from "next/script";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { HomepageAuthGate } from "../components/HomepageAuthGate";
+import { MarketingFooter, MarketingHeader } from "../components/MarketingChrome";
 import "./homepage.css";
 
 const title = "SpyReels | Research Viral Reels and Remake Scripts in Your Voice";
@@ -36,8 +37,11 @@ export default function HomePage() {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData).replace(/</g, "\\u003c") }} />
+      <MarketingHeader />
       <div dangerouslySetInnerHTML={{ __html: html }} />
+      <MarketingFooter />
       <HomepageAuthGate />
+      <Script src="/marketing/chrome.js" strategy="afterInteractive" />
       <Script src="/marketing/homepage.js" strategy="afterInteractive" />
     </>
   );

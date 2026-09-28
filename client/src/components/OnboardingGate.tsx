@@ -4,6 +4,8 @@ import { FEATURE_LAUNCH_DATE_ISO } from "@/data/onboardingNiches";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
+import { parseResearchIntent } from "@shared/researchIntent";
+import { stashResearchHandleForAfterAuth } from "@/lib/researchPendingHandle";
 
 const FEATURE_LAUNCH_DATE = new Date(FEATURE_LAUNCH_DATE_ISO);
 
@@ -101,6 +103,8 @@ export default function OnboardingGate({
   useEffect(() => {
     if (!shouldRedirectToOnboarding) return;
     if (location === "/onboarding") return;
+    const intent = parseResearchIntent(window.location.search);
+    if (intent) stashResearchHandleForAfterAuth(intent.handle, intent.autostart, "instagram");
     setLocation("/onboarding", { replace: true });
   }, [location, setLocation, shouldRedirectToOnboarding]);
 

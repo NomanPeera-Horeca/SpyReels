@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { InstagramMark } from "../../../../shared/ui/PlatformMarks";
+import { researchReturnTo } from "../../../../shared/researchIntent";
 import { resolvePublicAppOrigin } from "../../../lib/appOrigin";
 import { trackPublicWeb } from "../../../lib/trackPublicWeb";
 import interactionStyles from "./interaction.module.css";
@@ -77,17 +78,17 @@ function appOrigin(): string {
 }
 
 function handoffToResearch(handle: string, source: "form" | "selected_reel") {
+  const returnTo = researchReturnTo(handle);
   trackPublicWeb("viral_finder_research_cta_clicked", { handle, source });
   trackPublicWeb("viral_finder_app_handoff", {
     handle,
     source,
-    return_to: "/research",
+    return_to: returnTo,
     auth: "signup",
   });
   const url = new URL(`${appOrigin()}/`);
   url.searchParams.set("auth", "signup");
-  url.searchParams.set("returnTo", "/research");
-  url.searchParams.set("researchHandle", handle);
+  url.searchParams.set("returnTo", returnTo);
   window.location.assign(url.toString());
 }
 
@@ -289,9 +290,11 @@ export default function ViralFinderExperience() {
       chooseDemo(handle);
       return;
     }
-    if (!matchingProfile || matchingProfile.username.toLowerCase() !== handle) {
-      requestProfileNow(handle);
+    if (matchingProfile && !matchingProfile.isPrivate) {
+      handoffToResearch(matchingProfile.username, "form");
+      return;
     }
+    requestProfileNow(handle);
   }
 
   function selectReel(reel: DemoReel) {
@@ -315,7 +318,7 @@ export default function ViralFinderExperience() {
     ? "Private account"
     : profileLoading
       ? "Checking…"
-      : "Find account";
+      : "Find viral Reels";
 
   return (
     <div id="live-demo" className={styles.experience}>
@@ -351,7 +354,14 @@ export default function ViralFinderExperience() {
         {profileError && !profileLoading ? <p className={styles.formError}>{profileError}</p> : null}
 
         {matchingProfile ? (
-          <article className={`${styles.profileCard} ${interactionStyles.profileConfirmed}`}>
+          <button
+            type="button"
+            className={styles.profileCard}
+            data-testid="confirmed-instagram-profile"
+            disabled={matchingProfile.isPrivate}
+            onClick={() => handoffToResearch(matchingProfile.username, "form")}
+            aria-label={`Continue with @${matchingProfile.username} in Creator Radar`}
+          >
             <span className={styles.profileAvatarWrap}>
               {matchingProfile.profilePicUrl ? (
                 <img className={styles.profileAvatar} src={matchingProfile.profilePicUrl} alt="" referrerPolicy="no-referrer" />
@@ -371,27 +381,10 @@ export default function ViralFinderExperience() {
                 <b>{formatNumber(matchingProfile.postCount)}</b> posts · <b>{formatNumber(matchingProfile.followerCount)}</b> followers · <b>{formatNumber(matchingProfile.followingCount)}</b> following
               </span>
             </span>
-            <span className={interactionStyles.profilePlatform}>
-              <InstagramMark /> Instagram profile
+            <span className={styles.profileAction}>
+              {matchingProfile.isPrivate ? "Private account" : "Continue →"}
             </span>
-          </article>
-        ) : null}
-
-        {matchingProfile && !isDemoInput && !matchingProfile.isPrivate ? (
-          <div className={styles.profileNext}>
-            <p className={styles.profileHint} data-testid="profile-found-hint">
-              We found @{matchingProfile.username}. Ranking this account continues in SpyReels.
-            </p>
-            <button
-              type="button"
-              className={styles.primaryButton}
-              data-testid="research-found-account"
-              onClick={() => handoffToResearch(matchingProfile.username, "form")}
-            >
-              Research @{matchingProfile.username} in SpyReels
-            </button>
-            <span className={interactionStyles.actionHint}>Opens Research with @{matchingProfile.username} selected.</span>
-          </div>
+          </button>
         ) : null}
 
         <div className={styles.tryRow}>
