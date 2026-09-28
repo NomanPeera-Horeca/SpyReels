@@ -91,6 +91,7 @@ function revealIfNeeded(id: string) {
 export default function ViralFinderExperience() {
   const [input, setInput] = useState("");
   const [previewHandle, setPreviewHandle] = useState<string | null>(null);
+  const [searchAttempt, setSearchAttempt] = useState(0);
   const [demo, setDemo] = useState<DemoPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [demoError, setDemoError] = useState<string | null>(null);
@@ -147,7 +148,7 @@ export default function ViralFinderExperience() {
       });
 
     return () => controller.abort();
-  }, [previewHandle]);
+  }, [previewHandle, searchAttempt]);
 
   useEffect(() => {
     if (!previewHandle || loading) return;
@@ -172,6 +173,7 @@ export default function ViralFinderExperience() {
   function chooseDemo(handle: string) {
     setInput(handle);
     setPreviewHandle(handle);
+    setSearchAttempt((attempt) => attempt + 1);
     trackPublicWeb("viral_finder_demo_handle_selected", { handle });
   }
 
@@ -188,6 +190,7 @@ export default function ViralFinderExperience() {
     }
     setProfileError(null);
     setPreviewHandle(handle);
+    setSearchAttempt((attempt) => attempt + 1);
   }
 
   function selectReel(reel: DemoReel) {
@@ -280,7 +283,12 @@ export default function ViralFinderExperience() {
           ) : demoError || !demo ? (
             <div className={styles.demoState} role="alert">{demoError ?? "Reels are unavailable right now. Please try again."}</div>
           ) : demo.reels.length === 0 ? (
-            <div className={styles.demoState}>No public Reels came back for @{demo.handle}. Try another creator or continue in SpyReels.</div>
+            <div className={styles.demoState}>
+              <p>No public Reels came back for @{demo.handle}. Try another creator.</p>
+              <button type="button" className={styles.primaryButton} onClick={() => handoffToResearch(demo.handle, "form")}>
+                Research @{demo.handle} in SpyReels
+              </button>
+            </div>
           ) : (
             <>
               <div className={styles.previewGrid}>
