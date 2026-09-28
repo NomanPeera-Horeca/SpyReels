@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { InstagramMark } from "../../../../shared/ui/PlatformMarks";
+import { researchReturnTo } from "../../../../shared/researchIntent";
 import { resolvePublicAppOrigin } from "../../../lib/appOrigin";
 import { trackPublicWeb } from "../../../lib/trackPublicWeb";
 import interactionStyles from "./interaction.module.css";
@@ -29,6 +30,22 @@ type DemoPayload = {
   medianViewCount: number;
   reels: DemoReel[];
 };
+
+type FoundProfile = {
+  found: true;
+  username: string;
+  fullName: string;
+  biography: string;
+  profilePicUrl: string;
+  followerCount: number;
+  followingCount: number;
+  postCount: number;
+  isVerified: boolean;
+  isPrivate: boolean;
+  category: string;
+};
+
+type ProfilePayload = FoundProfile | { found: false; error?: string };
 
 function normalizeHandle(raw: string): string {
   const trimmed = raw.trim();
@@ -61,17 +78,17 @@ function appOrigin(): string {
 }
 
 function handoffToResearch(handle: string, source: "form" | "selected_reel") {
+  const returnTo = researchReturnTo(handle);
   trackPublicWeb("viral_finder_research_cta_clicked", { handle, source });
   trackPublicWeb("viral_finder_app_handoff", {
     handle,
     source,
-    return_to: "/research",
+    return_to: returnTo,
     auth: "signup",
   });
   const url = new URL(`${appOrigin()}/`);
   url.searchParams.set("auth", "signup");
-  url.searchParams.set("returnTo", "/research");
-  url.searchParams.set("researchHandle", handle);
+  url.searchParams.set("returnTo", returnTo);
   window.location.assign(url.toString());
 }
 
@@ -91,7 +108,6 @@ function revealIfNeeded(id: string) {
 export default function ViralFinderExperience() {
   const [input, setInput] = useState("");
   const [previewHandle, setPreviewHandle] = useState<string | null>(null);
-  const [searchAttempt, setSearchAttempt] = useState(0);
   const [demo, setDemo] = useState<DemoPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [demoError, setDemoError] = useState<string | null>(null);
@@ -100,12 +116,81 @@ export default function ViralFinderExperience() {
   const [selectedReel, setSelectedReel] = useState<DemoReel | null>(null);
   const [showSpyReelsNext, setShowSpyReelsNext] = useState(false);
 
+  const [debouncedHandle, setDebouncedHandle] = useState("");
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profile, setProfile] = useState<FoundProfile | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [finderReady, setFinderReady] = useState(false);
 
   useEffect(() => {
     setFinderReady(true);
   }, []);
+
+  useEffect(() => {
+    const normalized = normalizeHandle(input);
+    setProfile(null);
+    setProfileError(null);
+
+    if (DEMO_HANDLE_SET.has(normalized)) {
+      setDebouncedHandle("");
+      setProfileLoading(false);
+      setPreviewHandle(normalized);
+      return;
+    }
+
+    setPreviewHandle(null);
+
+    if (normalized.length < 2) {
+      setDebouncedHandle("");
+      setProfileLoading(false);
+      return;
+    }
+    if (!validHandle(normalized)) {
+      setDebouncedHandle("");
+      setProfileError("Instagram usernames can only contain letters, numbers, periods and underscores.");
+      return;
+    }
+
+    const timer = window.setTimeout(() => setDebouncedHandle(normalized), 700);
+    return () => window.clearTimeout(timer);
+  }, [input]);
+
+  useEffect(() => {
+    if (!debouncedHandle) return;
+    const controller = new AbortController();
+    setProfileLoading(true);
+    setProfileError(null);
+
+    fetch(`/features/viral-reel-finder/profile?handle=${encodeURIComponent(debouncedHandle)}`, {
+      signal: controller.signal,
+      headers: { accept: "application/json" },
+    })
+      .then(async (response) => {
+        const body = (await response.json()) as ProfilePayload;
+        if (!response.ok || body.found !== true) {
+          throw new Error("error" in body && body.error ? body.error : "We could not find that Instagram account.");
+        }
+        return body;
+      })
+      .then((body) => {
+        setProfile(body);
+        trackPublicWeb("viral_finder_profile_searched", {
+          handle: body.username,
+          found: true,
+          is_private: body.isPrivate,
+        });
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setProfile(null);
+        setProfileError(error instanceof Error ? error.message : "We could not find that Instagram account.");
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setProfileLoading(false);
+      });
+
+    return () => controller.abort();
+  }, [debouncedHandle]);
 
   useEffect(() => {
     if (!previewHandle) {
@@ -125,15 +210,14 @@ export default function ViralFinderExperience() {
     setShowAll(false);
     setShowSpyReelsNext(false);
 
-    const endpoint = DEMO_HANDLE_SET.has(previewHandle) ? "demo" : "search";
-    fetch(`/features/viral-reel-finder/${endpoint}?handle=${encodeURIComponent(previewHandle)}`, {
+    fetch(`/features/viral-reel-finder/demo?handle=${encodeURIComponent(previewHandle)}`, {
       signal: controller.signal,
       headers: { accept: "application/json" },
     })
       .then(async (response) => {
         const body = (await response.json()) as DemoPayload | { error?: string };
         if (!response.ok || !("reels" in body)) {
-          throw new Error("error" in body && body.error ? body.error : "Reel search is unavailable right now.");
+          throw new Error("error" in body && body.error ? body.error : "Demo unavailable");
         }
         return body;
       })
@@ -141,14 +225,14 @@ export default function ViralFinderExperience() {
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
         setDemo(null);
-        setDemoError(error instanceof Error ? error.message : "Reel search is unavailable right now.");
+        setDemoError(error instanceof Error ? error.message : "The demo catalog is unavailable right now.");
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
 
     return () => controller.abort();
-  }, [previewHandle, searchAttempt]);
+  }, [previewHandle]);
 
   useEffect(() => {
     if (!previewHandle || loading) return;
@@ -166,15 +250,29 @@ export default function ViralFinderExperience() {
   }, [demo, sortMode]);
 
   const visibleReels = showAll ? sortedReels : sortedReels.slice(0, 4);
+  const normalizedInput = normalizeHandle(input);
+  const isDemoInput = DEMO_HANDLE_SET.has(normalizedInput);
+  const matchingProfile =
+    profile && profile.username.toLowerCase() === normalizedInput ? profile : null;
   const selectedOwner = demo?.handle ?? previewHandle ?? "";
-  const continueHandle = selectedOwner;
+  const continueHandle =
+    matchingProfile && !isDemoInput && !matchingProfile.isPrivate
+      ? matchingProfile.username
+      : selectedOwner;
   const showPreview = Boolean(previewHandle);
 
   function chooseDemo(handle: string) {
     setInput(handle);
     setPreviewHandle(handle);
-    setSearchAttempt((attempt) => attempt + 1);
     trackPublicWeb("viral_finder_demo_handle_selected", { handle });
+  }
+
+  function requestProfileNow(handle: string) {
+    setProfile(null);
+    setProfileError(null);
+    setProfileLoading(true);
+    setDebouncedHandle("");
+    window.setTimeout(() => setDebouncedHandle(handle), 0);
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -188,9 +286,15 @@ export default function ViralFinderExperience() {
       setProfileError("Enter a valid Instagram username or profile link.");
       return;
     }
-    setProfileError(null);
-    setPreviewHandle(handle);
-    setSearchAttempt((attempt) => attempt + 1);
+    if (DEMO_HANDLE_SET.has(handle)) {
+      chooseDemo(handle);
+      return;
+    }
+    if (matchingProfile && !matchingProfile.isPrivate) {
+      handoffToResearch(matchingProfile.username, "form");
+      return;
+    }
+    requestProfileNow(handle);
   }
 
   function selectReel(reel: DemoReel) {
@@ -210,7 +314,11 @@ export default function ViralFinderExperience() {
     trackPublicWeb("viral_finder_sort_changed", { sort: next, handle: selectedOwner });
   }
 
-  const submitLabel = loading ? "Finding Reels…" : "Find viral Reels";
+  const submitLabel = matchingProfile?.isPrivate
+    ? "Private account"
+    : profileLoading
+      ? "Checking…"
+      : "Find viral Reels";
 
   return (
     <div id="live-demo" className={styles.experience}>
@@ -229,24 +337,55 @@ export default function ViralFinderExperience() {
             name="handle"
             className={styles.finderInput}
             value={input}
-            onChange={(event) => {
-              setInput(event.target.value);
-              setProfileError(null);
-              setPreviewHandle(null);
-            }}
+            onChange={(event) => setInput(event.target.value)}
             placeholder="@username or instagram.com/username"
             autoComplete="off"
           />
           <button
             className={styles.primaryButton}
             type="submit"
-            disabled={loading}
+            disabled={profileLoading || Boolean(matchingProfile?.isPrivate)}
           >
             {submitLabel}
           </button>
         </form>
 
-        {profileError ? <p className={styles.formError}>{profileError}</p> : null}
+        {profileLoading ? <div className={styles.profileLoading}>Looking up Instagram profile…</div> : null}
+        {profileError && !profileLoading ? <p className={styles.formError}>{profileError}</p> : null}
+
+        {matchingProfile ? (
+          <button
+            type="button"
+            className={styles.profileCard}
+            data-testid="confirmed-instagram-profile"
+            disabled={matchingProfile.isPrivate}
+            onClick={() => handoffToResearch(matchingProfile.username, "form")}
+            aria-label={`Continue with @${matchingProfile.username} in Creator Radar`}
+          >
+            <span className={styles.profileAvatarWrap}>
+              {matchingProfile.profilePicUrl ? (
+                <img className={styles.profileAvatar} src={matchingProfile.profilePicUrl} alt="" referrerPolicy="no-referrer" />
+              ) : (
+                <span className={styles.profileAvatarFallback}>@</span>
+              )}
+            </span>
+            <span className={styles.profileText}>
+              <span className={styles.profileNameRow}>
+                <strong>@{matchingProfile.username}</strong>
+                {matchingProfile.isVerified ? <span className={styles.verified}>✓</span> : null}
+                {matchingProfile.isPrivate ? <span className={styles.privateBadge}>Private</span> : null}
+              </span>
+              {matchingProfile.fullName ? <span>{matchingProfile.fullName}</span> : null}
+              {matchingProfile.biography ? <span className={styles.profileBio}>{matchingProfile.biography}</span> : null}
+              <span className={styles.profileStats}>
+                <b>{formatNumber(matchingProfile.postCount)}</b> posts · <b>{formatNumber(matchingProfile.followerCount)}</b> followers · <b>{formatNumber(matchingProfile.followingCount)}</b> following
+              </span>
+            </span>
+            <span className={styles.profileAction}>
+              {matchingProfile.isPrivate ? "Private account" : "Continue →"}
+            </span>
+          </button>
+        ) : null}
 
         <div className={styles.tryRow}>
           <span>Or try an example:</span>
@@ -268,9 +407,9 @@ export default function ViralFinderExperience() {
         <section id="reel-preview" className={styles.preview} aria-label="Interactive Viral Reel Finder product example">
           <div className={styles.previewHeader}>
             <div>
-              <small>{DEMO_HANDLE_SET.has(previewHandle ?? "") ? "Reel example" : "Reel results"}</small>
+              <small>Interactive example</small>
               <strong>@{demo?.handle ?? previewHandle}</strong>
-              <span>{demo ? `${demo.totalReelCount} Reels found` : loading ? "Finding Reels" : "Account unavailable"}</span>
+              <span>{demo ? `${demo.totalReelCount} Reels available` : loading ? "Loading account" : "Account unavailable"}</span>
             </div>
             <div className={styles.sortTabs} aria-label="Sort example Reels">
               <button className={sortMode === "views" ? styles.activeSort : undefined} type="button" aria-pressed={sortMode === "views"} onClick={() => changeSort("views")}>Views</button>
@@ -281,14 +420,7 @@ export default function ViralFinderExperience() {
           {loading ? (
             <div className={styles.demoState}>Loading Reel data…</div>
           ) : demoError || !demo ? (
-            <div className={styles.demoState} role="alert">{demoError ?? "Reels are unavailable right now. Please try again."}</div>
-          ) : demo.reels.length === 0 ? (
-            <div className={styles.demoState}>
-              <p>No public Reels came back for @{demo.handle}. Try another creator.</p>
-              <button type="button" className={styles.primaryButton} onClick={() => handoffToResearch(demo.handle, "form")}>
-                Research @{demo.handle} in SpyReels
-              </button>
-            </div>
+            <div className={styles.demoState}>The interactive example is unavailable right now.</div>
           ) : (
             <>
               <div className={styles.previewGrid}>
