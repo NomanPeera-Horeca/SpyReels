@@ -173,6 +173,16 @@
   background: rgba(124, 58, 237, 0.09);
 }
 
+.profileCard:focus-visible {
+  outline: 2px solid #7157ff;
+  outline-offset: 3px;
+}
+
+.profileCard:disabled {
+  cursor: default;
+  opacity: .72;
+}
+
 .profileAvatarWrap {
   width: 58px;
   height: 58px;
@@ -204,7 +214,7 @@
   display: flex;
   flex-direction: column;
   gap: 3px;
-  color: #a9a9b6;
+  color: #6f6b78;
   font-size: 13px;
 }
 
