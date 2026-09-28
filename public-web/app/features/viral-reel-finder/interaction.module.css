@@ -4,7 +4,7 @@
 
 .profileConfirmed.profileConfirmed:hover {
   border-color: rgba(167, 139, 250, 0.24);
-  background: rgba(124, 58, 237, 0.06);
+  background: #faf9ff;
 }
 
 .profilePlatform {
@@ -37,7 +37,7 @@
 }
 
 .demoHandleActive {
-  color: #f4f1ff !important;
+  color: #5b4cb8 !important;
   text-decoration: underline;
   text-underline-offset: 3px;
 }
