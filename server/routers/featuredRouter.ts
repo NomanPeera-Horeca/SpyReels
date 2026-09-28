@@ -6,7 +6,7 @@ import type { Transcription, Reel } from "../../drizzle/schema";
 import { invokeLLM } from "../_core/llm";
 import { accountEngagementRatePercent } from "../accountEngagementRate";
 import { getDb, transcriptionViewFromFeaturedReelRow, updateScrapeJob, seedDemoScrape } from "../db";
-import { fetchProfile } from "../instagram";
+import { fetchProfile, searchPublicReelsByHandle } from "../instagram";
 import { ensureProfilePicOnR2 } from "../profilePicR2";
 import { clientIpFromRequest, isPublicIpRateLimited } from "../publicRateLimit";
 import { reelNicheInputEnum } from "../reelNicheInputEnum";
@@ -201,7 +201,101 @@ async function featuredAccountMedianViewCount(
 }
 
 
+type PublicFinderPayload = {
+  handle: string;
+  totalReelCount: number;
+  medianViewCount: number;
+  reels: {
+    id: number;
+    reelShortcode: string;
+    caption: string;
+    viewCount: number;
+    likeCount: number;
+    commentCount: number;
+    engagementRate: number;
+    thumbnailUrl: string;
+  }[];
+};
+
+const publicFinderCache = new Map<string, { expiresAt: number; value: PublicFinderPayload }>();
+const publicFinderInflight = new Map<string, Promise<PublicFinderPayload>>();
+const publicFinderBudgets = new Map<string, { count: number; resetAt: number }>();
+const PUBLIC_FINDER_DAILY_LIMIT = 5;
+
+function consumePublicFinderBudget(ip: string): boolean {
+  const now = Date.now();
+  let budget = publicFinderBudgets.get(ip);
+  if (!budget || now > budget.resetAt) {
+    budget = { count: 0, resetAt: now + 24 * 60 * 60 * 1000 };
+    publicFinderBudgets.set(ip, budget);
+  }
+  budget.count++;
+  return budget.count <= PUBLIC_FINDER_DAILY_LIMIT;
+}
+
 export const featuredRouter = router({
+    /**
+     * A small, real sample for a typed public handle. Expensive provider reads
+     * are capped per IP and handle, coalesced while in flight, and cached.
+     * Full research remains in the authenticated workspace.
+     */
+    publicFinderSearch: publicProcedure
+      .input(z.object({ handle: z.string().min(1).max(128) }))
+      .query(async ({ ctx, input }) => {
+        const ip = clientIpFromRequest(ctx.req);
+        if (isPublicIpRateLimited(ip)) {
+          throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many requests. Please try again in a minute." });
+        }
+        const handle = normalizeInstagramHandle(input.handle);
+        if (!isValidInstagramHandleNormalized(handle)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: INSTAGRAM_HANDLE_INVALID_MESSAGE });
+        }
+        const cached = publicFinderCache.get(handle);
+        if (cached && cached.expiresAt > Date.now()) return cached.value;
+        const running = publicFinderInflight.get(handle);
+        if (running) return running;
+        if (!consumePublicFinderBudget(ip)) {
+          throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Search limit reached. Please try again tomorrow or continue in SpyReels." });
+        }
+        const task = (async (): Promise<PublicFinderPayload> => {
+          const result = await searchPublicReelsByHandle(handle);
+          const counts = result.reels.map((r) => r.viewCount).sort((a, b) => a - b);
+          const middle = Math.floor(counts.length / 2);
+          const medianViewCount = counts.length
+            ? Math.round(counts.length % 2 ? counts[middle] : (counts[middle - 1] + counts[middle]) / 2)
+            : 0;
+          const value: PublicFinderPayload = {
+            handle: result.handle,
+            totalReelCount: result.reels.length,
+            medianViewCount,
+            reels: result.reels.map((reel, index) => ({
+              id: index + 1,
+              reelShortcode: reel.shortcode,
+              caption: reel.caption,
+              viewCount: reel.viewCount,
+              likeCount: reel.likeCount,
+              commentCount: reel.commentCount,
+              engagementRate: reel.engagementRate,
+              thumbnailUrl: reel.thumbnailUrl,
+            })),
+          };
+          publicFinderCache.set(handle, { expiresAt: Date.now() + (value.reels.length ? 10 * 60_000 : 90_000), value });
+          return value;
+        })();
+        publicFinderInflight.set(handle, task);
+        try {
+          return await task;
+        } catch (error) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: error instanceof Error ? error.message : "Reel search is unavailable right now.",
+          });
+        } finally {
+          publicFinderInflight.delete(handle);
+        }
+      }),
+
+
     /**
      * Public, read-only demo slice of the curated featured catalog. Powers the
      * logged-out /features/viral-reel-finder marketing page, so it is the one
