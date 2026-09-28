@@ -37,7 +37,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "Can I search any public Instagram account?",
-    a: "Yes. Enter a public Instagram handle to see a sample of its recent Reels ranked by views. Continue in your SpyReels workspace for deeper research.",
+    a: "Yes. Enter a public Instagram handle to confirm the profile. Select it to sign in and open Creator Radar with that creator ready for Reel research.",
   },
   {
     q: "What does SpyReels do after I find a strong Reel?",
@@ -102,9 +102,7 @@ export default function ViralReelFinderPilotPage() {
       <main>
         <section className={`${styles.shell} ${styles.hero}`}>
           <div className={styles.eyebrow}>Viral Reel Finder</div>
-          <h1>
-            Find viral Instagram Reels in your niche
-          </h1>
+          <h1>Find <span className={styles.accent}>viral</span> Instagram Reels in your niche</h1>
           <p className={styles.heroLead}>
             Search a public creator. Find the posts worth studying. Turn what works into a script in your voice.
           </p>
@@ -126,7 +124,7 @@ export default function ViralReelFinderPilotPage() {
           </div>
           <div className={styles.stepRow}>
             <article><small>01</small><h3>Paste a public handle</h3><p>Go straight to the creator whose Reels you want to study.</p></article>
-            <article><small>02</small><h3>Study the strongest Reels</h3><p>Compare a creator's recent Reels by views or engagement, then pick an idea worth studying.</p></article>
+            <article><small>02</small><h3>Study the strongest Reels</h3><p>Open that creator in SpyReels to compare the posts that performed best.</p></article>
             <article><small>03</small><h3>Continue into creation</h3><p>Transcribe the Reel and move the useful pattern into your own script workflow.</p></article>
           </div>
         </section>
