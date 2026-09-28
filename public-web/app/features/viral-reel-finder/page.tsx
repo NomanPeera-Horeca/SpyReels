@@ -103,7 +103,7 @@ export default function ViralReelFinderPilotPage() {
         <section className={`${styles.shell} ${styles.hero}`}>
           <div className={styles.eyebrow}>Viral Reel Finder</div>
           <h1>
-            Find viral Instagram Reels in your niche.
+            Find viral Instagram Reels in your niche
           </h1>
           <p className={styles.heroLead}>
             Search a public creator. Find the posts worth studying. Turn what works into a script in your voice.
