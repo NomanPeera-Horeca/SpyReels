@@ -2239,6 +2239,75 @@ export async function searchReelsByHandle(
   return { reels: allReels.slice(0, maxResults), profile };
 }
 
+/**
+ * Bounded anonymous Finder sample. One profile request and at most two media
+ * pages; no background scrape job, transcript, or video URL is exposed.
+ */
+export async function searchPublicReelsByHandle(handle: string): Promise<{
+  handle: string;
+  reels: Pick<SearchReelData, "shortcode" | "caption" | "viewCount" | "likeCount" | "commentCount" | "engagementRate" | "thumbnailUrl">[];
+}> {
+  const requested = normalizeInstagramHandle(handle);
+  const { status, data } = await scGet(
+    "/v1/instagram/profile",
+    { handle: requested },
+    { timeoutMs: 8000 }
+  );
+  const user = data?.data?.user;
+  if (status === 404 || !user) {
+    throw new Error(status === 429 ? "Instagram is busy. Try again shortly." : "We could not find that public Instagram account.");
+  }
+  const profile = profileFromGraphUser(user, requested);
+  if (normalizeInstagramHandle(profile.username) !== requested) {
+    throw new Error("We could not confirm that Instagram username.");
+  }
+  if (profile.isPrivate) throw new InstagramPrivateAccountError(profile.username);
+
+  const reels: SearchReelData[] = [];
+  const seen = new Set<string>();
+  let maxId: string | null = null;
+  for (let pageNumber = 0; pageNumber < 2; pageNumber++) {
+    const page = await fetchUserReelsPage(
+      { handle: profile.username, userId: profile.userId || undefined },
+      maxId,
+      { emptyFirstPageTries: 1 }
+    );
+    for (const item of page.items) {
+      const reel = parseClipItem(item, profile.username);
+      if (!reel || seen.has(reel.shortcode)) continue;
+      seen.add(reel.shortcode);
+      reels.push({
+        shortcode: reel.shortcode,
+        caption: reel.caption,
+        viewCount: reel.viewCount,
+        likeCount: reel.likeCount,
+        commentCount: reel.commentCount,
+        engagementRate: profile.followerCount > 0
+          ? Math.round(((reel.likeCount + reel.commentCount) / profile.followerCount) * 10000) / 100
+          : 0,
+        thumbnailUrl: reel.thumbnailUrl,
+        videoUrl: "",
+        reelUrl: reel.reelUrl,
+        duration: reel.duration,
+        postedAt: reel.postedAt,
+        ownerUsername: profile.username,
+        ownerFullName: profile.fullName,
+        ownerProfilePicUrl: "",
+        ownerFollowerCount: profile.followerCount,
+      });
+    }
+    if (!page.moreAvailable || !page.maxId) break;
+    maxId = page.maxId;
+  }
+  reels.sort((a, b) => b.viewCount - a.viewCount);
+  return {
+    handle: profile.username,
+    reels: reels.slice(0, 8).map(({ shortcode, caption, viewCount, likeCount, commentCount, engagementRate, thumbnailUrl }) => ({
+      shortcode, caption, viewCount, likeCount, commentCount, engagementRate, thumbnailUrl,
+    })),
+  };
+}
+
 /* ------------------------------------------------------------------ */
 /*  Hybrid search parsers (no invented metrics)                        */
 /* ------------------------------------------------------------------ */
