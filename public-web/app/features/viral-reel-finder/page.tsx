@@ -49,11 +49,6 @@ const FAQ_ITEMS = [
   },
 ] as const;
 
-const RELATED_LINKS = [
-  ["How to find viral Reels in your niche", "/blog/guide-find-viral-reels-your-niche"],
-  ["How to reverse engineer viral Reels", "/blog/guide-reverse-engineer-viral-reels"],
-] as const;
-
 const breadcrumbJsonLd = {
   "@context": "https://schema.org",
   "@type": "BreadcrumbList",
@@ -137,18 +132,6 @@ export default function ViralReelFinderPilotPage() {
         </section>
 
         <MarketingWorkspace title="Find a Reel. Make the next one yours." tools={finderNextTools} />
-
-        <section className={`${styles.shell} ${styles.relatedStrip}`}>
-          <div>
-            <span className={styles.sectionEyebrow}>Keep learning</span>
-            <h2>Go deeper on Reel research</h2>
-          </div>
-          <nav aria-label="Related Reel research resources">
-            {RELATED_LINKS.map(([label, path]) => (
-              <a href={`${SITE_URL}${path}`} key={path}>{label} →</a>
-            ))}
-          </nav>
-        </section>
 
         <MarketingFaq title="Questions about finding viral Reels." description="Search a public creator, study standout Reel examples, and bring a promising idea into your own script workflow." items={FAQ_ITEMS} />
 
