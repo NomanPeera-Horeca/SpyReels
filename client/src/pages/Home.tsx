@@ -579,8 +579,10 @@ export default function Home() {
     if (platform !== "instagram") return;
     if (normalizedTyped !== pendingAutostartHandleRef.current) return;
     if (!profileFound || profile?.found !== true || profile.isPrivate) return;
+    if (normalizeInstagramHandle(profile.username) !== pendingAutostartHandleRef.current) return;
     if (debouncedNormalized !== normalizedTyped) return;
     if (isLoadingProfile) return;
+    if (scrapeGate.isLoading || !scrapeGate.allowed) return;
     if (startScrape.isPending) return;
     pendingAutostartRef.current = false;
     pendingAutostartHandleRef.current = null;
@@ -592,6 +594,8 @@ export default function Home() {
     debouncedNormalized,
     normalizedTyped,
     isLoadingProfile,
+    scrapeGate.isLoading,
+    scrapeGate.allowed,
     startScrape.isPending,
     // requestStartSpy is stable enough via closure; intentional auto-run once
   ]);
