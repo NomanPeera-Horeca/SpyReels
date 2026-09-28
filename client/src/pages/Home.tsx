@@ -52,6 +52,7 @@ import {
 import TikTokResearch from "@/pages/TikTokResearch";
 import YouTubeResearch from "@/pages/YouTubeResearch";
 import { consumeResearchPendingHandle } from "@/lib/researchPendingHandle";
+import { parseResearchIntent } from "@shared/researchIntent";
 
 function formatCount(n: number): string {
   if (n >= 1_000_000)
@@ -114,6 +115,7 @@ export default function Home() {
   const [debouncedHandle, setDebouncedHandle] = useState("");
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingAutostartRef = useRef(false);
+  const pendingAutostartHandleRef = useRef<string | null>(null);
   const initialTikTokJobId = useMemo(() => {
     const params = new URLSearchParams(search);
     if (params.get("platform") !== "tiktok") return undefined;
@@ -141,15 +143,24 @@ export default function Home() {
     }
   }, [search]);
 
-  // Landing-page handoff after sign-in: restore handle and optionally start spy.
+  // Landing-page handoff after sign-in: URL intent survives email and Google auth.
   useEffect(() => {
+    const intent = parseResearchIntent(search);
     const { handle: pending, autostart, platform: pendingPlatform } =
       consumeResearchPendingHandle();
-    if (!pending) return;
-    setPlatform(pendingPlatform);
-    setHandle(pending);
+    const selected = intent?.handle ?? pending;
+    if (!selected) return;
+    setPlatform(intent ? "instagram" : pendingPlatform);
+    setHandle(selected);
     setHandleError(null);
-    pendingAutostartRef.current = autostart;
+    pendingAutostartRef.current = intent?.autostart ?? autostart;
+    pendingAutostartHandleRef.current = selected;
+    if (intent) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("creator");
+      url.searchParams.delete("start");
+      window.history.replaceState(window.history.state, "", url.toString());
+    }
   }, []);
 
   // Debounce handle input - only query after 800ms of no typing and min 2 chars
@@ -562,18 +573,24 @@ export default function Home() {
     requestStartSpy();
   };
 
-  // After landing-page auth handoff: start spy once the handle is ready.
+  // After auth, start only after the exact public profile has been confirmed.
   useEffect(() => {
     if (!pendingAutostartRef.current) return;
     if (platform !== "instagram") return;
-    if (!handleReadyForSubmit) return;
+    if (normalizedTyped !== pendingAutostartHandleRef.current) return;
+    if (!profileFound || profile?.found !== true || profile.isPrivate) return;
+    if (debouncedNormalized !== normalizedTyped) return;
     if (isLoadingProfile) return;
     if (startScrape.isPending) return;
     pendingAutostartRef.current = false;
+    pendingAutostartHandleRef.current = null;
     requestStartSpy();
   }, [
     platform,
-    handleReadyForSubmit,
+    profileFound,
+    profile,
+    debouncedNormalized,
+    normalizedTyped,
     isLoadingProfile,
     startScrape.isPending,
     // requestStartSpy is stable enough via closure; intentional auto-run once
