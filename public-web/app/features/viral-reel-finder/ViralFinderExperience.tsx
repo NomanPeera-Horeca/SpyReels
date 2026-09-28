@@ -315,7 +315,7 @@ export default function ViralFinderExperience() {
     ? "Private account"
     : profileLoading
       ? "Checking…"
-      : "Find account";
+      : "Find viral Reels";
 
   return (
     <div id="live-demo" className={styles.experience}>
