@@ -240,6 +240,28 @@
     }
   }
 
+  /*
+    Browser autofill paints grey/yellow on Name/Email and often lightens text.
+    Keep AuthDialog fields white with readable dark text (same as Password).
+  */
+  .auth-dialog-field:-webkit-autofill,
+  .auth-dialog-field:-webkit-autofill:hover,
+  .auth-dialog-field:-webkit-autofill:focus,
+  .auth-dialog-field:-webkit-autofill:active {
+    -webkit-text-fill-color: #18181b !important;
+    caret-color: #18181b;
+    border-color: #e4e4e7 !important;
+    box-shadow: 0 0 0 1000px #fff inset !important;
+    transition: background-color 99999s ease-out 0s;
+  }
+
+  .auth-dialog-field:-webkit-autofill:focus {
+    border-color: #8b5cf6 !important;
+    box-shadow:
+      0 0 0 1000px #fff inset,
+      0 0 0 3px rgba(139, 92, 246, 0.2) !important;
+  }
+
   /* Workspace UI (Dark Pro preview) */
   .workspace-reel-card {
     border-radius: calc(var(--radius) + 2px);

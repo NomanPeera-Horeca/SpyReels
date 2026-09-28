@@ -167,10 +167,37 @@
   outline: none;
 }
 
+/*
+  Chrome/Safari autofill paints a grey/yellow wash and often lightens text.
+  Force brand-consistent white fields so Name/Email match Password.
+*/
+.input:-webkit-autofill,
+.input:-webkit-autofill:hover,
+.input:-webkit-autofill:focus,
+.input:-webkit-autofill:active,
+.passwordWrap input:-webkit-autofill,
+.passwordWrap input:-webkit-autofill:hover,
+.passwordWrap input:-webkit-autofill:focus,
+.passwordWrap input:-webkit-autofill:active {
+  -webkit-text-fill-color: #18181b;
+  caret-color: #18181b;
+  border-color: #e4e4e7;
+  box-shadow: 0 0 0 1000px #fff inset;
+  transition: background-color 99999s ease-out 0s;
+}
+
 .input:focus,
 .passwordWrap input:focus {
   border-color: #8b5cf6;
   box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
+}
+
+.input:-webkit-autofill:focus,
+.passwordWrap input:-webkit-autofill:focus {
+  border-color: #8b5cf6;
+  box-shadow:
+    0 0 0 1000px #fff inset,
+    0 0 0 3px rgba(139, 92, 246, 0.2);
 }
 
 .passwordWrap {

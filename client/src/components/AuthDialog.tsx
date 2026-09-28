@@ -312,7 +312,7 @@ export function AuthDialog({
                   placeholder="Your name"
                   value={authName}
                   onChange={(e) => setAuthName(e.target.value)}
-                  className="h-12 w-full rounded-xl border-[1.5px] border-zinc-200 bg-white px-3.5 text-sm text-zinc-900 outline-none transition focus:border-violet-500 focus:ring-[3px] focus:ring-violet-500/20"
+                  className="auth-dialog-field h-12 w-full rounded-xl border-[1.5px] border-zinc-200 bg-white px-3.5 text-sm text-zinc-900 outline-none transition focus:border-violet-500 focus:ring-[3px] focus:ring-violet-500/20"
                   autoComplete="name"
                 />
               </label>
@@ -327,7 +327,7 @@ export function AuthDialog({
                 placeholder="you@example.com"
                 value={authEmail}
                 onChange={(e) => setAuthEmail(e.target.value)}
-                className="h-12 w-full rounded-xl border-[1.5px] border-zinc-200 bg-white px-3.5 text-sm text-zinc-900 outline-none transition focus:border-violet-500 focus:ring-[3px] focus:ring-violet-500/20"
+                className="auth-dialog-field h-12 w-full rounded-xl border-[1.5px] border-zinc-200 bg-white px-3.5 text-sm text-zinc-900 outline-none transition focus:border-violet-500 focus:ring-[3px] focus:ring-violet-500/20"
                 autoComplete="email"
               />
             </label>
@@ -343,7 +343,7 @@ export function AuthDialog({
                     placeholder="••••••••"
                     value={authPassword}
                     onChange={(e) => setAuthPassword(e.target.value)}
-                    className="h-12 w-full rounded-xl border-[1.5px] border-zinc-200 bg-white px-3.5 pr-10 text-sm text-zinc-900 outline-none transition focus:border-violet-500 focus:ring-[3px] focus:ring-violet-500/20"
+                    className="auth-dialog-field h-12 w-full rounded-xl border-[1.5px] border-zinc-200 bg-white px-3.5 pr-10 text-sm text-zinc-900 outline-none transition focus:border-violet-500 focus:ring-[3px] focus:ring-violet-500/20"
                     autoComplete={
                       isSignup ? "new-password" : "current-password"
                     }
