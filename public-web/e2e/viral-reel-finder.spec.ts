@@ -40,10 +40,10 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("first paint asks for one account before showing Reels", async ({ page }) => {
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("Any Instagram account's viral Reels");
-  await expect(page.getByText("Free Instagram Reel Finder", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Find viral Instagram Reels in your niche");
+  await expect(page.getByText("Viral Reel Finder", { exact: true }).first()).toBeVisible();
   await expect(page.getByLabel("Instagram username or profile link")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Find account" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Find viral Reels", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "@garyvee", exact: true })).toBeVisible();
   await expect(page.getByTestId("reel-card")).toHaveCount(0);
   await expect(page.getByText("Interactive example", { exact: true })).toHaveCount(0);
@@ -52,9 +52,9 @@ test("first paint asks for one account before showing Reels", async ({ page }) =
 
 test("visitor can understand and interact with the Reel Finder before signup", async ({ page }) => {
   const qa = (page as Page & { __qa: { consoleErrors: string[]; failedRequests: string[] } }).__qa;
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("Any Instagram account's viral Reels");
-  await expect(page.getByText("Free Instagram Reel Finder", { exact: true })).toBeVisible();
-  await expect(page.getByText("Paste a public Instagram handle")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Find viral Instagram Reels in your niche");
+  await expect(page.getByText("Viral Reel Finder", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("Paste a public handle")).toBeVisible();
   await expect(page.getByLabel("Instagram username or profile link")).toBeVisible();
   await expect(page.getByTestId("reel-card")).toHaveCount(0);
   await expect(page.locator("video")).toHaveCount(0);
@@ -64,7 +64,7 @@ test("visitor can understand and interact with the Reel Finder before signup", a
 
   await searchAccount(page, "noman_peera");
   await expect(page.getByText("@noman_peera", { exact: true }).first()).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByRole("button", { name: "Find account" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Find viral Reels", exact: true })).toBeVisible();
   await expect(page.getByTestId("research-found-account")).toHaveText("Research @noman_peera in SpyReels");
   await expect(page.getByTestId("profile-found-hint")).toContainText("We found @noman_peera");
   await expect(page.getByTestId("reel-card")).toHaveCount(0);
@@ -154,9 +154,9 @@ test("visitor can understand and interact with the Reel Finder before signup", a
   expect(viewsAgain).toEqual(viewsOrder);
   expect(engagementOrder).not.toEqual(viewsOrder);
 
-  await expect(page.locator('a[href="https://spyreels.ai/free-tools/tiktok-viral-video-finder"]').first()).toBeVisible();
-  await expect(page.locator('a[href="https://spyreels.ai/free-tools/instagram-reels-script-generator"]').first()).toBeVisible();
-  await expect(page.locator('a[href="https://spyreels.ai/free-tools/viral-hooks"]').first()).toBeVisible();
+  await expect(page.locator('a[href="/free-tools/tiktok-viral-video-finder"]').first()).toBeVisible();
+  await expect(page.locator('a[href="/free-tools/ai-script-generator"]').first()).toBeVisible();
+  await expect(page.locator('a[href="/free-tools/viral-hooks"]').first()).toBeVisible();
 
   expect(qa.consoleErrors, qa.consoleErrors.join(" | ")).toEqual([]);
   expect(qa.failedRequests, qa.failedRequests.join(" | ")).toEqual([]);
@@ -172,7 +172,7 @@ test("research CTA hands the selected Instagram account to the real app", async 
   await searchAccount(page, "noman_peera");
   const researchButton = page.getByTestId("research-found-account");
   await expect(researchButton).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByRole("button", { name: "Find account" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Find viral Reels", exact: true })).toBeVisible();
   await researchButton.click();
 
   await expect(page).toHaveURL(/https:\/\/spyreels\.ai\/\?/);
