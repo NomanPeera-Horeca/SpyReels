@@ -37,7 +37,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "Can I search any public Instagram account?",
-    a: "Search any public Instagram profile here. You can explore Reel examples from the creators shown on this page. For another account, continue its research in your SpyReels workspace.",
+    a: "Yes. Enter a public Instagram handle to see a sample of its recent Reels ranked by views. Continue in your SpyReels workspace for deeper research.",
   },
   {
     q: "What does SpyReels do after I find a strong Reel?",
@@ -103,7 +103,7 @@ export default function ViralReelFinderPilotPage() {
         <section className={`${styles.shell} ${styles.hero}`}>
           <div className={styles.eyebrow}>Viral Reel Finder</div>
           <h1>
-            Find viral Instagram Reels in your niche. <span className={styles.accent}>Make the next idea yours.</span>
+            Find viral Instagram Reels in your niche.
           </h1>
           <p className={styles.heroLead}>
             Search a public creator. Find the posts worth studying. Turn what works into a script in your voice.
@@ -122,11 +122,11 @@ export default function ViralReelFinderPilotPage() {
         <section className={`${styles.shell} ${styles.simpleSteps}`} id="how-it-works">
           <div className={styles.sectionCopy}>
             <span className={styles.sectionEyebrow}>How it works</span>
-            <h2>From Reel research to your next script.</h2>
+            <h2>Research to ready-to-film in 3 minutes</h2>
           </div>
           <div className={styles.stepRow}>
-            <article><small>01</small><h3>Paste a public handle</h3><p>Confirm the actual Instagram profile before starting research.</p></article>
-            <article><small>02</small><h3>Study the strongest Reels</h3><p>Explore Reel examples here, then research your chosen account in SpyReels.</p></article>
+            <article><small>01</small><h3>Paste a public handle</h3><p>Go straight to the creator whose Reels you want to study.</p></article>
+            <article><small>02</small><h3>Study the strongest Reels</h3><p>Compare a creator's recent Reels by views or engagement, then pick an idea worth studying.</p></article>
             <article><small>03</small><h3>Continue into creation</h3><p>Transcribe the Reel and move the useful pattern into your own script workflow.</p></article>
           </div>
         </section>
