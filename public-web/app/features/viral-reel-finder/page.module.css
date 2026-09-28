@@ -560,10 +560,7 @@
 }
 
 .visualSection,
-.simpleSteps,
-.faqSection,
-.relatedStrip,
-.finalCta {
+.simpleSteps {
   border-top: 1px solid #dedbe6;
 }
 
@@ -575,9 +572,7 @@
   padding: 88px 0;
 }
 
-.sectionCopy h2,
-.relatedStrip h2,
-.finalCta h2 {
+.sectionCopy h2 {
   margin: 8px 0 0;
   font-size: clamp(34px, 4vw, 56px);
   line-height: 1.06;
@@ -585,8 +580,7 @@
   text-wrap: balance;
 }
 
-.sectionCopy p,
-.finalCta p {
+.sectionCopy p {
   margin: 16px 0 0;
   color: #6f6b78;
   font-size: 16px;
@@ -667,81 +661,6 @@
   line-height: 1.6;
 }
 
-.faqSection {
-  display: grid;
-  grid-template-columns: 0.82fr 1.18fr;
-  gap: 48px;
-  padding: 88px 0;
-}
-
-.faqList details {
-  border-bottom: 1px solid #dedbe6;
-}
-
-.faqList details:first-child {
-  border-top: 1px solid #dedbe6;
-}
-
-.faqList summary {
-  position: relative;
-  padding: 20px 34px 20px 0;
-  color: #121116;
-  font-weight: 700;
-  cursor: pointer;
-  list-style: none;
-}
-
-.faqList summary::-webkit-details-marker {
-  display: none;
-}
-
-.faqList summary::after {
-  content: "+";
-  position: absolute;
-  right: 4px;
-  color: #868693;
-  font-size: 20px;
-  font-weight: 400;
-}
-
-.faqList details[open] summary::after {
-  content: "−";
-}
-
-.faqList p {
-  margin: -5px 0 20px;
-  color: #6f6b78;
-  line-height: 1.7;
-}
-
-.relatedStrip {
-  display: grid;
-  grid-template-columns: 0.8fr 1.2fr;
-  gap: 42px;
-  align-items: center;
-  padding: 66px 0;
-}
-
-.relatedStrip nav {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.relatedStrip a {
-  padding: 13px 15px;
-  border-radius: 12px;
-  background: #fff;
-  color: #4e4a57;
-  text-decoration: none;
-  font-size: 14px;
-}
-
-.relatedStrip a:hover {
-  background: #eeeaff;
-  color: #5b4cb8;
-}
-
 .motionStage {
   width: min(1180px, calc(100% - 40px));
   margin: 0 auto 64px;
@@ -759,25 +678,12 @@
   transform: none;
 }
 
-.finalCta {
-  padding: 86px 0 94px;
-  text-align: center;
-}
-
-.finalCta p {
-  max-width: 600px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
 @media (max-width: 900px) {
   .previewGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .visualSection,
-  .faqSection,
-  .relatedStrip {
+  .visualSection {
     grid-template-columns: 1fr;
   }
 
@@ -855,14 +761,8 @@
   }
 
   .visualSection,
-  .simpleSteps,
-  .faqSection,
-  .relatedStrip {
+  .simpleSteps {
     padding: 64px 0;
-  }
-
-  .relatedStrip nav {
-    grid-template-columns: 1fr;
   }
 
   .motionStage {
