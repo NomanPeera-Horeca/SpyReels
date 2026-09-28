@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 async function waitForDemoReady(page: Page) {
-  await expect(page.getByText("Interactive example", { exact: true })).toBeVisible();
+  await expect(page.getByText("Reel example", { exact: true })).toBeVisible();
   await expect(page.getByText("Loading Reel data…")).toHaveCount(0);
   await expect(page.getByTestId("reel-card").first()).toBeVisible({ timeout: 20_000 });
 }
@@ -46,8 +46,8 @@ test("first paint asks for one account before showing Reels", async ({ page }) =
   await expect(page.getByRole("button", { name: "Find viral Reels", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "@garyvee", exact: true })).toBeVisible();
   await expect(page.getByTestId("reel-card")).toHaveCount(0);
-  await expect(page.getByText("Interactive example", { exact: true })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Research @noman_peera" })).toHaveCount(0);
+  await expect(page.getByText("Reel example", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("This file shows the design.")).toHaveCount(0);
 });
 
 test("visitor can understand and interact with the Reel Finder before signup", async ({ page }) => {
@@ -62,15 +62,17 @@ test("visitor can understand and interact with the Reel Finder before signup", a
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(2);
 
+  await page.route("**/features/viral-reel-finder/search?handle=noman_peera", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      handle: "noman_peera", totalReelCount: 1, medianViewCount: 12345,
+      reels: [{ id: 1, reelShortcode: "ABC123", caption: "Try this idea",
+        viewCount: 12345, likeCount: 120, commentCount: 8, engagementRate: 2.1,
+        thumbnailUrl: "https://example.com/reel.jpg" }],
+    }) })
+  );
   await searchAccount(page, "noman_peera");
-  await expect(page.getByText("@noman_peera", { exact: true }).first()).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByRole("button", { name: "Find viral Reels", exact: true })).toBeVisible();
-  await expect(page.getByTestId("research-found-account")).toHaveText("Research @noman_peera in SpyReels");
-  await expect(page.getByTestId("profile-found-hint")).toContainText("We found @noman_peera");
-  await expect(page.getByTestId("reel-card")).toHaveCount(0);
-  const avatar = page.locator("article").filter({ hasText: "@noman_peera" }).locator("img").first();
-  await expect(avatar).toBeVisible();
-  await expect(avatar).toHaveCSS("object-fit", "cover");
+  await expect(page.getByText("Reel results")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId("reel-card")).toHaveCount(1);
 
   await page.getByRole("button", { name: "@humphreytalks", exact: true }).click();
   await expect(page.getByRole("button", { name: "@humphreytalks", exact: true })).toHaveAttribute("aria-pressed", "true");
@@ -169,10 +171,19 @@ test("research CTA hands the selected Instagram account to the real app", async 
     await route.fulfill({ status: 200, contentType: "text/html", body: "<html><body>handoff</body></html>" });
   });
 
+  await page.route("**/features/viral-reel-finder/search?handle=noman_peera", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      handle: "noman_peera", totalReelCount: 1, medianViewCount: 12345,
+      reels: [{ id: 1, reelShortcode: "ABC123", caption: "Try this idea",
+        viewCount: 12345, likeCount: 120, commentCount: 8, engagementRate: 2.1,
+        thumbnailUrl: "https://example.com/reel.jpg" }],
+    }) })
+  );
   await searchAccount(page, "noman_peera");
-  const researchButton = page.getByTestId("research-found-account");
-  await expect(researchButton).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByRole("button", { name: "Find viral Reels", exact: true })).toBeVisible();
+  await page.getByTestId("reel-card").first().click();
+  await page.getByTestId("reveal-spyreels-next").click();
+  const researchButton = page.getByRole("button", { name: /Continue @noman_peera/ });
+  await expect(researchButton).toBeVisible();
   await researchButton.click();
 
   await expect(page).toHaveURL(/https:\/\/spyreels\.ai\/\?/);
