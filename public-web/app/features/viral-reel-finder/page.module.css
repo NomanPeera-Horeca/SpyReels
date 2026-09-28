@@ -1,34 +1,25 @@
 .page {
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 50% 0%, rgba(124, 58, 237, 0.14), transparent 34rem),
-    #0f0f14;
-  color: #f7f7fb;
-}
-
-.page header a[href*="auth=signup"] {
-  background: transparent;
-  box-shadow: none;
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  color: #ededf2;
+  background: #f7f6fa;
+  color: #121116;
 }
 
 .shell {
-  width: min(1120px, calc(100% - 32px));
+  width: min(1180px, calc(100% - 40px));
   margin: 0 auto;
 }
 
 .hero {
-  padding: 72px 0 86px;
+  padding: 76px 0 44px;
   text-align: center;
 }
 
 .eyebrow,
 .sectionEyebrow {
-  color: #a78bfa;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  color: #7157ff;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
@@ -37,10 +28,10 @@
   align-items: center;
   gap: 8px;
   padding: 7px 11px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid #ded8ef;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.035);
-  color: #bbb8c9;
+  background: white;
+  color: #5b4cb8;
 }
 
 .eyebrowDot {
@@ -52,21 +43,22 @@
 }
 
 .hero h1 {
-  max-width: 900px;
+  max-width: 980px;
   margin: 24px auto 0;
-  font-size: clamp(40px, 6.3vw, 68px);
-  line-height: 0.99;
-  letter-spacing: -0.048em;
+  font-size: clamp(44px, 6.2vw, 78px);
+  line-height: 1.02;
+  letter-spacing: -0.035em;
+  text-wrap: balance;
 }
 
 .accent {
-  color: #9b7cf8;
+  color: #7157ff;
 }
 
 .heroLead {
   max-width: 720px;
   margin: 22px auto 0;
-  color: #adadba;
+  color: #6f6b78;
   font-size: clamp(16px, 2vw, 19px);
   line-height: 1.65;
 }
@@ -87,16 +79,16 @@
   align-items: center;
   gap: 10px;
   padding: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid #dedbe6;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.055);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.22);
+  background: white;
+  box-shadow: 0 18px 50px rgba(31, 25, 70, 0.08);
 }
 
 .platformMark {
   flex: 0 0 auto;
   padding-left: 10px;
-  color: #c4b5fd;
+  color: #7157ff;
   font-size: 22px;
 }
 
@@ -106,7 +98,7 @@
   border: 0;
   outline: 0;
   background: transparent;
-  color: white;
+  color: #121116;
   font: inherit;
   font-size: 15px;
 }
@@ -129,8 +121,8 @@
 .primaryButton,
 .primaryLink {
   color: white;
-  background: #7c3aed;
-  box-shadow: 0 10px 30px rgba(124, 58, 237, 0.24);
+  background: #7157ff;
+  box-shadow: 0 10px 28px rgba(113, 87, 255, 0.25);
 }
 
 .primaryButton {
@@ -168,9 +160,9 @@
   gap: 14px;
   align-items: center;
   padding: 14px;
-  border: 1px solid rgba(167, 139, 250, 0.24);
+  border: 1px solid #ded8ef;
   border-radius: 16px;
-  background: rgba(124, 58, 237, 0.06);
+  background: white;
   color: inherit;
   text-align: left;
   cursor: pointer;
@@ -220,7 +212,7 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  color: #fff;
+  color: #121116;
   font-size: 14px;
 }
 
@@ -256,12 +248,12 @@
 }
 
 .profileStats b {
-  color: #d7d7de;
+  color: #3b3745;
 }
 
 .profileHint {
   margin: 10px 4px 0;
-  color: #c4b5fd;
+  color: #5b4cb8;
   font-size: 13px;
   line-height: 1.5;
 }
@@ -299,7 +291,7 @@
   border: 0;
   padding: 0;
   background: transparent;
-  color: #a78bfa;
+  color: #5b4cb8;
   cursor: pointer;
   font: inherit;
   font-weight: 700;
@@ -320,9 +312,10 @@
 .preview {
   margin-top: 34px;
   overflow: hidden;
+  color: #f7f7fb;
   border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 24px;
-  background: rgba(255, 255, 255, 0.025);
+  background: #111117;
   animation: previewIn 220ms ease;
 }
 
@@ -508,7 +501,8 @@
   padding: 22px;
   border: 1px solid rgba(167, 139, 250, 0.18);
   border-radius: 22px;
-  background: linear-gradient(135deg, rgba(124, 58, 237, 0.08), rgba(255, 255, 255, 0.025));
+  background: #17151f;
+  color: #f7f7fb;
 }
 
 .nextStepMedia {
@@ -570,7 +564,7 @@
 .faqSection,
 .relatedStrip,
 .finalCta {
-  border-top: 1px solid rgba(255, 255, 255, 0.075);
+  border-top: 1px solid #dedbe6;
 }
 
 .visualSection {
@@ -585,15 +579,16 @@
 .relatedStrip h2,
 .finalCta h2 {
   margin: 8px 0 0;
-  font-size: clamp(30px, 4.5vw, 46px);
+  font-size: clamp(34px, 4vw, 56px);
   line-height: 1.06;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
 }
 
 .sectionCopy p,
 .finalCta p {
   margin: 16px 0 0;
-  color: #aaaab7;
+  color: #6f6b78;
   font-size: 16px;
   line-height: 1.7;
 }
@@ -650,9 +645,9 @@
 
 .stepRow article {
   padding: 22px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid #e4e0eb;
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.022);
+  background: #fff;
 }
 
 .stepRow small {
@@ -667,7 +662,7 @@
 
 .stepRow p {
   margin: 9px 0 0;
-  color: #9999a6;
+  color: #6f6b78;
   font-size: 14px;
   line-height: 1.6;
 }
@@ -680,17 +675,17 @@
 }
 
 .faqList details {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid #dedbe6;
 }
 
 .faqList details:first-child {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid #dedbe6;
 }
 
 .faqList summary {
   position: relative;
   padding: 20px 34px 20px 0;
-  color: #f0f0f4;
+  color: #121116;
   font-weight: 700;
   cursor: pointer;
   list-style: none;
@@ -715,7 +710,7 @@
 
 .faqList p {
   margin: -5px 0 20px;
-  color: #9f9fac;
+  color: #6f6b78;
   line-height: 1.7;
 }
 
@@ -736,15 +731,32 @@
 .relatedStrip a {
   padding: 13px 15px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
-  color: #b8b8c4;
+  background: #fff;
+  color: #4e4a57;
   text-decoration: none;
   font-size: 14px;
 }
 
 .relatedStrip a:hover {
-  background: rgba(124, 58, 237, 0.08);
-  color: white;
+  background: #eeeaff;
+  color: #5b4cb8;
+}
+
+.motionStage {
+  width: min(1180px, calc(100% - 40px));
+  margin: 0 auto 64px;
+  padding: clamp(28px, 6vw, 76px);
+  border-radius: 30px;
+  background: #08080d;
+}
+
+.motionFrame {
+  max-width: 1000px;
+  margin: auto;
+}
+
+.motionFrame :global(.motion-shell) {
+  transform: none;
 }
 
 .finalCta {
@@ -851,5 +863,11 @@
 
   .relatedStrip nav {
     grid-template-columns: 1fr;
+  }
+
+  .motionStage {
+    width: calc(100% - 24px);
+    padding: 12px;
+    border-radius: 20px;
   }
 }
