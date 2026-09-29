@@ -19,7 +19,6 @@ export const VIRAL_REEL_FINDER_PILOT_PATH = "/features/viral-reel-finder";
 export const VIRAL_REEL_FINDER_DEMO_PATH = "/features/viral-reel-finder/demo";
 export const VIRAL_REEL_FINDER_PROFILE_PATH = "/features/viral-reel-finder/profile";
 export const TIKTOK_VIRAL_FINDER_PATH = "/free-tools/tiktok-viral-video-finder";
-export const TIKTOK_VIRAL_FINDER_DEMO_PATH = "/free-tools/tiktok-viral-video-finder/demo";
 const NEXT_ASSET_PREFIX = "/_next/";
 const HOMEPAGE_ASSET_PREFIX = "/marketing/";
 
@@ -75,7 +74,6 @@ export function isPublicWebPilotRequest(
     path === VIRAL_REEL_FINDER_DEMO_PATH ||
     path === VIRAL_REEL_FINDER_PROFILE_PATH ||
     path === TIKTOK_VIRAL_FINDER_PATH ||
-    path === TIKTOK_VIRAL_FINDER_DEMO_PATH ||
     pathname.startsWith(NEXT_ASSET_PREFIX) ||
     (config.homepageEnabled === true && pathname.startsWith(HOMEPAGE_ASSET_PREFIX))
   );
