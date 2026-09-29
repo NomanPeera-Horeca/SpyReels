@@ -104,7 +104,7 @@ export default function OnboardingGate({
     if (!shouldRedirectToOnboarding) return;
     if (location === "/onboarding") return;
     const intent = parseResearchIntent(window.location.search);
-    if (intent) stashResearchHandleForAfterAuth(intent.handle, intent.autostart, "instagram");
+    if (intent) stashResearchHandleForAfterAuth(intent.handle, intent.autostart, intent.platform);
     setLocation("/onboarding", { replace: true });
   }, [location, setLocation, shouldRedirectToOnboarding]);
 
