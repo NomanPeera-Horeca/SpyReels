@@ -105,9 +105,11 @@ function toPlatformVideos(
 export default function PlatformResearch({
   config,
   initialJobId,
+  initialHandle,
 }: {
   config: PlatformResearchConfig;
   initialJobId?: number;
+  initialHandle?: string;
 }) {
   const [, setLocation] = useLocation();
   const searchString = useSearch();
@@ -123,7 +125,8 @@ export default function PlatformResearch({
   }, [fromPage, config.platform]);
   const handleResearchBack = useAppBack(researchBackFallback);
   const utils = trpc.useUtils();
-  const [handle, setHandle] = useState("");
+  const [handle, setHandle] = useState(initialHandle ?? "");
+  const autoStartedHandleRef = useRef<string | null>(null);
   const [timeframe, setTimeframe] = useState<"30" | "90" | "180">("30");
   const [activeJobId, setActiveJobId] = useState<number | null>(
     initialJobId ?? null
@@ -212,6 +215,14 @@ export default function PlatformResearch({
       }
     },
   });
+  useEffect(() => {
+    if (config.platform !== "tiktok" || !initialHandle || initialJobId != null) return;
+    if (!/^[a-z0-9._]{2,24}$/i.test(initialHandle) || autoStartedHandleRef.current === initialHandle) return;
+    autoStartedHandleRef.current = initialHandle;
+    setHandle(initialHandle);
+    tiktokStart.mutate({ handle: initialHandle, timeframe: "30" });
+  }, [config.platform, initialHandle, initialJobId, tiktokStart]);
+
   const startPending =
     config.platform === "tiktok"
       ? tiktokStart.isPending
