@@ -41,6 +41,20 @@ test("first paint asks for one account before showing Reels", async ({ page }) =
   await expect(page.getByText("This file shows the design.")).toHaveCount(0);
 });
 
+test("empty Finder submission visibly identifies the field and error", async ({ page }) => {
+  await page.getByRole("button", { name: "Find viral Reels", exact: true }).click();
+  const input = page.getByLabel("Instagram username or profile link");
+  const error = page.getByRole("alert");
+  await expect(input).toBeFocused();
+  await expect(input).toHaveAttribute("aria-invalid", "true");
+  await expect(input).toHaveAttribute("aria-describedby", "viral-finder-error");
+  await expect(error).toHaveText("Enter a valid Instagram username or profile link.");
+  await expect(page.locator("form[data-invalid='true']")).toBeVisible();
+  await input.fill("hormozi");
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(input).toHaveAttribute("aria-invalid", "false");
+});
+
 test("visitor can understand and interact with the Reel Finder before signup", async ({ page }) => {
   const qa = (page as Page & { __qa: { consoleErrors: string[]; failedRequests: string[] } }).__qa;
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Find viral Instagram Reels in your niche");
