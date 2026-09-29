@@ -9,9 +9,10 @@ import styles from "./page.module.css";
 
 const SITE_URL = "https://spyreels.ai";
 const CANONICAL = `${SITE_URL}/features/viral-reel-finder`;
+/** Primary: viral reel finder / viral finder (DataForSEO). Locked for GSC stability. */
 const TITLE = "Viral Reel Finder for Instagram | SpyReels";
 const DESCRIPTION =
-  "Find viral Instagram Reels in your niche. Search a public creator, explore standout Reel examples, and turn what works into original scripts in your voice with SpyReels.";
+  "Free viral Reel finder for Instagram. Paste a public creator handle, rank Reels by views and engagement, then remake what worked in your own voice.";
 
 export const metadata: Metadata = {
   title: TITLE,
@@ -34,7 +35,23 @@ export const metadata: Metadata = {
 const FAQ_ITEMS = [
   {
     q: "What is an Instagram Reel finder?",
-    a: "An Instagram Reel finder brings the public Reels from a creator account into one research view so you can compare the posts that performed best instead of scrolling the profile manually.",
+    a: "An Instagram Reel finder (also called a viral Reel finder or Reels finder) pulls a public creator's Reels into one research view so you can compare posts by views and engagement instead of scrolling the profile manually.",
+  },
+  {
+    q: "Is SpyReels a free viral finder?",
+    a: "Yes. SpyReels includes a free viral finder tier so you can paste a public Instagram handle, preview ranked Reels, and try the research workflow before upgrading.",
+  },
+  {
+    q: "Reel finder vs Instagram Search: which should I use?",
+    a: "Use Instagram Search when you need native discovery by keyword, audio, or hashtag. Use a Reel finder when you already know the creator and want their Reels ranked by performance.",
+    afterLink: {
+      href: `${SITE_URL}/blog/guide-how-to-search-reels-on-instagram`,
+      label: "How to search Reels on Instagram",
+    },
+  },
+  {
+    q: "Can I find viral Instagram posts, not only Reels?",
+    a: "This viral Reel finder focuses on Reels performance for a public account. Viral posts and feed carousels are a different format; start with Reels here, then use SpyReels research tools when you want to turn a winning idea into a script.",
   },
   {
     q: "Can I search any public Instagram account?",
@@ -42,11 +59,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "What does SpyReels do after I find a strong Reel?",
-    a: "This page shows the opening and the performance numbers. If you continue in SpyReels, you can transcribe the Reel and use that research as context for an original script.",
-  },
-  {
-    q: "Is there a free version?",
-    a: "Yes. SpyReels has a free tier so you can try the research workflow before deciding whether you need a paid plan.",
+    a: "This page shows the hook and performance numbers. In SpyReels you can transcribe the Reel and use that research as context for an original script in your voice.",
   },
 ] as const;
 
@@ -55,16 +68,21 @@ const breadcrumbJsonLd = {
   "@type": "BreadcrumbList",
   itemListElement: [
     { "@type": "ListItem", position: 1, name: "Home", item: `${SITE_URL}/` },
-    { "@type": "ListItem", position: 2, name: "Free Tools", item: `${SITE_URL}/free-tools` },
-    { "@type": "ListItem", position: 3, name: "Viral Reel Finder", item: CANONICAL },
+    { "@type": "ListItem", position: 2, name: "Viral Reel Finder", item: CANONICAL },
   ],
 };
 
 const softwareJsonLd = {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
-  name: "SpyReels Viral Reel Finder for Instagram",
-  alternateName: ["Instagram Reel Finder", "Viral Reel Finder", "Reel Spy Tool", "Reels Finder"],
+  name: "SpyReels Viral Reel Finder",
+  alternateName: [
+    "Viral Reel Finder",
+    "Instagram Reel Finder",
+    "Reel Finder",
+    "Reels Finder",
+    "Instagram Reel Spy Tool",
+  ],
   applicationCategory: "MultimediaApplication",
   operatingSystem: "Web Browser",
   url: CANONICAL,
@@ -83,7 +101,13 @@ const faqJsonLd = {
   mainEntity: FAQ_ITEMS.map((item) => ({
     "@type": "Question",
     name: item.q,
-    acceptedAnswer: { "@type": "Answer", text: item.a },
+    acceptedAnswer: {
+      "@type": "Answer",
+      text:
+        "afterLink" in item && item.afterLink
+          ? `${item.a} ${item.afterLink.label}: ${item.afterLink.href}`
+          : item.a,
+    },
   })),
 };
 
@@ -102,10 +126,14 @@ export default function ViralReelFinderPilotPage() {
 
       <main>
         <section className={`${styles.shell} ${styles.hero}`}>
-          <div className={styles.eyebrow}>Viral Reel Finder</div>
-          <h1>Find <span className={styles.accent}>viral</span> Instagram Reels in your niche</h1>
+          <div className={styles.eyebrow}>Free Instagram Reel Finder</div>
+          <h1>
+            Find <span className={styles.accent}>viral</span> Instagram Reels, ranked by what worked
+          </h1>
           <p className={styles.heroLead}>
-            Search a public creator. Find the posts worth studying. Turn what works into a script in your voice.
+            SpyReels Viral Reel Finder ranks a public creator&apos;s Instagram Reels by
+            views and engagement so you can remake what already works. Paste a handle,
+            study the strongest posts, then continue into your own script workflow.
           </p>
           <ViralFinderExperience />
         </section>
@@ -132,9 +160,18 @@ export default function ViralReelFinderPilotPage() {
 
         <MarketingWorkspace title="Find a Reel. Make the next one yours." tools={finderNextTools} />
 
-        <MarketingFaq title="Questions about finding viral Reels." description="Search a public creator, study standout Reel examples, and bring a promising idea into your own script workflow." items={FAQ_ITEMS} />
+        <MarketingFaq
+          title="Questions about finding viral Reels."
+          description="Search a public creator, study standout Reel examples, and bring a promising idea into your own script workflow."
+          items={FAQ_ITEMS}
+        />
 
-        <MarketingFinalCta title="Your next idea starts with a Reel worth studying." description="Search a creator. Find a strong idea. Turn it into a script in your voice." label="Find viral Reels" href="#live-demo" />
+        <MarketingFinalCta
+          title="Your next idea starts with a Reel worth studying."
+          description="Search a creator. Find a strong idea. Turn it into a script in your voice."
+          label="Find viral Reels"
+          href="#live-demo"
+        />
       </main>
 
       <MarketingFooter />

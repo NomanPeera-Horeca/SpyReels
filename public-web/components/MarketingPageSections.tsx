@@ -1,6 +1,10 @@
 import type { ReactNode } from "react";
 
-type FaqItem = { q: string; a: string };
+type FaqItem = {
+  q: string;
+  a: string;
+  afterLink?: { href: string; label: string };
+};
 type Tool = { id: string; title: string; description: string; href: string; icon: ReactNode };
 
 const channels = [
@@ -36,7 +40,7 @@ export function MarketingWorkspace({ title, tools }: { title: string; tools: Too
 }
 
 export function MarketingFaq({ title, description, items }: { title: string; description: string; items: readonly FaqItem[] }) {
-  return <section className="seo-block" id="faq"><div className="shell answer-grid"><div className="answer-sticky"><span className="kicker">Frequently asked questions</span><h2>{title}</h2><p>{description}</p></div><div className="answers">{items.map((item, index) => <details key={item.q} open={index === 0}><summary>{item.q}</summary><p>{item.a}</p></details>)}</div></div></section>;
+  return <section className="seo-block" id="faq"><div className="shell answer-grid"><div className="answer-sticky"><span className="kicker">Frequently asked questions</span><h2>{title}</h2><p>{description}</p></div><div className="answers">{items.map((item, index) => <details key={item.q} open={index === 0}><summary>{item.q}</summary><p>{item.a}</p>{item.afterLink ? <p><a href={item.afterLink.href}>{item.afterLink.label} →</a></p> : null}</details>)}</div></div></section>;
 }
 
 export function MarketingFinalCta({ title, description, label, href }: { title: string; description: string; label: string; href: string }) {

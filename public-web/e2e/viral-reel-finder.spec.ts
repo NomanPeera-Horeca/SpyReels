@@ -31,8 +31,8 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("first paint asks for one account before showing Reels", async ({ page }) => {
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("Find viral Instagram Reels in your niche");
-  await expect(page.getByText("Viral Reel Finder", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Find viral Instagram Reels, ranked by what worked");
+  await expect(page.getByText("Free Instagram Reel Finder", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Instagram username or profile link")).toBeVisible();
   await expect(page.getByRole("button", { name: "Find viral Reels", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "@garyvee", exact: true })).toBeVisible();
@@ -71,8 +71,9 @@ test("final CTA returns visitors to the visible Finder input", async ({ page }) 
 
 test("visitor can understand and interact with the Reel Finder before signup", async ({ page }) => {
   const qa = (page as Page & { __qa: { consoleErrors: string[]; failedRequests: string[] } }).__qa;
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("Find viral Instagram Reels in your niche");
-  await expect(page.getByText("Viral Reel Finder", { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Find viral Instagram Reels, ranked by what worked");
+  await expect(page.getByText("Free Instagram Reel Finder", { exact: true })).toBeVisible();
+  await expect(page.getByText(/ranks a public creator/i)).toBeVisible();
   await expect(page.getByText("Paste a public handle")).toBeVisible();
   await expect(page.getByLabel("Instagram username or profile link")).toBeVisible();
   await expect(page.getByTestId("reel-card")).toHaveCount(0);
