@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { resolveServerAppOrigin } from "@/lib/appOrigin";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +13,11 @@ function validHandle(handle: string): boolean {
 }
 
 function appOrigin(): string {
-  return resolveServerAppOrigin();
+  return (
+    process.env.SPYREELS_APP_ORIGIN ??
+    process.env.NEXT_PUBLIC_SPYREELS_APP_ORIGIN ??
+    "https://spyreels.ai"
+  ).replace(/\/$/, "");
 }
 
 function readTrpcData(payload: unknown): unknown {
@@ -50,6 +53,7 @@ export async function GET(request: NextRequest) {
         "user-agent": "SpyReels-Public-Web/1.0",
       },
       cache: "no-store",
+      signal: AbortSignal.timeout(4000),
     });
 
     const payload = await upstream.json().catch(() => null);
