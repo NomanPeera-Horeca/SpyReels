@@ -3,6 +3,7 @@ import Script from "next/script";
 import { MarketingFinderMotion, MarketingFooter, MarketingHeader } from "../../../components/MarketingChrome";
 import { finderNextTools, MarketingFaq, MarketingFinalCta, MarketingPlatformStrip, MarketingWorkspace } from "../../../components/MarketingPageSections";
 import ViralFinderExperience from "./ViralFinderExperience";
+import { HomepageAuthGate } from "../../../components/HomepageAuthGate";
 import "../../homepage.css";
 import styles from "./page.module.css";
 
@@ -137,6 +138,7 @@ export default function ViralReelFinderPilotPage() {
       </main>
 
       <MarketingFooter />
+      <HomepageAuthGate />
       <Script src="/marketing/chrome.js" strategy="afterInteractive" />
     </div>
   );

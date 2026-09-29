@@ -53,15 +53,16 @@ test("visitor can understand and interact with the Reel Finder before signup", a
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(2);
 
-  await page.route("**/features/viral-reel-finder/profile?handle=noman_peera", (route) =>
-    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+  await page.route("**/api/trpc/featured.publicProfilePreview?input=*", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ result: { data: { json: {
       found: true, username: "noman_peera", fullName: "Noman Peera",
       biography: "Creator", profilePicUrl: "", followerCount: 1200,
       followingCount: 150, postCount: 40, isVerified: false, isPrivate: false, category: "",
-    }) })
+    } } } }) })
   );
   await page.getByLabel("Instagram username or profile link").fill("noman_peera");
   await expect(page.getByTestId("confirmed-instagram-profile")).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByTestId("confirmed-instagram-profile")).not.toContainText("40 posts");
   await expect(page.getByTestId("reel-card")).toHaveCount(0);
 
   await page.getByRole("button", { name: "@humphreytalks", exact: true }).click();
@@ -157,23 +158,20 @@ test("visitor can understand and interact with the Reel Finder before signup", a
 test("research CTA hands the selected Instagram account to the real app", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop-1440", "Handoff URL is viewport-independent");
 
-  await page.route("https://spyreels.ai/**", async (route) => {
-    await route.fulfill({ status: 200, contentType: "text/html", body: "<html><body>handoff</body></html>" });
-  });
-
-  await page.route("**/features/viral-reel-finder/profile?handle=noman_peera", (route) =>
-    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+  await page.route("**/api/trpc/featured.publicProfilePreview?input=*", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ result: { data: { json: {
       found: true, username: "noman_peera", fullName: "Noman Peera",
       biography: "Creator", profilePicUrl: "", followerCount: 1200,
       followingCount: 150, postCount: 40, isVerified: false, isPrivate: false, category: "",
-    }) })
+    } } } }) })
   );
   await page.getByLabel("Instagram username or profile link").fill("noman_peera");
   const researchButton = page.getByTestId("confirmed-instagram-profile");
   await expect(researchButton).toBeVisible();
   await researchButton.click();
 
-  await expect(page).toHaveURL(/https:\/\/spyreels\.ai\/\?/);
+  await expect(page).toHaveURL(/\/features\/viral-reel-finder\?auth=signup/);
+  await expect(page.getByRole("dialog", { name: "Join SpyReels" })).toBeVisible();
   const target = new URL(page.url());
   expect(target.searchParams.get("auth")).toBe("signup");
   expect(target.searchParams.get("returnTo")).toBe("/research?creator=noman_peera&start=1");

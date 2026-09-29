@@ -133,6 +133,12 @@ export function shouldRedirectApexPathToApp(
     return false;
   }
 
+  // Public Finder profile confirmation is served by the existing rate-limited
+  // tRPC procedure on this host, avoiding a cross-origin browser redirect.
+  if (normalized === "/api/trpc/featured.publicProfilePreview") {
+    return false;
+  }
+
   // Marketing auth modal posts to these from apex; keep them same-origin.
   if (
     normalized === "/api/auth" ||

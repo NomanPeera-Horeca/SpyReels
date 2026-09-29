@@ -3,7 +3,6 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
 import { InstagramMark } from "../../../../shared/ui/PlatformMarks";
 import { researchReturnTo } from "../../../../shared/researchIntent";
-import { resolvePublicAppOrigin } from "../../../lib/appOrigin";
 import { trackPublicWeb } from "../../../lib/trackPublicWeb";
 import interactionStyles from "./interaction.module.css";
 import styles from "./page.module.css";
@@ -70,13 +69,6 @@ function hookPreview(caption: string): string {
   return cleaned.length > 110 ? `${cleaned.slice(0, 107)}...` : cleaned;
 }
 
-function appOrigin(): string {
-  return resolvePublicAppOrigin({
-    configured: process.env.NEXT_PUBLIC_SPYREELS_APP_ORIGIN,
-    hostname: typeof window !== "undefined" ? window.location.hostname : null,
-  });
-}
-
 function handoffToResearch(handle: string, source: "form" | "selected_reel") {
   const returnTo = researchReturnTo(handle);
   trackPublicWeb("viral_finder_research_cta_clicked", { handle, source });
@@ -86,7 +78,9 @@ function handoffToResearch(handle: string, source: "form" | "selected_reel") {
     return_to: returnTo,
     auth: "signup",
   });
-  const url = new URL(`${appOrigin()}/`);
+  // Keep the visitor on the Finder while authenticating. The auth dialog
+  // carries this exact destination into both email and Google completion.
+  const url = new URL("/features/viral-reel-finder", window.location.origin);
   url.searchParams.set("auth", "signup");
   url.searchParams.set("returnTo", returnTo);
   window.location.assign(url.toString());
@@ -161,12 +155,25 @@ export default function ViralFinderExperience() {
     setProfileLoading(true);
     setProfileError(null);
 
-    fetch(`/features/viral-reel-finder/profile?handle=${encodeURIComponent(debouncedHandle)}`, {
+    const input = encodeURIComponent(JSON.stringify({ json: { handle: debouncedHandle } }));
+    // The public tRPC procedure already lives on the same Express host. Avoid
+    // an extra Next -> app round trip through the 5-second page-render proxy.
+    fetch(`/api/trpc/featured.publicProfilePreview?input=${input}`, {
       signal: controller.signal,
       headers: { accept: "application/json" },
     })
       .then(async (response) => {
-        const body = (await response.json()) as ProfilePayload;
+        if (!response.headers.get("content-type")?.includes("application/json")) {
+          throw new Error("Instagram lookup is temporarily unavailable. Please try again.");
+        }
+        const envelope = (await response.json()) as {
+          result?: { data?: { json?: ProfilePayload } };
+          error?: { message?: string };
+        };
+        const body = envelope.result?.data?.json;
+        if (!body) {
+          throw new Error(envelope.error?.message || "Instagram lookup is temporarily unavailable. Please try again.");
+        }
         if (!response.ok || body.found !== true) {
           throw new Error("error" in body && body.error ? body.error : "We could not find that Instagram account.");
         }
@@ -378,7 +385,7 @@ export default function ViralFinderExperience() {
               {matchingProfile.fullName ? <span>{matchingProfile.fullName}</span> : null}
               {matchingProfile.biography ? <span className={styles.profileBio}>{matchingProfile.biography}</span> : null}
               <span className={styles.profileStats}>
-                <b>{formatNumber(matchingProfile.postCount)}</b> posts · <b>{formatNumber(matchingProfile.followerCount)}</b> followers · <b>{formatNumber(matchingProfile.followingCount)}</b> following
+                <b>{formatNumber(matchingProfile.followerCount)}</b> followers · <b>{formatNumber(matchingProfile.followingCount)}</b> following
               </span>
             </span>
             <span className={styles.profileAction}>

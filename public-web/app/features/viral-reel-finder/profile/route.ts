@@ -50,6 +50,7 @@ export async function GET(request: NextRequest) {
         "user-agent": "SpyReels-Public-Web/1.0",
       },
       cache: "no-store",
+      signal: AbortSignal.timeout(4000),
     });
 
     const payload = await upstream.json().catch(() => null);
