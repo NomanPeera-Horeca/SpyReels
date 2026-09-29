@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { TikTokMark } from "../../shared/ui/PlatformMarks";
 
 type FaqItem = {
   q: string;
@@ -9,7 +10,7 @@ type Tool = { id: string; title: string; description: string; href: string; icon
 
 const channels = [
   { name: "Instagram Reels", href: "/features/viral-reel-finder", className: "instagram", icon: <svg viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="marketing-instagram-gradient" x1="2" y1="30" x2="30" y2="2" gradientUnits="userSpaceOnUse"><stop stopColor="#FFD600"/><stop offset=".45" stopColor="#FF0169"/><stop offset="1" stopColor="#D300C5"/></linearGradient></defs><rect x="3" y="3" width="26" height="26" rx="8" fill="url(#marketing-instagram-gradient)"/><circle cx="16" cy="16" r="6" fill="none" stroke="white" strokeWidth="2.3"/><circle cx="23.3" cy="8.8" r="1.5" fill="white"/></svg> },
-  { name: "TikTok", href: "/free-tools/tiktok-viral-video-finder", className: "tiktok", icon: <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M18.2 5.5c.6 3.2 2.5 5.1 5.7 5.7v4.1a12.2 12.2 0 0 1-5.7-1.7v7.2a7.3 7.3 0 1 1-6.3-7.2v4.2a3.2 3.2 0 1 0 2.2 3V5.5h4.1Z" fill="#25F4EE" transform="translate(-1 1)"/><path d="M19.2 4.5c.6 3.2 2.5 5.1 5.7 5.7v4.1a12.2 12.2 0 0 1-5.7-1.7v7.2a7.3 7.3 0 1 1-6.3-7.2v4.2a3.2 3.2 0 1 0 2.2 3V4.5h4.1Z" fill="#FE2C55" transform="translate(1 -1)"/><path d="M19.2 4.5c.6 3.2 2.5 5.1 5.7 5.7v4.1a12.2 12.2 0 0 1-5.7-1.7v7.2a7.3 7.3 0 1 1-6.3-7.2v4.2a3.2 3.2 0 1 0 2.2 3V4.5h4.1Z" fill="#16141B"/></svg> },
+  { name: "TikTok", href: "/free-tools/tiktok-viral-video-finder", className: "tiktok", icon: <TikTokMark /> },
   { name: "YouTube Shorts", href: "/free-tools/youtube-shorts-viral-finder", className: "youtube", icon: <svg viewBox="0 0 38 32" aria-hidden="true"><path d="M36.8 9.1a4.7 4.7 0 0 0-3.3-3.4C30.6 5 19 5 19 5S7.4 5 4.5 5.7A4.7 4.7 0 0 0 1.2 9.1C.5 12 .5 16 .5 16s0 4 .7 6.9a4.7 4.7 0 0 0 3.3 3.4C7.4 27 19 27 19 27s11.6 0 14.5-.7a4.7 4.7 0 0 0 3.3-3.4c.7-2.9.7-6.9.7-6.9s0-4-.7-6.9Z" fill="#FF0033"/><path d="m15.3 21.2 9.7-5.2-9.7-5.2v10.4Z" fill="white"/></svg> },
 ];
 
