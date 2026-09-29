@@ -128,12 +128,11 @@ export default function ViralReelFinderPilotPage() {
         <section className={`${styles.shell} ${styles.hero}`}>
           <div className={styles.eyebrow}>Free Instagram Reel Finder</div>
           <h1>
-            Find <span className={styles.accent}>viral</span> Instagram Reels, ranked by what worked
+            Find <span className={styles.accent}>viral</span> Instagram Reels in your niche
           </h1>
           <p className={styles.heroLead}>
-            SpyReels Viral Reel Finder ranks a public creator&apos;s Instagram Reels by
-            views and engagement so you can remake what already works. Paste a handle,
-            study the strongest posts, then continue into your own script workflow.
+            Find top-performing Reels from any public Instagram creator, then remake
+            the winning format in your own voice in under 3 minutes.
           </p>
           <ViralFinderExperience />
         </section>
