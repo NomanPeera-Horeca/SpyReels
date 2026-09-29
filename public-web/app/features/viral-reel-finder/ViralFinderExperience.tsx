@@ -291,6 +291,7 @@ export default function ViralFinderExperience() {
     }
     if (!handle || !validHandle(handle)) {
       setProfileError("Enter a valid Instagram username or profile link.");
+      (event.currentTarget.elements.namedItem("handle") as HTMLInputElement | null)?.focus();
       return;
     }
     if (DEMO_HANDLE_SET.has(handle)) {
@@ -326,6 +327,7 @@ export default function ViralFinderExperience() {
     : profileLoading
       ? "Checking…"
       : "Find viral Reels";
+  const inputInvalid = Boolean(profileError && (!normalizedInput || !validHandle(normalizedInput)));
 
   return (
     <div id="live-demo" className={styles.experience}>
@@ -334,6 +336,7 @@ export default function ViralFinderExperience() {
           className={styles.finderForm}
           onSubmit={submit}
           data-finder-ready={finderReady ? "true" : "false"}
+          data-invalid={inputInvalid ? "true" : undefined}
         >
           <span className={styles.platformMark} aria-hidden>
             <InstagramMark />
@@ -347,6 +350,8 @@ export default function ViralFinderExperience() {
             onChange={(event) => setInput(event.target.value)}
             placeholder="@username or instagram.com/username"
             autoComplete="off"
+            aria-invalid={inputInvalid}
+            aria-describedby={profileError && !profileLoading ? "viral-finder-error" : undefined}
           />
           <button
             className={styles.primaryButton}
@@ -358,7 +363,7 @@ export default function ViralFinderExperience() {
         </form>
 
         {profileLoading ? <div className={styles.profileLoading}>Looking up Instagram profile…</div> : null}
-        {profileError && !profileLoading ? <p className={styles.formError}>{profileError}</p> : null}
+        {profileError && !profileLoading ? <p id="viral-finder-error" className={styles.formError} role="alert">{profileError}</p> : null}
 
         {matchingProfile ? (
           <button
