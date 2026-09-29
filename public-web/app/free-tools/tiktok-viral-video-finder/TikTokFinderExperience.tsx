@@ -33,17 +33,15 @@ export default function TikTokFinderExperience() {
     if (!active) return;
     const controller = new AbortController();
     setLoading(true); setError(""); setDemo(null);
-    const query = encodeURIComponent(JSON.stringify({ json: { handle: active } }));
-    fetch(`/api/trpc/tiktokScrape.publicDemo?input=${query}`, { signal: controller.signal, headers: { accept: "application/json" } })
+    fetch(`/free-tools/tiktok-viral-video-finder/demo?handle=${encodeURIComponent(active)}`, { signal: controller.signal, headers: { accept: "application/json" } })
       .then(async response => {
         if (!response.headers.get("content-type")?.includes("application/json")) throw new Error("Results are unavailable right now. Please try again.");
-        const envelope = await response.json();
-        const body = envelope?.result?.data?.json ?? envelope?.result?.data;
-        if (!response.ok || !body || !Array.isArray(body.videos)) throw new Error(envelope?.error?.message || "Results are unavailable right now. Please try again.");
+        const body = await response.json();
+        if (!response.ok || !body || !Array.isArray(body.videos)) throw new Error(body?.error || "Results are unavailable right now. Please try again.");
         return body as Demo;
       })
       .then(setDemo)
-      .catch((cause: unknown) => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Results are unavailable right now."); })
+      .catch((cause: unknown) => { if (!controller.signal.aborted) setError(cause instanceof Error && cause.message !== "Failed to fetch" ? cause.message : "Results are unavailable right now. Please try again."); })
       .finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, [active]);
