@@ -55,6 +55,20 @@ test("empty Finder submission visibly identifies the field and error", async ({ 
   await expect(input).toHaveAttribute("aria-invalid", "false");
 });
 
+test("final CTA returns visitors to the visible Finder input", async ({ page }) => {
+  await page.getByRole("link", { name: "Find viral Reels", exact: true }).click();
+  await expect(page).toHaveURL(/#live-demo$/);
+  await expect.poll(async () =>
+    page.evaluate(() => {
+      const input = document.querySelector("#viral-finder-handle");
+      const header = document.querySelector("header");
+      if (!input || !header) return false;
+      const top = input.getBoundingClientRect().top;
+      return top >= header.getBoundingClientRect().bottom + 12 && top < window.innerHeight * 0.65;
+    })
+  ).toBe(true);
+});
+
 test("visitor can understand and interact with the Reel Finder before signup", async ({ page }) => {
   const qa = (page as Page & { __qa: { consoleErrors: string[]; failedRequests: string[] } }).__qa;
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Find viral Instagram Reels in your niche");

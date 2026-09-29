@@ -67,6 +67,7 @@
   max-width: 1000px;
   margin: 34px auto 0;
   text-align: left;
+  scroll-margin-top: 112px;
 }
 
 .finderIsland {
