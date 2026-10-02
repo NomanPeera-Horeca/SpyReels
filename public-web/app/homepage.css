@@ -354,3 +354,111 @@
   .platforms-menu .nav-choice small{display:block;white-space:normal;overflow-wrap:break-word;max-width:100%}
   @media(min-width:1041px){.platforms-menu>.nav-panel{width:min(390px,calc(100vw - 32px))}}
   @media(max-width:620px){.product-section-grid{grid-template-columns:1fr}}
+
+
+  /* Mobile 390 auto-height typography guard: text must grow naturally and push following content. */
+  .extension-card{
+    grid-template-rows:auto auto;
+    row-gap:11px;
+  }
+  .extension-card>div{
+    min-width:0;
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+  }
+  .extension-card>div>p{
+    margin:0;
+  }
+  .extension-status{
+    margin-top:1px;
+  }
+
+  @media(max-width:620px){
+    .trusted,
+    .pain-head,
+    .growth-intro,
+    .free-tools-heading,
+    .workflow-extensions-intro,
+    .trust-grid>div:first-child,
+    .stories-heading,
+    .cta-box,
+    .footer-brand{
+      min-height:0;
+    }
+
+    .pain-head,
+    .growth-intro,
+    .free-tools-heading>div,
+    .workflow-extensions-intro,
+    .trust-grid>div:first-child,
+    .stories-heading,
+    .cta-box,
+    .footer-brand{
+      display:flex;
+      flex-direction:column;
+      align-items:stretch;
+    }
+
+    .trusted h2,
+    .pain-head h2,
+    .pain-head p,
+    .growth-intro h2,
+    .growth-intro p,
+    .free-tools-heading h2,
+    .free-tools-heading h3,
+    .free-tools-heading p,
+    .workflow-extensions-intro .kicker,
+    .workflow-extensions-intro h3,
+    .workflow-extensions-intro h4,
+    .workflow-extensions-intro p,
+    .trust h2,
+    .trust-copy,
+    .stories-heading h2,
+    .stories-heading p,
+    .cta h2,
+    .cta p,
+    .footer-brand h2,
+    .footer-brand p{
+      width:100%;
+      height:auto!important;
+      min-height:0!important;
+      max-height:none!important;
+      overflow:visible!important;
+      white-space:normal!important;
+      text-overflow:clip!important;
+      flex:0 0 auto;
+    }
+
+    .free-tools-heading,
+    .workflow-extensions{
+      height:auto!important;
+      min-height:0!important;
+      max-height:none!important;
+      overflow:visible!important;
+    }
+
+    .workflow-extensions{
+      align-items:start;
+    }
+
+    .extension-card{
+      height:auto!important;
+      min-height:0!important;
+      max-height:none!important;
+      overflow:visible!important;
+      grid-template-rows:auto auto;
+      row-gap:12px;
+    }
+
+    .extension-card>div,
+    .extension-card strong,
+    .extension-card p,
+    .extension-status{
+      height:auto!important;
+      min-height:0!important;
+      max-height:none!important;
+      overflow:visible!important;
+      white-space:normal!important;
+    }
+  }
