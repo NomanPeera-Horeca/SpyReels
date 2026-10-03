@@ -139,7 +139,8 @@ These three channels are **critical** for SpyReels distribution and Facebook ads
 
 ## P2 — product polish / bugs
 
-- [x] **Remake output language = English** (Sep 26): non-English source transcripts still remake into English spoken scripts (`remakeOutputLanguage.ts`); deploy pending
+- [x] **Remake output language = English** (Sep 26): non-English source transcripts still remake into English spoken scripts (`remakeOutputLanguage.ts`)
+- [x] **Deepgram detect_language for non-English source audio** (Oct 3): STT no longer forces `language=en`; empty no-speech rows are retriable; no-voice CTA is Retry not Save for Inspiration (`d96e8b3` on main, Render deployed)
 - [x] **Creator Radar refresh → durable jobs** (reliability; exposed by host-split deploy churn Sep 26)
   - Shipped: `creator_radar_refresh` on `durable_jobs`; API enqueues; serial web claimer resumes after deploy; scrape tables stay UI source of truth
   - Docs: `docs/deploy-notes/creator-radar-durable-refresh.md`
