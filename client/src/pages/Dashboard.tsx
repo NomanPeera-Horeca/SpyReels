@@ -102,6 +102,8 @@ import {
   QuietReelCaption,
   QuietReelMetrics,
   QuietRemakeActions,
+  QuietRemakeStatusChip,
+  quietRemakeStatusFromState,
 } from "@/components/QuietWorkspaceReelChrome";
 import { useOpenCreatorInApp } from "@/hooks/useOpenCreatorInApp";
 import { WorkspaceReelGridSkeleton } from "@/components/WorkspaceReelGridSkeleton";
@@ -2747,12 +2749,16 @@ export default function Dashboard() {
                     : jobId != null
                       ? { source: "user", reelId: reel.id, jobId: jobId }
                       : null;
+                  const hookState =
+                    librarySource != null
+                      ? getRemakeState(libraryRemakeKey(librarySource))
+                      : null;
                   const batchEntry = recreateMap[reel.id as keyof typeof recreateMap] as
                     | RecreateBatchEntry
                     | undefined;
                   const alreadyTranscribed = hasTranscription && !isNoSpeech;
                   const oneClickRemake =
-                    librarySource != null
+                    librarySource != null && hookState != null
                       ? buildLibraryOneClickRemake({
                           openScriptReelId: reel.id,
                           jobId: librarySource.source === "user" ? jobId! : undefined,
@@ -2763,7 +2769,7 @@ export default function Dashboard() {
                           classification: reelClassificationFromRow(reel),
                           batchRecreateSt: recreateSt,
                           batchEntry,
-                          hookState: getRemakeState(libraryRemakeKey(librarySource)),
+                          hookState,
                           librarySource,
                           media: buildRemakeIntentMedia({
                             thumbnailUrl: reel.thumbnailUrl,
@@ -2782,6 +2788,11 @@ export default function Dashboard() {
                       : undefined;
 
                   const creatorHandle = displayScrapeHandle || job?.handle || null;
+                  const remakeStatusLabel = quietRemakeStatusFromState({
+                    hookStage: hookState?.stage,
+                    batchState: recreateSt,
+                    hasSavedScript: Boolean(batchEntry?.latestScriptId),
+                  });
 
                   return (
                     <div key={reel.id} ref={setReelRowRef(reel.id)}>
@@ -2805,6 +2816,12 @@ export default function Dashboard() {
                         onInlinePlayRequest={() => setInlinePlayingId(reel.id)}
                         onInlinePlayStop={() =>
                           setInlinePlayingId((cur) => (cur === reel.id ? null : cur))
+                        }
+                        onMetaClick={() => setGridModalReelId(reel.id)}
+                        statusChip={
+                          remakeStatusLabel ? (
+                            <QuietRemakeStatusChip label={remakeStatusLabel} />
+                          ) : undefined
                         }
                         caption={
                           <QuietReelCaption>

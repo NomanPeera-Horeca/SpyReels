@@ -255,10 +255,19 @@ export function RemakeWorkspaceDialog({
   const [broll, setBroll] = useState<SuggestBrollResult | null>(null);
   const [regeneratingBeatIndex, setRegeneratingBeatIndex] = useState<number | null>(null);
   const regeneratingBeatIndexRef = useRef<number | null>(null);
+  /** Prevents re-hydrating B-roll over an in-session match for the same script. */
+  const brollHydratedScriptId = useRef<number | null>(null);
 
   const scriptQuery = trpc.scripts.get.useQuery(
     { id: scriptId ?? 0 },
     { enabled: open && scriptId != null && !isPreview, staleTime: 10_000 }
+  );
+  const brollQuery = trpc.scripts.getBrollGeneration.useQuery(
+    { scriptId: scriptId ?? 0 },
+    {
+      enabled: open && scriptId != null && !isPreview,
+      staleTime: 30_000,
+    }
   );
   const scriptsListQuery = trpc.scripts.list.useQuery(
     {},
@@ -378,9 +387,11 @@ export function RemakeWorkspaceDialog({
   useEffect(() => {
     if (!open) {
       hydratedId.current = null;
+      brollHydratedScriptId.current = null;
       return;
     }
     hydratedId.current = null;
+    brollHydratedScriptId.current = null;
     setTab("script");
     setScript("");
     setCaption("");
@@ -400,6 +411,25 @@ export function RemakeWorkspaceDialog({
     setScheduledLabel(null);
     setSaveState("idle");
   }, [open, target?.remakeKey]);
+
+  // Hydrate saved B-roll (DB) so Visuals does not look empty after reopen.
+  useEffect(() => {
+    if (!open || isPreview || scriptId == null) return;
+    if (brollQuery.isLoading || brollQuery.isFetching) return;
+    if (brollHydratedScriptId.current === scriptId) return;
+    brollHydratedScriptId.current = scriptId;
+    const saved = brollQuery.data?.result;
+    if (saved?.beats?.length) {
+      setBroll(saved as SuggestBrollResult);
+    }
+  }, [
+    open,
+    isPreview,
+    scriptId,
+    brollQuery.isLoading,
+    brollQuery.isFetching,
+    brollQuery.data,
+  ]);
 
   useEffect(() => {
     if (!open || scriptId == null || remakeState?.stage !== "ready") return;
@@ -808,8 +838,10 @@ export function RemakeWorkspaceDialog({
     try {
       const result = await suggestBroll.mutateAsync({ scriptId, content: script });
       setBroll(result as SuggestBrollResult);
+      brollHydratedScriptId.current = scriptId;
       setRegeneratingBeatIndex(null);
       regeneratingBeatIndexRef.current = null;
+      void utils.scripts.getBrollGeneration.invalidate({ scriptId });
       addTurn({
         role: "agent",
         kind: "action",
@@ -819,7 +851,7 @@ export function RemakeWorkspaceDialog({
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not match B-roll");
     }
-  }, [addTurn, script, scriptId, suggestBroll]);
+  }, [addTurn, script, scriptId, suggestBroll, utils.scripts.getBrollGeneration]);
 
   const handleRegenerateBeat = useCallback(
     (beat: BrollBeat, options?: RegenerateBrollBeatOptions) => {
@@ -877,9 +909,19 @@ export function RemakeWorkspaceDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={(next) => { if (!next) void closeWorkspace(); }}>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          // Remake closes only via the X control (closeWorkspace). Ignore
+          // overlay / Escape driven dismiss requests from Radix.
+          if (next) return;
+        }}
+      >
         <DialogContent
           showCloseButton={false}
+          onPointerDownOutside={(event) => event.preventDefault()}
+          onInteractOutside={(event) => event.preventDefault()}
+          onEscapeKeyDown={(event) => event.preventDefault()}
           className="flex h-[min(92vh,850px)] max-h-[92vh] w-[min(1180px,100%)] max-w-[calc(100%-1rem)] flex-col gap-0 overflow-hidden border-[#2d2940] bg-[#1c1926] p-0 text-[#f5f2fa] sm:max-w-[min(1180px,calc(100%-1.5rem))]"
         >
           <DialogHeader className="sr-only">

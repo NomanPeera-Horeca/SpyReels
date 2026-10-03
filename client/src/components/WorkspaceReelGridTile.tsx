@@ -32,6 +32,11 @@ export type WorkspaceReelGridTileProps = {
   badges?: ReactNode;
   /** Optional creator row between caption and stats (quiet mature card). */
   creator?: ReactNode;
+  /**
+   * Quiet-card meta block (caption / creator / stats). Opens details drawer.
+   * Remake / star / more stay on `actions` and must not use this.
+   */
+  onMetaClick?: () => void;
   caption: ReactNode;
   stats: ReactNode;
   actions: ReactNode;
@@ -78,6 +83,7 @@ export function WorkspaceReelGridTile({
   statusChip,
   badges,
   creator,
+  onMetaClick,
   caption,
   stats,
   actions,
@@ -168,31 +174,28 @@ export function WorkspaceReelGridTile({
         </div>
 
         {hasThumb && !showInlinePlayer ? (
-          quiet ? (
-            <div
-              className="pointer-events-none absolute bottom-2.5 left-2.5 z-20 grid h-[30px] w-[30px] place-items-center rounded-full border border-white/20 bg-black/55 text-white"
-              aria-hidden
-            >
-              <Play className="h-3 w-3 translate-x-px fill-current" />
-            </div>
-          ) : (
-            <div
-              className={cn(
-                "absolute left-1/2 top-1/2 z-20 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/35 bg-black/55 text-white shadow-lg backdrop-blur transition-opacity duration-150",
-                interactiveMedia
-                  ? "opacity-90 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100"
-                  : "pointer-events-none opacity-75 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100"
-              )}
-              aria-hidden={!interactiveMedia}
-            >
-              <Play className="h-5 w-5 translate-x-0.5 fill-current" />
-            </div>
-          )
+          <div
+            className={cn(
+              "pointer-events-none absolute left-1/2 top-1/2 z-20 flex h-12 w-12 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-white/35 bg-black/55 text-white shadow-lg backdrop-blur transition-opacity duration-150",
+              interactiveMedia
+                ? "opacity-90 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100"
+                : "opacity-75 [@media(hover:hover)_and_(pointer:fine)]:opacity-0 [@media(hover:hover)_and_(pointer:fine)]:group-hover:opacity-100"
+            )}
+            aria-hidden
+          >
+            <Play className="h-5 w-5 translate-x-0.5 fill-current" />
+          </div>
         ) : null}
 
         {/* Keep source branding visible while playing (Shorts-style). */}
         {(hasThumb || showInlinePlayer) && !mediaLabel ? (
           <ReelSourcePlatformMark platform={mediaPlatform} />
+        ) : null}
+
+        {quiet && statusChip ? (
+          <div className="absolute left-2.5 top-2.5 z-30 max-w-[calc(100%-1.25rem)]">
+            {statusChip}
+          </div>
         ) : null}
 
         {!quiet ? (
@@ -262,7 +265,34 @@ export function WorkspaceReelGridTile({
           quiet ? "gap-2 px-3 pb-3 pt-3" : "px-2.5 pb-2.5 pt-2"
         )}
       >
-        <div className={cn("min-h-0 flex-1", quiet ? "grid gap-2" : "space-y-2")}>
+        <div
+          className={cn(
+            "min-h-0 flex-1",
+            quiet ? "grid gap-2" : "space-y-2",
+            onMetaClick && "cursor-pointer rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
+          )}
+          onClick={
+            onMetaClick
+              ? (e) => {
+                  e.stopPropagation();
+                  onMetaClick();
+                }
+              : undefined
+          }
+          onKeyDown={
+            onMetaClick
+              ? (e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onMetaClick();
+                  }
+                }
+              : undefined
+          }
+          role={onMetaClick ? "button" : undefined}
+          tabIndex={onMetaClick ? 0 : undefined}
+        >
           {caption}
           {creator}
           {stats}
