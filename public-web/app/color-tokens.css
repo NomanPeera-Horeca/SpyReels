@@ -1,0 +1,99 @@
+/**
+ * SpyReels Color Foundation tokens (Figma Page 01 + Hardening v1.1).
+ * Phase 0: define only. Consumers adopt in later phases.
+ */
+:root {
+  /* Brand primitives */
+  --sr-brand-purple-50: #f5f2ff;
+  --sr-brand-purple-100: #ece7ff;
+  --sr-brand-purple-200: #dcd3ff;
+  --sr-brand-purple-300: #c8bcff;
+  --sr-brand-purple-400: #9b86ff;
+  --sr-brand-purple-500: #7157ff;
+  --sr-brand-purple-600: #4c3e9a;
+  --sr-brand-purple-700: #433091;
+  --sr-brand-purple-800: #382778;
+  --sr-brand-blue-500: #46a0d0;
+  --sr-brand-blue-600: #4e74b5;
+  --sr-brand-cyan-400: #57c2e2;
+  --sr-brand-cyan-500: #46afd8;
+  --sr-brand-ink: #111116;
+  --sr-brand-white: #ffffff;
+
+  /* Neutrals */
+  --sr-neutral-0: #ffffff;
+  --sr-neutral-25: #fcfcfd;
+  --sr-neutral-50: #f8f8fa;
+  --sr-neutral-100: #f2f2f5;
+  --sr-neutral-200: #e7e7ec;
+  --sr-neutral-300: #d5d5dd;
+  --sr-neutral-400: #a6a6b0;
+  --sr-neutral-450: #94949f;
+  --sr-neutral-500: #70707a;
+  --sr-neutral-600: #575761;
+  --sr-neutral-700: #3c3c44;
+  --sr-neutral-800: #27272e;
+  --sr-neutral-900: #19191f;
+  --sr-neutral-950: #101014;
+
+  /* Semantic text */
+  --sr-color-text-primary: #101014;
+  --sr-color-text-secondary: #575761;
+  --sr-color-text-tertiary: #70707a;
+  --sr-color-text-disabled: #a6a6b0;
+  --sr-color-text-brand: #433091;
+  --sr-color-text-on-brand: #ffffff;
+  --sr-color-text-inverse: #ffffff;
+
+  /* Surfaces */
+  --sr-color-surface-page: #f8f8fa;
+  --sr-color-surface-default: #ffffff;
+  --sr-color-surface-subtle: #fcfcfd;
+  --sr-color-surface-raised: #ffffff;
+  --sr-color-surface-hover: #f2f2f5;
+
+  /* Borders */
+  --sr-color-border-subtle: #f2f2f5;
+  --sr-color-border-default: #e7e7ec;
+  --sr-color-border-strong: #d5d5dd;
+  --sr-color-border-control: #94949f;
+
+  /* Brand semantic */
+  --sr-color-brand-primary: #4c3e9a;
+  --sr-color-brand-strong: #433091;
+  --sr-color-brand-secondary: #4e74b5;
+  --sr-color-brand-accent: #46afd8;
+  --sr-color-brand-surface-subtle: #f5f2ff;
+  --sr-color-brand-surface-selected: #ece7ff;
+
+  /* Actions / focus */
+  --sr-color-action-primary-default: #4c3e9a;
+  --sr-color-action-primary-hover: #433091;
+  --sr-color-action-primary-pressed: #382778;
+  --sr-color-action-selected-subtle: #ece7ff;
+  --sr-color-action-selected-strong: #4c3e9a;
+  --sr-color-action-disabled-background: #f2f2f5;
+  --sr-color-action-destructive-default: #d92d20;
+  --sr-color-action-destructive-hover: #b42318;
+  --sr-color-focus-border: #4c3e9a;
+
+  /* Status */
+  --sr-color-status-success-background: #eaf8f2;
+  --sr-color-status-success-foreground: #147a57;
+  --sr-color-status-success-border: #22a06b;
+  --sr-color-status-warning-background: #fff6dd;
+  --sr-color-status-warning-foreground: #a15c00;
+  --sr-color-status-warning-border: #e59500;
+  --sr-color-status-error-background: #fff0ee;
+  --sr-color-status-error-foreground: #b42318;
+  --sr-color-status-error-border: #d92d20;
+  --sr-color-status-info-background: #eef4ff;
+  --sr-color-status-info-foreground: #175cd3;
+  --sr-color-status-info-border: #2e6fe8;
+
+  /* Platform */
+  --sr-color-platform-instagram-accent: #e4405f;
+  --sr-color-platform-tiktok-accent: #25f4ee;
+  --sr-color-platform-tiktok-secondary: #fe2c55;
+  --sr-color-platform-youtube-accent: #ff0000;
+}

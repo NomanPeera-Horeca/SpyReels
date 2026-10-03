@@ -11,7 +11,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  color: #8f8f9c;
+  color: var(--sr-color-text-disabled);
   font-size: 11px;
   white-space: nowrap;
 }
@@ -32,12 +32,12 @@
 }
 
 .selectedReelCard {
-  border-color: #a78bfa !important;
+  border-color: var(--sr-color-action-selected-strong) !important;
   box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.7), 0 16px 44px rgba(124, 58, 237, 0.18);
 }
 
 .demoHandleActive {
-  color: #5b4cb8 !important;
+  color: var(--sr-color-text-brand) !important;
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -53,7 +53,7 @@
   border-bottom: 2px solid transparent;
   padding: 8px 2px;
   background: transparent;
-  color: #858592;
+  color: var(--sr-color-text-disabled);
   cursor: pointer;
   font: inherit;
   font-size: 12px;
@@ -61,7 +61,7 @@
 }
 
 .stepTabActive {
-  border-bottom-color: #a78bfa;
+  border-bottom-color: var(--sr-color-action-selected-strong);
   color: #f4f1ff;
 }
 
@@ -98,7 +98,7 @@
 .actionHint {
   display: block;
   margin-top: 9px;
-  color: #777784;
+  color: var(--sr-color-text-tertiary);
   font-size: 11px;
 }
 

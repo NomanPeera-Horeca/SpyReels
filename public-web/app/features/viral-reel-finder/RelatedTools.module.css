@@ -2,7 +2,7 @@
   width: min(1120px, calc(100% - 32px));
   margin: 0 auto;
   padding: 56px 0;
-  border-top: 1px solid #dedbe6;
+  border-top: 1px solid var(--sr-color-border-default);
 }
 
 .headingRow {
@@ -19,9 +19,9 @@
 }
 
 .eyebrow {
-  color: #7157ff;
+  color: var(--sr-color-text-brand);
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -35,17 +35,17 @@
 
 .links a {
   padding: 9px 12px;
-  border: 1px solid #dedbe6;
+  border: 1px solid var(--sr-color-border-default);
   border-radius: 999px;
-  background: white;
-  color: #4e4a57;
+  background: var(--sr-color-surface-default);
+  color: var(--sr-color-text-secondary);
   text-decoration: none;
   font-size: 13px;
 }
 
 .links a:hover {
   border-color: rgba(167, 139, 250, 0.28);
-  color: #5b4cb8;
+  color: var(--sr-color-text-brand);
 }
 
 @media (max-width: 640px) {
