@@ -1146,13 +1146,18 @@ export function RemakeWorkspaceDialog({
                   </div>
                 ) : null}
 
-                {tab === "preview" ? (
+                {/* Keep Preview mounted across tab switches so Opening Hook edits are not wiped. */}
+                <div
+                  className={tab === "preview" ? "h-full" : "hidden"}
+                  aria-hidden={tab !== "preview"}
+                >
                   <Frame0TextPreview
+                    key={`${target?.remakeKey ?? "frame0"}:${open ? "open" : "closed"}`}
                     script={script}
                     source={target?.source ?? null}
                     reelId={target?.reelId ?? null}
                   />
-                ) : null}
+                </div>
               </div>
 
               <RemakeSourceDrawer
