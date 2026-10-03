@@ -163,15 +163,9 @@ These three channels are **critical** for SpyReels distribution and Facebook ads
 
 ## P3 — backlog (only if P0–P2 clear)
 
-- [ ] **Ready-to-post pack outside Remake** (parked Oct 3 — Noman: do later)
-  - Problem: caption, B-roll matches, and Opening Hook (9:16 Frame0) are hard or impossible to use without reopening the Remake modal; there is **no Instagram upload/publish** today
-  - Goal: a surface outside Remake (Script Editor pack and/or My Scripts card) where creators can see/copy:
-    - generated caption (+ hashtags)
-    - saved B-roll clips (hydrate from `broll_generations`)
-    - opening hook / Frame0 preview
-  - Out of scope for now: Meta/Instagram direct publish
+- [x] **Ready-to-post pack outside Remake** (Phase C, Oct 3): `RemakeReadyToPostPack` on Script Reader + My Scripts menu (copy caption/hashtags/hook; download B-roll via existing `BrollBeatsView`). No Instagram publish.
 - [x] **Remake Phase A integrity** (approved Oct 3): X-only dismiss; hydrate B-roll/caption/hook on Remake open; quiet card center play; meta → details drawer; status chip + Open remake when work exists (Dashboard / Collected / Saved); Frame0 persisted on `saved_scripts.frame0OnScreenText` (migration `0099`)
-- [x] **Remake Phase B continuity** (Oct 3): Script Reader shows Remake pack (caption / B-roll count / Opening Hook) from the same script + `broll_generations` (no re-run)
+- [x] **Remake Phase B continuity** (Oct 3): Script Reader shows Remake pack from the same script + `broll_generations` (no re-run)
 
 - [ ] **Buzzli competitive teardown → SpyReels roadmap** (LinkedIn “SpyReels-class” product)
   - Competitor: [buzzli.io](https://buzzli.io/) — personal branding + LinkedIn content stack (agents, viral posts, carousels, profile analysis, credits)

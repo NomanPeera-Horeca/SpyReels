@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { TeleprompterMode } from "@/pages/TeleprompterMode";
+import { RemakeReadyToPostPack } from "@/components/RemakeReadyToPostPack";
 
 const QUICK_AI_ACTIONS = [
   {
@@ -69,16 +70,7 @@ export function ScriptReaderWorkspace({
     { id: scriptId },
     { staleTime: 10_000, retry: false }
   );
-  const brollQuery = trpc.scripts.getBrollGeneration.useQuery(
-    { scriptId },
-    { staleTime: 30_000, retry: false }
-  );
   const script = scriptQuery.data;
-  const savedCaption =
-    (script as { generatedCaption?: string | null } | undefined)?.generatedCaption?.trim() || "";
-  const savedFrame0 =
-    (script as { frame0OnScreenText?: string | null } | undefined)?.frame0OnScreenText?.trim() || "";
-  const brollBeats = brollQuery.data?.result?.beats?.length ?? 0;
 
   const [content, setContent] = useState("");
   const [isEditing, setIsEditing] = useState(false);
@@ -469,57 +461,7 @@ export function ScriptReaderWorkspace({
 
           <aside className="space-y-4">
             <div className="rounded-2xl border bg-card/40 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-                Remake pack
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Same durable Remake object as the workspace. No re-run needed.
-              </p>
-              <div className="mt-3 space-y-3 text-sm">
-                <div>
-                  <p className="text-xs font-medium text-muted-foreground">Caption</p>
-                  {savedCaption ? (
-                    <div className="mt-1 flex items-start justify-between gap-2">
-                      <p className="line-clamp-4 text-[13px] leading-snug">{savedCaption}</p>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 shrink-0"
-                        aria-label="Copy caption"
-                        onClick={() => {
-                          void navigator.clipboard.writeText(savedCaption).then(
-                            () => toast.success("Caption copied"),
-                            () => toast.error("Could not copy caption")
-                          );
-                        }}
-                      >
-                        <Clipboard className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  ) : (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Generate a caption in Remake Visuals / publishing.
-                    </p>
-                  )}
-                </div>
-                <div className="border-t pt-3">
-                  <p className="text-xs font-medium text-muted-foreground">B-roll</p>
-                  <p className="mt-1 text-[13px]">
-                    {brollQuery.isLoading
-                      ? "Loading…"
-                      : brollBeats > 0
-                        ? `${brollBeats} matched beat${brollBeats === 1 ? "" : "s"} saved`
-                        : "No stock pack yet"}
-                  </p>
-                </div>
-                <div className="border-t pt-3">
-                  <p className="text-xs font-medium text-muted-foreground">Opening Hook</p>
-                  <p className="mt-1 text-[13px] font-semibold tracking-tight">
-                    {savedFrame0 || "Edit in Remake Preview"}
-                  </p>
-                </div>
-              </div>
+              <RemakeReadyToPostPack scriptId={scriptId} compact />
             </div>
 
             <div className="rounded-2xl border bg-card/40 p-4">
