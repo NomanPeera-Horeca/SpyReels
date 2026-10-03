@@ -23,7 +23,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { AgentProgressPanel } from "@/components/AgentProgressPanel";
-import { BrollBeatsView } from "@/components/BrollResultsPanel";
+import {
+  BrollBeatsView,
+  type RegenerateBrollBeatOptions,
+} from "@/components/BrollResultsPanel";
 import { Frame0TextPreview } from "@/components/Frame0TextPreview";
 import { RemakeSourceDrawer } from "@/components/RemakeSourceDrawer";
 import { trpc } from "@/lib/trpc";
@@ -32,7 +35,7 @@ import type {
   LibraryRemakeState,
 } from "@/lib/libraryRemakeChainCore";
 import type { AgentProgressStep } from "@shared/agentProgress";
-import type { SuggestBrollResult } from "@shared/broll";
+import type { BrollBeat, SuggestBrollResult } from "@shared/broll";
 import {
   formatSchedulePostButtonSubtitle,
   pickNextOpenPostSchedule,
@@ -250,6 +253,8 @@ export function RemakeWorkspaceDialog({
   const [scheduleTime, setScheduleTime] = useState("12:00");
   const [scheduledLabel, setScheduledLabel] = useState<string | null>(null);
   const [broll, setBroll] = useState<SuggestBrollResult | null>(null);
+  const [regeneratingBeatIndex, setRegeneratingBeatIndex] = useState<number | null>(null);
+  const regeneratingBeatIndexRef = useRef<number | null>(null);
 
   const scriptQuery = trpc.scripts.get.useQuery(
     { id: scriptId ?? 0 },
@@ -278,6 +283,36 @@ export function RemakeWorkspaceDialog({
   const grammar = trpc.scripts.grammarCheck.useMutation();
   const generateCaption = trpc.scripts.generateCaption.useMutation();
   const suggestBroll = trpc.scripts.suggestBroll.useMutation();
+  const regenerateBrollBeat = trpc.scripts.regenerateBrollBeat.useMutation({
+    onSuccess: (data) => {
+      const beatIndex = regeneratingBeatIndexRef.current;
+      regeneratingBeatIndexRef.current = null;
+      setRegeneratingBeatIndex(null);
+      if (beatIndex == null) return;
+      setBroll((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          beats: prev.beats.map((beat) =>
+            beat.index === beatIndex ? { ...beat, clips: data.clips } : beat
+          ),
+        };
+      });
+      if (scriptId != null) {
+        void utils.scripts.getBrollGeneration.invalidate({ scriptId });
+      }
+      if (data.clips.length === 0) {
+        toast.error("No new clip found for this beat");
+      } else {
+        toast.success("Clip updated");
+      }
+    },
+    onError: (error) => {
+      regeneratingBeatIndexRef.current = null;
+      setRegeneratingBeatIndex(null);
+      toast.error(error.message || "Could not regenerate beat");
+    },
+  });
 
   const voiceSummary = useMemo(() => {
     const audience = onboardingQuery.data?.targetAudience?.trim();
@@ -773,16 +808,47 @@ export function RemakeWorkspaceDialog({
     try {
       const result = await suggestBroll.mutateAsync({ scriptId, content: script });
       setBroll(result as SuggestBrollResult);
+      setRegeneratingBeatIndex(null);
+      regeneratingBeatIndexRef.current = null;
       addTurn({
         role: "agent",
         kind: "action",
         text: "Stock B-roll matched",
-        detail: "I matched real clips to the moments that benefit from B-roll. Review them on the right.",
+        detail: "I matched real clips to the moments that benefit from B-roll. Open a clip to preview or regenerate it.",
       });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not match B-roll");
     }
   }, [addTurn, script, scriptId, suggestBroll]);
+
+  const handleRegenerateBeat = useCallback(
+    (beat: BrollBeat, options?: RegenerateBrollBeatOptions) => {
+      if (regenerateBrollBeat.isPending) return;
+      const searchQuery = beat.searchQuery.trim() || beat.visualSummary.trim();
+      if (!searchQuery) {
+        toast.error("This beat has no search query to regenerate");
+        return;
+      }
+      const excludeUrls = beat.clips
+        .flatMap((c) => [c.previewUrl, c.sourceUrl])
+        .map((u) => u.trim())
+        .filter(Boolean);
+      const userContext = options?.userContext?.trim();
+      setRegeneratingBeatIndex(beat.index);
+      regeneratingBeatIndexRef.current = beat.index;
+      regenerateBrollBeat.mutate({
+        searchQuery,
+        visualSummary: beat.visualSummary || undefined,
+        theme: broll?.theme || undefined,
+        excludeUrls: excludeUrls.length ? excludeUrls : undefined,
+        clipsPerBeat: 1,
+        scriptId: scriptId ?? undefined,
+        beatIndex: beat.index,
+        userContext: userContext || undefined,
+      });
+    },
+    [broll?.theme, regenerateBrollBeat, scriptId]
+  );
 
   const restoreVersion = useCallback(async (version: { content: string; versionNumber: number }) => {
     setScript(version.content);
@@ -1124,9 +1190,9 @@ export function RemakeWorkspaceDialog({
                       <div className="mb-5 flex items-start justify-between gap-4">
                         <div>
                           <h3 className="text-base font-bold text-white">Recommended B-roll</h3>
-                          <p className="mt-1 max-w-lg text-xs leading-relaxed text-[#8f879f]">Match real stock clips to the moments that benefit from B-roll, then keep or regenerate the clips you want.</p>
+                          <p className="mt-1 max-w-lg text-xs leading-relaxed text-[#8f879f]">Preview a clip, then regenerate that moment.</p>
                         </div>
-                        <button type="button" disabled={!script.trim() || suggestBroll.isPending} onClick={() => void matchStockBroll()} className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40">
+                        <button type="button" disabled={!script.trim() || suggestBroll.isPending} onClick={() => void matchStockBroll()} className="inline-flex items-center gap-2 rounded-lg border border-[#332e45] bg-transparent px-3.5 py-2 text-xs font-semibold text-[#aaa3b8] hover:bg-white/5 hover:text-white disabled:opacity-40">
                           {suggestBroll.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
                           {suggestBroll.isPending ? "Matching..." : broll ? "Match again" : "Find stock clips"}
                         </button>
@@ -1140,7 +1206,12 @@ export function RemakeWorkspaceDialog({
                           <button type="button" disabled={!script.trim() || suggestBroll.isPending} onClick={() => void matchStockBroll()} className="mt-5 inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-40"><Wand2 className="h-4 w-4" /> Find stock clips</button>
                         </div>
                       ) : (
-                        <div className="rounded-2xl border border-[#332e45] bg-[#17141f] p-3"><BrollBeatsView result={broll} /></div>
+                        <BrollBeatsView
+                          result={broll}
+                          variant="workspace"
+                          regeneratingBeatIndex={regeneratingBeatIndex}
+                          onRegenerateBeat={handleRegenerateBeat}
+                        />
                       )}
                     </div>
                   </div>
