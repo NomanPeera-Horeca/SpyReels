@@ -49,6 +49,15 @@ vi.mock("./reelResearch", () => ({
 
 vi.mock("../../recreate/generateRemakeContent", () => ({
   generateRemakeContent: mocks.generateRemakeContent,
+  isRemakeContentRetryableFailure: (error: unknown) => {
+    if (!(error instanceof Error)) return false;
+    const message = error.message;
+    return (
+      message === "We couldn't finish this remake. Please try again." ||
+      message.includes("safely grounded remake") ||
+      message.includes("sufficiently original same-topic remake")
+    );
+  },
 }));
 
 vi.mock("../../studioResearchGrounding", () => ({

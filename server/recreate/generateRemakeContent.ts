@@ -297,6 +297,23 @@ export type GeneratedRemakeContent = {
   };
 };
 
+/** Calm user-facing copy after internal retries are exhausted. */
+export const REMAKE_CONTENT_FAILED_USER_MESSAGE =
+  "We couldn't finish this remake. Please try again.";
+
+/** Writer + repair passes before surfacing failure to the user. */
+const REMAKE_CONTENT_MAX_ATTEMPTS = 3;
+
+export function isRemakeContentRetryableFailure(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const message = error.message;
+  return (
+    message === REMAKE_CONTENT_FAILED_USER_MESSAGE ||
+    message.includes("safely grounded remake") ||
+    message.includes("sufficiently original same-topic remake")
+  );
+}
+
 export async function generateRemakeContent(input: {
   originalTranscript: string;
   caption: string;
@@ -412,28 +429,6 @@ ${cuesInstruction}
 
 ${scriptFormatClosing}`;
 
-  const writerStarted = Date.now();
-  const scriptResponse = await runLlm({
-    messages: [
-      {
-        role: "system",
-        content: withAiFormattingRules(
-          `You are an expert ${platformLabel} scriptwriter. Write natural, spoken scripts that preserve proven viral mechanics and factual integrity. ${remakeOutputLanguageSystemClause(outputLanguage)}`
-        ),
-      },
-      { role: "user", content: scriptPrompt },
-    ],
-    maxTokens: 3200,
-  });
-
-  let generatedScript = String(
-    scriptResponse.choices[0]?.message?.content || ""
-  ).trim();
-
-  console.info("[RemakeLatency] writer_ms", Date.now() - writerStarted, {
-    sourceKey: input.sourceKey ?? null,
-  });
-
   const trustedTexts = [
     input.topic,
     researchGroundingBlock,
@@ -441,94 +436,147 @@ ${scriptFormatClosing}`;
     ...(isSameTopic ? [input.originalTranscript, input.caption] : []),
   ];
 
-  const initialRisk = validateRemakeFactRisk({
-    script: generatedScript,
-    trustedTexts,
-  });
+  let lastFailureReason: "fact" | "originality" | null = null;
 
-  let repaired = false;
-  if (!initialRisk.safe) {
-    const repairStarted = Date.now();
-    const repairedScript = await repairUnsupportedFacts({
-      script: generatedScript,
-      risksText: formatFactRisksForRepair(initialRisk.risks),
-      trustedGrounding: trustedTexts.filter(Boolean).join("\n\n"),
-      scriptFormatClosing,
-      outputLanguage,
-      llmInvoker: runLlm,
+  for (let attempt = 1; attempt <= REMAKE_CONTENT_MAX_ATTEMPTS; attempt += 1) {
+    const writerStarted = Date.now();
+    const scriptResponse = await runLlm({
+      messages: [
+        {
+          role: "system",
+          content: withAiFormattingRules(
+            `You are an expert ${platformLabel} scriptwriter. Write natural, spoken scripts that preserve proven viral mechanics and factual integrity. ${remakeOutputLanguageSystemClause(outputLanguage)}`
+          ),
+        },
+        { role: "user", content: scriptPrompt },
+      ],
+      maxTokens: 3200,
     });
 
-    const repairedRisk = validateRemakeFactRisk({
-      script: repairedScript,
+    let generatedScript = String(
+      scriptResponse.choices[0]?.message?.content || ""
+    ).trim();
+
+    console.info("[RemakeLatency] writer_ms", Date.now() - writerStarted, {
+      sourceKey: input.sourceKey ?? null,
+      attempt,
+    });
+
+    const initialRisk = validateRemakeFactRisk({
+      script: generatedScript,
       trustedTexts,
     });
 
-    console.info("[RemakeLatency] fact_repair_ms", Date.now() - repairStarted, {
-      initialRiskCount: initialRisk.risks.length,
-      remainingRiskCount: repairedRisk.risks.length,
-    });
-
-    if (!repairedScript || !repairedRisk.safe) {
-      throw new Error(
-        "SpyReels could not produce a safely grounded remake. Please try again."
-      );
-    }
-
-    generatedScript = repairedScript;
-    repaired = true;
-  }
-
-  if (isSameTopic) {
-    const initialCopyRisk = remakeCopyRisk({
-      source: input.originalTranscript,
-      remake: generatedScript,
-    });
-
-    if (!initialCopyRisk.safe) {
-      const originalityStarted = Date.now();
-      const rebuilt = await repairCopiedSameTopic({
-        sourceTranscript: input.originalTranscript,
+    let repaired = false;
+    if (!initialRisk.safe) {
+      const repairStarted = Date.now();
+      const repairedScript = await repairUnsupportedFacts({
         script: generatedScript,
-        viralStructure,
+        risksText: formatFactRisksForRepair(initialRisk.risks),
+        trustedGrounding: trustedTexts.filter(Boolean).join("\n\n"),
         scriptFormatClosing,
         outputLanguage,
         llmInvoker: runLlm,
       });
 
-      const rebuiltRisk = remakeCopyRisk({
-        source: input.originalTranscript,
-        remake: rebuilt,
+      const repairedRisk = validateRemakeFactRisk({
+        script: repairedScript,
+        trustedTexts,
       });
 
-      console.info(
-        "[RemakeLatency] originality_repair_ms",
-        Date.now() - originalityStarted,
-        {
-          initialLongestRunWords: initialCopyRisk.longestRunWords,
-          remainingLongestRunWords: rebuiltRisk.longestRunWords,
-        }
-      );
+      console.info("[RemakeLatency] fact_repair_ms", Date.now() - repairStarted, {
+        initialRiskCount: initialRisk.risks.length,
+        remainingRiskCount: repairedRisk.risks.length,
+        attempt,
+      });
 
-      if (!rebuilt || !rebuiltRisk.safe) {
-        throw new Error(
-          "SpyReels could not produce a sufficiently original same-topic remake. Please try again."
-        );
+      if (!repairedScript || !repairedRisk.safe) {
+        lastFailureReason = "fact";
+        console.info("[RemakeContent] retrying after fact integrity failure", {
+          sourceKey: input.sourceKey ?? null,
+          attempt,
+          maxAttempts: REMAKE_CONTENT_MAX_ATTEMPTS,
+        });
+        continue;
       }
 
-      generatedScript = rebuilt;
+      generatedScript = repairedScript;
+      repaired = true;
     }
+
+    if (isSameTopic) {
+      const initialCopyRisk = remakeCopyRisk({
+        source: input.originalTranscript,
+        remake: generatedScript,
+      });
+
+      if (!initialCopyRisk.safe) {
+        const originalityStarted = Date.now();
+        const rebuilt = await repairCopiedSameTopic({
+          sourceTranscript: input.originalTranscript,
+          script: generatedScript,
+          viralStructure,
+          scriptFormatClosing,
+          outputLanguage,
+          llmInvoker: runLlm,
+        });
+
+        const rebuiltRisk = remakeCopyRisk({
+          source: input.originalTranscript,
+          remake: rebuilt,
+        });
+
+        console.info(
+          "[RemakeLatency] originality_repair_ms",
+          Date.now() - originalityStarted,
+          {
+            initialLongestRunWords: initialCopyRisk.longestRunWords,
+            remainingLongestRunWords: rebuiltRisk.longestRunWords,
+            attempt,
+          }
+        );
+
+        if (!rebuilt || !rebuiltRisk.safe) {
+          lastFailureReason = "originality";
+          console.info("[RemakeContent] retrying after originality failure", {
+            sourceKey: input.sourceKey ?? null,
+            attempt,
+            maxAttempts: REMAKE_CONTENT_MAX_ATTEMPTS,
+          });
+          continue;
+        }
+
+        generatedScript = rebuilt;
+      }
+    }
+
+    if (attempt > 1) {
+      console.info("[RemakeContent] recovered after silent retry", {
+        sourceKey: input.sourceKey ?? null,
+        attempt,
+        lastFailureReason,
+      });
+    }
+
+    const readabilityAnalysis = analyzeRemakeReadability(generatedScript);
+
+    return {
+      viralStructure,
+      generatedScript,
+      readabilityAnalysis,
+      structureCacheHit: analyzed.cacheHit,
+      factIntegrity: {
+        repaired,
+        initialRiskCount: initialRisk.risks.length,
+      },
+    };
   }
 
-  const readabilityAnalysis = analyzeRemakeReadability(generatedScript);
+  console.warn("[RemakeContent] exhausted silent retries", {
+    sourceKey: input.sourceKey ?? null,
+    lastFailureReason,
+    maxAttempts: REMAKE_CONTENT_MAX_ATTEMPTS,
+  });
 
-  return {
-    viralStructure,
-    generatedScript,
-    readabilityAnalysis,
-    structureCacheHit: analyzed.cacheHit,
-    factIntegrity: {
-      repaired,
-      initialRiskCount: initialRisk.risks.length,
-    },
-  };
+  throw new Error(REMAKE_CONTENT_FAILED_USER_MESSAGE);
 }

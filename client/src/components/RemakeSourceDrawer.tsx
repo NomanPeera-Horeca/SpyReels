@@ -33,9 +33,14 @@ export function RemakeSourceDrawer({ open, onClose, source, reelId }: Props) {
     input ?? { reelId: 0 },
     {
       enabled: open && input != null,
-      staleTime: 60_000,
+      staleTime: 0,
       retry: false,
-      refetchOnWindowFocus: false,
+      refetchOnWindowFocus: true,
+      refetchInterval: (q) => {
+        const status = q.state.data?.transcriptionStatus;
+        if (status === "processing" || status === "pending") return 2500;
+        return false;
+      },
     }
   );
 
@@ -44,6 +49,10 @@ export function RemakeSourceDrawer({ open, onClose, source, reelId }: Props) {
   const data = query.data;
   const segments = normalizeRemakeSourceSegments(data?.segments);
   const transcript = String(data?.transcript ?? "").trim();
+  const hasTranscriptContent = segments.length > 0 || Boolean(transcript);
+  const isTranscriptProcessing =
+    data?.transcriptionStatus === "processing" ||
+    data?.transcriptionStatus === "pending";
   const copyText = transcript || segments.map((segment) => segment.text).join("\n\n");
   const creator = creatorLabel(data?.creator);
   const sourceMeta = [platformLabel(data?.platform), creator].filter(Boolean).join(" · ");
@@ -136,7 +145,7 @@ export function RemakeSourceDrawer({ open, onClose, source, reelId }: Props) {
               </p>
             </div>
 
-            {data?.transcriptionStatus === "processing" ? (
+            {isTranscriptProcessing && !hasTranscriptContent ? (
               <div className="rounded-xl border border-[#302b40] bg-[#1b1724] p-4 text-xs leading-relaxed text-[#8f879f]">
                 Transcript is still processing.
               </div>
