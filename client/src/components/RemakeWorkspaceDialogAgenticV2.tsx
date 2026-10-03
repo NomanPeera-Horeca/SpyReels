@@ -229,11 +229,12 @@ export function RemakeWorkspaceDialog({
   const hydratedId = useRef<number | null>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const autosaveTimer = useRef<number | null>(null);
-  const lastSaved = useRef({ script: "", caption: "" });
+  const lastSaved = useRef({ script: "", caption: "", frame0: "" });
 
   const [tab, setTab] = useState<WorkspaceTab>("script");
   const [script, setScript] = useState("");
   const [caption, setCaption] = useState("");
+  const [frame0Text, setFrame0Text] = useState("");
   const [captionOpen, setCaptionOpen] = useState(false);
   const [captionStyle, setCaptionStyle] = useState<CaptionStyle>("educational");
   const [captionLength, setCaptionLength] = useState<CaptionLength>("auto");
@@ -364,25 +365,28 @@ export function RemakeWorkspaceDialog({
     nextScript: string,
     nextCaption: string,
     changeType: "manual_edit" | "ai_rewrite",
-    description: string
+    description: string,
+    nextFrame0?: string
   ) => {
     if (scriptId == null || isPreview) return false;
     setSaveState("saving");
+    const frame0 = (nextFrame0 ?? frame0Text).trim().slice(0, 120);
     try {
       await updateMutation.mutateAsync({
         id: scriptId,
         content: nextScript,
         generatedCaption: nextCaption || null,
+        frame0OnScreenText: frame0 || null,
         changeType,
         changeDescription: description.slice(0, 120),
       });
-      lastSaved.current = { script: nextScript, caption: nextCaption };
+      lastSaved.current = { script: nextScript, caption: nextCaption, frame0 };
       setSaveState("saved");
       return true;
     } catch {
       return false;
     }
-  }, [isPreview, scriptId, updateMutation]);
+  }, [frame0Text, isPreview, scriptId, updateMutation]);
 
   useEffect(() => {
     if (!open) {
@@ -407,6 +411,7 @@ export function RemakeWorkspaceDialog({
     setSelection(null);
     setUndo(null);
     setBroll(null);
+    setFrame0Text("");
     setSourceOpen(false);
     setScheduledLabel(null);
     setSaveState("idle");
@@ -442,8 +447,9 @@ export function RemakeWorkspaceDialog({
     if (previewSeed && scriptId == null) {
       setScript(previewSeed.script);
       setCaption(previewSeed.caption);
+      setFrame0Text("");
       setCaptionHashtags([]);
-      lastSaved.current = { script: previewSeed.script, caption: previewSeed.caption };
+      lastSaved.current = { script: previewSeed.script, caption: previewSeed.caption, frame0: "" };
       setSaveState("idle");
       return;
     }
@@ -456,15 +462,18 @@ export function RemakeWorkspaceDialog({
       generatedCaption?: string | null;
       generatedHashtags?: string | null;
       captionStyle?: string | null;
+      frame0OnScreenText?: string | null;
       postDate?: string | Date | null;
       postTime?: string | null;
     };
     const generatedCaption = captionMeta.generatedCaption?.trim() || "";
+    const savedFrame0 = captionMeta.frame0OnScreenText?.trim() || "";
     setScript(content);
     setCaption(generatedCaption);
+    setFrame0Text(savedFrame0);
     setCaptionHashtags(parseSavedHashtags(captionMeta.generatedHashtags));
     if (isCaptionStyle(captionMeta.captionStyle)) setCaptionStyle(captionMeta.captionStyle);
-    lastSaved.current = { script: content, caption: generatedCaption };
+    lastSaved.current = { script: content, caption: generatedCaption, frame0: savedFrame0 };
     setSaveState("saved");
 
     if (captionMeta.postDate) {
@@ -483,7 +492,13 @@ export function RemakeWorkspaceDialog({
 
   useEffect(() => {
     if (!open || isPreview || scriptId == null || hydratedId.current !== scriptId) return;
-    if (script === lastSaved.current.script && caption === lastSaved.current.caption) return;
+    if (
+      script === lastSaved.current.script &&
+      caption === lastSaved.current.caption &&
+      frame0Text === lastSaved.current.frame0
+    ) {
+      return;
+    }
     setSaveState("unsaved");
     if (autosaveTimer.current != null) window.clearTimeout(autosaveTimer.current);
     autosaveTimer.current = window.setTimeout(() => {
@@ -492,18 +507,21 @@ export function RemakeWorkspaceDialog({
     return () => {
       if (autosaveTimer.current != null) window.clearTimeout(autosaveTimer.current);
     };
-  }, [caption, isPreview, open, persist, script, scriptId]);
+  }, [caption, frame0Text, isPreview, open, persist, script, scriptId]);
 
   const closeWorkspace = useCallback(async () => {
     if (autosaveTimer.current != null) window.clearTimeout(autosaveTimer.current);
-    const changed = script !== lastSaved.current.script || caption !== lastSaved.current.caption;
+    const changed =
+      script !== lastSaved.current.script ||
+      caption !== lastSaved.current.caption ||
+      frame0Text !== lastSaved.current.frame0;
     if (changed && scriptId != null && !isPreview) {
       const saved = await persist(script, caption, "manual_edit", "Remake workspace close");
       if (!saved) return;
     }
     setSourceOpen(false);
     onOpenChange(false);
-  }, [caption, isPreview, onOpenChange, persist, script, scriptId]);
+  }, [caption, frame0Text, isPreview, onOpenChange, persist, script, scriptId]);
 
   const undoAi = useCallback(async () => {
     if (!undo) return;
@@ -527,13 +545,14 @@ export function RemakeWorkspaceDialog({
         id: scriptId,
         content: script,
         generatedCaption: caption || null,
+        frame0OnScreenText: frame0Text.trim() || null,
         postDate: toLocalYmd(date),
         postTime: time,
         status: "approved",
         changeType: "manual_edit",
         changeDescription: `Scheduled for ${label}`,
       });
-      lastSaved.current = { script, caption };
+      lastSaved.current = { script, caption, frame0: frame0Text };
       setSaveState("saved");
       setScheduleDate(toLocalYmd(date));
       setScheduleTime(time);
@@ -548,7 +567,7 @@ export function RemakeWorkspaceDialog({
     } finally {
       setAgentBusy(false);
     }
-  }, [addTurn, caption, isPreview, script, scriptId, updateMutation, utils.scripts.list]);
+  }, [addTurn, caption, frame0Text, isPreview, script, scriptId, updateMutation, utils.scripts.list]);
 
   const scheduleFromAgent = useCallback(async (input: string) => {
     const result = resolveSchedule(input);
@@ -585,7 +604,7 @@ export function RemakeWorkspaceDialog({
       setCaptionStyle(nextStyle);
       setCaptionLength(nextLength);
       setCaptionOpen(true);
-      lastSaved.current = { script, caption: generated.caption };
+      lastSaved.current = { script, caption: generated.caption, frame0: frame0Text };
       setSaveState("saved");
       void utils.scripts.get.invalidate({ id: scriptId });
       void utils.scripts.list.invalidate();
@@ -596,6 +615,7 @@ export function RemakeWorkspaceDialog({
   }, [
     captionLength,
     captionStyle,
+    frame0Text,
     generateCaption,
     onboardingQuery.data?.targetAudience,
     script,
@@ -630,7 +650,7 @@ export function RemakeWorkspaceDialog({
         captionStyle,
       });
       setCaptionHashtags(tags);
-      lastSaved.current = { script, caption };
+      lastSaved.current = { script, caption, frame0: frame0Text };
       setSaveState("saved");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not refresh hashtags";
@@ -766,7 +786,7 @@ export function RemakeWorkspaceDialog({
       setTab("script");
 
       if (captionOnly) {
-        lastSaved.current = { script: nextScript, caption: nextCaption };
+        lastSaved.current = { script: nextScript, caption: nextCaption, frame0: frame0Text };
         setSaveState("saved");
         void utils.scripts.get.invalidate({ id: scriptId });
         void utils.scripts.list.invalidate();
@@ -1265,8 +1285,10 @@ export function RemakeWorkspaceDialog({
                   aria-hidden={tab !== "preview"}
                 >
                   <Frame0TextPreview
-                    key={`${target?.remakeKey ?? "frame0"}:${open ? "open" : "closed"}`}
+                    key={`${target?.remakeKey ?? "frame0"}:${scriptId ?? "preview"}:${open ? "open" : "closed"}`}
                     script={script}
+                    savedText={frame0Text}
+                    onTextChange={setFrame0Text}
                     source={target?.source ?? null}
                     reelId={target?.reelId ?? null}
                   />

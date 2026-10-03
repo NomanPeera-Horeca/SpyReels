@@ -170,7 +170,8 @@ These three channels are **critical** for SpyReels distribution and Facebook ads
     - saved B-roll clips (hydrate from `broll_generations`)
     - opening hook / Frame0 preview
   - Out of scope for now: Meta/Instagram direct publish
-- [x] **Remake Phase A integrity** (approved Oct 3): X-only dismiss; hydrate B-roll on Remake open; quiet card center play; meta → details drawer; status chip when remake exists (Dashboard / Collected / Saved)
+- [x] **Remake Phase A integrity** (approved Oct 3): X-only dismiss; hydrate B-roll/caption/hook on Remake open; quiet card center play; meta → details drawer; status chip + Open remake when work exists (Dashboard / Collected / Saved); Frame0 persisted on `saved_scripts.frame0OnScreenText` (migration `0099`)
+- [x] **Remake Phase B continuity** (Oct 3): Script Reader shows Remake pack (caption / B-roll count / Opening Hook) from the same script + `broll_generations` (no re-run)
 
 - [ ] **Buzzli competitive teardown → SpyReels roadmap** (LinkedIn “SpyReels-class” product)
   - Competitor: [buzzli.io](https://buzzli.io/) — personal branding + LinkedIn content stack (agents, viral posts, carousels, profile analysis, credits)

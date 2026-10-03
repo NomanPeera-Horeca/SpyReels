@@ -131,7 +131,9 @@ export function buildLibraryOneClickRemake(args: {
         }),
     };
   }
-  if (args.batchRecreateSt === "ready" && args.batchEntry?.latestScriptId) {
+  // Any prior remake artifact: open the durable workspace (never look like a fresh Remake).
+  // Generating is handled above; here ready / failed / other still open existing work.
+  if (args.batchEntry?.latestScriptId) {
     return {
       label: READY_TO_FILM_CTA_LABEL,
       tone: "ready",
