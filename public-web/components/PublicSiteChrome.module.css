@@ -21,10 +21,10 @@
   align-items: center;
   gap: 10px;
   flex: 0 0 auto;
-  color: #f8f8fb;
+  color: var(--sr-neutral-100);
   text-decoration: none;
   font-size: 17px;
-  font-weight: 750;
+  font-weight: 700;
   letter-spacing: -0.02em;
 }
 
@@ -44,7 +44,7 @@
 }
 
 .nav a {
-  color: #a7a7b4;
+  color: var(--sr-color-text-disabled);
   text-decoration: none;
   transition: color 160ms ease;
 }
@@ -79,13 +79,13 @@
 
 .login {
   border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #ededf2;
+  color: var(--sr-neutral-100);
   background: transparent;
 }
 
 .start {
   color: #fff;
-  background: #7c3aed;
+  background: var(--sr-color-action-primary-default);
   box-shadow: 0 10px 26px rgba(124, 58, 237, 0.28);
 }
 
@@ -112,13 +112,13 @@
   gap: 9px;
   color: #fff;
   text-decoration: none;
-  font-weight: 750;
+  font-weight: 700;
 }
 
 .footerCopy {
   max-width: 300px;
   margin: 14px 0 0;
-  color: #8f8f9d;
+  color: var(--sr-color-text-disabled);
   font-size: 14px;
   line-height: 1.65;
 }
@@ -127,7 +127,7 @@
   margin: 0 0 14px;
   color: #e7e7ec;
   font-size: 12px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -135,7 +135,7 @@
 .footerColumn a {
   display: block;
   margin: 9px 0;
-  color: #8f8f9d;
+  color: var(--sr-color-text-disabled);
   text-decoration: none;
   font-size: 14px;
   line-height: 1.45;
@@ -150,7 +150,7 @@
   padding-top: 24px;
   border-top: 1px solid rgba(255, 255, 255, 0.07);
   text-align: right;
-  color: #696977;
+  color: var(--sr-color-text-tertiary);
   font-size: 12px;
 }
 

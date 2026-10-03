@@ -16,8 +16,8 @@
   max-height: min(920px, calc(100vh - 24px));
   overflow: hidden;
   border-radius: 24px;
-  background: #fff;
-  color: #18181b;
+  background: var(--sr-color-surface-raised);
+  color: var(--sr-color-text-primary);
   box-shadow: 0 24px 80px rgba(0, 0, 0, 0.35);
 }
 
@@ -38,7 +38,7 @@
   border: 0;
   border-radius: 999px;
   background: rgba(24, 24, 27, 0.06);
-  color: #3f3f46;
+  color: var(--sr-color-text-secondary);
   font-size: 20px;
   line-height: 1;
   cursor: pointer;
@@ -55,7 +55,7 @@
   min-height: 0;
   overflow-y: auto;
   padding: 28px 20px;
-  background: #fff;
+  background: var(--sr-color-surface-default);
 }
 
 @media (min-width: 640px) {
@@ -66,7 +66,7 @@
 
 .eyebrow {
   margin: 0 0 8px;
-  color: #7c3aed;
+  color: var(--sr-color-text-brand);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.08em;
@@ -75,9 +75,9 @@
 
 .title {
   margin: 0;
-  color: #18181b;
+  color: var(--sr-color-text-primary);
   font-size: clamp(1.5rem, 2vw, 1.85rem);
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.15;
 }
@@ -85,7 +85,7 @@
 .subtitle {
   margin: 8px 0 0;
   max-width: 38ch;
-  color: #71717a;
+  color: var(--sr-color-text-tertiary);
   font-size: 14px;
   line-height: 1.5;
 }
@@ -98,17 +98,17 @@
   width: 100%;
   height: 48px;
   margin-top: 24px;
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--sr-color-border-default);
   border-radius: 999px;
-  background: #fff;
-  color: #18181b;
+  background: var(--sr-color-surface-default);
+  color: var(--sr-color-text-primary);
   font-size: 14px;
   font-weight: 600;
   cursor: pointer;
 }
 
 .google:hover {
-  background: #fafafa;
+  background: var(--sr-color-surface-subtle);
 }
 
 .google img {
@@ -125,7 +125,7 @@
 }
 
 .divider span {
-  color: #a1a1aa;
+  color: var(--sr-color-text-disabled);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -136,7 +136,7 @@
   content: "";
   flex: 1;
   height: 1px;
-  background: #e4e4e7;
+  background: var(--sr-color-border-default);
 }
 
 .label {
@@ -147,7 +147,7 @@
 .label span {
   display: block;
   margin-bottom: 6px;
-  color: #71717a;
+  color: var(--sr-color-text-tertiary);
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -158,10 +158,10 @@
 .passwordWrap input {
   width: 100%;
   height: 48px;
-  border: 1.5px solid #e4e4e7;
+  border: 1.5px solid var(--sr-color-border-default);
   border-radius: 12px;
-  background: #fff;
-  color: #18181b;
+  background: var(--sr-color-surface-default);
+  color: var(--sr-color-text-primary);
   padding: 0 14px;
   font-size: 14px;
   outline: none;
@@ -179,24 +179,24 @@
 .passwordWrap input:-webkit-autofill:hover,
 .passwordWrap input:-webkit-autofill:focus,
 .passwordWrap input:-webkit-autofill:active {
-  -webkit-text-fill-color: #18181b;
-  caret-color: #18181b;
-  border-color: #e4e4e7;
-  box-shadow: 0 0 0 1000px #fff inset;
+  -webkit-text-fill-color: var(--sr-color-text-primary);
+  caret-color: var(--sr-color-text-primary);
+  border-color: var(--sr-color-border-default);
+  box-shadow: 0 0 0 1000px var(--sr-color-surface-default) inset;
   transition: background-color 99999s ease-out 0s;
 }
 
 .input:focus,
 .passwordWrap input:focus {
-  border-color: #8b5cf6;
+  border-color: var(--sr-color-focus-border);
   box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2);
 }
 
 .input:-webkit-autofill:focus,
 .passwordWrap input:-webkit-autofill:focus {
-  border-color: #8b5cf6;
+  border-color: var(--sr-color-focus-border);
   box-shadow:
-    0 0 0 1000px #fff inset,
+    0 0 0 1000px var(--sr-color-surface-default) inset,
     0 0 0 3px rgba(139, 92, 246, 0.2);
 }
 
@@ -215,7 +215,7 @@
   transform: translateY(-50%);
   border: 0;
   background: transparent;
-  color: #a1a1aa;
+  color: var(--sr-color-text-disabled);
   cursor: pointer;
   padding: 6px;
 }
@@ -237,11 +237,11 @@
 }
 
 .forgotRow button {
-  color: #71717a;
+  color: var(--sr-color-text-tertiary);
 }
 
 .forgotRow button:hover {
-  color: #27272a;
+  color: var(--sr-neutral-800);
 }
 
 .error,
@@ -253,15 +253,15 @@
 }
 
 .error {
-  border: 1px solid #fecaca;
-  background: #fef2f2;
-  color: #b91c1c;
+  border: 1px solid var(--sr-color-status-error-border);
+  background: var(--sr-color-status-error-background);
+  color: var(--sr-color-status-error-foreground);
 }
 
 .success {
-  border: 1px solid #a7f3d0;
-  background: #ecfdf5;
-  color: #047857;
+  border: 1px solid var(--sr-color-status-success-border);
+  background: var(--sr-color-status-success-background);
+  color: var(--sr-color-status-success-foreground);
 }
 
 .submit {
@@ -270,10 +270,10 @@
   margin-top: 4px;
   border: 0;
   border-radius: 999px;
-  background: #7c3aed;
+  background: var(--sr-color-action-primary-default);
   color: #fff;
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   box-shadow: 0 10px 24px rgba(124, 58, 237, 0.28);
@@ -292,7 +292,7 @@
 .switch {
   margin: 16px 0 0;
   text-align: center;
-  color: #71717a;
+  color: var(--sr-color-text-tertiary);
   font-size: 13px;
 }
 
@@ -301,7 +301,7 @@
   min-height: 0;
   flex-direction: column;
   overflow: hidden;
-  border-left: 1px solid #e4e4e7;
+  border-left: 1px solid var(--sr-color-border-default);
   background: linear-gradient(180deg, #f5f3ff 0%, #f4f4f5 45%, #f1f5f9 100%);
   padding: 20px;
 }
@@ -315,9 +315,9 @@
 
 .proofTitle {
   margin: 0 0 12px;
-  color: #18181b;
+  color: var(--sr-color-text-primary);
   font-size: 18px;
-  font-weight: 800;
+  font-weight: 700;
   letter-spacing: -0.02em;
 }
 
@@ -356,7 +356,7 @@
 .card {
   border: 1px solid rgba(228, 228, 231, 0.9);
   border-radius: 16px;
-  background: #fff;
+  background: var(--sr-color-surface-default);
   padding: 14px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
@@ -370,7 +370,7 @@
 
 .quote {
   margin: 0 0 12px;
-  color: #3f3f46;
+  color: var(--sr-color-text-secondary);
   font-size: 13px;
   line-height: 1.35;
 }
@@ -413,11 +413,11 @@
 }
 
 .person strong {
-  color: #18181b;
+  color: var(--sr-color-text-primary);
   font-size: 13px;
 }
 
 .person small {
-  color: #71717a;
+  color: var(--sr-color-text-tertiary);
   font-size: 12px;
 }
