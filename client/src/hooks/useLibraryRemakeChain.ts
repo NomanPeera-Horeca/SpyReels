@@ -343,9 +343,9 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
               runningRef.current.delete(key);
               setIntentPrompt((current) => (current?.key === key ? null : current));
               patchState(source, {
-                stage: "inspiration",
-                progressPercent: 100,
-                classificationReason: message,
+                stage: "error",
+                progressPercent: 0,
+                errorMessage: message,
                 ...resolveLibraryIds(source, reelId),
               });
               setWorkspaceOpen(false);
@@ -619,9 +619,9 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
         if (isNoCaptionsOrNoVoiceFailure(message)) {
           runningRef.current.delete(key);
           patchState(source, {
-            stage: "inspiration",
-            progressPercent: 100,
-            classificationReason: message,
+            stage: "error",
+            progressPercent: 0,
+            errorMessage: message,
             ...resolveLibraryIds(source, reelId),
           });
           setWorkspaceOpen(false);
