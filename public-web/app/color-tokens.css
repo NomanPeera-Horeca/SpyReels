@@ -45,6 +45,9 @@
   --sr-color-text-on-brand: #ffffff;
   --sr-color-text-inverse: #ffffff;
 
+  /* Marketing (Figma color/marketing/live/accent) — large headline emphasis only */
+  --sr-color-marketing-live-accent: var(--sr-brand-purple-500);
+
   /* Surfaces */
   --sr-color-surface-page: #f8f8fa;
   --sr-color-surface-default: #ffffff;

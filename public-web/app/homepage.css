@@ -66,7 +66,7 @@
     .hero-intro{max-width:920px;margin:0 auto 54px;text-align:center}
     .hero h1{max-width:none;margin:0 0 24px;font-family:var(--font-inter),"Helvetica Neue",Arial,sans-serif;font-size:clamp(60px,6.7vw,90px);font-weight:700;line-height:.96;letter-spacing:-.055em}
     .hero h1 .headline-line{display:block;color:inherit;white-space:nowrap}
-    .hero h1 .headline-accent{color:var(--sr-color-text-brand);font:inherit}
+    .hero h1 .headline-accent{color:var(--sr-color-marketing-live-accent);font:inherit}
     .hero-copy{max-width:720px;margin:0 auto 28px;font-size:20px}
     .hero-actions{justify-content:center}
     .hero-actions .btn{min-height:54px;padding-inline:32px}
@@ -102,7 +102,7 @@
   .growth-section{background:#fbfaff;padding:100px 0 105px}
   .growth-intro{text-align:center;max-width:1020px;margin:0 auto 62px}
   .growth-section .growth-intro h2{font-size:clamp(42px,5.3vw,70px);line-height:1.03;letter-spacing:-.055em;margin:0 0 22px;font-weight:700}
-  .growth-intro h2 span{color:#6745e7}
+  .growth-intro h2 span{color:var(--sr-color-marketing-live-accent)}
   .growth-intro p{max-width:850px;margin:0 auto;color:#73728a;font-size:clamp(17px,1.7vw,21px);line-height:1.55}
   .growth-steps{display:grid;grid-template-columns:minmax(0,1fr) 46px minmax(0,1fr) 46px minmax(0,1fr);align-items:center;gap:0}
   .growth-card{min-width:0;min-height:280px;padding:28px 27px 25px;border:1px solid var(--sr-brand-purple-200);border-radius:22px;background:var(--sr-color-surface-raised);box-shadow:0 14px 40px rgba(45,26,108,.045);display:flex;flex-direction:column}
