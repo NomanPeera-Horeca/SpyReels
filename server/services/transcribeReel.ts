@@ -68,13 +68,18 @@ function fail(
   };
 }
 
+/**
+ * Detect spoken language per reel instead of forcing English.
+ * Remake still writes the creator's camera script in English
+ * (`remakeOutputLanguage.ts`); this only unlocks non-English source audio.
+ */
 const DEEPGRAM_MEDIA_OPTIONS = {
   model: "nova-3" as const,
   smart_format: true,
   punctuate: true,
   paragraphs: true,
   utterances: true,
-  language: "en",
+  detect_language: true,
 };
 
 function mapDeepgramCatch(

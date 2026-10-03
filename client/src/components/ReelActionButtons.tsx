@@ -173,6 +173,7 @@ export function ReelActionButtons(props: ReelActionButtonsProps) {
     oneClickRemake &&
     oneClickRemake.tone !== "inspiration" &&
     oneClickRemake.tone !== "ready" &&
+    oneClickRemake.label !== "Retry" &&
     oneClickRemake.label !== "No voice";
   const useReadyPrimary = oneClickRemake?.tone === "ready";
   const firstVisitPrimaryBtnClass =

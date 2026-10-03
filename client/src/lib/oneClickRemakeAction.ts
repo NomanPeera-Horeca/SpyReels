@@ -146,10 +146,14 @@ export function buildLibraryOneClickRemake(args: {
   }
   if (args.isNoSpeech) {
     return {
-      label: "No voice",
-      disabled: true,
-      tooltip: "No transcript available. Click the reel to view details.",
-      onClick: () => {},
+      label: "Retry",
+      tooltip:
+        "No transcript yet. Tap to try transcription again (works for non-English speech too).",
+      onClick: () =>
+        void args.startRemake(librarySource, {
+          ...startOpts,
+          alreadyTranscribed: false,
+        }),
     };
   }
   if (args.idleNotRemakeable) {
