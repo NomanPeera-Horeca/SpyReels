@@ -6,7 +6,8 @@ import { assertRecreatedScriptInWorkspace } from "../assertRecreatedScriptInWork
 import { assertScriptInWorkspace } from "../assertScriptInWorkspace";
 import { upsertBrollGeneration, updateBrollGenerationBeatClips, getBrollGenerationByScriptId, listScriptIdsWithBroll as listBrollScriptIds } from "../broll/db";
 import { suggestBrollForScript, regenerateBrollBeat } from "../broll/suggestBroll";
-import { ensureDefaultTags, createSavedScript, createScriptVersion, assignTagToScript, getSavedScriptIdForRecreated, getTagsForScript, getScriptVersions, getReelById, getSavedScriptsByWorkspace, getScriptsByTag, getTagsForScripts, updateSavedScript, getLatestVersionNumber, deleteSavedScript, removeTagFromScript } from "../db";
+import { ensureDefaultTags, createSavedScript, createScriptVersion, assignTagToScript, getTagsForScript, getScriptVersions, getReelById, getSavedScriptsByWorkspace, getScriptsByTag, getTagsForScripts, updateSavedScript, getLatestVersionNumber, deleteSavedScript, removeTagFromScript } from "../db";
+import { ensureSavedScriptFromRecreate } from "../ensureSavedScriptFromRecreate";
 import { generateSeoInstagramCaption } from "../generateSeoCaption";
 import { createShareLinkForScript, revokeShareLinkForScript, getShareLinkInfoForScript } from "../scriptShareLinks";
 import { enrichScriptsWithSendMeta, sendScriptToWorkspace } from "../scriptsSendToWorkspace";
@@ -83,8 +84,8 @@ export const scriptsRouter = router({
     /**
      * Remake workspace needs a saved_scripts row (scripts.get / update / AI).
      * recreate.generate returns recreated_scripts.id. Promote completed remake
-     * content into My Scripts once (idempotent). Also accepts an already-saved
-     * script id and returns it unchanged.
+     * into My Scripts (idempotent by recreated id; upsert by reel on re-remake).
+     * Also accepts an already-saved script id and returns it unchanged.
      */
     ensureFromRecreate: protectedProcedure
       .input(
@@ -102,19 +103,10 @@ export const scriptsRouter = router({
       .mutation(async ({ ctx, input }) => {
         if (input.savedScriptId != null) {
           await assertScriptInWorkspace(input.savedScriptId, ctx);
-          return { id: input.savedScriptId, created: false as const };
+          return { id: input.savedScriptId, created: false as const, updated: false as const };
         }
 
         const recreatedScriptId = input.recreatedScriptId!;
-        const existingId = await getSavedScriptIdForRecreated(
-          ctx.workspaceId,
-          ctx.user.id,
-          recreatedScriptId
-        );
-        if (existingId != null) {
-          return { id: existingId, created: false as const };
-        }
-
         let recreated: Awaited<ReturnType<typeof assertRecreatedScriptInWorkspace>>;
         try {
           recreated = await assertRecreatedScriptInWorkspace(
@@ -124,53 +116,14 @@ export const scriptsRouter = router({
         } catch {
           // Caller may already hold a saved_scripts id (post-promote reopen).
           await assertScriptInWorkspace(recreatedScriptId, ctx);
-          return { id: recreatedScriptId, created: false as const };
-        }
-        if (recreated.status !== "completed") {
-          throw new TRPCError({
-            code: "PRECONDITION_FAILED",
-            message: "Remake script is not ready yet. Wait for generation to finish.",
-          });
-        }
-        const content = String(recreated.generatedScript ?? "").trim();
-        if (!content) {
-          throw new TRPCError({
-            code: "PRECONDITION_FAILED",
-            message: "Remake finished with empty script content. Retry remake.",
-          });
+          return { id: recreatedScriptId, created: false as const, updated: false as const };
         }
 
-        await ensureDefaultTags(ctx.workspaceId, ctx.user.id);
-        const topic = String(recreated.topic ?? "").trim();
-        const titleBase =
-          topic && topic !== "SAME_TOPIC" && topic !== "Personalized"
-            ? `Remake: ${topic.slice(0, 60)}`
-            : "Remake script";
-        const wordCount = content.split(/\s+/).filter(Boolean).length;
-        const scriptId = await createSavedScript({
-          userId: ctx.user.id,
+        return ensureSavedScriptFromRecreate({
           workspaceId: ctx.workspaceId,
-          reelId: recreated.reelId ?? null,
-          recreatedScriptId,
-          title: titleBase,
-          content,
-          originalContent: content,
-          sourceHandle: null,
-          gradeLevel: recreated.gradeLevel ?? null,
-          wordCount,
-          postDate: null,
-          postTime: null,
-          notes: null,
-          status: "draft",
+          userId: ctx.user.id,
+          recreated,
         });
-        await createScriptVersion({
-          scriptId,
-          content,
-          versionNumber: 1,
-          changeType: "initial",
-          changeDescription: "Initial remake script",
-        });
-        return { id: scriptId, created: true as const };
       }),
 
     /** Get a single script with tags and versions */
