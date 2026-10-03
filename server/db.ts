@@ -1958,6 +1958,10 @@ export async function updateSavedScript(
       | "notes"
       | "gradeLevel"
       | "recreatedScriptId"
+      | "generatedCaption"
+      | "generatedHashtags"
+      | "captionStyle"
+      | "frame0OnScreenText"
     >
   >
 ): Promise<void> {

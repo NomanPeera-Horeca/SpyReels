@@ -669,6 +669,8 @@ export const savedScripts = mysqlTable(
   generatedCaption: text("generatedCaption"),
   generatedHashtags: text("generatedHashtags"),
   captionStyle: varchar("captionStyle", { length: 32 }),
+  /** Opening Hook on-screen text (Remake Preview / Frame0). */
+  frame0OnScreenText: varchar("frame0OnScreenText", { length: 120 }),
   sourceWorkspaceId: varchar("sourceWorkspaceId", { length: 36 }),
   sourceScriptId: int("sourceScriptId"),
   sentByUserId: int("sentByUserId"),

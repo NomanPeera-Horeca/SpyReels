@@ -183,6 +183,7 @@ export const scriptsRouter = router({
         generatedCaption: z.string().nullable().optional(),
         generatedHashtags: z.string().nullable().optional(),
         captionStyle: z.string().nullable().optional(),
+        frame0OnScreenText: z.string().max(120).nullable().optional(),
         changeType: z.enum(["manual_edit", "ai_rewrite", "grammar_fix"]).optional(),
         changeDescription: z.string().optional(),
       }))
@@ -195,9 +196,13 @@ export const scriptsRouter = router({
         if (input.notes !== undefined) updateData.notes = input.notes;
         if (input.status !== undefined) updateData.status = input.status;
         if (input.gradeLevel !== undefined) updateData.gradeLevel = input.gradeLevel;
-        if (input.generatedCaption !== undefined) (updateData as any).generatedCaption = input.generatedCaption;
-        if (input.generatedHashtags !== undefined) (updateData as any).generatedHashtags = input.generatedHashtags;
-        if (input.captionStyle !== undefined) (updateData as any).captionStyle = input.captionStyle;
+        if (input.generatedCaption !== undefined) updateData.generatedCaption = input.generatedCaption;
+        if (input.generatedHashtags !== undefined) updateData.generatedHashtags = input.generatedHashtags;
+        if (input.captionStyle !== undefined) updateData.captionStyle = input.captionStyle;
+        if (input.frame0OnScreenText !== undefined) {
+          const trimmed = input.frame0OnScreenText?.trim() || null;
+          updateData.frame0OnScreenText = trimmed ? trimmed.slice(0, 120) : null;
+        }
         if (input.content !== undefined) {
           updateData.content = input.content;
           updateData.wordCount = input.content.trim().split(/\s+/).length;

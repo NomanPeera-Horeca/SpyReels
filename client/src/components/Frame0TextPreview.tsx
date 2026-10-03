@@ -5,6 +5,10 @@ import { deriveFrame0Text } from "@shared/frame0Text";
 
 type Props = {
   script: string;
+  /** Saved Opening Hook text from the Remake script (durable). */
+  savedText?: string | null;
+  /** Called when the creator edits the on-screen hook. */
+  onTextChange?: (text: string) => void;
   /**
    * Kept for call-site compatibility. Preview intentionally never renders
    * source creator identity, source platform chrome, or source media.
@@ -21,15 +25,20 @@ type Props = {
  * source asset. Until SpyReels has an explicit destination platform and the
  * creator's own footage, the honest preview is a neutral 9:16 composition.
  */
-export function Frame0TextPreview({ script }: Props) {
+export function Frame0TextPreview({ script, savedText, onTextChange }: Props) {
   const suggested = deriveFrame0Text(script);
-  const [text, setText] = useState(suggested);
-  const [edited, setEdited] = useState(false);
+  const saved = savedText?.trim() || "";
+  const [text, setText] = useState(saved || suggested);
+  const [edited, setEdited] = useState(Boolean(saved));
 
   useEffect(() => {
-    if (edited) return;
-    setText(suggested);
-  }, [edited, suggested]);
+    if (saved) {
+      setText(saved);
+      setEdited(true);
+      return;
+    }
+    if (!edited) setText(suggested);
+  }, [edited, saved, suggested]);
 
   return (
     <div className="h-full overflow-y-auto px-7 py-6">
@@ -69,8 +78,10 @@ export function Frame0TextPreview({ script }: Props) {
             <textarea
               value={text}
               onChange={(event) => {
+                const next = event.target.value.slice(0, 90);
                 setEdited(true);
-                setText(event.target.value);
+                setText(next);
+                onTextChange?.(next);
               }}
               onFocus={() => setEdited(true)}
               maxLength={90}
