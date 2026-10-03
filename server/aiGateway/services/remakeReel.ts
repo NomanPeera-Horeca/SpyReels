@@ -7,7 +7,10 @@ import { getOrFetchAudienceSignals } from "../../audienceResearch/service";
 import { getOnboardingState } from "../../db";
 import { getPersonalWorkspaceId } from "../../personalWorkspace";
 import { getCreatorCoachProfile } from "../../planCoachProfile";
-import { generateRemakeContent } from "../../recreate/generateRemakeContent";
+import {
+  generateRemakeContent,
+  isRemakeContentRetryableFailure,
+} from "../../recreate/generateRemakeContent";
 import { analyzeRemakeStructure } from "../../recreate/remakeStructure";
 import {
   formatResearchGroundingForPrompt,
@@ -243,15 +246,15 @@ export async function remakeReelUrl(input: {
         viralStructureOverride: structureResult.structure,
       });
     } catch (error) {
-      if (
-        error instanceof Error &&
-        error.message.includes("safely grounded remake")
-      ) {
+      if (isRemakeContentRetryableFailure(error)) {
         throw new AiGatewayError({
           code: "UPSTREAM_UNAVAILABLE",
-          message: error.message,
+          message:
+            error instanceof Error
+              ? error.message
+              : "We couldn't finish this remake. Please try again.",
           retryable: true,
-          cause: error,
+          cause: error instanceof Error ? error : undefined,
         });
       }
       throw error;

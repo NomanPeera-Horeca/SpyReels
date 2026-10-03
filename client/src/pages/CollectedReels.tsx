@@ -66,6 +66,8 @@ import {
   QuietReelCaption,
   QuietReelMetrics,
   QuietRemakeActions,
+  QuietRemakeStatusChip,
+  quietRemakeStatusFromState,
 } from "@/components/QuietWorkspaceReelChrome";
 import { useOpenCreatorInApp } from "@/hooks/useOpenCreatorInApp";
 import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
@@ -1370,6 +1372,13 @@ export default function CollectedReels() {
                   openRemakeWorkspace,
                 })
               : null;
+            const remakeStatusLabel = isReady
+              ? quietRemakeStatusFromState({
+                  hookStage: hookState.stage,
+                  batchState: recreateSt,
+                  hasSavedScript: Boolean(batchEntry?.latestScriptId || hookState.scriptId),
+                })
+              : null;
 
             return (
               <WorkspaceReelGridTile
@@ -1388,6 +1397,12 @@ export default function CollectedReels() {
                 onInlinePlayRequest={() => setInlinePlayingId(reel.id)}
                 onInlinePlayStop={() =>
                   setInlinePlayingId((cur) => (cur === reel.id ? null : cur))
+                }
+                onMetaClick={isReady ? () => setGridModalCollectedId(reel.id) : undefined}
+                statusChip={
+                  remakeStatusLabel ? (
+                    <QuietRemakeStatusChip label={remakeStatusLabel} />
+                  ) : undefined
                 }
                 mediaPlatform={collectedPlatform(reel)}
                 mediaFallback={

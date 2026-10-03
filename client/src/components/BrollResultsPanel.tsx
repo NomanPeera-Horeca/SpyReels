@@ -2,9 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import {
   Clapperboard,
   Download,
+  Expand,
   Loader2,
   Play,
   RefreshCw,
+  X,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
@@ -29,6 +31,7 @@ import {
 import type { BrollBeat, BrollClip, SuggestBrollResult } from "@shared/broll";
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
+import { cn } from "@/lib/utils";
 
 export type BrollResultsPanelProps = {
   open: boolean;
@@ -42,6 +45,10 @@ export type BrollResultsPanelProps = {
   autoGenerate?: boolean;
 };
 
+export type RegenerateBrollBeatOptions = {
+  userContext?: string;
+};
+
 function primaryClip(beat: BrollBeat): BrollClip | undefined {
   return beat.clips.find((c) => c.previewUrl?.trim()) ?? beat.clips[0];
 }
@@ -51,17 +58,57 @@ function ShotRow({
   regenerating,
   onRegenerate,
   watermarkApi,
+  variant = "default",
+  expanded,
+  onExpandedChange,
 }: {
   beat: BrollBeat;
   regenerating?: boolean;
-  onRegenerate?: (beat: BrollBeat) => void;
+  onRegenerate?: (beat: BrollBeat, options?: RegenerateBrollBeatOptions) => void;
   watermarkApi: WatermarkJobsApi;
+  variant?: "default" | "workspace";
+  expanded: boolean;
+  onExpandedChange: (open: boolean) => void;
 }) {
   const clip = primaryClip(beat);
   const [playing, setPlaying] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [preparing, setPreparing] = useState(false);
+  const [hint, setHint] = useState("");
+  const [status, setStatus] = useState<"idle" | "searching" | "updated" | "empty">(
+    "idle"
+  );
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const wasRegenerating = useRef(false);
   const beatLabel = beatFileIndex(beat.index);
+  const canRegenerate = Boolean(onRegenerate);
+  const isWorkspace = variant === "workspace";
+
+  useEffect(() => {
+    if (regenerating) {
+      wasRegenerating.current = true;
+      setStatus("searching");
+      return;
+    }
+    if (wasRegenerating.current) {
+      wasRegenerating.current = false;
+      if (!primaryClip(beat)) {
+        setStatus("empty");
+        return;
+      }
+      setStatus("updated");
+      const timer = window.setTimeout(() => setStatus("idle"), 1800);
+      return () => window.clearTimeout(timer);
+    }
+  }, [regenerating, beat]);
+
+  useEffect(() => {
+    if (!expanded) {
+      setPlaying(false);
+      setHint("");
+      if (!regenerating) setStatus("idle");
+    }
+  }, [expanded, regenerating]);
 
   const handleDownload = async () => {
     if (!clip?.previewUrl?.trim() || downloading) return;
@@ -90,139 +137,406 @@ function ShotRow({
     }
   };
 
+  const submitRegenerate = () => {
+    if (!onRegenerate || regenerating) return;
+    const userContext = hint.trim();
+    onRegenerate(
+      beat,
+      userContext ? { userContext } : undefined
+    );
+  };
+
+  const requestFullscreen = () => {
+    const el = videoRef.current;
+    if (!el) return;
+    if (!playing) {
+      setPlaying(true);
+      window.setTimeout(() => {
+        void videoRef.current?.requestFullscreen?.().catch(() => undefined);
+      }, 60);
+      return;
+    }
+    void el.requestFullscreen?.().catch(() => undefined);
+  };
+
+  const iconBtn = cn(
+    "inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors disabled:opacity-40",
+    isWorkspace
+      ? "text-[#8f879f] hover:bg-white/5 hover:text-white"
+      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+  );
+
+  if (expanded && canRegenerate) {
+    return (
+      <div
+        className={cn(
+          "relative rounded-xl border p-3",
+          isWorkspace
+            ? "border-violet-500/45 bg-[#221d30]"
+            : "border-primary/40 bg-card"
+        )}
+      >
+        <button
+          type="button"
+          className={cn(iconBtn, "absolute right-2 top-2 z-10")}
+          onClick={() => onExpandedChange(false)}
+          aria-label={`Close beat ${beatLabel}`}
+          disabled={regenerating}
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+
+        <div className="grid gap-3.5 sm:grid-cols-[148px_minmax(0,1fr)]">
+          <div
+            className={cn(
+              "relative aspect-[9/14] max-h-[220px] overflow-hidden rounded-[10px] border",
+              isWorkspace ? "border-[#332e45] bg-[#15121c]" : "border bg-muted"
+            )}
+          >
+            {regenerating ? (
+              <div className="absolute inset-0 z-10 grid place-items-center bg-black/45">
+                <Loader2 className="h-5 w-5 animate-spin text-white" />
+              </div>
+            ) : null}
+
+            {playing && clip?.previewUrl ? (
+              <video
+                ref={videoRef}
+                key={clip.previewUrl}
+                src={clip.previewUrl}
+                className="h-full w-full object-cover"
+                autoPlay
+                playsInline
+                onEnded={() => setPlaying(false)}
+                onError={() => setPlaying(false)}
+              />
+            ) : clip?.thumbnailUrl || clip?.previewUrl ? (
+              <>
+                {clip.thumbnailUrl ? (
+                  <img
+                    src={clip.thumbnailUrl}
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="h-full w-full bg-black/40" />
+                )}
+                {clip.previewUrl ? (
+                  <button
+                    type="button"
+                    className="absolute inset-0 grid place-items-center"
+                    onClick={() => setPlaying(true)}
+                    aria-label={`Play beat ${beatLabel}`}
+                    disabled={regenerating}
+                  >
+                    <span className="grid h-10 w-10 place-items-center rounded-full bg-white/95 text-black shadow-lg">
+                      <Play className="h-4 w-4 fill-current" />
+                    </span>
+                  </button>
+                ) : null}
+              </>
+            ) : (
+              <div
+                className={cn(
+                  "grid h-full place-items-center text-xs font-medium",
+                  isWorkspace ? "text-[#8f879f]" : "text-muted-foreground"
+                )}
+              >
+                No clip
+              </div>
+            )}
+
+            {clip?.previewUrl ? (
+              <button
+                type="button"
+                className="absolute bottom-2 right-2 z-20 grid h-7 w-7 place-items-center rounded-md bg-black/55 text-white hover:bg-black/75"
+                onClick={requestFullscreen}
+                aria-label={`Fullscreen beat ${beatLabel}`}
+                disabled={regenerating}
+              >
+                <Expand className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
+          </div>
+
+          <div className="flex min-w-0 flex-col gap-2.5 pr-7">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p
+                  className={cn(
+                    "text-[13.5px] font-semibold leading-snug tracking-tight",
+                    isWorkspace ? "text-white" : "text-foreground"
+                  )}
+                >
+                  {beat.scriptText}
+                </p>
+                <p
+                  className={cn(
+                    "mt-1 line-clamp-2 text-xs leading-snug",
+                    isWorkspace ? "text-[#8f879f]" : "text-muted-foreground"
+                  )}
+                >
+                  {regenerating
+                    ? "Finding a better clip…"
+                    : beat.visualSummary ||
+                      (!clip ? "No stock match for this moment." : "")}
+                </p>
+              </div>
+              {clip?.previewUrl ? (
+                <button
+                  type="button"
+                  className={iconBtn}
+                  onClick={() => void handleDownload()}
+                  disabled={downloading || regenerating}
+                  aria-label={
+                    preparing
+                      ? `Preparing download for beat ${beatLabel}`
+                      : `Download beat ${beatLabel}`
+                  }
+                >
+                  {downloading ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5" />
+                  )}
+                </button>
+              ) : null}
+            </div>
+
+            <div className="mt-auto grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+              <input
+                type="text"
+                maxLength={120}
+                value={hint}
+                onChange={(e) => setHint(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    submitRegenerate();
+                  }
+                }}
+                disabled={regenerating}
+                placeholder="Describe a better visual…"
+                className={cn(
+                  "h-9 min-w-0 rounded-lg border px-3 text-[13px] outline-none focus:ring-2 disabled:opacity-60",
+                  isWorkspace
+                    ? "border-[#332e45] bg-[#121018] text-white placeholder:text-[#6d667a] focus:border-violet-500/70 focus:ring-violet-500/15"
+                    : "border-input bg-background text-foreground placeholder:text-muted-foreground focus:ring-ring/30"
+                )}
+              />
+              <button
+                type="button"
+                onClick={submitRegenerate}
+                disabled={regenerating}
+                className={cn(
+                  "inline-flex h-9 items-center justify-center rounded-lg px-3 text-xs font-semibold text-white disabled:opacity-65",
+                  isWorkspace
+                    ? "bg-violet-600 hover:bg-violet-500"
+                    : "bg-primary hover:bg-primary/90"
+                )}
+              >
+                {regenerating ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  "Regenerate"
+                )}
+              </button>
+            </div>
+
+            <p
+              className={cn(
+                "min-h-[16px] text-[11px]",
+                status === "empty" || (!clip && !regenerating)
+                  ? isWorkspace
+                    ? "text-red-400"
+                    : "text-destructive"
+                  : status === "updated"
+                    ? isWorkspace
+                      ? "text-emerald-300"
+                      : "text-emerald-600"
+                    : isWorkspace
+                      ? "text-[#8f879f]"
+                      : "text-muted-foreground"
+              )}
+            >
+              {status === "searching"
+                ? "Searching stock…"
+                : status === "updated"
+                  ? "Updated"
+                  : status === "empty" || !clip
+                    ? "Try a shorter visual hint."
+                    : preparing
+                      ? "Preparing your download…"
+                      : "\u00a0"}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="flex gap-3 rounded-lg border bg-card p-2.5 sm:p-3">
-      <div className="relative h-20 w-14 shrink-0 overflow-hidden rounded-md bg-muted sm:h-24 sm:w-16">
-        {playing && clip?.previewUrl ? (
-          <video
-            src={clip.previewUrl}
-            className="h-full w-full object-cover"
-            controls
-            autoPlay
-            playsInline
-            onEnded={() => setPlaying(false)}
-            onError={() => setPlaying(false)}
-          />
-        ) : clip?.thumbnailUrl ? (
-          <>
+    <div
+      className={cn(
+        "rounded-xl border p-2",
+        isWorkspace
+          ? "border-[#332e45] bg-[#1c1826] hover:border-[#3d3654]"
+          : "border bg-card",
+        canRegenerate ? "cursor-pointer" : null
+      )}
+      onClick={() => {
+        if (canRegenerate) onExpandedChange(true);
+      }}
+    >
+      <div className="grid grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-2.5">
+        <div
+          className={cn(
+            "relative h-[66px] w-11 shrink-0 overflow-hidden rounded-md",
+            isWorkspace ? "bg-[#15121c]" : "bg-muted"
+          )}
+        >
+          {clip?.thumbnailUrl ? (
             <img
               src={clip.thumbnailUrl}
               alt=""
               className="h-full w-full object-cover"
               loading="lazy"
             />
-            {clip.previewUrl ? (
-              <button
-                type="button"
-                className="absolute inset-0 flex items-center justify-center bg-black/25 transition-colors hover:bg-black/40"
-                onClick={() => setPlaying(true)}
-                aria-label={`Play beat ${beatLabel}`}
-              >
-                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-background/90">
-                  <Play className="h-3 w-3 text-foreground" />
-                </span>
-              </button>
-            ) : null}
-          </>
-        ) : (
-          <div className="flex h-full w-full items-center justify-center">
-            <Clapperboard className="h-4 w-4 text-muted-foreground" />
-          </div>
-        )}
-        {clip && clip.durationSeconds > 0 ? (
-          <span className="absolute bottom-1 right-1 rounded bg-black/70 px-1 py-0.5 text-[10px] font-medium text-white">
-            {clip.durationSeconds}s
-          </span>
-        ) : null}
-      </div>
+          ) : (
+            <div className="grid h-full place-items-center">
+              <Clapperboard
+                className={cn(
+                  "h-3.5 w-3.5",
+                  isWorkspace ? "text-[#8f879f]" : "text-muted-foreground"
+                )}
+              />
+            </div>
+          )}
+          {clip?.previewUrl ? (
+            <span className="absolute inset-0 grid place-items-center bg-black/20">
+              <span className="grid h-[18px] w-[18px] place-items-center rounded-full bg-white/90 text-black">
+                <Play className="h-2.5 w-2.5 fill-current" />
+              </span>
+            </span>
+          ) : null}
+          {clip && clip.durationSeconds > 0 ? (
+            <span className="absolute bottom-0.5 right-0.5 rounded bg-black/70 px-1 py-px text-[9px] font-semibold text-white">
+              {clip.durationSeconds}s
+            </span>
+          ) : null}
+        </div>
 
-      <div className="min-w-0 flex-1 space-y-1">
-        <div className="flex items-start justify-between gap-2">
-          <p className="text-xs font-semibold tabular-nums text-muted-foreground">
+        <div className="min-w-0">
+          <p
+            className={cn(
+              "mb-0.5 text-[10px] font-semibold tabular-nums",
+              isWorkspace ? "text-[#8f879f]" : "text-muted-foreground"
+            )}
+          >
             {beatLabel}
           </p>
-          <div className="flex shrink-0 items-center gap-0.5">
-            {clip?.previewUrl ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => void handleDownload()}
-                disabled={downloading || regenerating}
-                aria-label={
-                  preparing
-                    ? `Preparing download for beat ${beatLabel}`
-                    : `Download beat ${beatLabel}`
-                }
-              >
-                {downloading ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <Download className="h-3.5 w-3.5" />
-                )}
-              </Button>
-            ) : null}
-            {onRegenerate ? (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7"
-                onClick={() => onRegenerate(beat)}
-                disabled={regenerating}
-                aria-label={`Regenerate beat ${beatLabel}`}
-              >
-                {regenerating ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-3.5 w-3.5" />
-                )}
-              </Button>
-            ) : null}
-          </div>
+          <p
+            className={cn(
+              "truncate text-[13px] font-semibold leading-snug tracking-tight",
+              isWorkspace ? "text-white" : "text-foreground"
+            )}
+          >
+            {beat.scriptText}
+          </p>
+          {beat.visualSummary ? (
+            <p
+              className={cn(
+                "truncate text-xs leading-snug",
+                isWorkspace ? "text-[#8f879f]" : "text-muted-foreground"
+              )}
+            >
+              {beat.visualSummary}
+            </p>
+          ) : null}
         </div>
-        <p className="text-sm leading-snug text-foreground">{beat.scriptText}</p>
-        {beat.visualSummary ? (
-          <p className="text-xs text-muted-foreground line-clamp-2">
-            {beat.visualSummary}
-          </p>
-        ) : null}
-        {preparing ? (
-          <p className="text-xs text-muted-foreground">
-            Preparing your download…
-          </p>
-        ) : null}
-        {!clip ? (
-          <p className="text-xs text-muted-foreground">
-            No matching clip. Try regenerating this beat.
-          </p>
-        ) : null}
+
+        <div
+          className="flex shrink-0 items-center gap-0.5"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {clip?.previewUrl ? (
+            <button
+              type="button"
+              className={iconBtn}
+              onClick={() => void handleDownload()}
+              disabled={downloading || regenerating}
+              aria-label={
+                preparing
+                  ? `Preparing download for beat ${beatLabel}`
+                  : `Download beat ${beatLabel}`
+              }
+            >
+              {downloading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Download className="h-3.5 w-3.5" />
+              )}
+            </button>
+          ) : null}
+          {onRegenerate ? (
+            <button
+              type="button"
+              className={iconBtn}
+              onClick={() => onExpandedChange(true)}
+              disabled={regenerating}
+              aria-label={`Open regenerate for beat ${beatLabel}`}
+            >
+              {regenerating ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5" />
+              )}
+            </button>
+          ) : null}
+        </div>
       </div>
     </div>
   );
 }
 
-/** Presentational shot-list of beats + clips (shared by library dialog and public demo). */
+/** Presentational shot-list of beats + clips (shared by library dialog and remake workspace). */
 export function BrollBeatsView({
   result,
   regeneratingBeatIndex = null,
   onRegenerateBeat,
+  variant = "default",
 }: {
   result: SuggestBrollResult;
   regeneratingBeatIndex?: number | null;
-  /** When set, shows per-beat regenerate (authenticated panel only). */
-  onRegenerateBeat?: (beat: BrollBeat) => void;
+  /** When set, shows expandable per-beat regenerate. */
+  onRegenerateBeat?: (
+    beat: BrollBeat,
+    options?: RegenerateBrollBeatOptions
+  ) => void;
+  variant?: "default" | "workspace";
 }) {
   const [zipping, setZipping] = useState(false);
   const [preparingZip, setPreparingZip] = useState(false);
+  const [expandedBeatIndex, setExpandedBeatIndex] = useState<number | null>(
+    null
+  );
   const requestDownload = trpc.watermarkJobs.requestDownload.useMutation();
   const utils = trpc.useUtils();
+  const isWorkspace = variant === "workspace";
 
   const watermarkApi: WatermarkJobsApi = {
     requestDownload: (input) => requestDownload.mutateAsync(input),
     getStatus: (input) => utils.client.watermarkJobs.getStatus.query(input),
   };
+
+  useEffect(() => {
+    if (
+      regeneratingBeatIndex != null &&
+      expandedBeatIndex !== regeneratingBeatIndex
+    ) {
+      setExpandedBeatIndex(regeneratingBeatIndex);
+    }
+  }, [regeneratingBeatIndex, expandedBeatIndex]);
 
   const handleDownloadAll = async () => {
     if (zipping) return;
@@ -289,9 +603,14 @@ export function BrollBeatsView({
   );
 
   return (
-    <div className="space-y-3">
+    <div className={cn("space-y-1.5", isWorkspace ? "space-y-1.5" : "space-y-3")}>
       {result.beats.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
+        <p
+          className={cn(
+            "text-sm",
+            isWorkspace ? "text-[#8f879f]" : "text-muted-foreground"
+          )}
+        >
           No beats were returned. Try a longer script.
         </p>
       ) : (
@@ -302,6 +621,11 @@ export function BrollBeatsView({
             regenerating={regeneratingBeatIndex === beat.index}
             onRegenerate={onRegenerateBeat}
             watermarkApi={watermarkApi}
+            variant={variant}
+            expanded={expandedBeatIndex === beat.index}
+            onExpandedChange={(open) =>
+              setExpandedBeatIndex(open ? beat.index : null)
+            }
           />
         ))
       )}
@@ -311,7 +635,12 @@ export function BrollBeatsView({
             type="button"
             variant="outline"
             size="sm"
-            className="w-full gap-1.5 sm:w-auto"
+            className={cn(
+              "w-full gap-1.5 sm:w-auto",
+              isWorkspace
+                ? "border-[#332e45] bg-transparent text-[#aaa3b8] hover:bg-white/5 hover:text-white"
+                : null
+            )}
             onClick={() => void handleDownloadAll()}
             disabled={zipping}
           >
@@ -433,7 +762,10 @@ export function BrollResultsPanel({
     });
   };
 
-  const handleRegenerateBeat = (beat: BrollBeat) => {
+  const handleRegenerateBeat = (
+    beat: BrollBeat,
+    options?: RegenerateBrollBeatOptions
+  ) => {
     if (regenerateBeatMutation.isPending) return;
     const searchQuery = beat.searchQuery.trim() || beat.visualSummary.trim();
     if (!searchQuery) {
@@ -444,6 +776,7 @@ export function BrollResultsPanel({
       .flatMap((c) => [c.previewUrl, c.sourceUrl])
       .map((u) => u.trim())
       .filter(Boolean);
+    const userContext = options?.userContext?.trim();
     setRegeneratingBeatIndex(beat.index);
     regeneratingBeatIndexRef.current = beat.index;
     regenerateBeatMutation.mutate({
@@ -455,6 +788,7 @@ export function BrollResultsPanel({
       clipsPerBeat: 1,
       scriptId,
       beatIndex: beat.index,
+      userContext: userContext || undefined,
     });
   };
 

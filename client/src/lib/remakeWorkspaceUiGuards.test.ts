@@ -23,6 +23,17 @@ const chainHookSource = readFileSync(
   "utf8"
 );
 
+describe("Remake workspace persistence + dismiss contract", () => {
+  it("hydrates saved B-roll on open and does not dismiss on outside click", () => {
+    expect(workspaceSource).toContain("getBrollGeneration");
+    expect(workspaceSource).toContain("brollHydratedScriptId");
+    expect(workspaceSource).toContain("onPointerDownOutside");
+    expect(workspaceSource).toContain("onInteractOutside");
+    expect(workspaceSource).toContain("onEscapeKeyDown");
+    expect(workspaceSource).toContain("event.preventDefault()");
+  });
+});
+
 describe("Remake workspace agent UI cleanup", () => {
   it("does not render the four large left-side quick-action boxes", () => {
     expect(workspaceSource).not.toMatch(/quickActions/);
