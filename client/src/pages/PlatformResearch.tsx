@@ -45,6 +45,7 @@ import {
 } from "@/lib/libraryRemakeChainCore";
 import { useLibraryRemakeChain } from "@/hooks/useLibraryRemakeChain";
 import { buildLibraryOneClickRemake } from "@/lib/oneClickRemakeAction";
+import { buildRemakeIntentMedia } from "@/lib/remakeIntent";
 import type { OneClickRemakeAction } from "@/components/ReelActionButtons";
 import type {
   PlatformResearchConfig,
@@ -708,6 +709,13 @@ export default function PlatformResearch({
       batchEntry,
       hookState: getRemakeState(libraryRemakeKey(librarySource)),
       librarySource,
+      media: buildRemakeIntentMedia({
+        thumbnailUrl: video.thumbnailUrl,
+        videoUrl: config.getVideoUrl(video),
+        platform: config.platform,
+        videoPageUrl: video.videoPageUrl,
+        durationSec: video.durationSec,
+      }),
       startRemake,
       retryRemake,
       startInspirationSave,

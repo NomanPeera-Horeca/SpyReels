@@ -86,6 +86,7 @@ import {
   buildLibraryOneClickRemake,
   reelClassificationFromRow,
 } from "@/lib/oneClickRemakeAction";
+import { buildRemakeIntentMedia } from "@/lib/remakeIntent";
 import { ONBOARDING_NICHES_BY_SLUG } from "@/data/onboardingNiches";
 import { V13ReelClassificationBadges } from "@/components/V13ReelClassificationBadges";
 import { resolveFromParamFallback } from "@shared/appNavigation";
@@ -2524,6 +2525,15 @@ export default function Dashboard() {
                         batchEntry,
                         hookState: getRemakeState(libraryRemakeKey(librarySource)),
                         librarySource,
+                        media: buildRemakeIntentMedia({
+                          thumbnailUrl: reel.thumbnailUrl,
+                          videoUrl: reel.videoUrl,
+                          shortcode: reel.shortcode,
+                          reelId: reel.id,
+                          platform: "instagram",
+                          reelUrl: reel.reelUrl,
+                          duration: reel.duration,
+                        }),
                         startRemake,
                         retryRemake,
                         startInspirationSave,
@@ -2755,6 +2765,15 @@ export default function Dashboard() {
                           batchEntry,
                           hookState: getRemakeState(libraryRemakeKey(librarySource)),
                           librarySource,
+                          media: buildRemakeIntentMedia({
+                            thumbnailUrl: reel.thumbnailUrl,
+                            videoUrl: reel.videoUrl,
+                            shortcode: reel.shortcode,
+                            reelId: reel.id,
+                            platform: "instagram",
+                            reelUrl: reel.reelUrl,
+                            duration: reel.duration,
+                          }),
                           startRemake,
                           retryRemake,
                           startInspirationSave,

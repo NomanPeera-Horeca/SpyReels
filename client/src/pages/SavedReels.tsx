@@ -39,6 +39,7 @@ import {
   buildLibraryOneClickRemake,
   reelClassificationFromRow,
 } from "@/lib/oneClickRemakeAction";
+import { buildRemakeIntentMedia } from "@/lib/remakeIntent";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { BrandCoachBadge } from "@/components/BrandCoachBadge";
 import { useBrandCoachBatchPrefetched } from "@/hooks/useBrandCoachBatchPrefetched";
@@ -818,6 +819,15 @@ export default function SavedReels() {
                             batchEntry,
                             hookState: getRemakeState(libraryRemakeKey(librarySource)),
                             librarySource,
+                            media: buildRemakeIntentMedia({
+                              thumbnailUrl: reel.thumbnailUrl,
+                              videoUrl: reel.videoUrl,
+                              shortcode: reel.shortcode,
+                              reelId: reel.id,
+                              platform: "instagram",
+                              reelUrl: reel.reelUrl,
+                              duration: reel.duration,
+                            }),
                             startRemake,
                             retryRemake,
                             startInspirationSave,
@@ -1045,6 +1055,15 @@ export default function SavedReels() {
                             batchEntry,
                             hookState: getRemakeState(libraryRemakeKey(librarySource)),
                             librarySource,
+                            media: buildRemakeIntentMedia({
+                              thumbnailUrl: reel.thumbnailUrl,
+                              videoUrl: reel.videoUrl,
+                              shortcode: reel.shortcode,
+                              reelId: reel.id,
+                              platform: "instagram",
+                              reelUrl: reel.reelUrl,
+                              duration: reel.duration,
+                            }),
                             startRemake,
                             retryRemake,
                             startInspirationSave,

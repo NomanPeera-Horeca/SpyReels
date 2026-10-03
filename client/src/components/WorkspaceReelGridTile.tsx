@@ -6,7 +6,6 @@ import { ReelSourcePlatformMark } from "@/components/ReelSourcePlatformMark";
 import { YouTubeInlineEmbed } from "@/components/YouTubeInlineEmbed";
 import { cn } from "@/lib/utils";
 import { formatWorkspaceReelDuration } from "@/lib/workspaceReelGridLayout";
-import { setPendingRemakeIntentMedia } from "@/lib/remakeIntent";
 import { resolveYouTubeVideoId } from "@/lib/youtubeVideoId";
 
 export type WorkspaceReelGridTileProps = {
@@ -113,19 +112,6 @@ export function WorkspaceReelGridTile({
       return;
     }
     onMediaClick?.();
-  };
-
-  const primeRemakeSourceMedia = () => {
-    setPendingRemakeIntentMedia({
-      thumbnailUrl: thumbnailUrl ?? null,
-      videoUrl: videoUrl ?? null,
-      shortcode: shortcode ?? null,
-      reelId: reelId ?? null,
-      platform: mediaPlatform,
-      videoPageUrl: reelUrl ?? null,
-      originalUrl: reelUrl ?? null,
-      durationSec: duration ?? null,
-    });
   };
 
   return (
@@ -286,10 +272,6 @@ export function WorkspaceReelGridTile({
             "relative z-20 mt-auto shrink-0",
             quiet ? "min-h-9 pt-1" : "min-h-10 pt-2"
           )}
-          onPointerDown={(e) => {
-            e.stopPropagation();
-            primeRemakeSourceMedia();
-          }}
           onClick={(e) => e.stopPropagation()}
         >
           {actions}

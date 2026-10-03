@@ -39,6 +39,7 @@ import {
 } from "@/lib/libraryRemakeChainCore";
 import { useLibraryRemakeChain } from "@/hooks/useLibraryRemakeChain";
 import { ingestUrlAndStartLibraryRemake } from "@/lib/ingestUrlAndStartLibraryRemake";
+import { buildRemakeIntentMedia } from "@/lib/remakeIntent";
 import { DISCOVERY_REELS_PER_PAGE } from "@shared/const";
 
 type DiscoveryResultPayload =
@@ -1049,6 +1050,13 @@ export default function Discovery() {
             addByUrl: (url) => addByUrlMutation.mutateAsync({ url }),
             fetchCollectedList: () => trpcUtils.collected.list.fetch(),
             startRemake,
+            media: buildRemakeIntentMedia({
+              thumbnailUrl: reel.thumbnailUrl,
+              videoUrl: reel.videoUrl,
+              shortcode: reel.shortcode,
+              reelUrl: reel.reelUrl,
+              platform: "instagram",
+            }),
           }
         );
         shortcodeToCollectedIdRef.current[reel.shortcode] = collectedReelId;
@@ -1073,7 +1081,15 @@ export default function Discovery() {
         return;
       }
       setRemakeWorkspaceShortcode(reel.shortcode);
-      retryRemake(source);
+      retryRemake(source, {
+        media: buildRemakeIntentMedia({
+          thumbnailUrl: reel.thumbnailUrl,
+          videoUrl: reel.videoUrl,
+          shortcode: reel.shortcode,
+          reelUrl: reel.reelUrl,
+          platform: "instagram",
+        }),
+      });
     },
     [collectedSourceFor, handleRemakeStart, retryRemake]
   );

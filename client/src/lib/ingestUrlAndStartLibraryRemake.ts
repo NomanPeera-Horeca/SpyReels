@@ -1,4 +1,6 @@
+import type { StartRemakeOptions } from "@/hooks/useLibraryRemakeChain";
 import { libraryRemakeKey, type LibraryRemakeSource } from "@/lib/libraryRemakeChainCore";
+import type { RemakeIntentMedia } from "@/lib/remakeIntent";
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -9,7 +11,9 @@ export type IngestCollectedRemakeDeps = {
   fetchCollectedList: () => Promise<
     Array<{ id: number; status: string; errorMessage?: string | null }>
   >;
-  startRemake: (source: LibraryRemakeSource) => void;
+  startRemake: (source: LibraryRemakeSource, opts?: StartRemakeOptions) => void;
+  /** Source preview captured before ingest so RemakeIntentDialog still has media after polling. */
+  media?: RemakeIntentMedia | null;
   maxAttempts?: number;
   pollMs?: number;
 };
@@ -59,6 +63,6 @@ export async function ingestUrlAndStartLibraryRemake(
     collectedReelId: added.id,
   };
   const remakeKey = libraryRemakeKey(source);
-  deps.startRemake(source);
+  deps.startRemake(source, deps.media ? { media: deps.media } : undefined);
   return { collectedReelId: added.id, remakeKey };
 }

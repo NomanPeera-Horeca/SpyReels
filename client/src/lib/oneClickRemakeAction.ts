@@ -7,6 +7,7 @@ import {
   type LibraryRemakeSource,
   type LibraryRemakeState,
 } from "@/lib/libraryRemakeChainCore";
+import type { RemakeIntentMedia } from "@/lib/remakeIntent";
 import type { ReelClassificationLike } from "@/lib/remakeability";
 
 type RecreateBatchEntry = { latestScriptId: number; status: string };
@@ -48,6 +49,7 @@ export function buildLibraryOneClickRemake(args: {
   batchEntry: RecreateBatchEntry | undefined;
   hookState: LibraryRemakeState;
   librarySource: LibraryRemakeSource;
+  media?: RemakeIntentMedia | null;
   startRemake: (source: LibraryRemakeSource, opts?: StartRemakeOptions) => void;
   retryRemake: (source: LibraryRemakeSource, opts?: StartRemakeOptions) => void;
   startInspirationSave: (
@@ -59,6 +61,7 @@ export function buildLibraryOneClickRemake(args: {
   const startOpts: StartRemakeOptions = {
     alreadyTranscribed: args.alreadyTranscribed,
     classification: args.classification,
+    media: args.media ?? null,
     ...(args.librarySource.source === "user" && args.jobId != null
       ? { jobId: args.jobId }
       : {}),

@@ -62,7 +62,12 @@ describe("Viral Posts remake path parity", () => {
     expect(viralLegacySource).toContain("useLibraryRemakeChain");
     expect(viralLegacySource).toContain("startRemake");
     expect(ingestSource).toContain('source: "collected"');
-    expect(ingestSource).toContain("deps.startRemake(source)");
+    expect(ingestSource).toContain("deps.startRemake(source,");
+    expect(ingestSource).toContain("media:");
+    expect(viralLegacySource).toContain("buildRemakeIntentMedia");
+    expect(chainHookSource).toContain("media: intentPrompt?.media ?? null");
+    expect(chainHookSource).not.toContain("getPendingRemakeIntentMedia");
+    expect(chainHookSource).not.toContain("setPendingRemakeIntentMedia");
   });
 
   it("Collected Reels still uses the same library remake chain", () => {

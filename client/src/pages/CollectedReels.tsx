@@ -52,6 +52,7 @@ import {
   buildLibraryOneClickRemake,
   reelClassificationFromRow,
 } from "@/lib/oneClickRemakeAction";
+import { buildRemakeIntentMedia } from "@/lib/remakeIntent";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import {
   InlineWorkflow,
@@ -792,6 +793,15 @@ export default function CollectedReels() {
         : undefined;
     const alreadyTranscribed = mappedReelId != null && hasTranscription && !isNoSpeech;
     const resolvedOpenReelId = mappedReelId ?? hookState.reelId ?? null;
+    const remakeMedia = buildRemakeIntentMedia({
+      thumbnailUrl: reel.thumbnailUrl,
+      videoUrl: reel.videoUrl,
+      shortcode: reel.shortcode,
+      reelId: mappedReelId,
+      platform: collectedPlatform(reel),
+      reelUrl: reel.reelUrl,
+      duration: reel.duration,
+    });
     const oneClickRemake = buildLibraryOneClickRemake({
       openScriptReelId: resolvedOpenReelId,
       isNoSpeech,
@@ -803,6 +813,7 @@ export default function CollectedReels() {
       batchEntry,
       hookState,
       librarySource,
+      media: remakeMedia,
       startRemake,
       retryRemake,
       startInspirationSave,
@@ -1344,6 +1355,15 @@ export default function CollectedReels() {
                   batchEntry,
                   hookState,
                   librarySource,
+                  media: buildRemakeIntentMedia({
+                    thumbnailUrl: reel.thumbnailUrl,
+                    videoUrl: reel.videoUrl,
+                    shortcode: reel.shortcode,
+                    reelId: mappedReelId,
+                    platform: collectedPlatform(reel),
+                    reelUrl: reel.reelUrl,
+                    duration: reel.duration,
+                  }),
                   startRemake,
                   retryRemake,
                   startInspirationSave,
