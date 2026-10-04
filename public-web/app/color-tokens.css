@@ -99,4 +99,29 @@
   --sr-color-platform-tiktok-accent: #25f4ee;
   --sr-color-platform-tiktok-secondary: #fe2c55;
   --sr-color-platform-youtube-accent: #ff0000;
+
+  /*
+   * Marketing layout (Figma Page 03 Spacing + Layout, locked).
+   * Semantic names mirror Figma: layout/page/gutter/desktop, etc.
+   * Phase 1: define only. Consumers adopt in later phases.
+   */
+  --sr-layout-page-gutter-desktop: 64px; /* layout/page/gutter/desktop */
+  --sr-layout-page-gutter-tablet: 32px; /* layout/page/gutter/tablet */
+  --sr-layout-page-gutter-mobile: 20px; /* layout/page/gutter/mobile */
+  --sr-layout-section-gap: 96px; /* layout/section/gap */
+  --sr-layout-section-compact-gap: 64px; /* layout/section/compact-gap */
+  --sr-layout-content-gap: 32px; /* layout/content/gap */
+  --sr-layout-card-gap: 24px; /* layout/card/gap */
+  --sr-layout-card-padding: 24px; /* layout/card/padding */
+  --sr-layout-panel-padding: 32px; /* layout/panel/padding */
+  --sr-layout-control-gap: 12px; /* layout/control/gap */
+  --sr-layout-inline-gap: 8px; /* layout/inline/gap */
+  --sr-layout-stack-sm: 12px; /* layout/stack/sm */
+  --sr-layout-stack-md: 24px; /* layout/stack/md */
+  --sr-layout-stack-lg: 40px; /* layout/stack/lg */
+  --sr-layout-grid-column-gap: 24px; /* layout/grid/column-gap */
+  --sr-layout-grid-row-gap: 32px; /* layout/grid/row-gap */
+  --sr-layout-container-max-width: 1200px; /* layout/container/max-width */
+  --sr-layout-content-reading-width: 720px; /* layout/content/reading-width */
+  --sr-layout-content-form-width: 560px; /* layout/content/form-width */
 }
