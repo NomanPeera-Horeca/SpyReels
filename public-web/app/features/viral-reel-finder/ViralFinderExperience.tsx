@@ -348,7 +348,7 @@ export default function ViralFinderExperience() {
             className={styles.finderInput}
             value={input}
             onChange={(event) => setInput(event.target.value)}
-            placeholder="@username or instagram.com/username"
+            placeholder="@username"
             autoComplete="off"
             aria-invalid={inputInvalid}
             aria-describedby={profileError && !profileLoading ? "viral-finder-error" : undefined}
