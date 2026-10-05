@@ -124,4 +124,19 @@
   --sr-layout-container-max-width: 1200px; /* layout/container/max-width */
   --sr-layout-content-reading-width: 720px; /* layout/content/reading-width */
   --sr-layout-content-form-width: 560px; /* layout/content/form-width */
+
+  /*
+   * Marketing radius, borders, elevation (Figma Page 04, locked).
+   * Phase 1: define only. Phase 2+ adopt via clear semantic remaps.
+   */
+  --sr-radius-control: 10px; /* radius/control */
+  --sr-radius-input: 10px; /* radius/input */
+  --sr-radius-card: 16px; /* radius/card */
+  --sr-radius-panel: 20px; /* radius/panel */
+  --sr-radius-menu: 14px; /* radius/menu */
+  --sr-radius-modal: 24px; /* radius/modal */
+  --sr-radius-full: 9999px; /* radius/full (pill, badge) */
+  --sr-border-width-none: 0px; /* border/width/none */
+  --sr-border-width-default: 1px; /* border/width/default */
+  --sr-border-width-strong: 2px; /* border/width/strong */
 }

@@ -100,7 +100,7 @@
 .finderForm {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--sr-layout-control-gap);
   padding: 8px;
   border: 1px solid var(--sr-color-border-default);
   border-radius: 18px;
@@ -139,7 +139,7 @@
 .secondaryButton,
 .primaryLink {
   border: 0;
-  border-radius: 12px;
+  border-radius: var(--sr-radius-control);
   font: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -190,7 +190,7 @@
   align-items: center;
   padding: 14px;
   border: 1px solid var(--sr-brand-purple-200);
-  border-radius: 16px;
+  border-radius: var(--sr-radius-card);
   background: var(--sr-color-surface-default);
   color: inherit;
   text-align: left;
@@ -446,7 +446,7 @@
 .previewCard {
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 18px;
+  border-radius: var(--sr-radius-card);
   background: rgba(255, 255, 255, 0.025);
 }
 
@@ -535,11 +535,11 @@
 .nextStepPanel {
   display: grid;
   grid-template-columns: 220px 1fr;
-  gap: 28px;
+  gap: var(--sr-layout-content-gap);
   margin: 24px 0 0;
-  padding: 22px;
+  padding: var(--sr-layout-card-padding);
   border: 1px solid rgba(167, 139, 250, 0.18);
-  border-radius: 22px;
+  border-radius: var(--sr-radius-panel);
   background: #17151f;
   color: #f7f7fb;
 }
@@ -586,7 +586,7 @@
 .nextStepChips {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--sr-layout-inline-gap);
   margin: 18px 0;
 }
 
@@ -608,7 +608,7 @@
   grid-template-columns: 0.9fr 1.1fr;
   gap: 48px;
   align-items: center;
-  padding: 88px 0;
+  padding: var(--sr-layout-section-gap) 0;
 }
 
 .sectionCopy h2 {
@@ -630,7 +630,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 9px;
+  gap: var(--sr-layout-control-gap);
   margin-top: 22px;
   color: #c7c7d0;
   font-size: 13px;
@@ -662,7 +662,7 @@
 }
 
 .simpleSteps {
-  padding: 88px 0;
+  padding: var(--sr-layout-section-gap) 0;
 }
 
 .simpleSteps .sectionCopy {
@@ -672,14 +672,14 @@
 .stepRow {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  gap: var(--sr-layout-card-gap);
   margin-top: 30px;
 }
 
 .stepRow article {
-  padding: 22px;
+  padding: var(--sr-layout-card-padding);
   border: 1px solid var(--sr-color-border-default);
-  border-radius: 18px;
+  border-radius: var(--sr-radius-card);
   background: var(--sr-color-surface-default);
 }
 
@@ -804,7 +804,7 @@
 
   .visualSection,
   .simpleSteps {
-    padding: 64px 0;
+    padding: var(--sr-layout-section-compact-gap) 0;
   }
 
   .motionStage {

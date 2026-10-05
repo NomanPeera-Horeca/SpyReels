@@ -1,7 +1,7 @@
 .section {
   width: min(1120px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 56px 0;
+  padding: var(--sr-layout-section-compact-gap) 0;
   border-top: 1px solid var(--sr-color-border-default);
 }
 
@@ -29,7 +29,7 @@
 .links {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--sr-layout-inline-gap);
   margin-top: 18px;
 }
 
@@ -50,7 +50,7 @@
 
 @media (max-width: 640px) {
   .section {
-    padding: 40px 0;
+    padding: var(--sr-layout-section-compact-gap) 0;
   }
 
   .links {
