@@ -29,6 +29,10 @@
       calc(100% - 2 * var(--sr-layout-page-gutter-mobile))
     );
   }
+
+  .howItWorksAnchor {
+    scroll-margin-top: calc(max(12px, env(safe-area-inset-top, 0px)) + 60px + 24px);
+  }
 }
 
 .hero {

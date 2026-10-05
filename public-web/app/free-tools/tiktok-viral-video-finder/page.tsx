@@ -81,7 +81,7 @@ export default function TikTokViralVideoFinderPage() {
       <section className={styles.motionStage} aria-label="See the SpyReels workflow"><div className={styles.motionFrame}><MarketingFinderMotion /></div></section>
       <MarketingPlatformStrip />
       <MarketingHowItWorksSection
-        className={styles.shell}
+        className={`${styles.shell} ${styles.howItWorksAnchor}`}
         title="Research to ready-to-film in 3 minutes"
         description="Go from a public TikTok creator to a video idea you can make your own."
         steps={HOW_IT_WORKS_STEPS}
