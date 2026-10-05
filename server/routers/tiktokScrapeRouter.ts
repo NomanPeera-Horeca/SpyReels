@@ -5,7 +5,8 @@ import { tiktokScrapeJobs, tiktokVideos } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { clientIpFromRequest, isPublicIpRateLimited } from "../publicRateLimit";
 import { checkUsageLimit, incrementUsage } from "../stripe/stripe-service";
-import { scrapeTikTokVideos, fetchTikTokVideoInfo } from "../tiktok";
+import { scrapeTikTokVideos, fetchTikTokVideoInfo, fetchTikTokProfile } from "../tiktok";
+import { ensureProfilePicOnR2 } from "../profilePicR2";
 import { mirrorTiktokThumbnailsBounded } from "../tiktokScrape/mediaMirror";
 import { repairTikTokProfilePicsBounded } from "../tiktokScrape/repairProfilePics";
 import { runTikTokScrapeJob } from "../tiktokScrape/runJob";
@@ -15,7 +16,64 @@ import { PUBLIC_TIKTOK_DEMO_HANDLES, PUBLIC_TIKTOK_DEMO_VIDEO_LIMIT, isPublicTik
 import { not, eq, desc, sql, and, inArray, or } from "drizzle-orm";
 import { PUBLIC_TIKTOK_DEMO_CACHE_TTL_MS, PUBLIC_TIKTOK_DEMO_EMPTY_CACHE_TTL_MS, PublicTikTokDemoPayload, publicTikTokDemoCache, emptyPublicTikTokDemoPayload, readPublicTikTokDemoCache, writePublicTikTokDemoCache } from "./_shared";
 
+const TIKTOK_HANDLE_INVALID_MESSAGE =
+  "TikTok usernames can only contain letters, numbers, periods and underscores.";
 
+type PublicTikTokProfilePreviewPayload =
+  | {
+      found: true;
+      username: string;
+      fullName: string;
+      biography: string;
+      profilePicUrl: string;
+      followerCount: number;
+      followingCount: number;
+      postCount: number;
+      heartCount: number;
+      isVerified: boolean;
+      isPrivate: boolean;
+    }
+  | {
+      found: false;
+      error: string;
+    };
+
+const PUBLIC_TIKTOK_PROFILE_PREVIEW_TTL_MS = 5 * 60_000;
+
+const publicTikTokProfilePreviewCache = new Map<
+  string,
+  { expiresAt: number; payload: PublicTikTokProfilePreviewPayload }
+>();
+
+function normalizePublicTikTokHandle(raw: string): string {
+  return raw.replace(/^@/, "").trim().toLowerCase();
+}
+
+function isValidPublicTikTokHandle(handle: string): boolean {
+  return /^[a-z0-9._]{2,24}$/i.test(handle);
+}
+
+function readPublicTikTokProfilePreviewCache(
+  handle: string
+): PublicTikTokProfilePreviewPayload | null {
+  const hit = publicTikTokProfilePreviewCache.get(handle);
+  if (!hit) return null;
+  if (Date.now() > hit.expiresAt) {
+    publicTikTokProfilePreviewCache.delete(handle);
+    return null;
+  }
+  return hit.payload;
+}
+
+function writePublicTikTokProfilePreviewCache(
+  handle: string,
+  payload: PublicTikTokProfilePreviewPayload
+): void {
+  publicTikTokProfilePreviewCache.set(handle, {
+    expiresAt: Date.now() + PUBLIC_TIKTOK_PROFILE_PREVIEW_TTL_MS,
+    payload,
+  });
+}
 
 export const tiktokScrapeRouter = router({
     /**
@@ -133,6 +191,68 @@ export const tiktokScrapeRouter = router({
           code: "NOT_FOUND",
           message: "This creator isn't available",
         });
+      }),
+
+    /**
+     * Unauthenticated TikTok profile lookup for the public finder hero.
+     * Same interaction contract as `featured.publicProfilePreview`: rate-limited,
+     * short in-memory cache, display fields only.
+     */
+    publicProfilePreview: publicProcedure
+      .input(z.object({ handle: z.string().min(1).max(128) }))
+      .query(async ({ ctx, input }) => {
+        const ip = clientIpFromRequest(ctx.req);
+        if (isPublicIpRateLimited(ip)) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: "Too many requests. Please try again in a minute.",
+          });
+        }
+
+        const normalized = normalizePublicTikTokHandle(input.handle);
+        if (!isValidPublicTikTokHandle(normalized)) {
+          return {
+            found: false as const,
+            error: TIKTOK_HANDLE_INVALID_MESSAGE,
+          };
+        }
+
+        const cached = readPublicTikTokProfilePreviewCache(normalized);
+        if (cached) return cached;
+
+        try {
+          const profile = await fetchTikTokProfile(normalized);
+          const cleanHandle = normalizePublicTikTokHandle(profile.uniqueId || normalized);
+          const proxiedPicUrl = await ensureProfilePicOnR2(
+            cleanHandle,
+            profile.avatarUrl,
+            "tiktok"
+          );
+          const payload = {
+            found: true as const,
+            username: profile.uniqueId || cleanHandle,
+            fullName: profile.nickname,
+            biography: profile.biography,
+            profilePicUrl: proxiedPicUrl,
+            followerCount: profile.followerCount,
+            followingCount: profile.followingCount,
+            postCount: profile.videoCount,
+            heartCount: profile.heartCount,
+            isVerified: profile.isVerified,
+            isPrivate: profile.isPrivate,
+          };
+          writePublicTikTokProfilePreviewCache(normalized, payload);
+          return payload;
+        } catch (err: unknown) {
+          const message =
+            err instanceof Error ? err.message : "Profile not found";
+          const payload = {
+            found: false as const,
+            error: message,
+          };
+          writePublicTikTokProfilePreviewCache(normalized, payload);
+          return payload;
+        }
       }),
 
     start: protectedProcedure
