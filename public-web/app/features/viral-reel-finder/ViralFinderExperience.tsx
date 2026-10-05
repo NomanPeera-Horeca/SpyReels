@@ -1,9 +1,19 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { InstagramMark } from "../../../../shared/ui/PlatformMarks";
 import { researchReturnTo } from "../../../../shared/researchIntent";
 import { trackPublicWeb } from "../../../lib/trackPublicWeb";
+import { PrimaryButton } from "../../../components/PrimaryButton";
+import { FinderSearch } from "../../../components/FinderSearch";
+import {
+  formatFinderCount,
+  type FinderProfilePreviewData,
+} from "../../../components/FinderProfilePreview";
+import {
+  useFinderProfileLookup,
+  type FinderProfileLookupResult,
+} from "../../../components/useFinderProfileLookup";
 import interactionStyles from "./interaction.module.css";
 import styles from "./page.module.css";
 
@@ -30,21 +40,7 @@ type DemoPayload = {
   reels: DemoReel[];
 };
 
-type FoundProfile = {
-  found: true;
-  username: string;
-  fullName: string;
-  biography: string;
-  profilePicUrl: string;
-  followerCount: number;
-  followingCount: number;
-  postCount: number;
-  isVerified: boolean;
-  isPrivate: boolean;
-  category: string;
-};
-
-type ProfilePayload = FoundProfile | { found: false; error?: string };
+type ProfilePayload = FinderProfileLookupResult | { found: false; error?: string };
 
 function normalizeHandle(raw: string): string {
   const trimmed = raw.trim();
@@ -56,11 +52,12 @@ function validHandle(handle: string): boolean {
   return /^[a-z0-9._]{1,30}$/i.test(handle);
 }
 
+function isDemoHandle(handle: string): boolean {
+  return DEMO_HANDLE_SET.has(handle);
+}
+
 function formatNumber(value: number): string {
-  if (!Number.isFinite(value)) return "0";
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1).replace(/\.0$/, "")}M`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(value >= 100_000 ? 0 : 1).replace(/\.0$/, "")}K`;
-  return Math.round(value).toLocaleString();
+  return formatFinderCount(value);
 }
 
 function hookPreview(caption: string): string {
@@ -99,6 +96,56 @@ function revealIfNeeded(id: string) {
   window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
 }
 
+async function fetchInstagramProfile(
+  handle: string,
+  signal: AbortSignal
+): Promise<FinderProfileLookupResult> {
+  const input = encodeURIComponent(JSON.stringify({ json: { handle } }));
+  const response = await fetch(`/api/trpc/featured.publicProfilePreview?input=${input}`, {
+    signal,
+    headers: { accept: "application/json" },
+  });
+  if (!response.headers.get("content-type")?.includes("application/json")) {
+    throw new Error("Instagram lookup is temporarily unavailable. Please try again.");
+  }
+  const envelope = (await response.json()) as {
+    result?: { data?: { json?: ProfilePayload } };
+    error?: { message?: string };
+  };
+  const body = envelope.result?.data?.json;
+  if (!body) {
+    throw new Error(
+      envelope.error?.message ||
+        "Instagram lookup is temporarily unavailable. Please try again."
+    );
+  }
+  if (!response.ok || body.found !== true) {
+    throw new Error(
+      "error" in body && body.error
+        ? body.error
+        : "We could not find that Instagram account."
+    );
+  }
+  return body;
+}
+
+function toPreviewData(profile: FinderProfileLookupResult): FinderProfilePreviewData {
+  return {
+    username: profile.username,
+    displayName: profile.fullName || undefined,
+    biography: profile.biography || undefined,
+    profilePicUrl: profile.profilePicUrl || undefined,
+    isVerified: profile.isVerified,
+    isPrivate: profile.isPrivate,
+    meta: (
+      <>
+        <b>{formatNumber(profile.followerCount)}</b> followers ·{" "}
+        <b>{formatNumber(profile.followingCount)}</b> following
+      </>
+    ),
+  };
+}
+
 export default function ViralFinderExperience() {
   const [input, setInput] = useState("");
   const [previewHandle, setPreviewHandle] = useState<string | null>(null);
@@ -109,95 +156,47 @@ export default function ViralFinderExperience() {
   const [showAll, setShowAll] = useState(false);
   const [selectedReel, setSelectedReel] = useState<DemoReel | null>(null);
   const [showSpyReelsNext, setShowSpyReelsNext] = useState(false);
-
-  const [debouncedHandle, setDebouncedHandle] = useState("");
-  const [profileLoading, setProfileLoading] = useState(false);
-  const [profile, setProfile] = useState<FoundProfile | null>(null);
-  const [profileError, setProfileError] = useState<string | null>(null);
   const [finderReady, setFinderReady] = useState(false);
+
+  const onProfileFound = useCallback((body: FinderProfileLookupResult) => {
+    trackPublicWeb("viral_finder_profile_searched", {
+      handle: body.username,
+      found: true,
+      is_private: body.isPrivate,
+      platform: "instagram",
+    });
+  }, []);
+
+  const {
+    normalizedInput,
+    isDemoInput,
+    matchingProfile,
+    profileLoading,
+    profileError,
+    setProfileError,
+    requestProfileNow,
+  } = useFinderProfileLookup({
+    input,
+    normalize: normalizeHandle,
+    isValid: validHandle,
+    invalidMessage:
+      "Instagram usernames can only contain letters, numbers, periods and underscores.",
+    isDemoHandle,
+    fetchProfile: fetchInstagramProfile,
+    onProfileFound,
+  });
 
   useEffect(() => {
     setFinderReady(true);
   }, []);
 
   useEffect(() => {
-    const normalized = normalizeHandle(input);
-    setProfile(null);
-    setProfileError(null);
-
-    if (DEMO_HANDLE_SET.has(normalized)) {
-      setDebouncedHandle("");
-      setProfileLoading(false);
-      setPreviewHandle(normalized);
+    if (isDemoInput) {
+      setPreviewHandle(normalizedInput);
       return;
     }
-
     setPreviewHandle(null);
-
-    if (normalized.length < 2) {
-      setDebouncedHandle("");
-      setProfileLoading(false);
-      return;
-    }
-    if (!validHandle(normalized)) {
-      setDebouncedHandle("");
-      setProfileError("Instagram usernames can only contain letters, numbers, periods and underscores.");
-      return;
-    }
-
-    const timer = window.setTimeout(() => setDebouncedHandle(normalized), 700);
-    return () => window.clearTimeout(timer);
-  }, [input]);
-
-  useEffect(() => {
-    if (!debouncedHandle) return;
-    const controller = new AbortController();
-    setProfileLoading(true);
-    setProfileError(null);
-
-    const input = encodeURIComponent(JSON.stringify({ json: { handle: debouncedHandle } }));
-    // The public tRPC procedure already lives on the same Express host. Avoid
-    // an extra Next -> app round trip through the 5-second page-render proxy.
-    fetch(`/api/trpc/featured.publicProfilePreview?input=${input}`, {
-      signal: controller.signal,
-      headers: { accept: "application/json" },
-    })
-      .then(async (response) => {
-        if (!response.headers.get("content-type")?.includes("application/json")) {
-          throw new Error("Instagram lookup is temporarily unavailable. Please try again.");
-        }
-        const envelope = (await response.json()) as {
-          result?: { data?: { json?: ProfilePayload } };
-          error?: { message?: string };
-        };
-        const body = envelope.result?.data?.json;
-        if (!body) {
-          throw new Error(envelope.error?.message || "Instagram lookup is temporarily unavailable. Please try again.");
-        }
-        if (!response.ok || body.found !== true) {
-          throw new Error("error" in body && body.error ? body.error : "We could not find that Instagram account.");
-        }
-        return body;
-      })
-      .then((body) => {
-        setProfile(body);
-        trackPublicWeb("viral_finder_profile_searched", {
-          handle: body.username,
-          found: true,
-          is_private: body.isPrivate,
-        });
-      })
-      .catch((error: unknown) => {
-        if (controller.signal.aborted) return;
-        setProfile(null);
-        setProfileError(error instanceof Error ? error.message : "We could not find that Instagram account.");
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setProfileLoading(false);
-      });
-
-    return () => controller.abort();
-  }, [debouncedHandle]);
+  }, [isDemoInput, normalizedInput]);
 
   useEffect(() => {
     if (!previewHandle) {
@@ -257,10 +256,6 @@ export default function ViralFinderExperience() {
   }, [demo, sortMode]);
 
   const visibleReels = showAll ? sortedReels : sortedReels.slice(0, 4);
-  const normalizedInput = normalizeHandle(input);
-  const isDemoInput = DEMO_HANDLE_SET.has(normalizedInput);
-  const matchingProfile =
-    profile && profile.username.toLowerCase() === normalizedInput ? profile : null;
   const selectedOwner = demo?.handle ?? previewHandle ?? "";
   const continueHandle =
     matchingProfile && !isDemoInput && !matchingProfile.isPrivate
@@ -271,15 +266,7 @@ export default function ViralFinderExperience() {
   function chooseDemo(handle: string) {
     setInput(handle);
     setPreviewHandle(handle);
-    trackPublicWeb("viral_finder_demo_handle_selected", { handle });
-  }
-
-  function requestProfileNow(handle: string) {
-    setProfile(null);
-    setProfileError(null);
-    setProfileLoading(true);
-    setDebouncedHandle("");
-    window.setTimeout(() => setDebouncedHandle(handle), 0);
+    trackPublicWeb("viral_finder_demo_handle_selected", { handle, platform: "instagram" });
   }
 
   function submit(event: FormEvent<HTMLFormElement>) {
@@ -332,87 +319,59 @@ export default function ViralFinderExperience() {
   return (
     <div id="live-demo" className={styles.experience}>
       <div className={styles.finderIsland}>
-        <form
-          className={styles.finderForm}
+        <FinderSearch
+          invalid={inputInvalid}
           onSubmit={submit}
-          data-finder-ready={finderReady ? "true" : "false"}
-          data-invalid={inputInvalid ? "true" : undefined}
-        >
-          <span className={styles.platformMark} aria-hidden>
-            <InstagramMark />
-          </span>
-          <label className={styles.srOnly} htmlFor="viral-finder-handle">Instagram username or profile link</label>
-          <input
-            id="viral-finder-handle"
-            name="handle"
-            className={styles.finderInput}
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            placeholder="@username"
-            autoComplete="off"
-            aria-invalid={inputInvalid}
-            aria-describedby={profileError && !profileLoading ? "viral-finder-error" : undefined}
-          />
-          <button
-            className={styles.primaryButton}
-            type="submit"
-            disabled={profileLoading || Boolean(matchingProfile?.isPrivate)}
-          >
-            {submitLabel}
-          </button>
-        </form>
-
-        {profileLoading ? <div className={styles.profileLoading}>Looking up Instagram profile…</div> : null}
-        {profileError && !profileLoading ? <p id="viral-finder-error" className={styles.formError} role="alert">{profileError}</p> : null}
-
-        {matchingProfile ? (
-          <button
-            type="button"
-            className={styles.profileCard}
-            data-testid="confirmed-instagram-profile"
-            disabled={matchingProfile.isPrivate}
-            onClick={() => handoffToResearch(matchingProfile.username, "form")}
-            aria-label={`Continue with @${matchingProfile.username} in Creator Radar`}
-          >
-            <span className={styles.profileAvatarWrap}>
-              {matchingProfile.profilePicUrl ? (
-                <img className={styles.profileAvatar} src={matchingProfile.profilePicUrl} alt="" referrerPolicy="no-referrer" />
-              ) : (
-                <span className={styles.profileAvatarFallback}>@</span>
-              )}
-            </span>
-            <span className={styles.profileText}>
-              <span className={styles.profileNameRow}>
-                <strong>@{matchingProfile.username}</strong>
-                {matchingProfile.isVerified ? <span className={styles.verified}>✓</span> : null}
-                {matchingProfile.isPrivate ? <span className={styles.privateBadge}>Private</span> : null}
-              </span>
-              {matchingProfile.fullName ? <span>{matchingProfile.fullName}</span> : null}
-              {matchingProfile.biography ? <span className={styles.profileBio}>{matchingProfile.biography}</span> : null}
-              <span className={styles.profileStats}>
-                <b>{formatNumber(matchingProfile.followerCount)}</b> followers · <b>{formatNumber(matchingProfile.followingCount)}</b> following
-              </span>
-            </span>
-            <span className={styles.profileAction}>
-              {matchingProfile.isPrivate ? "Private account" : "Continue →"}
-            </span>
-          </button>
-        ) : null}
-
-        <div className={styles.tryRow}>
-          <span>Or try an example:</span>
-          {DEMO_HANDLES.map((handle) => (
-            <button
-              type="button"
-              className={previewHandle === handle ? interactionStyles.demoHandleActive : undefined}
-              aria-pressed={previewHandle === handle}
-              onClick={() => chooseDemo(handle)}
-              key={handle}
+          formProps={{
+            "data-finder-ready": finderReady ? "true" : "false",
+          }}
+          platformMark={<InstagramMark />}
+          label="Instagram username or profile link"
+          inputId="viral-finder-handle"
+          value={input}
+          onChange={(event) => setInput(event.target.value)}
+          placeholder="@username"
+          inputProps={{
+            name: "handle",
+            autoComplete: "off",
+            "aria-describedby":
+              profileError && !profileLoading ? "viral-finder-error" : undefined,
+          }}
+          action={
+            <PrimaryButton
+              type="submit"
+              glow
+              disabled={profileLoading || Boolean(matchingProfile?.isPrivate)}
             >
-              @{handle}
-            </button>
-          ))}
-        </div>
+              {submitLabel}
+            </PrimaryButton>
+          }
+          profileLoading={profileLoading}
+          profileLoadingLabel="Looking up Instagram profile…"
+          profileError={profileError}
+          profileErrorId="viral-finder-error"
+          profile={matchingProfile ? toPreviewData(matchingProfile) : null}
+          profileTestId="confirmed-instagram-profile"
+          profileContinueAriaLabel={(username) =>
+            `Continue with @${username} in Creator Radar`
+          }
+          onProfileContinue={(username) => handoffToResearch(username, "form")}
+        >
+          <div className={styles.tryRow}>
+            <span>Or try an example:</span>
+            {DEMO_HANDLES.map((handle) => (
+              <button
+                type="button"
+                className={previewHandle === handle ? interactionStyles.demoHandleActive : undefined}
+                aria-pressed={previewHandle === handle}
+                onClick={() => chooseDemo(handle)}
+                key={handle}
+              >
+                @{handle}
+              </button>
+            ))}
+          </div>
+        </FinderSearch>
       </div>
 
       {showPreview ? (
@@ -511,11 +470,16 @@ export default function ViralFinderExperience() {
                   <strong>Transcribe this Reel, then write your own version.</strong>
                   <p>SpyReels keeps this post as research context so you can study the spoken content and turn the useful idea into an original script.</p>
                 </div>
-                <button type="button" className={styles.primaryButton} onClick={() => handoffToResearch(continueHandle, "selected_reel")}>
+                <PrimaryButton
+                  type="button"
+                  className={styles.nextStepPrimary}
+                  glow
+                  onClick={() => handoffToResearch(continueHandle, "selected_reel")}
+                >
                   {continueHandle && continueHandle !== selectedOwner
                     ? `Research @${continueHandle} in SpyReels`
                     : `Continue @${selectedOwner} in SpyReels`}
-                </button>
+                </PrimaryButton>
                 <span className={interactionStyles.actionHint}>Opens Research with @{continueHandle} selected.</span>
               </>
             )}

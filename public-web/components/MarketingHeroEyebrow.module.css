@@ -1,0 +1,24 @@
+/* Hero pill eyebrow (Figma Page 05). Not for kicker, auth, or text-only eyebrows. */
+.root {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sr-layout-inline-gap);
+  padding: 7px 11px;
+  border: var(--sr-border-width-default) solid var(--sr-brand-purple-200);
+  border-radius: var(--sr-radius-full);
+  background: var(--sr-color-surface-default);
+  color: var(--sr-color-text-brand);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--sr-color-status-success-border);
+  box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.08);
+}

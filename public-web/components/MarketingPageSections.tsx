@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { TikTokMark } from "../../shared/ui/PlatformMarks";
+import { PrimaryButton } from "./PrimaryButton";
 
 type FaqItem = {
   q: string;
@@ -45,5 +46,19 @@ export function MarketingFaq({ title, description, items }: { title: string; des
 }
 
 export function MarketingFinalCta({ title, description, label, href }: { title: string; description: string; label: string; href: string }) {
-  return <section className="cta"><div className="shell"><div className="cta-box"><div><h2>{title}</h2><p>{description}</p></div><a className="btn btn-violet" href={href}>{label} <span aria-hidden="true">→</span></a></div></div></section>;
+  return (
+    <section className="cta">
+      <div className="shell">
+        <div className="cta-box">
+          <div>
+            <h2>{title}</h2>
+            <p>{description}</p>
+          </div>
+          <PrimaryButton href={href} size="large" glow>
+            {label} <span aria-hidden="true">→</span>
+          </PrimaryButton>
+        </div>
+      </div>
+    </section>
+  );
 }

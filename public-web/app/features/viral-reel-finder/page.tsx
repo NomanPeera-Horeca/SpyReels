@@ -4,6 +4,7 @@ import { MarketingFinderMotion, MarketingFooter, MarketingHeader } from "../../.
 import { finderNextTools, MarketingFaq, MarketingFinalCta, MarketingPlatformStrip, MarketingWorkspace } from "../../../components/MarketingPageSections";
 import ViralFinderExperience from "./ViralFinderExperience";
 import { HomepageAuthGate } from "../../../components/HomepageAuthGate";
+import { MarketingHeroEyebrow } from "../../../components/MarketingHeroEyebrow";
 import "../../homepage.css";
 import styles from "./page.module.css";
 
@@ -126,7 +127,7 @@ export default function ViralReelFinderPilotPage() {
 
       <main>
         <section className={`${styles.shell} ${styles.hero}`}>
-          <div className={styles.eyebrow}>Free Instagram Reel Finder</div>
+          <MarketingHeroEyebrow>Free Instagram Reel Finder</MarketingHeroEyebrow>
           <h1>
             Find <span className={styles.accent}>viral</span> Instagram Reels in your niche
           </h1>

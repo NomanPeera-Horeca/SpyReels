@@ -36,32 +36,12 @@
   text-align: center;
 }
 
-.eyebrow,
 .sectionEyebrow {
   color: var(--sr-color-text-brand);
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-}
-
-.eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 11px;
-  border: 1px solid var(--sr-brand-purple-200);
-  border-radius: 999px;
-  background: var(--sr-color-surface-default);
-  color: var(--sr-color-text-brand);
-}
-
-.eyebrowDot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--sr-color-status-success-border);
-  box-shadow: 0 0 0 4px rgba(52, 211, 153, 0.08);
 }
 
 .hero h1 {
@@ -97,47 +77,7 @@
   margin: 0 auto;
 }
 
-.finderForm {
-  display: flex;
-  align-items: center;
-  gap: var(--sr-layout-control-gap);
-  padding: 8px;
-  border: 1px solid var(--sr-color-border-default);
-  border-radius: 18px;
-  background: var(--sr-color-surface-raised);
-  box-shadow: 0 18px 50px rgba(31, 25, 70, 0.08);
-}
-
-.finderForm[data-invalid="true"] {
-  border-color: var(--sr-color-status-error-border);
-  box-shadow: 0 0 0 3px rgba(196, 53, 43, 0.12);
-}
-
-.platformMark {
-  flex: 0 0 auto;
-  padding-left: 10px;
-  color: var(--sr-color-text-brand);
-  font-size: 22px;
-}
-
-.finderInput {
-  flex: 1 1 auto;
-  min-width: 0;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: var(--sr-brand-ink);
-  font: inherit;
-  font-size: 15px;
-}
-
-.finderInput::placeholder {
-  color: var(--sr-color-text-tertiary);
-}
-
-.primaryButton,
-.secondaryButton,
-.primaryLink {
+.secondaryButton {
   border: 0;
   border-radius: var(--sr-radius-control);
   font: inherit;
@@ -146,174 +86,8 @@
   text-decoration: none;
 }
 
-.primaryButton,
-.primaryLink {
-  color: white;
-  background: var(--sr-color-action-primary-default);
-  box-shadow: 0 10px 28px rgba(113, 87, 255, 0.25);
-}
-
-.primaryButton {
-  flex: 0 0 auto;
-  padding: 13px 18px;
-}
-
-.primaryLink {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin-top: 22px;
-  padding: 12px 18px;
-}
-
-.profileLoading,
-.formError {
-  margin: 10px 4px 0;
-  font-size: 13px;
-}
-
-.profileLoading {
-  color: var(--sr-color-text-disabled);
-}
-
-.formError {
-  color: var(--sr-color-status-error-foreground);
-  font-weight: 600;
-}
-
-.profileCard {
-  width: 100%;
-  margin-top: 12px;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 14px;
-  align-items: center;
-  padding: 14px;
-  border: 1px solid var(--sr-brand-purple-200);
-  border-radius: var(--sr-radius-card);
-  background: var(--sr-color-surface-default);
-  color: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.profileCard:hover {
-  border-color: rgba(167, 139, 250, 0.48);
-  background: var(--sr-color-action-selected-subtle);
-}
-
-.profileCard:focus-visible {
-  outline: 2px solid var(--sr-color-focus-border);
-  outline-offset: 3px;
-}
-
-.profileCard:disabled {
-  cursor: default;
-  opacity: .72;
-}
-
-.profileAvatarWrap {
-  width: 58px;
-  height: 58px;
-  border-radius: 50%;
-  overflow: hidden;
-  background: #202027;
-}
-
-.profileAvatar,
-.profileAvatarFallback {
-  width: 100%;
-  height: 100%;
-}
-
-.profileAvatar {
-  display: block;
-  object-fit: cover;
-}
-
-.profileAvatarFallback {
-  display: grid;
-  place-items: center;
-  color: #a78bfa;
-  font-weight: 700;
-}
-
-.profileText {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  color: var(--sr-color-text-tertiary);
-  font-size: 13px;
-}
-
-.profileNameRow {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--sr-brand-ink);
-  font-size: 14px;
-}
-
-.verified {
-  display: inline-grid;
-  width: 16px;
-  height: 16px;
-  place-items: center;
-  border-radius: 50%;
-  background: #3b82f6;
-  color: white;
-  font-size: 10px;
-}
-
-.privateBadge {
-  padding: 2px 6px;
-  border: 1px solid rgba(251, 146, 60, 0.35);
-  border-radius: 999px;
-  color: #fdba74;
-  font-size: 10px;
-}
-
-.profileBio {
-  max-width: 640px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.profileStats {
-  margin-top: 3px;
-  color: var(--sr-color-text-tertiary);
-}
-
-.profileStats b {
-  color: #3b3745;
-}
-
-.profileHint {
-  margin: 10px 4px 0;
-  color: var(--sr-color-text-brand);
-  font-size: 13px;
-  line-height: 1.5;
-}
-
-.profileNext {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 10px;
-  margin-top: 4px;
-}
-
-.profileNext .primaryButton {
-  margin-top: 2px;
-}
-
-.profileAction {
-  color: #a78bfa;
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
+.nextStepPrimary {
+  margin-top: 18px;
 }
 
 .tryRow {
@@ -578,8 +352,7 @@
   line-height: 1.65;
 }
 
-.nextStepCopy .secondaryButton,
-.nextStepCopy .primaryButton {
+.nextStepCopy .secondaryButton {
   margin-top: 18px;
 }
 
@@ -745,33 +518,6 @@
 
   .hero h1 {
     font-size: 40px;
-  }
-
-  .finderForm {
-    flex-wrap: wrap;
-  }
-
-  .platformMark {
-    display: none;
-  }
-
-  .finderInput {
-    width: 100%;
-    flex-basis: 100%;
-    padding: 10px;
-  }
-
-  .primaryButton {
-    width: 100%;
-  }
-
-  .profileCard {
-    grid-template-columns: auto 1fr;
-  }
-
-  .profileAction {
-    grid-column: 1 / -1;
-    padding-top: 10px;
   }
 
   .previewHeader,

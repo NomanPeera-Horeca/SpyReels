@@ -1,0 +1,66 @@
+/**
+ * Shared Primary Button recipe (Figma Button / Primary).
+ * Consumes semantic action tokens so Marketing/Product context can retheme later.
+ * Purple glow is NOT part of this core recipe — see .sr-primary-button-glow.
+ */
+.sr-primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sr-layout-inline-gap);
+  box-sizing: border-box;
+  padding: 0 18px;
+  border: var(--sr-border-width-none);
+  border-radius: var(--sr-radius-control);
+  background: var(--sr-color-action-primary-default);
+  color: var(--sr-color-text-on-brand);
+  font: inherit;
+  font-weight: 700;
+  line-height: 1.2;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+/* Figma Button / Primary — size Medium */
+.sr-primary-button-medium {
+  height: 44px;
+  min-height: 44px;
+}
+
+/* Figma Button / Primary — size Large */
+.sr-primary-button-large {
+  height: 52px;
+  min-height: 52px;
+}
+
+.sr-primary-button:hover:not(:disabled) {
+  background: var(--sr-color-action-primary-hover);
+}
+
+.sr-primary-button:active:not(:disabled) {
+  background: var(--sr-color-action-primary-pressed);
+}
+
+.sr-primary-button:focus-visible {
+  outline: 2px solid var(--sr-color-focus-border);
+  outline-offset: 3px;
+}
+
+.sr-primary-button:disabled {
+  background: var(--sr-color-action-disabled-background);
+  color: var(--sr-color-text-disabled);
+  cursor: not-allowed;
+}
+
+/**
+ * Decorative Marketing treatment only. Not part of Figma Button / Primary core.
+ * Apply at call sites that previously used the purple CTA glow.
+ */
+.sr-primary-button-glow {
+  box-shadow: 0 10px 28px rgba(113, 87, 255, 0.25);
+}
+
+.sr-primary-button-glow:disabled {
+  box-shadow: none;
+}

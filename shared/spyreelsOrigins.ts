@@ -135,7 +135,10 @@ export function shouldRedirectApexPathToApp(
 
   // Public Finder profile confirmation is served by the existing rate-limited
   // tRPC procedure on this host, avoiding a cross-origin browser redirect.
-  if (normalized === "/api/trpc/featured.publicProfilePreview") {
+  if (
+    normalized === "/api/trpc/featured.publicProfilePreview" ||
+    normalized === "/api/trpc/tiktokScrape.publicProfilePreview"
+  ) {
     return false;
   }
 

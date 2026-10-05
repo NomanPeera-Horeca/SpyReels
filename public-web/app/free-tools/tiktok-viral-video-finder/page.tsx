@@ -3,6 +3,7 @@ import Script from "next/script";
 import { MarketingFinderMotion, MarketingFooter, MarketingHeader } from "../../../components/MarketingChrome";
 import { MarketingFaq, MarketingFinalCta, MarketingPlatformStrip, MarketingWorkspace } from "../../../components/MarketingPageSections";
 import { HomepageAuthGate } from "../../../components/HomepageAuthGate";
+import { MarketingHeroEyebrow } from "../../../components/MarketingHeroEyebrow";
 import TikTokFinderExperience from "./TikTokFinderExperience";
 import "../../homepage.css";
 import styles from "./page.module.css";
@@ -46,7 +47,7 @@ export default function TikTokViralVideoFinderPage() {
     <MarketingHeader />
     <main>
       <section className={`${styles.shell} ${styles.hero}`}>
-        <span className={styles.eyebrow}>TikTok viral video finder</span>
+        <MarketingHeroEyebrow>TikTok viral video finder</MarketingHeroEyebrow>
         <h1>Find <span>viral</span> TikTok videos in your niche</h1>
         <p>Search a public TikTok creator. See which videos broke through. Turn a strong idea into a script in your voice.</p>
         <TikTokFinderExperience />
