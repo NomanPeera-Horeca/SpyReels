@@ -5,6 +5,10 @@ import { finderNextTools, MarketingFaq, MarketingFinalCta, MarketingPlatformStri
 import ViralFinderExperience from "./ViralFinderExperience";
 import { HomepageAuthGate } from "../../../components/HomepageAuthGate";
 import { MarketingHeroEyebrow } from "../../../components/MarketingHeroEyebrow";
+import {
+  MarketingHowItWorksSection,
+  type MarketingHowItWorksStep,
+} from "../../../components/MarketingHowItWorksSection";
 import "../../homepage.css";
 import styles from "./page.module.css";
 
@@ -63,6 +67,28 @@ const FAQ_ITEMS = [
     a: "This page shows the hook and performance numbers. In SpyReels you can transcribe the Reel and use that research as context for an original script in your voice.",
   },
 ] as const;
+
+const HOW_IT_WORKS_STEPS: readonly [
+  MarketingHowItWorksStep,
+  MarketingHowItWorksStep,
+  MarketingHowItWorksStep,
+] = [
+  {
+    number: "01",
+    title: "Paste a public handle",
+    body: "Go straight to the creator whose Reels you want to study.",
+  },
+  {
+    number: "02",
+    title: "Study the strongest Reels",
+    body: "Open that creator in SpyReels to compare the posts that performed best.",
+  },
+  {
+    number: "03",
+    title: "Continue into creation",
+    body: "Transcribe the Reel and move the useful pattern into your own script workflow.",
+  },
+];
 
 const breadcrumbJsonLd = {
   "@context": "https://schema.org",
@@ -146,17 +172,11 @@ export default function ViralReelFinderPilotPage() {
 
         <MarketingPlatformStrip />
 
-        <section className={`${styles.shell} ${styles.simpleSteps}`} id="how-it-works">
-          <div className={styles.sectionCopy}>
-            <span className={styles.sectionEyebrow}>How it works</span>
-            <h2>Research to ready-to-film in 3 minutes</h2>
-          </div>
-          <div className={styles.stepRow}>
-            <article><small>01</small><h3>Paste a public handle</h3><p>Go straight to the creator whose Reels you want to study.</p></article>
-            <article><small>02</small><h3>Study the strongest Reels</h3><p>Open that creator in SpyReels to compare the posts that performed best.</p></article>
-            <article><small>03</small><h3>Continue into creation</h3><p>Transcribe the Reel and move the useful pattern into your own script workflow.</p></article>
-          </div>
-        </section>
+        <MarketingHowItWorksSection
+          className={styles.shell}
+          title="Research to ready-to-film in 3 minutes"
+          steps={HOW_IT_WORKS_STEPS}
+        />
 
         <MarketingWorkspace title="Find a Reel. Make the next one yours." tools={finderNextTools} />
 

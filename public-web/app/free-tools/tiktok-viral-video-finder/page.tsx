@@ -4,6 +4,10 @@ import { MarketingFinderMotion, MarketingFooter, MarketingHeader } from "../../.
 import { MarketingFaq, MarketingFinalCta, MarketingPlatformStrip, MarketingWorkspace } from "../../../components/MarketingPageSections";
 import { HomepageAuthGate } from "../../../components/HomepageAuthGate";
 import { MarketingHeroEyebrow } from "../../../components/MarketingHeroEyebrow";
+import {
+  MarketingHowItWorksSection,
+  type MarketingHowItWorksStep,
+} from "../../../components/MarketingHowItWorksSection";
 import TikTokFinderExperience from "./TikTokFinderExperience";
 import "../../homepage.css";
 import styles from "./page.module.css";
@@ -25,6 +29,28 @@ const faqs = [
   { q: "What can I do after finding a strong TikTok?", a: "Study the opening, pacing, and structure. In SpyReels you can use that research to write an original script in your own voice and plan what to film." },
   { q: "Can I use a TikTok idea for Instagram Reels or YouTube Shorts?", a: "Yes. Use the useful pattern as research, then adapt your own story and edit for the channel where you will publish." },
 ] as const;
+
+const HOW_IT_WORKS_STEPS: readonly [
+  MarketingHowItWorksStep,
+  MarketingHowItWorksStep,
+  MarketingHowItWorksStep,
+] = [
+  {
+    number: "01",
+    title: "Search a creator",
+    body: "Start with a TikTok account in your niche, or explore one you already follow.",
+  },
+  {
+    number: "02",
+    title: "Find the videos that broke through",
+    body: "Compare public videos by views, engagement, and performance relative to that creator's typical posts.",
+  },
+  {
+    number: "03",
+    title: "Make the idea yours",
+    body: "Study the opening and structure, then turn the insight into a script in your own voice.",
+  },
+];
 
 const tools = [
   { id: "script", title: "AI Viral Script Generator", description: "Turn a strong TikTok idea into a script in your voice", href: "/free-tools/ai-script-generator", icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M5 3h10l4 4v14H5V3Z M15 3v5h4 M8 12h8 M8 16h6"/></svg> },
@@ -54,14 +80,12 @@ export default function TikTokViralVideoFinderPage() {
       </section>
       <section className={styles.motionStage} aria-label="See the SpyReels workflow"><div className={styles.motionFrame}><MarketingFinderMotion /></div></section>
       <MarketingPlatformStrip />
-      <section className={`${styles.shell} ${styles.steps}`} id="how-it-works">
-        <div className={styles.sectionHead}><span className={styles.kicker}>How it works</span><h2>Research to ready-to-film in 3 minutes</h2><p>Go from a public TikTok creator to a video idea you can make your own.</p></div>
-        <div className={styles.stepGrid}>
-          <article><small>01</small><h3>Search a creator</h3><p>Start with a TikTok account in your niche, or explore one you already follow.</p></article>
-          <article><small>02</small><h3>Find the videos that broke through</h3><p>Compare public videos by views, engagement, and performance relative to that creator’s typical posts.</p></article>
-          <article><small>03</small><h3>Make the idea yours</h3><p>Study the opening and structure, then turn the insight into a script in your own voice.</p></article>
-        </div>
-      </section>
+      <MarketingHowItWorksSection
+        className={styles.shell}
+        title="Research to ready-to-film in 3 minutes"
+        description="Go from a public TikTok creator to a video idea you can make your own."
+        steps={HOW_IT_WORKS_STEPS}
+      />
       <MarketingWorkspace title="Find a strong TikTok. Make the next one yours." tools={tools} />
       <MarketingFaq title="Questions about finding viral TikToks." description="Research public creator videos and bring a promising idea into your own script workflow." items={faqs} />
       <MarketingFinalCta title="Find your next video idea." description="Search a creator. Study what worked. Make the next script yours." label="Find viral TikToks" href="#finder" />
