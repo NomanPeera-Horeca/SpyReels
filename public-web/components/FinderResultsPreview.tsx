@@ -5,6 +5,7 @@ import { ResultCard, type ResultCardData } from "./ResultCard";
 import styles from "./FinderResultsPreview.module.css";
 
 type FinderResultsPreviewProps = {
+  id?: string;
   handle: string;
   results: ResultCardData[];
   platformLabel: string;
@@ -15,6 +16,7 @@ type FinderResultsPreviewProps = {
 };
 
 export function FinderResultsPreview({
+  id,
   handle,
   results,
   platformLabel,
@@ -25,6 +27,7 @@ export function FinderResultsPreview({
 }: FinderResultsPreviewProps) {
   return (
     <section
+      id={id}
       className={styles.panel}
       aria-label="Interactive Viral Finder product example"
     >
