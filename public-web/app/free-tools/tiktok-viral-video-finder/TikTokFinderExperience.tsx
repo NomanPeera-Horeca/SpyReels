@@ -4,6 +4,8 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { TikTokMark } from "../../../../shared/ui/PlatformMarks";
 import { PrimaryButton } from "../../../components/PrimaryButton";
 import { FinderSearch } from "../../../components/FinderSearch";
+import { FinderResultsPreview } from "../../../components/FinderResultsPreview";
+import type { ResultCardData } from "../../../components/ResultCard";
 import {
   formatFinderCount,
   type FinderProfilePreviewData,
@@ -25,6 +27,7 @@ type Video = {
   viewCount: number;
   engagementRate: number;
 };
+
 type Demo = {
   handle: string;
   medianViewCount: number;
@@ -112,7 +115,6 @@ export default function TikTokFinderExperience() {
   const [demo, setDemo] = useState<Demo | null>(null);
   const [loading, setLoading] = useState(false);
   const [demoError, setDemoError] = useState("");
-  const [sort, setSort] = useState<"outlier" | "views" | "engagement">("outlier");
 
   const onProfileFound = useCallback((body: FinderProfileLookupResult) => {
     trackPublicWeb("viral_finder_profile_searched", {
@@ -142,15 +144,6 @@ export default function TikTokFinderExperience() {
     onProfileFound,
   });
 
-  const sorted = useMemo(
-    () =>
-      [...(demo?.videos ?? [])].sort((a, b) => {
-        if (sort === "engagement") return b.engagementRate - a.engagementRate;
-        return b.viewCount - a.viewCount;
-      }),
-    [demo, sort]
-  );
-
   useEffect(() => {
     if (isDemoInput) {
       setActive(normalizedInput);
@@ -170,6 +163,7 @@ export default function TikTokFinderExperience() {
     setLoading(true);
     setDemoError("");
     setDemo(null);
+
     fetch(
       `/free-tools/tiktok-viral-video-finder/demo?handle=${encodeURIComponent(active)}`,
       { signal: controller.signal, headers: { accept: "application/json" } }
@@ -199,19 +193,41 @@ export default function TikTokFinderExperience() {
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
       });
+
     return () => controller.abort();
   }, [active]);
 
-  function continueToResearch(handle: string) {
+  const visibleVideos = useMemo(
+    () =>
+      [...(demo?.videos ?? [])]
+        .sort((a, b) => b.viewCount - a.viewCount)
+        .slice(0, 4),
+    [demo]
+  );
+
+  const resultCards = useMemo<ResultCardData[]>(
+    () =>
+      visibleVideos.map((video) => ({
+        id: video.id,
+        caption: video.caption,
+        thumbnailUrl: video.thumbnailUrl,
+        viewCount: video.viewCount,
+        engagementRate: video.engagementRate,
+        creatorHandle: demo?.handle ?? active,
+      })),
+    [visibleVideos, demo?.handle, active]
+  );
+
+  function continueToResearch(handle: string, source: "form" | "selected_reel" = "form") {
     const returnTo = `/research?platform=tiktok&creator=${encodeURIComponent(handle)}&start=1`;
     trackPublicWeb("viral_finder_research_cta_clicked", {
       handle,
-      source: "form",
+      source,
       platform: "tiktok",
     });
     trackPublicWeb("viral_finder_app_handoff", {
       handle,
-      source: "form",
+      source,
       return_to: returnTo,
       auth: "signup",
       platform: "tiktok",
@@ -239,14 +255,7 @@ export default function TikTokFinderExperience() {
       return;
     }
     if (featured.has(handle)) {
-      if (handle === active && demo) {
-        document.getElementById("results")?.scrollIntoView({
-          behavior: "smooth",
-          block: "start",
-        });
-      } else {
-        chooseDemo(handle);
-      }
+      chooseDemo(handle);
       return;
     }
     if (matchingProfile && !matchingProfile.isPrivate) {
@@ -254,6 +263,17 @@ export default function TikTokFinderExperience() {
       return;
     }
     requestProfileNow(handle);
+  }
+
+  function remakeResult(result: ResultCardData) {
+    const handle = demo?.handle ?? active ?? "";
+    trackPublicWeb("viral_finder_reel_selected", {
+      handle,
+      reel_id: result.id,
+      source: "remake",
+      platform: "tiktok",
+    });
+    continueToResearch(handle, "selected_reel");
   }
 
   const submitLabel = matchingProfile?.isPrivate
@@ -264,7 +284,6 @@ export default function TikTokFinderExperience() {
   const inputInvalid = Boolean(
     profileError && (!normalizedInput || !validHandle(normalizedInput))
   );
-  const surfaceError = profileError || (active && !loading && demoError ? demoError : "");
 
   return (
     <div id="finder" className={styles.experience}>
@@ -283,7 +302,7 @@ export default function TikTokFinderExperience() {
             autoComplete: "off",
             spellCheck: false,
             "aria-describedby":
-              surfaceError && !profileLoading ? "tiktok-search-error" : undefined,
+              profileError && !profileLoading ? "tiktok-search-error" : undefined,
           }}
           action={
             <PrimaryButton
@@ -312,96 +331,31 @@ export default function TikTokFinderExperience() {
             {examples.map((handle, index) => (
               <span key={handle}>
                 {index > 0 ? " · " : ""}
-                <button type="button" onClick={() => chooseDemo(handle)}>
+                <button
+                  type="button"
+                  aria-pressed={active === handle}
+                  onClick={() => chooseDemo(handle)}
+                >
                   @{handle}
                 </button>
               </span>
             ))}
           </p>
         </FinderSearch>
-
-        {demoError && active && !loading && !profileError ? (
-          <p className={styles.error} id="tiktok-demo-error" role="alert">
-            {demoError}
-          </p>
-        ) : null}
       </div>
 
-      {(loading || demo || (active && demoError)) && (
-        <section className={styles.results} id="results" aria-live="polite">
-          {loading && (
-            <p className={styles.resultsStatus}>Loading public TikTok videos…</p>
-          )}
-          {demo && (
-            <>
-              <div className={styles.resultsHeader}>
-                <div>
-                  <small>Public video preview</small>
-                  <h2>@{demo.handle}</h2>
-                  <p>
-                    {prettyCount(demo.totalVideoCount)} public videos · compared with
-                    the creator's usual views
-                  </p>
-                </div>
-                <label>
-                  Sort by{" "}
-                  <select
-                    value={sort}
-                    onChange={(event) =>
-                      setSort(event.target.value as typeof sort)
-                    }
-                  >
-                    <option value="outlier">Standout views</option>
-                    <option value="views">Views</option>
-                    <option value="engagement">Engagement</option>
-                  </select>
-                </label>
-              </div>
-              {sorted.length ? (
-                <div className={styles.videoGrid}>
-                  {sorted.slice(0, 8).map((video) => (
-                    <article key={video.id} className={styles.videoCard}>
-                      {video.thumbnailUrl ? (
-                        <img
-                          src={video.thumbnailUrl}
-                          alt=""
-                          loading="lazy"
-                          referrerPolicy="no-referrer"
-                        />
-                      ) : (
-                        <div className={styles.emptyThumbnail} aria-hidden="true">
-                          <TikTokMark />
-                        </div>
-                      )}
-                      <div>
-                        <strong>{prettyCount(video.viewCount)} views</strong>
-                        <p>
-                          {video.caption?.trim() ||
-                            "Open this video in SpyReels to study its opening"}
-                        </p>
-                        <small>
-                          {Number(video.engagementRate || 0).toFixed(1)}% engagement
-                        </small>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <p className={styles.resultsStatus}>
-                  No public videos are available for this preview right now.
-                </p>
-              )}
-              <PrimaryButton
-                className={styles.continue}
-                type="button"
-                onClick={() => continueToResearch(demo.handle)}
-              >
-                Continue with @{demo.handle} in SpyReels <span aria-hidden>→</span>
-              </PrimaryButton>
-            </>
-          )}
-        </section>
-      )}
+      {active ? (
+        <FinderResultsPreview
+          id="results"
+          handle={demo?.handle ?? active}
+          results={resultCards}
+          platformLabel="TikTok"
+          platformMark={<TikTokMark />}
+          loading={loading}
+          error={demoError || null}
+          onRemake={remakeResult}
+        />
+      ) : null}
     </div>
   );
 }
