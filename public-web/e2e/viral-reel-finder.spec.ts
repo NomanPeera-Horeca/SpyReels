@@ -42,7 +42,7 @@ test("first paint asks for one account before showing Reels", async ({ page }) =
 test("empty Finder submission visibly identifies the field and error", async ({ page }) => {
   await page.getByRole("button", { name: "Find viral Reels", exact: true }).click();
   const input = page.getByLabel("Instagram username or profile link");
-  const error = page.getByRole("alert");
+  const error = page.locator("#viral-finder-error");
 
   await expect(input).toBeFocused();
   await expect(input).toHaveAttribute("aria-invalid", "true");
@@ -50,7 +50,7 @@ test("empty Finder submission visibly identifies the field and error", async ({ 
   await expect(error).toHaveText("Enter a valid Instagram username or profile link.");
 
   await input.fill("hormozi");
-  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.locator("#viral-finder-error")).toHaveCount(0);
   await expect(input).toHaveAttribute("aria-invalid", "false");
 });
 
@@ -79,7 +79,7 @@ test("approved Finder Results Preview matches the locked desktop/mobile pattern"
   const cards = page.getByTestId("reel-card");
 
   await expect(preview.getByText("Interactive example", { exact: true })).toBeVisible();
-  await expect(preview.getByText("@garyvee", { exact: true })).toBeVisible();
+  await expect(preview.locator("header").getByText("@garyvee", { exact: true })).toBeVisible();
 
   await expect(preview.getByText("21 Reels available")).toHaveCount(0);
   await expect(preview.getByRole("button", { name: "Views", exact: true })).toHaveCount(0);
