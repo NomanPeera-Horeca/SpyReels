@@ -29,6 +29,7 @@ export function FinderResultsPreview({
     <section
       id={id}
       className={styles.panel}
+      data-testid="finder-results-preview"
       aria-label="Interactive Viral Finder product example"
     >
       <header className={styles.header}>
@@ -42,7 +43,7 @@ export function FinderResultsPreview({
         <div className={styles.state}>The interactive example is unavailable right now.</div>
       ) : results.length ? (
         <div className={styles.viewport}>
-          <div className={styles.results}>
+          <div className={styles.results} data-testid="finder-results-row">
             {results.slice(0, 4).map((result) => (
               <ResultCard
                 key={result.id}
