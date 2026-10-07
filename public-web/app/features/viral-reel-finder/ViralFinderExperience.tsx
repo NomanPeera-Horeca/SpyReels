@@ -6,6 +6,8 @@ import { researchReturnTo } from "../../../../shared/researchIntent";
 import { trackPublicWeb } from "../../../lib/trackPublicWeb";
 import { PrimaryButton } from "../../../components/PrimaryButton";
 import { FinderSearch } from "../../../components/FinderSearch";
+import { FinderResultsPreview } from "../../../components/FinderResultsPreview";
+import type { ResultCardData } from "../../../components/ResultCard";
 import {
   formatFinderCount,
   type FinderProfilePreviewData,
@@ -19,8 +21,6 @@ import styles from "./page.module.css";
 
 const DEMO_HANDLES = ["garyvee", "humphreytalks", "russellbrunson", "codiesanchez"] as const;
 const DEMO_HANDLE_SET = new Set<string>(DEMO_HANDLES);
-
-type SortMode = "views" | "engagement";
 
 type DemoReel = {
   id: number;
@@ -60,12 +60,6 @@ function formatNumber(value: number): string {
   return formatFinderCount(value);
 }
 
-function hookPreview(caption: string): string {
-  const cleaned = (caption || "").replace(/\s+/g, " ").trim();
-  if (!cleaned) return "Open this Reel to study the hook";
-  return cleaned.length > 110 ? `${cleaned.slice(0, 107)}...` : cleaned;
-}
-
 function handoffToResearch(handle: string, source: "form" | "selected_reel") {
   const returnTo = researchReturnTo(handle);
   trackPublicWeb("viral_finder_research_cta_clicked", { handle, source });
@@ -75,8 +69,6 @@ function handoffToResearch(handle: string, source: "form" | "selected_reel") {
     return_to: returnTo,
     auth: "signup",
   });
-  // Keep the visitor on the Finder while authenticating. The auth dialog
-  // carries this exact destination into both email and Google completion.
   const url = new URL("/features/viral-reel-finder", window.location.origin);
   url.searchParams.set("auth", "signup");
   url.searchParams.set("returnTo", returnTo);
@@ -152,10 +144,6 @@ export default function ViralFinderExperience() {
   const [demo, setDemo] = useState<DemoPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [demoError, setDemoError] = useState<string | null>(null);
-  const [sortMode, setSortMode] = useState<SortMode>("views");
-  const [showAll, setShowAll] = useState(false);
-  const [selectedReel, setSelectedReel] = useState<DemoReel | null>(null);
-  const [showSpyReelsNext, setShowSpyReelsNext] = useState(false);
   const [finderReady, setFinderReady] = useState(false);
 
   const onProfileFound = useCallback((body: FinderProfileLookupResult) => {
@@ -203,18 +191,12 @@ export default function ViralFinderExperience() {
       setDemo(null);
       setDemoError(null);
       setLoading(false);
-      setSelectedReel(null);
-      setShowAll(false);
-      setShowSpyReelsNext(false);
       return;
     }
 
     const controller = new AbortController();
     setLoading(true);
     setDemoError(null);
-    setSelectedReel(null);
-    setShowAll(false);
-    setShowSpyReelsNext(false);
 
     fetch(`/features/viral-reel-finder/demo?handle=${encodeURIComponent(previewHandle)}`, {
       signal: controller.signal,
@@ -231,7 +213,9 @@ export default function ViralFinderExperience() {
       .catch((error: unknown) => {
         if (controller.signal.aborted) return;
         setDemo(null);
-        setDemoError(error instanceof Error ? error.message : "The demo catalog is unavailable right now.");
+        setDemoError(
+          error instanceof Error ? error.message : "The demo catalog is unavailable right now."
+        );
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -245,23 +229,26 @@ export default function ViralFinderExperience() {
     window.requestAnimationFrame(() => revealIfNeeded("reel-preview"));
   }, [previewHandle, loading, demo]);
 
-  const sortedReels = useMemo(() => {
-    const copy = [...(demo?.reels ?? [])];
-    if (sortMode === "engagement") {
-      copy.sort((a, b) => b.engagementRate - a.engagementRate);
-    } else {
-      copy.sort((a, b) => b.viewCount - a.viewCount);
-    }
-    return copy;
-  }, [demo, sortMode]);
+  const visibleReels = useMemo(
+    () =>
+      [...(demo?.reels ?? [])]
+        .sort((a, b) => b.viewCount - a.viewCount)
+        .slice(0, 4),
+    [demo]
+  );
 
-  const visibleReels = showAll ? sortedReels : sortedReels.slice(0, 4);
-  const selectedOwner = demo?.handle ?? previewHandle ?? "";
-  const continueHandle =
-    matchingProfile && !isDemoInput && !matchingProfile.isPrivate
-      ? matchingProfile.username
-      : selectedOwner;
-  const showPreview = Boolean(previewHandle);
+  const resultCards = useMemo<ResultCardData[]>(
+    () =>
+      visibleReels.map((reel) => ({
+        id: reel.id,
+        caption: reel.caption,
+        thumbnailUrl: reel.thumbnailUrl,
+        viewCount: reel.viewCount,
+        engagementRate: reel.engagementRate,
+        creatorHandle: demo?.handle ?? previewHandle,
+      })),
+    [visibleReels, demo?.handle, previewHandle]
+  );
 
   function chooseDemo(handle: string) {
     setInput(handle);
@@ -292,21 +279,14 @@ export default function ViralFinderExperience() {
     requestProfileNow(handle);
   }
 
-  function selectReel(reel: DemoReel) {
-    setSelectedReel(reel);
-    setShowSpyReelsNext(false);
+  function remakeResult(result: ResultCardData) {
+    const handle = demo?.handle ?? previewHandle ?? "";
     trackPublicWeb("viral_finder_reel_selected", {
-      handle: selectedOwner,
-      reel_id: reel.id,
+      handle,
+      reel_id: result.id,
+      source: "remake",
     });
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => revealIfNeeded("selected-reel-next"));
-    });
-  }
-
-  function changeSort(next: SortMode) {
-    setSortMode(next);
-    trackPublicWeb("viral_finder_sort_changed", { sort: next, handle: selectedOwner });
+    handoffToResearch(handle, "selected_reel");
   }
 
   const submitLabel = matchingProfile?.isPrivate
@@ -315,6 +295,7 @@ export default function ViralFinderExperience() {
       ? "Checking…"
       : "Find viral Reels";
   const inputInvalid = Boolean(profileError && (!normalizedInput || !validHandle(normalizedInput)));
+  const showPreview = Boolean(previewHandle);
 
   return (
     <div id="live-demo" className={styles.experience}>
@@ -375,116 +356,16 @@ export default function ViralFinderExperience() {
       </div>
 
       {showPreview ? (
-        <section id="reel-preview" className={styles.preview} aria-label="Interactive Viral Reel Finder product example">
-          <div className={styles.previewHeader}>
-            <div>
-              <small>Interactive example</small>
-              <strong>@{demo?.handle ?? previewHandle}</strong>
-              <span>{demo ? `${demo.totalReelCount} Reels available` : loading ? "Loading account" : "Account unavailable"}</span>
-            </div>
-            <div className={styles.sortTabs} aria-label="Sort example Reels">
-              <button className={sortMode === "views" ? styles.activeSort : undefined} type="button" aria-pressed={sortMode === "views"} onClick={() => changeSort("views")}>Views</button>
-              <button className={sortMode === "engagement" ? styles.activeSort : undefined} type="button" aria-pressed={sortMode === "engagement"} onClick={() => changeSort("engagement")}>Engagement</button>
-            </div>
-          </div>
-
-          {loading ? (
-            <div className={styles.demoState}>Loading Reel data…</div>
-          ) : demoError || !demo ? (
-            <div className={styles.demoState}>The interactive example is unavailable right now.</div>
-          ) : (
-            <>
-              <div className={styles.previewGrid}>
-                {visibleReels.map((reel) => {
-                  const selected = selectedReel?.id === reel.id;
-                  return (
-                    <article
-                      className={`${styles.previewCard} ${selected ? interactionStyles.selectedReelCard : ""}`}
-                      key={reel.id}
-                    >
-                      <button
-                        className={styles.reelSelect}
-                        type="button"
-                        data-testid="reel-card"
-                        aria-pressed={selected}
-                        onClick={() => selectReel(reel)}
-                      >
-                        <div
-                          className={styles.previewArt}
-                          style={{
-                            backgroundImage: `linear-gradient(180deg, transparent 48%, rgba(0,0,0,.9)), url(${JSON.stringify(reel.thumbnailUrl).slice(1, -1)})`,
-                            backgroundSize: "cover",
-                            backgroundPosition: "center",
-                          }}
-                        >
-                          <strong>{formatNumber(reel.viewCount)} views</strong>
-                        </div>
-                        <div className={styles.previewBody}>
-                          <small>Opening hook</small>
-                          <p>{hookPreview(reel.caption)}</p>
-                          <span>{reel.engagementRate > 0 ? `${reel.engagementRate.toFixed(1)}% engagement` : "Engagement unavailable"}</span>
-                          <b>{selected ? "Selected" : "Open this Reel"}</b>
-                        </div>
-                      </button>
-                    </article>
-                  );
-                })}
-              </div>
-
-              {sortedReels.length > 4 ? (
-                <div className={`${styles.previewFooter} ${interactionStyles.previewFooterSingle}`}>
-                  <button type="button" className={styles.textButton} onClick={() => setShowAll((value) => !value)}>
-                    {showAll ? "Show fewer Reels" : `Show all ${sortedReels.length} Reels`}
-                  </button>
-                </div>
-              ) : null}
-            </>
-          )}
-        </section>
-      ) : null}
-
-      {selectedReel ? (
-        <section id="selected-reel-next" className={styles.nextStepPanel} aria-label="Selected Reel">
-          <div className={styles.nextStepMedia} style={{ backgroundImage: `url(${JSON.stringify(selectedReel.thumbnailUrl).slice(1, -1)})` }} />
-          <div className={styles.nextStepCopy}>
-            <small>This Reel</small>
-            <h2>{hookPreview(selectedReel.caption)}</h2>
-            <p>
-              {formatNumber(selectedReel.viewCount)} views
-              {selectedReel.engagementRate > 0 ? ` · ${selectedReel.engagementRate.toFixed(1)}% engagement` : ""}
-            </p>
-
-            {!showSpyReelsNext ? (
-              <button
-                type="button"
-                className={styles.secondaryButton}
-                data-testid="reveal-spyreels-next"
-                onClick={() => setShowSpyReelsNext(true)}
-              >
-                What SpyReels can do next
-              </button>
-            ) : (
-              <>
-                <div className={interactionStyles.stepDetail} data-testid="workflow-step-detail" data-step="next">
-                  <small>Inside SpyReels</small>
-                  <strong>Transcribe this Reel, then write your own version.</strong>
-                  <p>SpyReels keeps this post as research context so you can study the spoken content and turn the useful idea into an original script.</p>
-                </div>
-                <PrimaryButton
-                  type="button"
-                  className={styles.nextStepPrimary}
-                  glow
-                  onClick={() => handoffToResearch(continueHandle, "selected_reel")}
-                >
-                  {continueHandle && continueHandle !== selectedOwner
-                    ? `Research @${continueHandle} in SpyReels`
-                    : `Continue @${selectedOwner} in SpyReels`}
-                </PrimaryButton>
-                <span className={interactionStyles.actionHint}>Opens Research with @{continueHandle} selected.</span>
-              </>
-            )}
-          </div>
-        </section>
+        <FinderResultsPreview
+          id="reel-preview"
+          handle={demo?.handle ?? previewHandle ?? ""}
+          results={resultCards}
+          platformLabel="Reels"
+          platformMark={<InstagramMark />}
+          loading={loading}
+          error={demoError}
+          onRemake={remakeResult}
+        />
       ) : null}
     </div>
   );
