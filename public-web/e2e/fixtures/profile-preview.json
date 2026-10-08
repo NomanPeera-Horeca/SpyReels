@@ -1,0 +1,20 @@
+{
+  "result": {
+    "data": {
+      "json": {
+        "found": true,
+        "username": "garyvee",
+        "fullName": "Gary Vaynerchuk",
+        "biography": "Fixture biography for visual regression. Do not use live data.",
+        "profilePicUrl": "https://visual-fixture.local/profile-pic.png",
+        "followerCount": 10200000,
+        "followingCount": 1800,
+        "postCount": 12500,
+        "isVerified": true,
+        "isPrivate": false,
+        "category": "Entrepreneur",
+        "externalUrl": "https://example.com"
+      }
+    }
+  }
+}

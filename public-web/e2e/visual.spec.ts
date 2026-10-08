@@ -1,0 +1,54 @@
+import { expect, test } from "@playwright/test";
+import { prepareVisualPage, visualScreenshotOptions } from "./visualHelpers";
+
+const VISUAL_PROJECTS = new Set(["desktop-1440", "mobile-390"]);
+
+const PAGES = [
+  { name: "viral-reel-finder", path: "/features/viral-reel-finder" },
+  { name: "homepage", path: "/" },
+  { name: "tiktok-viral-video-finder", path: "/free-tools/tiktok-viral-video-finder" },
+] as const;
+
+test.describe("public-web visual baselines", () => {
+  test.beforeEach(({}, testInfo) => {
+    test.skip(
+      !VISUAL_PROJECTS.has(testInfo.project.name),
+      "Visual baselines run on desktop-1440 and mobile-390 only"
+    );
+  });
+
+  for (const pageDef of PAGES) {
+    test(`${pageDef.name} initial state`, async ({ page }) => {
+      await prepareVisualPage(page, pageDef.path);
+
+      // Initial empty finder only — never open auth or interact
+      expect(page.url()).not.toMatch(/[?&]auth=/);
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+
+      // Font probe for Phase 3 reporting (logged, does not affect pixels)
+      const fontReport = await page.evaluate(() => {
+        const h1 = document.querySelector("h1");
+        const family = h1 ? getComputedStyle(h1).fontFamily : "";
+        let interLoaded = false;
+        try {
+          interLoaded = Array.from(document.fonts).some(
+            (face) => /inter/i.test(face.family) && face.status === "loaded"
+          );
+        } catch {
+          interLoaded = false;
+        }
+        return {
+          path: location.pathname,
+          h1FontFamily: family,
+          interInDocumentFonts: interLoaded,
+          fontsSize: document.fonts.size,
+        };
+      });
+      console.log(`[visual-font] ${JSON.stringify(fontReport)}`);
+
+      await expect(page).toHaveScreenshot(`${pageDef.name}.png`, {
+        ...visualScreenshotOptions,
+      });
+    });
+  }
+});
