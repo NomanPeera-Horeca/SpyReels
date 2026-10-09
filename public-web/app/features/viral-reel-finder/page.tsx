@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Script from "next/script";
 import { MarketingFinderMotion, MarketingFooter, MarketingHeader } from "../../../components/MarketingChrome";
-import { finderNextTools, MarketingFaq, MarketingFinalCta, MarketingPlatformStrip, MarketingWorkspace } from "../../../components/MarketingPageSections";
+import { MarketingFaq, MarketingFinalCta, MarketingPlatformStrip, MarketingWorkspace } from "../../../components/MarketingPageSections";
 import ViralFinderExperience from "./ViralFinderExperience";
 import { HomepageAuthGate } from "../../../components/HomepageAuthGate";
 import { MarketingHeroEyebrow } from "../../../components/MarketingHeroEyebrow";
@@ -178,7 +178,7 @@ export default function ViralReelFinderPilotPage() {
           steps={HOW_IT_WORKS_STEPS}
         />
 
-        <MarketingWorkspace title="Find a Reel. Make the next one yours." tools={finderNextTools} />
+        <MarketingWorkspace toolsPage="instagram" title="Find a Reel. Make the next one yours." />
 
         <MarketingFaq
           title="Questions about finding viral Reels."

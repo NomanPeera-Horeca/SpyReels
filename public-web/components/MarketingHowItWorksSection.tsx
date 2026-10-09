@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { MarketingSectionHeader } from "./MarketingSectionHeader";
 import styles from "./MarketingHowItWorksSection.module.css";
 
 export type MarketingHowItWorksStep = {
@@ -37,13 +38,14 @@ export function MarketingHowItWorksSection({
       className={cx(styles.root, className)}
       aria-labelledby={titleId}
     >
-      <header className={styles.header}>
-        <p className={styles.eyebrow}>How it works</p>
-        <h2 id={titleId} className={styles.title}>
-          {title}
-        </h2>
-        {description ? <p className={styles.description}>{description}</p> : null}
-      </header>
+      <MarketingSectionHeader
+        className={styles.header}
+        eyebrow="How it works"
+        title={title}
+        subtitle={description}
+        headingLevel="h2"
+        titleId={titleId}
+      />
       <div className={styles.grid}>
         {steps.map((step) => (
           <article key={step.number} className={styles.card}>

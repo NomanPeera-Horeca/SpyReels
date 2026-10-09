@@ -1,12 +1,17 @@
-import type { ReactNode } from "react";
 import { PrimaryButton } from "./PrimaryButton";
-
-type FaqItem = {
-  q: string;
-  a: string;
-  afterLink?: { href: string; label: string };
-};
-type Tool = { id: string; title: string; description: string; href: string; icon: ReactNode };
+import { MarketingSectionHeader } from "./MarketingSectionHeader";
+import {
+  MarketingIconArrowRight,
+  MarketingIconSparkle,
+  MarketingIconTelegram,
+  MarketingToolIcon,
+} from "./MarketingIcons";
+import {
+  resolveMarketingTools,
+  type MarketingToolId,
+  type MarketingToolsPage,
+} from "./marketingTools";
+import styles from "./MarketingToolGrid.module.css";
 
 const officialPlatformMark = (src: string, width: number, height: number, alt: string) => (
   // Official platform marks from Marketing / Platform Strip (Figma Page 09).
@@ -34,38 +39,6 @@ const channels = [
   },
 ];
 
-const toolArrow = (
-  // Icon / QA Arrow Right — vector icon, not a font glyph (Figma Marketing / Tool Grid).
-  <img className="free-tool-arrow-icon" src="/marketing/platform-marks/arrow-right.svg" width={14} height={14} alt="" aria-hidden="true" />
-);
-
-const icons = {
-  script: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M5 3h10l4 4v14H5V3Z"/><path d="M15 3v5h4M8 12h8M8 16h6"/></svg>,
-  hooks: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3v4m0 10v4M3 12h4m10 0h4M5.6 5.6l2.8 2.8m7.2 7.2 2.8 2.8M18.4 5.6l-2.8 2.8m-7.2 7.2-2.8 2.8"/><circle cx="12" cy="12" r="3"/></svg>,
-  broll: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="m10 9 5 3-5 3V9ZM3 9h3M3 15h3M18 9h3M18 15h3"/></svg>,
-  creators: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="9" cy="8" r="3"/><path d="M3 19v-1a6 6 0 0 1 12 0v1H3Z"/><path d="M17 6a3 3 0 0 1 0 6M18 15a5 5 0 0 1 3 4"/></svg>,
-  carousel: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="4" width="12" height="16" rx="2"/><path d="M3 7v10m18-10v10M9 9h6m-6 4h6"/></svg>,
-  finder: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="m10 8 6 4-6 4V8Z"/></svg>,
-};
-
-export const finderNextTools: Tool[] = [
-  { id: "script", title: "AI Viral Script Generator", description: "Turn a strong Reel idea into a script in your voice.", href: "/free-tools/ai-script-generator", icon: icons.script },
-  { id: "hooks", title: "Viral Hook Generator", description: "Give your opening a sharper hook.", href: "/free-tools/viral-hooks", icon: icons.hooks },
-  { id: "broll", title: "B-roll Generator", description: "Plan the shots that support your script.", href: "/free-tools/broll-generator", icon: icons.broll },
-  { id: "creators", title: "Find Creators", description: "Explore more creators in your niche.", href: "/?auth=signup&returnTo=%2Fdiscover-creators", icon: icons.creators },
-  { id: "carousel", title: "Carousel Generator", description: "Turn the same idea into a swipeable post.", href: "/?auth=signup&returnTo=%2Fcarousels", icon: icons.carousel },
-  { id: "tiktok", title: "TikTok Viral Video Finder", description: "Find more ideas on TikTok.", href: "/free-tools/tiktok-viral-video-finder", icon: icons.finder },
-];
-
-export const homepageWorkspaceTools: Tool[] = [
-  { id: "creators", title: "Find Creators", description: "Discover creators in your niche.", href: "/?auth=signup&returnTo=%2Fdiscover-creators", icon: icons.creators },
-  { id: "finder", title: "Viral Reel Finder", description: "Spot the Reels worth studying.", href: "/features/viral-reel-finder", icon: icons.finder },
-  { id: "script", title: "AI Viral Script Generator", description: "Turn an idea into a viral script.", href: "/free-tools/ai-script-generator", icon: icons.script },
-  { id: "hooks", title: "Viral Hook Generator", description: "Find a stronger opening.", href: "/free-tools/viral-hooks", icon: icons.hooks },
-  { id: "broll", title: "B-roll Generator", description: "Plan what viewers will see.", href: "/free-tools/broll-generator", icon: icons.broll },
-  { id: "carousel", title: "Carousel Generator", description: "Make your idea swipeable.", href: "/?auth=signup&returnTo=%2Fcarousels", icon: icons.carousel },
-];
-
 export function MarketingPlatformStrip() {
   return (
     <section className="trusted" aria-label="Short-form channels">
@@ -88,7 +61,10 @@ export function MarketingPlatformStrip() {
 
 type MarketingWorkspaceProps = {
   title: string;
-  tools: Tool[];
+  /** Selects tool order + live descriptions for this page. */
+  toolsPage: MarketingToolsPage;
+  /** Tool ids to omit (e.g. hide the page's own finder). */
+  hiddenToolIds?: readonly MarketingToolId[];
   /** Finder pages use standalone shell; homepage nests inside growth-section. */
   layout?: "standalone" | "embedded";
   titleHeadingLevel?: "h2" | "h3";
@@ -97,75 +73,104 @@ type MarketingWorkspaceProps = {
   extensionsAriaLabel?: string;
 };
 
+function cx(...parts: Array<string | false | undefined>) {
+  return parts.filter(Boolean).join(" ");
+}
+
 function MarketingWorkspaceBody({
   title,
-  tools,
+  toolsPage,
+  hiddenToolIds,
   titleHeadingLevel,
   extensionsHeadingLevel,
   freeToolsId,
   extensionsAriaLabel,
+  layout,
 }: Required<
   Pick<
     MarketingWorkspaceProps,
-    "title" | "tools" | "titleHeadingLevel" | "extensionsHeadingLevel" | "extensionsAriaLabel"
+    | "title"
+    | "toolsPage"
+    | "titleHeadingLevel"
+    | "extensionsHeadingLevel"
+    | "extensionsAriaLabel"
+    | "layout"
   >
 > &
-  Pick<MarketingWorkspaceProps, "freeToolsId">) {
-  const TitleTag = titleHeadingLevel;
-  const ExtensionsTitleTag = extensionsHeadingLevel;
+  Pick<MarketingWorkspaceProps, "freeToolsId" | "hiddenToolIds">) {
+  const tools = resolveMarketingTools(toolsPage, hiddenToolIds);
   const titleId = titleHeadingLevel === "h2" ? "finder-workspace-title" : undefined;
 
   return (
-    <div className="free-tools" id={freeToolsId}>
-      <div className="free-tools-heading">
-        <div>
-          <span className="kicker">Everything in one workspace</span>
-          <TitleTag {...(titleId ? { id: titleId } : {})}>{title}</TitleTag>
-        </div>
-      </div>
-      <div className="free-tools-grid">
+    <div
+      className={cx(styles.root, layout === "embedded" && styles.rootEmbedded)}
+      id={freeToolsId}
+    >
+      <MarketingSectionHeader
+        eyebrow="Everything in one workspace"
+        title={title}
+        headingLevel={titleHeadingLevel}
+        titleId={titleId}
+      />
+
+      <div className={styles.tools}>
         {tools.map((tool) => (
-          <a className="free-tool" id={`tool-${tool.id}`} href={tool.href} key={tool.id}>
-            <span className="free-tool-icon" aria-hidden="true">
-              {tool.icon}
+          <a className={styles.tool} id={`tool-${tool.id}`} href={tool.href} key={tool.id}>
+            <span className={styles.iconTile} aria-hidden="true">
+              <MarketingToolIcon name={tool.icon} />
             </span>
-            <span className="free-tool-copy">
-              <strong>{tool.title}</strong>
-              <small>{tool.description}</small>
+            <span className={styles.copy}>
+              <strong className={cx(styles.title, "sr-text-product-card-title")}>{tool.title}</strong>
+              <small className={cx(styles.description, "sr-text-marketing-body-small")}>
+                {tool.description}
+              </small>
             </span>
-            <span className="free-tool-arrow" aria-hidden="true">
-              {toolArrow}
+            <span className={styles.arrow} aria-hidden="true">
+              <MarketingIconArrowRight />
             </span>
           </a>
         ))}
       </div>
-      <div className="workflow-extensions" aria-label={extensionsAriaLabel}>
-        <div className="workflow-extensions-intro">
-          <span className="kicker">Beyond the workspace</span>
-          <ExtensionsTitleTag>Your ideas travel with you.</ExtensionsTitleTag>
-          <p>Save inspiration wherever you find it and bring SpyReels research into your writing flow.</p>
-        </div>
-        <div className="extension-card telegram" id="telegram-extension">
-          <span className="extension-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M21.4 3.1 2.8 10.3c-1.3.5-1.3 1.2-.2 1.5l4.8 1.5 1.8 5.7c.2.7.1 1 1 .9.7-.1 1-.3 1.4-.7l2.4-2.3 5 3.7c.9.5 1.6.2 1.8-.9L23 4.4c.3-1.3-.5-1.8-1.6-1.3ZM8.1 12.9l10.9-6.8c.5-.3 1-.1.6.3l-9 8.1-.4 4.1-2.1-5.7Z" />
-            </svg>
-          </span>
-          <div>
-            <strong>Save Reels with Telegram</strong>
-            <p>Send a Reel while you browse. Pick it up later in your SpyReels workspace.</p>
+
+      <div className={styles.beyond} aria-label={extensionsAriaLabel}>
+        <MarketingSectionHeader
+          eyebrow="Beyond the workspace"
+          title="Your ideas travel with you."
+          subtitle="Save inspiration wherever you find it and bring SpyReels research into your writing flow."
+          headingLevel={extensionsHeadingLevel}
+        />
+        <div className={styles.integrations}>
+          <div className={styles.integration} id="telegram-extension">
+            <span className={styles.iconTile} aria-hidden="true">
+              <MarketingIconTelegram />
+            </span>
+            <div className={styles.integrationCopy}>
+              <div className={styles.integrationTitleRow}>
+                <strong className={cx(styles.integrationTitle, "sr-text-product-card-title")}>
+                  Save Reels with Telegram
+                </strong>
+              </div>
+              <p className={cx(styles.integrationDescription, "sr-text-marketing-body-small")}>
+                Send a Reel while you browse. Pick it up later in your SpyReels workspace.
+              </p>
+            </div>
           </div>
-          <span className="extension-status live">Available now</span>
-        </div>
-        <div className="extension-card" id="ai-extension">
-          <span className="extension-icon" aria-hidden="true">
-            ✦
-          </span>
-          <div>
-            <strong>SpyReels in ChatGPT and Claude</strong>
-            <p>Bring SpyReels viral-post research into the conversation where you develop ideas.</p>
+          <div className={styles.integration} id="ai-extension">
+            <span className={styles.iconTile} aria-hidden="true">
+              <MarketingIconSparkle />
+            </span>
+            <div className={styles.integrationCopy}>
+              <div className={styles.integrationTitleRow}>
+                <strong className={cx(styles.integrationTitle, "sr-text-product-card-title")}>
+                  SpyReels in ChatGPT and Claude
+                </strong>
+                <span className={cx(styles.badge, "sr-text-marketing-caption")}>Coming soon</span>
+              </div>
+              <p className={cx(styles.integrationDescription, "sr-text-marketing-body-small")}>
+                Bring SpyReels viral-post research into the conversation where you develop ideas.
+              </p>
+            </div>
           </div>
-          <span className="extension-status">Coming soon</span>
         </div>
       </div>
     </div>
@@ -174,7 +179,8 @@ function MarketingWorkspaceBody({
 
 export function MarketingWorkspace({
   title,
-  tools,
+  toolsPage,
+  hiddenToolIds = [],
   layout = "standalone",
   titleHeadingLevel = layout === "embedded" ? "h3" : "h2",
   extensionsHeadingLevel = layout === "embedded" ? "h4" : "h3",
@@ -184,30 +190,78 @@ export function MarketingWorkspace({
   const body = (
     <MarketingWorkspaceBody
       title={title}
-      tools={tools}
+      toolsPage={toolsPage}
+      hiddenToolIds={hiddenToolIds}
       titleHeadingLevel={titleHeadingLevel}
       extensionsHeadingLevel={extensionsHeadingLevel}
       freeToolsId={freeToolsId}
       extensionsAriaLabel={extensionsAriaLabel}
+      layout={layout}
     />
   );
 
   if (layout === "embedded") {
-    return body;
+    // Same centered max-width + page gutters as other homepage / finder shells.
+    return <div className="shell">{body}</div>;
   }
 
   return (
-    <section className="shell finder-workspace" aria-labelledby="finder-workspace-title">
+    <section
+      className={cx("shell", styles.sectionStandalone)}
+      aria-labelledby="finder-workspace-title"
+    >
       {body}
     </section>
   );
 }
 
+type FaqItem = {
+  q: string;
+  a: string;
+  afterLink?: { href: string; label: string };
+};
+
 export function MarketingFaq({ title, description, items }: { title: string; description: string; items: readonly FaqItem[] }) {
-  return <section className="seo-block" id="faq"><div className="shell answer-grid"><div className="answer-sticky"><span className="kicker">Frequently asked questions</span><h2>{title}</h2><p>{description}</p></div><div className="answers">{items.map((item, index) => <details key={item.q} open={index === 0}><summary>{item.q}</summary><p>{item.a}</p>{item.afterLink ? <p><a href={item.afterLink.href}>{item.afterLink.label} →</a></p> : null}</details>)}</div></div></section>;
+  return (
+    <section className="seo-block" id="faq">
+      <div className="shell answer-grid">
+        <div className="answer-sticky">
+          <MarketingSectionHeader
+            eyebrow="Frequently asked questions"
+            title={title}
+            subtitle={description}
+            headingLevel="h2"
+          />
+        </div>
+        <div className="answers">
+          {items.map((item, index) => (
+            <details key={item.q} open={index === 0}>
+              <summary>{item.q}</summary>
+              <p>{item.a}</p>
+              {item.afterLink ? (
+                <p>
+                  <a href={item.afterLink.href}>{item.afterLink.label} →</a>
+                </p>
+              ) : null}
+            </details>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
 }
 
-export function MarketingFinalCta({ title, description, label, href }: { title: string; description: string; label: string; href: string }) {
+export function MarketingFinalCta({
+  title,
+  description,
+  label,
+  href,
+}: {
+  title: string;
+  description: string;
+  label: string;
+  href: string;
+}) {
   return (
     <section className="cta">
       <div className="shell">

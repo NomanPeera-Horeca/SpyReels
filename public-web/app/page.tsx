@@ -7,7 +7,6 @@ import { MarketingFooter, MarketingHeader } from "../components/MarketingChrome"
 import {
   MarketingPlatformStrip,
   MarketingWorkspace,
-  homepageWorkspaceTools,
 } from "../components/MarketingPageSections";
 import "./homepage.css";
 
@@ -69,8 +68,8 @@ export default function HomePage() {
         <div dangerouslySetInnerHTML={{ __html: homepageSegments.throughGrowthSteps }} />
         <MarketingWorkspace
           layout="embedded"
+          toolsPage="homepage"
           title="Find it. Make it yours. Get ready to post."
-          tools={homepageWorkspaceTools}
           freeToolsId="free-tools"
         />
         <div dangerouslySetInnerHTML={{ __html: homepageSegments.afterWorkspace }} />

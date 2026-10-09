@@ -1,40 +1,15 @@
 /**
  * Marketing / Finder Steps (Figma). Shared by IG + TikTok finder pilots.
- * Uses locked layout + radius tokens only.
+ * Section header via MarketingSectionHeader. Card layout uses locked tokens.
  */
 .root {
   padding: var(--sr-layout-section-gap) 0;
-  border-top: 1px solid var(--sr-color-border-default);
+  border-top: var(--sr-border-width-default) solid var(--sr-color-border-default);
 }
 
 .header {
-  max-width: 860px;
-  margin: 0 auto;
-  text-align: center;
-}
-
-.eyebrow {
-  margin: 0;
-  color: var(--sr-color-text-brand);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.title {
-  margin: var(--sr-layout-stack-sm) 0 0;
-  font-size: clamp(34px, 4vw, 56px);
-  line-height: 1.06;
-  letter-spacing: -0.03em;
-  text-wrap: balance;
-}
-
-.description {
-  margin: var(--sr-layout-stack-sm) 0 0;
-  color: var(--sr-color-text-tertiary);
-  font-size: 18px;
-  line-height: 1.55;
+  /* Layout only; typography owned by MarketingSectionHeader */
+  max-width: 100%;
 }
 
 .grid {
@@ -46,7 +21,7 @@
 
 .card {
   padding: var(--sr-layout-card-padding);
-  border: 1px solid var(--sr-color-border-default);
+  border: var(--sr-border-width-default) solid var(--sr-color-border-default);
   border-radius: var(--sr-radius-card);
   background: var(--sr-color-surface-default);
 }

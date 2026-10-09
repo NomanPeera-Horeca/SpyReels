@@ -1,4 +1,5 @@
 @import "./color-tokens.css";
+@import "./type-tokens.css";
 
 :root {
   color-scheme: dark;

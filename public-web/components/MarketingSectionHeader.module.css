@@ -1,0 +1,44 @@
+/**
+ * Marketing / Section Header (Figma Page 09).
+ * Eyebrow → Heading gap = layout/inline/gap. Optional subtitle below.
+ * Type tokens applied here so page CSS (e.g. .answer-sticky h2) cannot override.
+ */
+.root {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sr-layout-inline-gap);
+  margin: 0;
+}
+
+.root .eyebrow {
+  margin: 0;
+  color: var(--sr-color-marketing-live-accent);
+  font-size: var(--sr-type-marketing-eyebrow-size);
+  line-height: var(--sr-type-marketing-eyebrow-line);
+  font-weight: var(--sr-type-marketing-eyebrow-weight);
+  letter-spacing: var(--sr-type-marketing-eyebrow-tracking);
+  text-transform: var(--sr-type-marketing-eyebrow-transform);
+}
+
+.root .heading {
+  margin: 0;
+  color: var(--sr-color-text-primary);
+  font-size: var(--sr-type-marketing-heading-3-size);
+  line-height: var(--sr-type-marketing-heading-3-line);
+  font-weight: var(--sr-type-marketing-heading-3-weight);
+  letter-spacing: var(--sr-type-marketing-heading-3-tracking);
+  /* Headings never break mid-word */
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+
+.root .subtitle {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+  font-size: var(--sr-type-marketing-body-small-size);
+  line-height: var(--sr-type-marketing-body-small-line);
+  font-weight: var(--sr-type-marketing-body-small-weight);
+  letter-spacing: var(--sr-type-marketing-body-small-tracking);
+}
