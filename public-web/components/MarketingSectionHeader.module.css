@@ -28,7 +28,8 @@
   line-height: var(--sr-type-marketing-heading-3-line);
   font-weight: var(--sr-type-marketing-heading-3-weight);
   letter-spacing: var(--sr-type-marketing-heading-3-tracking);
-  /* Headings never break mid-word */
+  /* Headings never break mid-word; balance wraps across lines */
+  text-wrap: balance;
   overflow-wrap: normal;
   word-break: normal;
   hyphens: none;

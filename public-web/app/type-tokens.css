@@ -1,5 +1,6 @@
 /**
  * SpyReels Typography Foundation (Figma text styles, exact values).
+ * Marketing Responsive Typography v1.1: Desktop defaults; Mobile ≤ 640px overrides.
  * Marketing + Product roles. Loaded globally via globals.css.
  */
 :root {
@@ -148,6 +149,18 @@
 }
 
 /* Composite text utilities — one class applies a full Figma text style */
+
+.sr-text-marketing-display,
+.sr-text-marketing-heading-1,
+.sr-text-marketing-heading-2,
+.sr-text-marketing-heading-3,
+.sr-text-marketing-heading-4 {
+  /* Headings never break mid-word; balance wraps across lines */
+  text-wrap: balance;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
 
 .sr-text-marketing-display {
   font-size: var(--sr-type-marketing-display-size);
@@ -330,4 +343,27 @@
   line-height: var(--sr-type-product-card-title-line);
   font-weight: var(--sr-type-product-card-title-weight);
   letter-spacing: var(--sr-type-product-card-title-tracking);
+}
+
+/* Marketing Responsive Typography v1.1 — Mobile mode (≤ 640px) */
+@media (max-width: 640px) {
+  :root {
+    --sr-type-marketing-display-size: 44px;
+    --sr-type-marketing-display-line: 48px;
+
+    --sr-type-marketing-heading-1-size: 40px;
+    --sr-type-marketing-heading-1-line: 44px;
+
+    --sr-type-marketing-heading-2-size: 32px;
+    --sr-type-marketing-heading-2-line: 40px;
+
+    --sr-type-marketing-heading-3-size: 28px;
+    --sr-type-marketing-heading-3-line: 36px;
+
+    --sr-type-marketing-heading-4-size: 22px;
+    --sr-type-marketing-heading-4-line: 28px;
+
+    --sr-type-marketing-metric-size: 32px;
+    --sr-type-marketing-metric-line: 40px;
+  }
 }
