@@ -137,11 +137,39 @@ function looksLikeZodIssuePayload(message: string): boolean {
   );
 }
 
+const GENERIC_SERVER_ERROR = "Something went wrong. Please try again.";
+
+/**
+ * Strip database / driver internals from messages that may reach the browser.
+ * Keep Zod validation copy intact; only redact SQL and MySQL error text.
+ */
+export function sanitizePublicTrpcMessage(message: string): string {
+  const trimmed = message.trim();
+  if (!trimmed) return GENERIC_SERVER_ERROR;
+
+  const lower = trimmed.toLowerCase();
+  if (
+    lower.startsWith("failed query:") ||
+    lower.includes("unknown column") ||
+    lower.includes("duplicate entry") ||
+    /\ber_bad_field_error\b/i.test(trimmed) ||
+    /\ber_dup_entry\b/i.test(trimmed) ||
+    /\bselect\b.+\bfrom\b/i.test(trimmed) ||
+    /\bupdate\b.+\bset\b/i.test(trimmed) ||
+    /\binsert\s+into\b/i.test(trimmed) ||
+    /\bdelete\s+from\b/i.test(trimmed)
+  ) {
+    return GENERIC_SERVER_ERROR;
+  }
+
+  return trimmed;
+}
+
 /** Map tRPC/Zod validation messages to user-friendly copy (client fallback + server formatter). */
 export function formatTrpcValidationMessage(message: string): string {
   const trimmed = message.trim();
   if (!trimmed) {
-    return "Something went wrong. Please try again.";
+    return GENERIC_SERVER_ERROR;
   }
 
   const parsed = parseZodIssuesFromMessage(trimmed);
@@ -156,5 +184,5 @@ export function formatTrpcValidationMessage(message: string): string {
     return "Invalid input. Please check your entries and try again.";
   }
 
-  return trimmed;
+  return sanitizePublicTrpcMessage(trimmed);
 }

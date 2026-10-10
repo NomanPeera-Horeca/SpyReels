@@ -1,5 +1,9 @@
 import { NOT_ADMIN_ERR_MSG, UNAUTHED_ERR_MSG } from '@shared/const';
-import { formatTrpcValidationMessage, formatZodIssuesForUser } from "@shared/trpcValidationErrors";
+import {
+  formatTrpcValidationMessage,
+  formatZodIssuesForUser,
+  sanitizePublicTrpcMessage,
+} from "@shared/trpcValidationErrors";
 import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import { ZodError } from "zod";
@@ -33,7 +37,9 @@ const t = initTRPC.context<TrpcContext>().create({
       });
     }
 
-    const friendly = formatTrpcValidationMessage(shape.message);
+    const friendly = sanitizePublicTrpcMessage(
+      formatTrpcValidationMessage(shape.message)
+    );
     if (friendly !== shape.message) {
       return {
         ...shape,
