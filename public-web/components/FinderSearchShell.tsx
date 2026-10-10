@@ -11,7 +11,7 @@ type FinderSearchShellProps = {
   /** Platform mark rendered inside the shell (InstagramMark / TikTokMark / etc.) */
   platformMark: ReactNode;
   /** Drives mark visibility (IG mobile hides mark, keeps inset) and mark sizing. */
-  platform?: "instagram" | "tiktok";
+  platform?: "instagram" | "tiktok" | "youtube";
   /** Accessible label text for the visible input */
   label: string;
   inputId: string;

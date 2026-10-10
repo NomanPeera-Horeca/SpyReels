@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import { InstagramMark, TikTokMark } from "../../shared/ui/PlatformMarks";
+import { InstagramMark, TikTokMark, YouTubeMark } from "../../shared/ui/PlatformMarks";
 import { trackPublicWeb } from "../lib/trackPublicWeb";
 import { PrimaryButton } from "./PrimaryButton";
 import { FinderSearch } from "./FinderSearch";
@@ -17,6 +17,7 @@ import {
 } from "./useFinderProfileLookup";
 import { instagramFinderConfig } from "../lib/finderConfigs/instagram";
 import { tiktokFinderConfig } from "../lib/finderConfigs/tiktok";
+import { youtubeFinderConfig } from "../lib/finderConfigs/youtube";
 import type { FinderConfig, FinderPlatform } from "../lib/finderConfigs/types";
 
 type StyleMap = {
@@ -30,7 +31,18 @@ type StyleMap = {
 const CONFIG_BY_PLATFORM: Record<FinderPlatform, FinderConfig> = {
   instagram: instagramFinderConfig,
   tiktok: tiktokFinderConfig,
+  youtube: youtubeFinderConfig,
 };
+
+function platformMark(platform: FinderPlatform) {
+  if (platform === "instagram") return InstagramMark;
+  if (platform === "tiktok") return TikTokMark;
+  return YouTubeMark;
+}
+
+function isCatalogDemoPlatform(platform: FinderPlatform) {
+  return platform === "tiktok" || platform === "youtube";
+}
 
 function revealIfNeeded(id: string) {
   const panel = document.getElementById(id);
@@ -82,7 +94,7 @@ export function PlatformFinderExperience({
   const config = CONFIG_BY_PLATFORM[platform];
   const { search, pagePath, experienceId, resultsId } = config;
   const demoHandleSet = useMemo(() => new Set(search.demoHandles), [search.demoHandles]);
-  const PlatformMark = platform === "instagram" ? InstagramMark : TikTokMark;
+  const PlatformMark = platformMark(platform);
 
   const [input, setInput] = useState("");
   const [activeHandle, setActiveHandle] = useState<string | null>(null);
@@ -151,7 +163,7 @@ export function PlatformFinderExperience({
     const controller = new AbortController();
     setLoading(true);
     setDemoError(null);
-    if (platform === "tiktok") {
+    if (isCatalogDemoPlatform(platform)) {
       setDemoHandle("");
       setDemoItems([]);
     }
@@ -162,7 +174,7 @@ export function PlatformFinderExperience({
     })
       .then(async (response) => {
         if (
-          platform === "tiktok" &&
+          isCatalogDemoPlatform(platform) &&
           !response.headers.get("content-type")?.includes("application/json")
         ) {
           throw new Error(search.demoUnavailableMessage);
@@ -187,7 +199,7 @@ export function PlatformFinderExperience({
         if (controller.signal.aborted) return;
         setDemoHandle("");
         setDemoItems([]);
-        if (platform === "tiktok") {
+        if (isCatalogDemoPlatform(platform)) {
           setDemoError(
             error instanceof Error && error.message !== "Failed to fetch"
               ? error.message
@@ -225,17 +237,19 @@ export function PlatformFinderExperience({
 
   function handoff(handle: string, source: "form" | "selected_reel") {
     const returnTo = search.buildReturnTo(handle);
-    const eventProps =
-      platform === "tiktok"
-        ? { handle, source, platform: "tiktok" as const }
-        : { handle, source };
-    trackPublicWeb("viral_finder_research_cta_clicked", eventProps);
+    const platformProp =
+      platform === "instagram" ? {} : { platform: platform as "tiktok" | "youtube" };
+    trackPublicWeb("viral_finder_research_cta_clicked", {
+      handle,
+      source,
+      ...platformProp,
+    });
     trackPublicWeb("viral_finder_app_handoff", {
       handle,
       source,
       return_to: returnTo,
       auth: "signup",
-      ...(platform === "tiktok" ? { platform: "tiktok" } : {}),
+      ...platformProp,
     });
     const url = new URL(pagePath, window.location.origin);
     url.searchParams.set("auth", "signup");
@@ -273,6 +287,11 @@ export function PlatformFinderExperience({
       chooseDemo(handle);
       return;
     }
+    // YouTube Vite parity: non-demo handles go straight to research handoff.
+    if (platform === "youtube") {
+      handoff(handle, "form");
+      return;
+    }
     if (matchingProfile && !matchingProfile.isPrivate) {
       handoff(matchingProfile.username, "form");
       return;
@@ -286,7 +305,7 @@ export function PlatformFinderExperience({
       handle,
       reel_id: result.id,
       source: "remake",
-      ...(platform === "tiktok" ? { platform: "tiktok" } : {}),
+      ...(platform === "instagram" ? {} : { platform }),
     });
     handoff(handle, "selected_reel");
   }

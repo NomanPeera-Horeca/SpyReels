@@ -1,5 +1,6 @@
 import { instagramFinderConfig } from "./finderConfigs/instagram";
 import { tiktokFinderConfig } from "./finderConfigs/tiktok";
+import { youtubeFinderConfig } from "./finderConfigs/youtube";
 import type { FinderConfig } from "./finderConfigs/types";
 import type { MarketingCopySlot } from "./marketingContentSpec";
 import { marketingSharedCopy } from "./marketingSharedCopy";
@@ -167,6 +168,7 @@ export function collectMarketingCopySlots(): MarketingCopySlot[] {
   return [
     ...slotsForFinder("instagram", instagramFinderConfig),
     ...slotsForFinder("tiktok", tiktokFinderConfig),
+    ...slotsForFinder("youtube", youtubeFinderConfig),
     ...sharedSlots(),
   ];
 }

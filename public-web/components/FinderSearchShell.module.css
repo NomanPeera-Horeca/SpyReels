@@ -51,6 +51,11 @@
   height: 24px;
 }
 
+.shell[data-platform="youtube"] .mark svg {
+  width: 24px;
+  height: 24px;
+}
+
 .input {
   flex: 1 1 auto;
   min-width: 0;

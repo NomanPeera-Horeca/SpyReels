@@ -3,7 +3,7 @@ import type { MarketingFaqItem } from "../../components/marketingFaqJsonLd";
 import type { MarketingHowItWorksStep } from "../../components/MarketingHowItWorksSection";
 import type { FinderProfileLookupResult } from "../../components/useFinderProfileLookup";
 
-export type FinderPlatform = "instagram" | "tiktok";
+export type FinderPlatform = "instagram" | "tiktok" | "youtube";
 
 export type FinderExamplesVariant = "tryRow" | "tryInline";
 
@@ -41,7 +41,7 @@ export type FinderConfig = {
     steps: readonly [MarketingHowItWorksStep, MarketingHowItWorksStep, MarketingHowItWorksStep];
   };
   workspace: {
-    toolsPage: "instagram" | "tiktok";
+    toolsPage: "instagram" | "tiktok" | "youtube";
     title: string;
   };
   faq: {

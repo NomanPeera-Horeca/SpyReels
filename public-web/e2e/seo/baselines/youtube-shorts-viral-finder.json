@@ -5,13 +5,13 @@
   "description": "Free YouTube Shorts finder by channel. Paste any public handle, sort viral Shorts by views, engagement and outlier score, then remake winners in your voice.",
   "canonical": "https://spyreels.ai/free-tools/youtube-shorts-viral-finder",
   "robots": "index, follow",
-  "googlebot": null,
+  "googlebot": "index, follow",
   "verification": {
     "google": "TfvQaX_pN1iSSkXBwgrUoK45mvnWKJTozdMdeZsgibs"
   },
   "openGraph": {
     "description": "Free YouTube Shorts finder by channel. Paste any public handle, sort viral Shorts by views, engagement and outlier score, then remake winners in your voice.",
-    "image": "https://spyreels.ai/brand/og-default.jpg",
+    "site_name": "SpyReels",
     "title": "YouTube Shorts Finder - Viral Shorts by Channel | SpyReels",
     "type": "website",
     "url": "https://spyreels.ai/free-tools/youtube-shorts-viral-finder"
@@ -19,10 +19,9 @@
   "twitter": {
     "card": "summary_large_image",
     "description": "Free YouTube Shorts finder by channel. Paste any public handle, sort viral Shorts by views, engagement and outlier score, then remake winners in your voice.",
-    "image": "https://spyreels.ai/brand/og-default.jpg",
     "title": "YouTube Shorts Finder - Viral Shorts by Channel | SpyReels"
   },
-  "h1": "YouTube Shorts Finder: any channel's most viral Shorts",
+  "h1": "Find viral YouTube Shorts in your niche.",
   "hreflang": [],
   "jsonLd": [
     {
@@ -37,15 +36,9 @@
         },
         {
           "@type": "ListItem",
-          "item": "https://spyreels.ai/free-tools",
-          "name": "Free Tools",
-          "position": 2
-        },
-        {
-          "@type": "ListItem",
           "item": "https://spyreels.ai/free-tools/youtube-shorts-viral-finder",
           "name": "YouTube Shorts Finder",
-          "position": 3
+          "position": 2
         }
       ]
     },
@@ -122,28 +115,17 @@
     {
       "@context": "https://schema.org",
       "@type": "SoftwareApplication",
-      "aggregateRating": {
-        "@type": "AggregateRating",
-        "bestRating": "5",
-        "ratingCount": "12000",
-        "ratingValue": "4.5",
-        "worstRating": "1"
-      },
-      "alternateName": [
-        "YouTube Shorts Finder",
-        "YouTube Shorts Viral Finder",
-        "YouTube Short Finder"
-      ],
       "applicationCategory": "MultimediaApplication",
-      "description": "Free YouTube Shorts finder by channel. Sort viral Shorts by views, engagement and outlier score, then remake winners in your voice.",
+      "description": "Free YouTube Shorts finder by channel. Paste any public handle, sort viral Shorts by views, engagement and outlier score, then remake winners in your voice.",
       "name": "SpyReels YouTube Shorts Finder",
       "offers": {
-        "@type": "AggregateOffer",
-        "highPrice": "99",
-        "lowPrice": "0",
+        "@type": "Offer",
+        "description": "Free tier available",
+        "price": "0",
         "priceCurrency": "USD"
       },
-      "operatingSystem": "Web Browser"
+      "operatingSystem": "Web Browser",
+      "url": "https://spyreels.ai/free-tools/youtube-shorts-viral-finder"
     }
   ]
 }

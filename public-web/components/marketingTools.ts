@@ -11,9 +11,10 @@ export type MarketingToolId =
   | "hooks"
   | "broll"
   | "carousel"
-  | "tiktok";
+  | "tiktok"
+  | "youtube";
 
-export type MarketingToolsPage = "homepage" | "instagram" | "tiktok";
+export type MarketingToolsPage = "homepage" | "instagram" | "tiktok" | "youtube";
 
 export type MarketingTool = {
   id: MarketingToolId;
@@ -42,6 +43,7 @@ const CATALOG: Record<MarketingToolId, CatalogEntry> = {
       homepage: "Discover creators in your niche.",
       instagram: "Explore more creators in your niche.",
       tiktok: "Explore more creators in your niche",
+      youtube: "Explore more creators in your niche.",
     },
   },
   finder: {
@@ -52,6 +54,7 @@ const CATALOG: Record<MarketingToolId, CatalogEntry> = {
     descriptions: {
       homepage: "Spot the Reels worth studying.",
       tiktok: "Research what works on Instagram Reels",
+      youtube: "Research what works on Instagram Reels.",
     },
   },
   script: {
@@ -63,6 +66,7 @@ const CATALOG: Record<MarketingToolId, CatalogEntry> = {
       homepage: "Turn an idea into a viral script.",
       instagram: "Turn a strong Reel idea into a script in your voice.",
       tiktok: "Turn a strong TikTok idea into a script in your voice",
+      youtube: "Turn a strong Shorts idea into a script in your voice.",
     },
   },
   hooks: {
@@ -74,6 +78,7 @@ const CATALOG: Record<MarketingToolId, CatalogEntry> = {
       homepage: "Find a stronger opening.",
       instagram: "Give your opening a sharper hook.",
       tiktok: "Give the opening a stronger reason to watch",
+      youtube: "Give the opening a stronger reason to watch.",
     },
   },
   broll: {
@@ -85,6 +90,7 @@ const CATALOG: Record<MarketingToolId, CatalogEntry> = {
       homepage: "Plan what viewers will see.",
       instagram: "Plan the shots that support your script.",
       tiktok: "Plan the shots that support your script",
+      youtube: "Plan the shots that support your script.",
     },
   },
   carousel: {
@@ -96,6 +102,7 @@ const CATALOG: Record<MarketingToolId, CatalogEntry> = {
       homepage: "Make your idea swipeable.",
       instagram: "Turn the same idea into a swipeable post.",
       tiktok: "Turn the idea into a swipeable post",
+      youtube: "Turn the idea into a swipeable post.",
     },
   },
   tiktok: {
@@ -105,6 +112,17 @@ const CATALOG: Record<MarketingToolId, CatalogEntry> = {
     icon: "finder",
     descriptions: {
       instagram: "Find more ideas on TikTok.",
+      youtube: "Find more ideas on TikTok.",
+    },
+  },
+  youtube: {
+    id: "youtube",
+    title: "YouTube Shorts Viral Finder",
+    href: "/free-tools/youtube-shorts-viral-finder",
+    icon: "finder",
+    descriptions: {
+      instagram: "Find more ideas on YouTube Shorts.",
+      tiktok: "Find more ideas on YouTube Shorts.",
     },
   },
 };
@@ -112,8 +130,9 @@ const CATALOG: Record<MarketingToolId, CatalogEntry> = {
 /** Page tool order — matches live lists today. */
 export const MARKETING_TOOL_ORDER: Record<MarketingToolsPage, readonly MarketingToolId[]> = {
   homepage: ["creators", "finder", "script", "hooks", "broll", "carousel"],
-  instagram: ["script", "hooks", "broll", "creators", "carousel", "tiktok"],
-  tiktok: ["script", "hooks", "broll", "finder", "creators", "carousel"],
+  instagram: ["script", "hooks", "broll", "creators", "carousel", "tiktok", "youtube"],
+  tiktok: ["script", "hooks", "broll", "finder", "creators", "carousel", "youtube"],
+  youtube: ["script", "hooks", "broll", "finder", "creators", "carousel", "tiktok"],
 };
 
 export function resolveMarketingTools(

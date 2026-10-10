@@ -65,6 +65,17 @@ const PAGES: readonly PageDef[] = [
     ],
     primaryButtons: ["finder-search", "final-cta"],
   },
+  {
+    name: "youtube-shorts-viral-finder",
+    path: "/free-tools/youtube-shorts-viral-finder",
+    sectionHeaders: [
+      { slug: "how-it-works", eyebrow: "How it works" },
+      { slug: "workspace", eyebrow: "Everything in one workspace" },
+      { slug: "beyond", eyebrow: "Beyond the workspace" },
+      { slug: "faq", eyebrow: "Frequently asked questions" },
+    ],
+    primaryButtons: ["finder-search", "final-cta"],
+  },
 ] as const;
 
 test.describe("public-web visual baselines", () => {

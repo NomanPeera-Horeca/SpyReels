@@ -132,6 +132,18 @@ export async function installVisualNetworkMocks(page: Page): Promise<void> {
       return;
     }
 
+    if (
+      method === "GET" &&
+      /\/free-tools\/youtube-shorts-viral-finder\/demo(?:\?|$)/.test(url)
+    ) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(tiktokDemo),
+      });
+      return;
+    }
+
     if (method === "GET" && url.includes("/api/trpc/featured.publicProfilePreview")) {
       await route.fulfill({
         status: 200,
@@ -144,6 +156,17 @@ export async function installVisualNetworkMocks(page: Page): Promise<void> {
     }
 
     if (method === "GET" && url.includes("/api/trpc/tiktokScrape.publicProfilePreview")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          withRequestedUsername(tiktokProfilePreview, readRequestedHandle(url))
+        ),
+      });
+      return;
+    }
+
+    if (method === "GET" && url.includes("/api/trpc/youtubeScrape.publicProfilePreview")) {
       await route.fulfill({
         status: 200,
         contentType: "application/json",

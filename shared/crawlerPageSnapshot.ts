@@ -27,11 +27,6 @@ const STATIC_CRAWLER_SNAPSHOTS: Record<string, CrawlerPageSnapshot> = {
     summary:
       "Free TikTok finder by username. Sort viral TikTok videos by views, engagement and outlier score, then remake winners in your voice.",
   },
-  "/free-tools/youtube-shorts-viral-finder": {
-    h1: "YouTube Shorts Finder: any channel's most viral Shorts",
-    summary:
-      "Free YouTube Shorts finder by channel. Sort viral Shorts by views, engagement and outlier score, then remake winners in your voice.",
-  },
   "/free-tools/viral-hooks": {
     h1: "Viral Hook Generator",
     summary:

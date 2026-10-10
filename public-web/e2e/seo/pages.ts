@@ -28,15 +28,14 @@ export const SEO_NEXT_PAGES: readonly SeoPageDef[] = [
     path: "/free-tools/tiktok-viral-video-finder",
     kind: "next",
   },
-] as const;
-
-export const SEO_MIGRATION_TARGET_PAGES: readonly SeoPageDef[] = [
   {
     id: "youtube-shorts-viral-finder",
     path: "/free-tools/youtube-shorts-viral-finder",
-    kind: "migration-target",
+    kind: "next",
   },
 ] as const;
+
+export const SEO_MIGRATION_TARGET_PAGES: readonly SeoPageDef[] = [] as const;
 
 export const SEO_ALL_PAGES: readonly SeoPageDef[] = [
   ...SEO_NEXT_PAGES,
