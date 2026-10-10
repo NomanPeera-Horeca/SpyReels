@@ -16,9 +16,15 @@
 }
 
 .box {
-  /* Dark scope: remap semantic text tokens for title/body on Feature Surface */
+  /* Dark scope: remap text + action-primary (never override button fills per instance) */
   --sr-color-text-primary: var(--sr-color-text-inverse);
   --sr-color-text-secondary: var(--sr-color-text-secondary-inverse);
+  --sr-color-action-primary-default: #7157ff;
+  /* Re-bind alias in this scope so Primary Large resolves dark default */
+  --sr-color-action-primary: var(--sr-color-action-primary-default);
+  --sr-color-action-primary-hover: #4c3e9a;
+  --sr-color-action-primary-pressed: #433091;
+  --sr-color-focus-primary-action: #9b86ff;
 
   position: relative;
   overflow: hidden;
@@ -56,35 +62,9 @@
   color: var(--sr-color-text-secondary);
 }
 
-/* Light-scope accent button on dark Feature Surface (AA on accent). */
 .button {
   position: relative;
   z-index: 1;
-  box-shadow: none;
-  padding-inline: 20px;
-  background: var(--sr-color-marketing-accent);
-  color: var(--sr-color-text-on-brand);
-  font-weight: var(--sr-type-marketing-button-weight);
-  font-size: var(--sr-type-marketing-button-size);
-  line-height: var(--sr-type-marketing-button-line);
-  letter-spacing: var(--sr-type-marketing-button-tracking);
-}
-
-.button:hover:not(:disabled) {
-  background: var(--sr-color-action-primary-hover);
-  box-shadow: none;
-}
-
-.button:active:not(:disabled) {
-  background: var(--sr-color-action-primary-pressed);
-  box-shadow: none;
-}
-
-.buttonIcon {
-  width: var(--sr-size-icon);
-  height: var(--sr-size-icon);
-  flex: 0 0 var(--sr-size-icon);
-  display: block;
 }
 
 @media (max-width: 640px) {

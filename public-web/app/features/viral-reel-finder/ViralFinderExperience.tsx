@@ -321,7 +321,8 @@ export default function ViralFinderExperience() {
           action={
             <PrimaryButton
               type="submit"
-              glow
+              size="large"
+              data-marketing-primary-button="finder-search"
               disabled={profileLoading || Boolean(matchingProfile?.isPrivate)}
             >
               {submitLabel}

@@ -270,3 +270,8 @@ export function marketingFinalCta(page: Page) {
 export function marketingProcessSteps(page: Page) {
   return page.locator("[data-marketing-process-steps]");
 }
+
+/** Shared Primary Large button close-up target. */
+export function marketingPrimaryButton(page: Page, kind: string) {
+  return page.locator(`[data-marketing-primary-button="${kind}"]`);
+}

@@ -289,9 +289,13 @@ export function MarketingFinalCta({
             <h2 className={cx("sr-text-marketing-heading-2", finalCtaStyles.title)}>{title}</h2>
             <p className={cx("sr-text-marketing-body-large", finalCtaStyles.body)}>{body}</p>
           </div>
-          <PrimaryButton href={href} size="large" className={finalCtaStyles.button}>
-            <span className="sr-text-marketing-button">{buttonLabel}</span>
-            <MarketingIconArrowRight className={finalCtaStyles.buttonIcon} />
+          <PrimaryButton
+            href={href}
+            size="large"
+            className={finalCtaStyles.button}
+            data-marketing-primary-button="final-cta"
+          >
+            {buttonLabel}
           </PrimaryButton>
         </div>
       </div>

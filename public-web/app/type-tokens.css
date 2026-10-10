@@ -75,6 +75,12 @@
   --sr-type-marketing-button-weight: var(--sr-font-weight-semibold);
   --sr-type-marketing-button-tracking: normal;
 
+  /* Core / Button Large (Figma Page 05 Button / Primary Large) */
+  --sr-type-core-button-large-size: 16px;
+  --sr-type-core-button-large-line: 1.2;
+  --sr-type-core-button-large-weight: var(--sr-font-weight-bold);
+  --sr-type-core-button-large-tracking: normal;
+
   --sr-type-marketing-metric-size: 40px;
   --sr-type-marketing-metric-line: 48px;
   --sr-type-marketing-metric-weight: var(--sr-font-weight-bold);
@@ -249,6 +255,13 @@
   line-height: var(--sr-type-marketing-button-line);
   font-weight: var(--sr-type-marketing-button-weight);
   letter-spacing: var(--sr-type-marketing-button-tracking);
+}
+
+.sr-text-core-button-large {
+  font-size: var(--sr-type-core-button-large-size);
+  line-height: var(--sr-type-core-button-large-line);
+  font-weight: var(--sr-type-core-button-large-weight);
+  letter-spacing: var(--sr-type-core-button-large-tracking);
 }
 
 .sr-text-marketing-metric {

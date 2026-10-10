@@ -91,6 +91,7 @@
 
   /* Actions / focus */
   --sr-color-action-primary-default: #4c3e9a;
+  --sr-color-action-primary: var(--sr-color-action-primary-default);
   --sr-color-action-primary-hover: #433091;
   --sr-color-action-primary-pressed: #382778;
   --sr-color-action-selected-subtle: #ece7ff;
@@ -99,6 +100,8 @@
   --sr-color-action-destructive-default: #d92d20;
   --sr-color-action-destructive-hover: #b42318;
   --sr-color-focus-border: #4c3e9a;
+  /* Focus / Primary Action ring color (light). Dark Feature Surface remaps. */
+  --sr-color-focus-primary-action: #4c3e9a;
 
   /* Status */
   --sr-color-status-success-background: #eaf8f2;
@@ -146,6 +149,7 @@
   --sr-layout-content-form-width: 560px; /* layout/content/form-width */
   --sr-layout-marketing-header-height: 77px; /* layout/marketing/header-height (desktop) */
   --sr-layout-icon-tile-size: 40px; /* layout/icon-tile/size (Process Steps + connectors) */
+  --sr-layout-button-large-padding-x: 18px; /* layout/button/large/padding-x */
 
   /*
    * Marketing radius, borders, elevation (Figma Page 04, locked).
@@ -165,6 +169,11 @@
   --sr-elevation-surface-raised: 0 1px 4px rgba(16, 16, 20, 0.08); /* elevation/surface/raised */
   --sr-elevation-menu: 0 4px 12px -2px rgba(16, 16, 20, 0.1); /* elevation/menu */
   --sr-elevation-modal: 0 8px 24px -4px rgba(16, 16, 20, 0.14); /* elevation/modal */
+  /* Elevation / Primary Action — Button / Primary Large */
+  --sr-elevation-primary-action: 0 10px 28px rgba(76, 62, 154, 0.25);
+  /* Focus / Primary Action — 4px spread ring (a≈0.22) atop Primary Action elevation */
+  --sr-elevation-focus-primary-action: 0 0 0 4px
+    color-mix(in srgb, var(--sr-color-focus-primary-action) 22%, transparent);
 }
 
 /* Marketing header height: Compact (≤ 640px), matches Figma Marketing / Header */

@@ -1,8 +1,9 @@
 /**
- * Shared Finder / Search Input Shell (Figma Input / Search architecture).
- * Composed control: platform mark + field + action. Not a standalone 48px input.
- * Shadow kept as the existing ambiguous Marketing recipe until elevation decides.
+ * Shared Finder / Search Input Shell (Figma Marketing / Finder Search v1.1).
+ * Desktop: mark + flexible input + Primary Large at right.
+ * ≤720px: mark + input on row one; full-width Primary Large on row two.
  */
+
 .shell {
   display: flex;
   align-items: center;
@@ -11,7 +12,7 @@
   width: 100%;
   max-width: 760px;
   margin: 0 auto;
-  padding: 8px;
+  padding: var(--sr-layout-inline-gap);
   border: var(--sr-border-width-default) solid var(--sr-color-border-default);
   border-radius: 18px;
   background: var(--sr-color-surface-raised);
@@ -81,13 +82,19 @@
 @media (max-width: 720px) {
   .shell {
     flex-wrap: wrap;
+    align-items: stretch;
+  }
+
+  .mark {
+    margin-left: 6px;
   }
 
   .input {
-    min-width: calc(100% - 50px);
+    flex: 1 1 0;
   }
 
   .action {
+    flex: 1 1 100%;
     width: 100%;
   }
 

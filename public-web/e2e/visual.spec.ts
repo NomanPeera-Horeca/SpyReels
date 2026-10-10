@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import {
   marketingFaq,
   marketingFinalCta,
+  marketingPrimaryButton,
   marketingProcessSteps,
   marketingSectionHeader,
   marketingToolGrid,
@@ -17,6 +18,8 @@ type PageDef = {
   path: string;
   /** MarketingSectionHeader eyebrows present on this page (in page order). */
   sectionHeaders: readonly { slug: string; eyebrow: string }[];
+  /** Primary Large close-ups on this page (hero / finder-search / final-cta). */
+  primaryButtons: readonly string[];
 };
 
 const PAGES: readonly PageDef[] = [
@@ -29,6 +32,7 @@ const PAGES: readonly PageDef[] = [
       { slug: "beyond", eyebrow: "Beyond the workspace" },
       { slug: "faq", eyebrow: "Frequently asked questions" },
     ],
+    primaryButtons: ["finder-search", "final-cta"],
   },
   {
     name: "homepage",
@@ -38,6 +42,7 @@ const PAGES: readonly PageDef[] = [
       { slug: "beyond", eyebrow: "Beyond the workspace" },
       { slug: "faq", eyebrow: "Frequently asked questions" },
     ],
+    primaryButtons: ["hero", "final-cta"],
   },
   {
     name: "tiktok-viral-video-finder",
@@ -48,6 +53,7 @@ const PAGES: readonly PageDef[] = [
       { slug: "beyond", eyebrow: "Beyond the workspace" },
       { slug: "faq", eyebrow: "Frequently asked questions" },
     ],
+    primaryButtons: ["finder-search", "final-cta"],
   },
 ] as const;
 
@@ -142,6 +148,16 @@ test.describe("public-web visual baselines", () => {
         `${pageDef.name}-process-steps.png`,
         visualSectionScreenshotOptions
       );
+
+      for (const kind of pageDef.primaryButtons) {
+        const button = marketingPrimaryButton(page, kind);
+        await expect(button).toHaveCount(1);
+        await button.scrollIntoViewIfNeeded();
+        await expect(button).toHaveScreenshot(
+          `${pageDef.name}-primary-button-${kind}.png`,
+          visualSectionScreenshotOptions
+        );
+      }
     });
   }
 });

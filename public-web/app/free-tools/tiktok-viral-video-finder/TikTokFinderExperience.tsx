@@ -307,12 +307,11 @@ export default function TikTokFinderExperience() {
           action={
             <PrimaryButton
               type="submit"
+              size="large"
+              data-marketing-primary-button="finder-search"
               disabled={profileLoading || Boolean(matchingProfile?.isPrivate)}
             >
-              {submitLabel}{" "}
-              {matchingProfile?.isPrivate || profileLoading ? null : (
-                <span aria-hidden>→</span>
-              )}
+              {submitLabel}
             </PrimaryButton>
           }
           profileLoading={profileLoading}
