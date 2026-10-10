@@ -568,7 +568,7 @@ export type InsertRecreatedScript = typeof recreatedScripts.$inferInsert;
  * Enforced in the `saved.toggle` handler.
  *
  * `platform` + `sourceId` are the nullable canonical external identity used by
- * Viral Posts library sync (see drizzle/0101_saved_reels_canonical_identity.sql).
+ * Viral Posts library sync (see drizzle/0102_saved_reels_canonical_identity.sql).
  */
 export const savedReels = mysqlTable(
   "saved_reels",

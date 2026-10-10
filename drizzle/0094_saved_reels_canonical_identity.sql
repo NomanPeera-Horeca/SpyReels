@@ -1,4 +1,4 @@
--- SUPERSEDED by drizzle/0101_saved_reels_canonical_identity.sql.
+-- SUPERSEDED by drizzle/0102_saved_reels_canonical_identity.sql.
 -- Do not apply this file. It collides with 0094_carousel_remake_slot_style_overrides.sql
 -- and was never recorded on production. Keep for history only.
 --
