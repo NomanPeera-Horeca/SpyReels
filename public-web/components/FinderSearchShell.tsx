@@ -74,7 +74,7 @@ export function FinderSearchShell({
         value={value}
         onChange={onChange}
         placeholder={placeholder}
-        aria-invalid={invalid || undefined}
+        aria-invalid={invalid}
       />
       <span className={styles.action}>{action}</span>
     </form>
