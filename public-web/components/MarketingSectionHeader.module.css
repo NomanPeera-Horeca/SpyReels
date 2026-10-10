@@ -1,14 +1,25 @@
 /**
  * Marketing / Section Header (Figma Page 09).
- * Eyebrow → Heading gap = layout/inline/gap. Optional subtitle below.
- * Type tokens applied here so page CSS (e.g. .answer-sticky h2) cannot override.
+ * Eyebrow → Heading gap = layout/inline-gap (default).
+ * Large: column gap 12 (control-gap); Heading 1 + Body Large.
  */
+
 .root {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: var(--sr-layout-inline-gap);
   margin: 0;
+}
+
+.rootCenter {
+  align-items: center;
+  text-align: center;
+}
+
+.rootLarge {
+  gap: var(--sr-layout-control-gap);
+  max-width: 1020px;
 }
 
 .root .eyebrow {
@@ -28,11 +39,26 @@
   line-height: var(--sr-type-marketing-heading-3-line);
   font-weight: var(--sr-type-marketing-heading-3-weight);
   letter-spacing: var(--sr-type-marketing-heading-3-tracking);
-  /* Headings never break mid-word; balance wraps across lines */
   text-wrap: balance;
   overflow-wrap: normal;
   word-break: normal;
   hyphens: none;
+}
+
+.rootLarge .heading {
+  font-size: var(--sr-type-marketing-heading-1-size);
+  line-height: var(--sr-type-marketing-heading-1-line);
+  font-weight: var(--sr-type-marketing-heading-1-weight);
+  letter-spacing: var(--sr-type-marketing-heading-1-tracking);
+}
+
+/* Highlight phrase inside Large titles (homepage Process Steps). */
+.rootLarge .heading span:not(.noBreak) {
+  color: var(--sr-color-marketing-accent);
+}
+
+.noBreak {
+  white-space: nowrap;
 }
 
 .root .subtitle {
@@ -42,4 +68,12 @@
   line-height: var(--sr-type-marketing-body-small-line);
   font-weight: var(--sr-type-marketing-body-small-weight);
   letter-spacing: var(--sr-type-marketing-body-small-tracking);
+}
+
+.rootLarge .subtitle {
+  font-size: var(--sr-type-marketing-body-large-size);
+  line-height: var(--sr-type-marketing-body-large-line);
+  font-weight: var(--sr-type-marketing-body-large-weight);
+  letter-spacing: var(--sr-type-marketing-body-large-tracking);
+  max-width: 850px;
 }

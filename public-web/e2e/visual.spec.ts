@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import {
   marketingFaq,
   marketingFinalCta,
+  marketingProcessSteps,
   marketingSectionHeader,
   marketingToolGrid,
   prepareVisualPage,
@@ -130,6 +131,15 @@ test.describe("public-web visual baselines", () => {
       await finalCta.scrollIntoViewIfNeeded();
       await expect(finalCta).toHaveScreenshot(
         `${pageDef.name}-final-cta.png`,
+        visualSectionScreenshotOptions
+      );
+
+      const processSteps = marketingProcessSteps(page);
+      await expect(processSteps).toHaveCount(1);
+      await expect(processSteps.locator("article")).toHaveCount(3);
+      await processSteps.scrollIntoViewIfNeeded();
+      await expect(processSteps).toHaveScreenshot(
+        `${pageDef.name}-process-steps.png`,
         visualSectionScreenshotOptions
       );
     });

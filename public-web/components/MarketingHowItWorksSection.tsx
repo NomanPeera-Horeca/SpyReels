@@ -1,28 +1,26 @@
 import type { ReactNode } from "react";
-import { MarketingSectionHeader } from "./MarketingSectionHeader";
-import styles from "./MarketingHowItWorksSection.module.css";
+import {
+  MarketingProcessSteps,
+  type MarketingProcessStep,
+} from "./MarketingProcessSteps";
 
-export type MarketingHowItWorksStep = {
-  number: string;
-  title: string;
-  body: string;
-};
+/** @deprecated Prefer MarketingProcessStep — kept for finder page imports. */
+export type MarketingHowItWorksStep = MarketingProcessStep;
 
 type MarketingHowItWorksSectionProps = {
   /** Section title (page-specific) */
   title: ReactNode;
   /** Optional lead under the title (TikTok uses this; IG omits) */
   description?: ReactNode;
-  steps: readonly [MarketingHowItWorksStep, MarketingHowItWorksStep, MarketingHowItWorksStep];
+  steps: readonly [MarketingProcessStep, MarketingProcessStep, MarketingProcessStep];
   id?: string;
-  /** Page shell width/gutter class (e.g. page module `.shell`) */
+  /** Scroll-margin / page-specific class on the section */
   className?: string;
 };
 
-function cx(...parts: Array<string | false | undefined>) {
-  return parts.filter(Boolean).join(" ");
-}
-
+/**
+ * Finder "How it works" — Marketing Process Steps, presentation=numbered.
+ */
 export function MarketingHowItWorksSection({
   title,
   description,
@@ -30,31 +28,14 @@ export function MarketingHowItWorksSection({
   id = "how-it-works",
   className,
 }: MarketingHowItWorksSectionProps) {
-  const titleId = `${id}-title`;
-
   return (
-    <section
+    <MarketingProcessSteps
+      presentation="numbered"
+      title={title}
+      subtitle={description}
+      steps={steps}
       id={id}
-      className={cx(styles.root, className)}
-      aria-labelledby={titleId}
-    >
-      <MarketingSectionHeader
-        className={styles.header}
-        eyebrow="How it works"
-        title={title}
-        subtitle={description}
-        headingLevel="h2"
-        titleId={titleId}
-      />
-      <div className={styles.grid}>
-        {steps.map((step) => (
-          <article key={step.number} className={styles.card}>
-            <span className={styles.number}>{step.number}</span>
-            <h3 className={styles.cardTitle}>{step.title}</h3>
-            <p className={styles.cardBody}>{step.body}</p>
-          </article>
-        ))}
-      </div>
-    </section>
+      className={className}
+    />
   );
 }

@@ -111,6 +111,69 @@ export function MarketingIconArrowRight(props: IconProps) {
   );
 }
 
+/** Icon / Process Research — Figma Page 05 (20×20, currentColor). */
+export function MarketingIconProcessResearch(props: IconProps) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" fill="none" {...props}>
+      <path
+        d="M13.75 8.75C13.75 11.5114 11.5114 13.75 8.75 13.75C5.98858 13.75 3.75 11.5114 3.75 8.75C3.75 5.98858 5.98858 3.75 8.75 3.75C11.5114 3.75 13.75 5.98858 13.75 8.75Z"
+        stroke="currentColor"
+        strokeWidth="2.5"
+      />
+      <path d="M12.5 12.5L16.875 16.875" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+      <path
+        d="M8.75 10C9.44036 10 10 9.44036 10 8.75C10 8.05964 9.44036 7.5 8.75 7.5C8.05964 7.5 7.5 8.05964 7.5 8.75C7.5 9.44036 8.05964 10 8.75 10Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+/** Icon / Process Remake — Figma Page 05 (20×20, currentColor). */
+export function MarketingIconProcessRemake(props: IconProps) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" fill="none" {...props}>
+      <path
+        d="M6.25 10C6.25 11.0355 5.41053 11.875 4.375 11.875C3.33947 11.875 2.5 11.0355 2.5 10C2.5 8.96447 3.33947 8.125 4.375 8.125C5.41053 8.125 6.25 8.96447 6.25 10Z"
+        stroke="currentColor"
+        strokeWidth="2.5"
+      />
+      <path
+        d="M16.875 4.375C16.875 5.41053 16.0355 6.25 15 6.25C13.9645 6.25 13.125 5.41053 13.125 4.375C13.125 3.33947 13.9645 2.5 15 2.5C16.0355 2.5 16.875 3.33947 16.875 4.375Z"
+        stroke="currentColor"
+        strokeWidth="2.5"
+      />
+      <path
+        d="M15 17.5C16.0355 17.5 16.875 16.6605 16.875 15.625C16.875 14.5895 16.0355 13.75 15 13.75C13.9645 13.75 13.125 14.5895 13.125 15.625C13.125 16.6605 13.9645 17.5 15 17.5Z"
+        fill="currentColor"
+        stroke="currentColor"
+        strokeWidth="2.5"
+      />
+      <path d="M6.25 9.375L13.125 5M6.25 10.625L13.125 15" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** Icon / Process Film — Figma Page 05 (20×20, currentColor). */
+export function MarketingIconProcessFilm(props: IconProps) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" fill="none" {...props}>
+      <path
+        d="M3.75 5H11.875C12.9105 5 13.75 5.83947 13.75 6.875V13.125C13.75 14.1605 12.9105 15 11.875 15H3.75C2.71447 15 1.875 14.1605 1.875 13.125V6.875C1.875 5.83947 2.71447 5 3.75 5Z"
+        stroke="currentColor"
+        strokeWidth="2.5"
+      />
+      <path
+        d="M13.75 8.125L18.125 5.625V14.375L13.75 11.875"
+        stroke="currentColor"
+        strokeWidth="2.5"
+        strokeLinejoin="round"
+      />
+      <path d="M6.875 7.5L10.625 10L6.875 12.5V7.5Z" fill="currentColor" />
+    </svg>
+  );
+}
+
 /** Marketing / FAQ Plus — Figma Page 09. */
 export function MarketingIconPlus(props: IconProps) {
   return (

@@ -70,7 +70,7 @@ type MarketingWorkspaceProps = {
   toolsPage: MarketingToolsPage;
   /** Tool ids to omit (e.g. hide the page's own finder). */
   hiddenToolIds?: readonly MarketingToolId[];
-  /** Finder pages use standalone shell; homepage nests inside growth-section. */
+  /** Finder pages use standalone shell; homepage nests inside .homepage-tools-band. */
   layout?: "standalone" | "embedded";
   titleHeadingLevel?: "h2" | "h3";
   extensionsHeadingLevel?: "h3" | "h4";

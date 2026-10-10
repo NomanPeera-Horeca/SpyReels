@@ -156,7 +156,7 @@ export default function ViralReelFinderPilotPage() {
         <MarketingPlatformStrip />
 
         <MarketingHowItWorksSection
-          className={`${styles.shell} ${styles.howItWorksAnchor}`}
+          className={styles.howItWorksAnchor}
           title="Research to ready-to-film in 3 minutes"
           steps={HOW_IT_WORKS_STEPS}
         />

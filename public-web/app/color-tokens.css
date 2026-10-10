@@ -145,6 +145,7 @@
   --sr-layout-content-reading-width: 720px; /* layout/content/reading-width */
   --sr-layout-content-form-width: 560px; /* layout/content/form-width */
   --sr-layout-marketing-header-height: 77px; /* layout/marketing/header-height (desktop) */
+  --sr-layout-icon-tile-size: 40px; /* layout/icon-tile/size (Process Steps + connectors) */
 
   /*
    * Marketing radius, borders, elevation (Figma Page 04, locked).

@@ -10,6 +10,10 @@ import {
   MarketingPlatformStrip,
   MarketingWorkspace,
 } from "../components/MarketingPageSections";
+import {
+  MarketingProcessSteps,
+  MARKETING_PROCESS_ICON_STEPS,
+} from "../components/MarketingProcessSteps";
 import { buildFaqPageJsonLd, jsonLdScript } from "../components/marketingFaqJsonLd";
 import "./homepage.css";
 
@@ -27,9 +31,31 @@ export const metadata: Metadata = {
 };
 
 const HOMEPAGE_PLATFORM_MARKER = "<!--REACT:PLATFORM_STRIP-->";
+const HOMEPAGE_PROCESS_STEPS_MARKER = "<!--REACT:PROCESS_STEPS-->";
 const HOMEPAGE_WORKSPACE_MARKER = "<!--REACT:WORKSPACE-->";
 const HOMEPAGE_FAQ_MARKER = "<!--REACT:FAQ-->";
 const HOMEPAGE_FINAL_CTA_MARKER = "<!--REACT:FINAL_CTA-->";
+
+const HOMEPAGE_PROCESS_STEPS = [
+  {
+    number: "01",
+    title: "Research",
+    body: "Find the topics and formats already resonating in your niche, with strong Reels surfaced for you.",
+    icon: MARKETING_PROCESS_ICON_STEPS.research,
+  },
+  {
+    number: "02",
+    title: "Remake",
+    body: "Choose a proven idea and turn its structure into an original script in your own voice.",
+    icon: MARKETING_PROCESS_ICON_STEPS.remake,
+  },
+  {
+    number: "03",
+    title: "Film",
+    body: "Get a ready-to-film script with what to say, what to show, and where B-roll fits.",
+    icon: MARKETING_PROCESS_ICON_STEPS.film,
+  },
+] as const;
 
 /** Live homepage FAQ copy (keep wording identical to prior HTML segment). */
 const HOMEPAGE_FAQ_ITEMS = [
@@ -58,19 +84,28 @@ const HOMEPAGE_FAQ_ITEMS = [
 function loadHomepageSegments() {
   const raw = readFileSync(join(process.cwd(), "app", "homepage.html"), "utf8");
   const [beforePlatform, afterPlatform] = raw.split(HOMEPAGE_PLATFORM_MARKER);
-  const [throughGrowthSteps, afterWorkspace] = afterPlatform.split(HOMEPAGE_WORKSPACE_MARKER);
-  const [beforeFaq, afterFaq] = afterWorkspace.split(HOMEPAGE_FAQ_MARKER);
+  const [beforeProcessSteps, afterProcessSteps] = (afterPlatform ?? "").split(HOMEPAGE_PROCESS_STEPS_MARKER);
+  const [beforeWorkspace, afterWorkspace] = (afterProcessSteps ?? "").split(HOMEPAGE_WORKSPACE_MARKER);
+  const [beforeFaq, afterFaq] = (afterWorkspace ?? "").split(HOMEPAGE_FAQ_MARKER);
   const [beforeFinalCta, afterFinalCta] = (afterFaq ?? "").split(HOMEPAGE_FINAL_CTA_MARKER);
   if (
     !beforePlatform ||
-    !throughGrowthSteps ||
+    beforeProcessSteps === undefined ||
+    beforeWorkspace === undefined ||
     beforeFaq === undefined ||
     beforeFinalCta === undefined ||
     afterFinalCta === undefined
   ) {
     throw new Error("homepage.html is missing React segment markers");
   }
-  return { beforePlatform, throughGrowthSteps, beforeFaq, beforeFinalCta, afterFinalCta };
+  return {
+    beforePlatform,
+    beforeProcessSteps,
+    beforeWorkspace,
+    beforeFaq,
+    beforeFinalCta,
+    afterFinalCta,
+  };
 }
 
 const homepageSegments = loadHomepageSegments();
@@ -104,7 +139,21 @@ export default function HomePage() {
       <main id="top">
         <div dangerouslySetInnerHTML={{ __html: homepageSegments.beforePlatform }} />
         <MarketingPlatformStrip />
-        <div dangerouslySetInnerHTML={{ __html: homepageSegments.throughGrowthSteps }} />
+        <div dangerouslySetInnerHTML={{ __html: homepageSegments.beforeProcessSteps }} />
+        <MarketingProcessSteps
+          presentation="icon"
+          id="tools"
+          title={
+            <>
+              You bring the expertise.
+              <br />
+              <span>SpyReels helps you grow.</span>
+            </>
+          }
+          subtitle="From niche research to ready-to-film content, SpyReels makes it easier to show up on Instagram and TikTok while building your personal brand."
+          steps={HOMEPAGE_PROCESS_STEPS}
+        />
+        <div dangerouslySetInnerHTML={{ __html: homepageSegments.beforeWorkspace }} />
         <MarketingWorkspace
           layout="embedded"
           toolsPage="homepage"

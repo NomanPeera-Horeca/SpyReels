@@ -265,3 +265,8 @@ export function marketingFaq(page: Page) {
 export function marketingFinalCta(page: Page) {
   return page.locator("[data-marketing-final-cta]");
 }
+
+/** Marketing Process Steps section (numbered or icon). */
+export function marketingProcessSteps(page: Page) {
+  return page.locator("[data-marketing-process-steps]");
+}
