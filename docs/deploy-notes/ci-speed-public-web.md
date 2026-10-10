@@ -1,6 +1,6 @@
 # public-web CI speed (before / after)
 
-Measured from successful GitHub Actions runs on 2026-10-10 (PR #104 window).
+Measured from successful GitHub Actions runs on 2026-10-10.
 
 ## Before (monolithic `qa`)
 
@@ -8,7 +8,7 @@ Single job in Playwright Docker: typecheck → content-spec → build → e2e �
 
 | Workflow / job | Wall time | Notes |
 |---|---:|---|
-| **public-web / qa** | **~2.8–2.9 min** (170–175s) | Required gate |
+| **public-web / qa** | **~2.8–2.9 min** (170–175s) | Required gate; always full path |
 | └ Initialize containers | ~37–48s | Playwright image pull/start |
 | └ Install deps | ~7s | No explicit pnpm store cache in container |
 | └ Typecheck | ~4–7s | |
@@ -21,23 +21,39 @@ Single job in Playwright Docker: typecheck → content-spec → build → e2e �
 | **CI** (root typecheck+test) | ~3.2–3.7 min | Separate workflow |
 | **SpyReels App CI** | ~2.5–4.1 min | Separate workflow |
 
-Feedback for copy/SEO-only changes still paid the full visual + e2e Docker path. Baseline updates required `workflow_dispatch` → download artifact → manual commit (extra round trip).
+Baseline updates required `workflow_dispatch` → download artifact → manual commit (extra round trip).
 
-## After (this change)
+Source runs: [public-web 38087099442](https://github.com/NomanPeera-Horeca/SpyReels/actions/runs/38087099442), [CI 38087099448](https://github.com/NomanPeera-Horeca/SpyReels/actions/runs/38087099448), [App CI 38087099431](https://github.com/NomanPeera-Horeca/SpyReels/actions/runs/38087099431).
 
-| Job | When | Expected wall time | Role |
-|---|---|---:|---|
-| **fast** | Every public-web change | **≤3 min** (est. ~1–1.5 min warm) | typecheck, content-spec, build, SEO; ubuntu + pnpm cache; no Playwright container |
-| **e2e** | After fast | ~1.5–2.5 min (est.) | Reuses `.next` artifact; Chromium cache |
-| **visual** | UI paths only, 2 shards | ~1.5–2.5 min wall (parallel shards) | Docker pixels; skipped for SEO/content-only |
-| **update-baselines** | Label `update-baselines` | ~3–4 min | Update + verify + commit on PR branch |
-| **qa** | Aggregate | <30s | Keeps required check name `public-web / qa` |
+## After (PR #106)
 
-Fill in measured after timings from the PR checks once green:
+Source run: [public-web 38088505177](https://github.com/NomanPeera-Horeca/SpyReels/actions/runs/38088505177) (UI path change; visuals on).
 
-| Job | Run URL | Duration |
-|---|---|---:|
-| fast | _pending_ | |
-| e2e | _pending_ | |
-| visual | _pending_ | |
-| qa (gate) | _pending_ | |
+| Job | Wall time | Role |
+|---|---:|---|
+| **fast** | **35s** (also saw 49–58s) | typecheck, content-spec, build, SEO; ubuntu + pnpm cache |
+| changes | 9s | UI / `update-baselines` label gate |
+| e2e | 1m53s | Reuses `.next`; Playwright Chromium cache hit |
+| visual (1/2) | 1m53s | Docker; parallel shard |
+| visual (2/2) | 1m50s | Docker; parallel shard |
+| qa | 3s | Aggregate required check |
+| **Workflow wall (UI change)** | **~2m40s** | fast ∥ changes → e2e ∥ visual → qa |
+
+### Fast lane step breakdown (35s run)
+
+| Step | Time |
+|---|---:|
+| Checkout + pnpm/node setup | ~9s |
+| Install (cached) | 2s |
+| Typecheck | 3s |
+| content-spec | 1s |
+| Build | 10s |
+| Upload `.next` | 3s |
+| SEO contract | 3s |
+
+### Wins
+
+- **Fast feedback ≤3 min:** 35–58s for typecheck + unit/content-spec + SEO (was buried until ~2.8 min).
+- **Visuals conditional:** skipped when only SEO/content-spec/docs change (path filter).
+- **Caches:** pnpm store (host + container), Playwright Chromium on e2e.
+- **Baselines:** PR label `update-baselines` commits Linux snapshots in-run (no dispatch round trip).
