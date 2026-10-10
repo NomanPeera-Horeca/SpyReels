@@ -192,6 +192,41 @@ export function MarketingIconMinus(props: IconProps) {
   );
 }
 
+/** Icon / Menu — Figma Page 05 (20×20, currentColor). */
+export function MarketingIconMenu(props: IconProps) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" fill="none" {...props}>
+      <path
+        d="M0 4C0 3.44772 0.447715 3 1 3H19C19.5523 3 20 3.44772 20 4C20 4.55228 19.5523 5 19 5H1C0.447715 5 0 4.55228 0 4Z"
+        fill="currentColor"
+      />
+      <path
+        d="M0 10C0 9.44772 0.447715 9 1 9H19C19.5523 9 20 9.44772 20 10C20 10.5523 19.5523 11 19 11H1C0.447715 11 0 10.5523 0 10Z"
+        fill="currentColor"
+      />
+      <path
+        d="M0 16C0 15.4477 0.447715 15 1 15H19C19.5523 15 20 15.4477 20 16C20 16.5523 19.5523 17 19 17H1C0.447715 17 0 16.5523 0 16Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+/** Icon / Close — Figma Page 05 (20×20, currentColor). */
+export function MarketingIconClose(props: IconProps) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" fill="none" {...props}>
+      <path
+        d="M5 5L15 15M15 5L5 15"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export type MarketingToolIconId =
   | "script"
   | "hooks"

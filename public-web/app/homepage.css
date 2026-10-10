@@ -374,3 +374,74 @@
 /* Homepage Tool Grid band under Process Steps */
 .homepage-tools-band{padding-bottom:var(--sr-layout-section-compact-gap);background:var(--sr-color-surface-page)}
 @media(max-width:640px){.homepage-tools-band{padding-bottom:var(--sr-layout-section-compact-gap)}}
+
+/* Marketing Header v1.0: Icon Menu / Close + Button / Dark (no glyph, no CSS hamburger) */
+.menu-toggle{
+  display:none;
+  place-items:center;
+  width:42px;
+  height:42px;
+  border-radius:var(--sr-radius-control);
+  color:var(--sr-color-text-primary);
+  background:transparent;
+  border:0;
+  cursor:pointer;
+  padding:0;
+}
+.menu-toggle:before,
+.menu-toggle:after,
+.menu-toggle > span{
+  content:none !important;
+  display:none !important;
+}
+.menu-toggle-icon{
+  width:var(--sr-size-icon);
+  height:var(--sr-size-icon);
+  display:block;
+  color:currentColor;
+}
+.menu-toggle-icon-close{display:none}
+.menu-toggle.open .menu-toggle-icon-open{display:none}
+.menu-toggle.open .menu-toggle-icon-close{display:block}
+@media(max-width:1040px){
+  .menu-toggle{display:grid}
+}
+/* DarkButton owns Start free sizing; do not shrink on mobile */
+.nav-actions .sr-dark-button{
+  flex-shrink:0;
+}
+.nav-actions .btn-dark{display:none}
+@media(max-width:620px){
+  .nav-actions .sr-dark-button{
+    height:40px;
+    min-height:40px;
+    padding:0 var(--sr-layout-control-gap);
+    font-size:var(--sr-type-marketing-button-size);
+    line-height:var(--sr-type-marketing-button-line);
+  }
+}
+/* Mega titles / captions use Figma marketing type styles */
+.mega-link strong,
+.nav-choice strong,
+.nav-role strong{
+  font-size:var(--sr-type-marketing-button-size);
+  line-height:var(--sr-type-marketing-button-line);
+  font-weight:var(--sr-type-marketing-button-weight);
+  color:var(--sr-color-text-primary);
+}
+.mega-link small,
+.nav-choice small,
+.nav-role small{
+  font-size:var(--sr-type-marketing-caption-size);
+  line-height:var(--sr-type-marketing-caption-line);
+  font-weight:var(--sr-type-marketing-caption-weight);
+  color:var(--sr-color-text-tertiary);
+}
+.nav-panel-label{
+  font-size:var(--sr-type-marketing-eyebrow-size);
+  line-height:var(--sr-type-marketing-eyebrow-line);
+  font-weight:var(--sr-type-marketing-eyebrow-weight);
+  letter-spacing:var(--sr-type-marketing-eyebrow-tracking);
+  text-transform:uppercase;
+  color:var(--sr-color-text-tertiary);
+}

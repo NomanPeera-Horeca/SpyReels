@@ -2,11 +2,14 @@ import { expect, test } from "@playwright/test";
 import {
   marketingFaq,
   marketingFinalCta,
+  marketingFooter,
+  marketingHeader,
   marketingPrimaryButton,
   marketingProcessSteps,
   marketingSectionHeader,
   marketingToolGrid,
   prepareVisualPage,
+  screenshotWithoutStickyHeader,
   visualScreenshotOptions,
   visualSectionScreenshotOptions,
 } from "./visualHelpers";
@@ -66,7 +69,7 @@ test.describe("public-web visual baselines", () => {
   });
 
   for (const pageDef of PAGES) {
-    test(`${pageDef.name} initial state`, async ({ page }) => {
+    test(`${pageDef.name} initial state`, async ({ page }, testInfo) => {
       await prepareVisualPage(page, pageDef.path);
 
       // Initial empty finder only — never open auth or interact
@@ -98,14 +101,60 @@ test.describe("public-web visual baselines", () => {
         ...visualScreenshotOptions,
       });
 
+      // Shared chrome shots once (homepage) — sticky header stays visible here
+      if (pageDef.name === "homepage") {
+        const header = marketingHeader(page);
+        await expect(header).toHaveCount(1);
+        await expect(header).toHaveScreenshot(
+          "marketing-header-closed.png",
+          visualSectionScreenshotOptions
+        );
+
+        if (testInfo.project.name === "desktop-1440") {
+          const product = header.locator("details.product-menu");
+          await product.evaluate((el) => {
+            (el as HTMLDetailsElement).open = true;
+          });
+          await expect(product).toHaveAttribute("open", "");
+          await expect(header).toHaveScreenshot(
+            "marketing-header-product-open.png",
+            visualSectionScreenshotOptions
+          );
+          await product.evaluate((el) => {
+            (el as HTMLDetailsElement).open = false;
+          });
+        }
+
+        if (testInfo.project.name === "mobile-390") {
+          const toggle = header.locator("#menu-toggle");
+          await toggle.click();
+          await expect(header.locator("#nav-inner")).toHaveClass(/menu-open/);
+          await expect(header).toHaveScreenshot(
+            "marketing-header-mobile-open.png",
+            visualSectionScreenshotOptions
+          );
+          await toggle.click();
+        }
+
+        const footer = marketingFooter(page);
+        await expect(footer).toHaveCount(1);
+        await screenshotWithoutStickyHeader(page, footer, async () => {
+          await expect(footer).toHaveScreenshot(
+            "marketing-footer.png",
+            visualSectionScreenshotOptions
+          );
+        });
+      }
+
       for (const header of pageDef.sectionHeaders) {
         const loc = marketingSectionHeader(page, header.eyebrow);
         await expect(loc).toHaveCount(1);
-        await loc.scrollIntoViewIfNeeded();
-        await expect(loc).toHaveScreenshot(
-          `${pageDef.name}-section-header-${header.slug}.png`,
-          visualSectionScreenshotOptions
-        );
+        await screenshotWithoutStickyHeader(page, loc, async () => {
+          await expect(loc).toHaveScreenshot(
+            `${pageDef.name}-section-header-${header.slug}.png`,
+            visualSectionScreenshotOptions
+          );
+        });
       }
 
       const toolGrid = marketingToolGrid(page);
@@ -113,50 +162,55 @@ test.describe("public-web visual baselines", () => {
       await expect
         .poll(async () => toolGrid.locator('[id^="tool-"]').count())
         .toBeGreaterThanOrEqual(4);
-      await toolGrid.scrollIntoViewIfNeeded();
-      await expect(toolGrid).toHaveScreenshot(
-        `${pageDef.name}-tool-grid.png`,
-        visualSectionScreenshotOptions
-      );
+      await screenshotWithoutStickyHeader(page, toolGrid, async () => {
+        await expect(toolGrid).toHaveScreenshot(
+          `${pageDef.name}-tool-grid.png`,
+          visualSectionScreenshotOptions
+        );
+      });
 
       const faq = marketingFaq(page);
       await expect(faq).toHaveCount(1);
       await expect
         .poll(async () => faq.locator("details").count())
         .toBeGreaterThanOrEqual(5);
-      await faq.scrollIntoViewIfNeeded();
-      await expect(faq).toHaveScreenshot(
-        `${pageDef.name}-faq.png`,
-        visualSectionScreenshotOptions
-      );
+      await screenshotWithoutStickyHeader(page, faq, async () => {
+        await expect(faq).toHaveScreenshot(
+          `${pageDef.name}-faq.png`,
+          visualSectionScreenshotOptions
+        );
+      });
 
       const finalCta = marketingFinalCta(page);
       await expect(finalCta).toHaveCount(1);
       await expect(finalCta.getByRole("heading", { level: 2 })).toBeVisible();
       await expect(finalCta.locator("a.sr-primary-button")).toBeVisible();
-      await finalCta.scrollIntoViewIfNeeded();
-      await expect(finalCta).toHaveScreenshot(
-        `${pageDef.name}-final-cta.png`,
-        visualSectionScreenshotOptions
-      );
+      await screenshotWithoutStickyHeader(page, finalCta, async () => {
+        await expect(finalCta).toHaveScreenshot(
+          `${pageDef.name}-final-cta.png`,
+          visualSectionScreenshotOptions
+        );
+      });
 
       const processSteps = marketingProcessSteps(page);
       await expect(processSteps).toHaveCount(1);
       await expect(processSteps.locator("article")).toHaveCount(3);
-      await processSteps.scrollIntoViewIfNeeded();
-      await expect(processSteps).toHaveScreenshot(
-        `${pageDef.name}-process-steps.png`,
-        visualSectionScreenshotOptions
-      );
+      await screenshotWithoutStickyHeader(page, processSteps, async () => {
+        await expect(processSteps).toHaveScreenshot(
+          `${pageDef.name}-process-steps.png`,
+          visualSectionScreenshotOptions
+        );
+      });
 
       for (const kind of pageDef.primaryButtons) {
         const button = marketingPrimaryButton(page, kind);
         await expect(button).toHaveCount(1);
-        await button.scrollIntoViewIfNeeded();
-        await expect(button).toHaveScreenshot(
-          `${pageDef.name}-primary-button-${kind}.png`,
-          visualSectionScreenshotOptions
-        );
+        await screenshotWithoutStickyHeader(page, button, async () => {
+          await expect(button).toHaveScreenshot(
+            `${pageDef.name}-primary-button-${kind}.png`,
+            visualSectionScreenshotOptions
+          );
+        });
       }
     });
   }

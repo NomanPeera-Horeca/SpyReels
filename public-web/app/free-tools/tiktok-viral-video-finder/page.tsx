@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Script from "next/script";
 import { MarketingFinderMotion, MarketingFooter, MarketingHeader } from "../../../components/MarketingChrome";
 import { MarketingFaq, MarketingFinalCta, MarketingPlatformStrip, MarketingWorkspace } from "../../../components/MarketingPageSections";
 import { buildFaqPageJsonLd, jsonLdScript } from "../../../components/marketingFaqJsonLd";
@@ -90,6 +89,6 @@ export default function TikTokViralVideoFinderPage() {
         href="#finder"
       />
     </main>
-    <MarketingFooter /><HomepageAuthGate /><Script src="/marketing/chrome.js" strategy="afterInteractive" />
+    <MarketingFooter /><HomepageAuthGate />
   </div>;
 }

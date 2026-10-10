@@ -99,9 +99,17 @@
   --sr-color-action-disabled-background: #f2f2f5;
   --sr-color-action-destructive-default: #d92d20;
   --sr-color-action-destructive-hover: #b42318;
+  /* Button / Dark (Figma Page 05) — marketing header Start free */
+  --sr-color-action-neutral-default: #111116;
+  --sr-color-action-neutral-hover: #19191f;
+  --sr-color-action-neutral-pressed: #101014;
   --sr-color-focus-border: #4c3e9a;
   /* Focus / Primary Action ring color (light). Dark Feature Surface remaps. */
   --sr-color-focus-primary-action: #4c3e9a;
+  /* Focus / Neutral Action — Button / Dark (same purple ring recipe) */
+  --sr-color-focus-neutral-action: #4c3e9a;
+  --sr-elevation-focus-neutral-action: 0 0 0 4px
+    color-mix(in srgb, var(--sr-color-focus-neutral-action) 22%, transparent);
 
   /* Status */
   --sr-color-status-success-background: #eaf8f2;

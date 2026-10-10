@@ -178,7 +178,6 @@ export default function HomePage() {
       </main>
       <MarketingFooter />
       <HomepageAuthGate />
-      <Script src="/marketing/chrome.js" strategy="afterInteractive" />
       <Script src="/marketing/homepage.js" strategy="afterInteractive" />
     </>
   );

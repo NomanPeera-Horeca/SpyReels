@@ -275,3 +275,49 @@ export function marketingProcessSteps(page: Page) {
 export function marketingPrimaryButton(page: Page, kind: string) {
   return page.locator(`[data-marketing-primary-button="${kind}"]`);
 }
+
+/** Sticky marketing header (chrome). */
+export function marketingHeader(page: Page) {
+  return page.locator("[data-marketing-header]");
+}
+
+/** Marketing footer (chrome). */
+export function marketingFooter(page: Page) {
+  return page.locator("[data-marketing-footer]");
+}
+
+/**
+ * Hide sticky marketing header for section/element screenshots so it cannot
+ * cover the crop. Restores previous visibility after `fn` completes.
+ */
+export async function withStickyHeaderHidden<T>(
+  page: Page,
+  fn: () => Promise<T>
+): Promise<T> {
+  const previous = await page.evaluate(() => {
+    const header = document.querySelector<HTMLElement>("[data-marketing-header]");
+    if (!header) return null;
+    const prior = header.style.visibility;
+    header.style.visibility = "hidden";
+    return prior;
+  });
+  try {
+    return await fn();
+  } finally {
+    await page.evaluate((prior) => {
+      const header = document.querySelector<HTMLElement>("[data-marketing-header]");
+      if (!header) return;
+      header.style.visibility = prior ?? "";
+    }, previous);
+  }
+}
+
+/** Scroll target into view, hide sticky header, then run screenshot callback. */
+export async function screenshotWithoutStickyHeader<T>(
+  page: Page,
+  locator: { scrollIntoViewIfNeeded: () => Promise<void> },
+  fn: () => Promise<T>
+): Promise<T> {
+  await locator.scrollIntoViewIfNeeded();
+  return withStickyHeaderHidden(page, fn);
+}
