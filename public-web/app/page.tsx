@@ -17,6 +17,7 @@ import {
   MARKETING_PROCESS_ICON_STEPS,
 } from "../components/MarketingProcessSteps";
 import { buildFaqPageJsonLd, jsonLdScript } from "../components/marketingFaqJsonLd";
+import { marketingSharedCopy } from "../lib/marketingSharedCopy";
 import "./homepage.css";
 
 const title = "SpyReels | Research Viral Reels and Remake Scripts in Your Voice";
@@ -164,7 +165,7 @@ export default function HomePage() {
               <span>SpyReels helps you grow.</span>
             </>
           }
-          subtitle="From niche research to ready-to-film content, SpyReels makes it easier to show up on Instagram and TikTok while building your personal brand."
+          subtitle={marketingSharedCopy.homepage.processSupport}
           steps={HOMEPAGE_PROCESS_STEPS}
         />
         <div dangerouslySetInnerHTML={{ __html: homepageSegments.beforeWorkspace }} />

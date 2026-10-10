@@ -15,8 +15,8 @@ test.describe("Viral Reel Finder raw HTML", () => {
     expect(html).toMatch(/name="description" content="Free viral Reel finder for Instagram/);
     expect(html).toContain("Find");
     expect(html).toContain("viral");
-    expect(html).toContain("Instagram Reels in your niche");
-    expect(html).toContain("Research to ready-to-film in 3 minutes");
+    expect(html).toContain("Instagram Reels in your niche.");
+    expect(html).toContain("Research to ready-to-film in 3 minutes.");
     expect(html).toContain("Questions about finding viral Reels.");
     expect(html).toContain("Is SpyReels a free viral finder?");
     expect(html).toContain("Reel finder vs Instagram Search");

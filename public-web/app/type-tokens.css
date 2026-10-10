@@ -235,6 +235,13 @@
   letter-spacing: var(--sr-type-marketing-title-medium-tracking);
 }
 
+.sr-text-marketing-body-large,
+.sr-text-marketing-body-medium,
+.sr-text-marketing-body-small {
+  /* Decision 32: balanced paragraph wrapping; avoid orphan last words where supported */
+  text-wrap: pretty;
+}
+
 .sr-text-marketing-body-large {
   font-size: var(--sr-type-marketing-body-large-size);
   line-height: var(--sr-type-marketing-body-large-line);
@@ -299,6 +306,17 @@
   text-transform: var(--sr-type-marketing-eyebrow-transform);
 }
 
+.sr-text-product-display,
+.sr-text-product-heading-1,
+.sr-text-product-heading-2,
+.sr-text-product-heading-3,
+.sr-text-product-heading-4 {
+  text-wrap: balance;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+
 .sr-text-product-display {
   font-size: var(--sr-type-product-display-size);
   line-height: var(--sr-type-product-display-line);
@@ -332,6 +350,12 @@
   line-height: var(--sr-type-product-heading-4-line);
   font-weight: var(--sr-type-product-heading-4-weight);
   letter-spacing: var(--sr-type-product-heading-4-tracking);
+}
+
+.sr-text-product-body-large,
+.sr-text-product-body-medium,
+.sr-text-product-body-small {
+  text-wrap: pretty;
 }
 
 .sr-text-product-body-large {

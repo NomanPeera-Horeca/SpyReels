@@ -82,6 +82,9 @@ jobs:
       - name: Typecheck
         run: pnpm check
 
+      - name: Marketing content-spec (Figma Decision 32)
+        run: pnpm test:content-spec
+
       - name: Build
         run: pnpm build
 
