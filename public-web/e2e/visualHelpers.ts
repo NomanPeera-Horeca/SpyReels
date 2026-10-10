@@ -386,12 +386,12 @@ export async function withProductDemoScenePaused<T>(
         camera.setAttribute("data-pw-style-backup", camera.getAttribute("style") ?? "");
       }
       const focus: Record<string, string> = {
-        search: "translate(-187.5px, -90.62px) scale(0.625)",
-        results: "translate(-72.92px, -72.4px) scale(0.7292)",
-        winner: "translate(-8.33px, -100px) scale(0.8333)",
+        search: "translate(-170.66px, -53.94px) scale(0.5960)",
+        results: "translate(-57.27px, -58.95px) scale(0.6152)",
+        winner: "translate(-29.17px, -100px) scale(0.8333)",
         remake: "translate(-83.33px, -116.67px) scale(0.8333)",
-        script: "translate(-60.58px, -48.56px) scale(0.6731)",
-        success: "translate(-266.3px, -101.09px) scale(0.7609)",
+        script: "translate(-75px, -50px) scale(0.6250)",
+        success: "translate(-231px, -105px) scale(0.7000)",
       };
       camera.style.animation = "none";
       camera.style.transform = focus[sceneName] ?? focus.success;
