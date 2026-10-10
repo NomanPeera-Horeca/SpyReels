@@ -95,9 +95,19 @@ function sharedSlots(): MarketingCopySlot[] {
       kind: "supporting",
     },
     {
+      slot: "shared.integrations.telegramTitle",
+      value: shared.integrations.telegramTitle,
+      kind: "cardTitle",
+    },
+    {
       slot: "shared.integrations.telegram",
       value: shared.integrations.telegram,
       kind: "cardDescription",
+    },
+    {
+      slot: "shared.integrations.aiTitle",
+      value: shared.integrations.aiTitle,
+      kind: "cardTitle",
     },
     {
       slot: "shared.integrations.ai",

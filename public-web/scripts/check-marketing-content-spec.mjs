@@ -173,9 +173,19 @@ function sharedSlots(source) {
       kind: "supporting",
     },
     {
+      slot: "shared.integrations.telegramTitle",
+      value: get("telegramTitle"),
+      kind: "cardTitle",
+    },
+    {
       slot: "shared.integrations.telegram",
       value: get("telegram"),
       kind: "cardDescription",
+    },
+    {
+      slot: "shared.integrations.aiTitle",
+      value: get("aiTitle"),
+      kind: "cardTitle",
     },
     { slot: "shared.integrations.ai", value: get("ai"), kind: "cardDescription" },
     {

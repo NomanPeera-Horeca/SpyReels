@@ -31,6 +31,8 @@ export const CONTENT_SPEC_LIMITS = {
  */
 export const PROTECTED_COPY_SLOTS: Readonly<Record<string, "protected copy, owner-approved">> = {
   "instagram.hero.lead": "protected copy, owner-approved",
+  /** Locked Figma title; same string on every breakpoint (34 > cardTitle 30). */
+  "shared.integrations.aiTitle": "protected copy, owner-approved",
 };
 
 export type ContentSpecKind =

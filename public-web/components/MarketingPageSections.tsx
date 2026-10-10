@@ -173,7 +173,7 @@ export function MarketingWorkspace({
           <div className={styles.integrationCopy}>
             <div className={styles.integrationTitleRow}>
               <strong className={cx(styles.integrationTitle, "sr-text-product-card-title")}>
-                Save Reels with Telegram
+                {marketingSharedCopy.integrations.telegramTitle}
               </strong>
             </div>
             <p className={cx(styles.integrationDescription, "sr-text-marketing-body-small")}>
@@ -188,7 +188,7 @@ export function MarketingWorkspace({
           <div className={styles.integrationCopy}>
             <div className={styles.integrationTitleRow}>
               <strong className={cx(styles.integrationTitle, "sr-text-product-card-title")}>
-                SpyReels in ChatGPT and Claude
+                {marketingSharedCopy.integrations.aiTitle}
               </strong>
               <span className={cx(styles.badge, "sr-text-marketing-caption")}>Coming soon</span>
             </div>

@@ -22,7 +22,10 @@ export const marketingSharedCopy = {
       "From niche research to ready-to-film content, SpyReels helps you show up on Instagram and TikTok.",
   },
   integrations: {
+    telegramTitle: "Save Reels with Telegram",
     telegram: "Send a Reel while you browse. Pick it up later in SpyReels.",
+    /** Same title on every breakpoint; no mobile-only shorter variant. */
+    aiTitle: "SpyReels in ChatGPT and Claude",
     ai: "Bring SpyReels research into the conversation where you develop ideas.",
   },
   responsibleResearch: {

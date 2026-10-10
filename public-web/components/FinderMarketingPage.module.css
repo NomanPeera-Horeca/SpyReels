@@ -108,6 +108,11 @@
   line-height: var(--sr-type-marketing-caption-line);
   font-weight: var(--sr-type-marketing-caption-weight);
   letter-spacing: var(--sr-type-marketing-caption-tracking);
+  /* Figma: one line on desktop + mobile (3 handles + Try) */
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
 }
 
 .examples button {

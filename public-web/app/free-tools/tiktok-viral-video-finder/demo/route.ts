@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
-const handles = new Set(["charlidamelio", "khaby.lame", "zachking", "mrbeast"]);
+const handles = new Set(["charlidamelio", "khaby.lame", "mrbeast"]);
 
 export async function GET(request: NextRequest) {
   const handle = (request.nextUrl.searchParams.get("handle") ?? "").trim().toLowerCase();

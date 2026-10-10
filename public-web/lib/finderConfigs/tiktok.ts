@@ -200,7 +200,7 @@ export const tiktokFinderConfig: FinderConfig = {
     spellCheck: false,
     examplesVariant: "tryInline",
     examplesPrefix: "Try ",
-    demoHandles: ["charlidamelio", "khaby.lame", "zachking", "mrbeast"],
+    demoHandles: ["charlidamelio", "khaby.lame", "mrbeast"],
     platformLabel: "TikTok",
     profileMetaKind: "followersVideos",
     normalizeHandle: parseHandle,
