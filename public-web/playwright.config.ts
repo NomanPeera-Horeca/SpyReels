@@ -1,8 +1,14 @@
 import { defineConfig } from "@playwright/test";
 
-// Visual baselines are macOS-local only (pnpm test:visual). Keep them out of
-// default pnpm test:e2e so Linux CI (public-web-pilot) never runs them.
+// Visual baselines: Linux (*-linux.png) via Playwright Docker / CI is the
+// source of truth. Optional local macOS Chrome runs write *-darwin.png.
 const runVisual = process.env.PLAYWRIGHT_VISUAL === "1";
+// Local macOS: system Chrome (historical *-darwin.png). CI/Docker set
+// PLAYWRIGHT_USE_SYSTEM_CHROME=0 and use bundled Chromium (*-linux.png).
+const useSystemChrome =
+  runVisual &&
+  process.platform === "darwin" &&
+  process.env.PLAYWRIGHT_USE_SYSTEM_CHROME !== "0";
 
 export default defineConfig({
   testDir: "./e2e",
@@ -27,9 +33,8 @@ export default defineConfig({
     trace: runVisual ? "off" : "retain-on-failure",
     screenshot: runVisual ? "off" : "only-on-failure",
     video: runVisual ? "off" : "retain-on-failure",
-    // Cursor Electron often resolves Playwright's bundled browser as mac-x64
-    // on Apple Silicon (missing/SEGV). Visual runs use system Chrome instead.
-    ...(runVisual ? { channel: "chrome" as const } : {}),
+    // Local macOS convenience only. CI / Docker use bundled Chromium.
+    ...(useSystemChrome ? { channel: "chrome" as const } : {}),
   },
   projects: [
     { name: "desktop-1440", use: { viewport: { width: 1440, height: 900 } } },

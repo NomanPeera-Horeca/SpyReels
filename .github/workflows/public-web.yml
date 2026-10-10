@@ -1,0 +1,149 @@
+# Public-web safety net: typecheck, build, e2e, faq.spec, visual baselines.
+# Visuals run inside the official Playwright image (Linux) for stable pixels.
+# macOS darwin baselines remain for optional local Chrome runs.
+#
+# Required check (repo settings → branch protection):
+#   public-web / qa
+#
+# Update Linux baselines (one command after Docker is installed):
+#   cd public-web && pnpm test:visual:update:docker
+# Or via Actions: workflow_dispatch → update_visual_baselines=true → download artifact.
+
+name: public-web
+
+on:
+  pull_request:
+    paths:
+      - "public-web/**"
+      - ".github/workflows/public-web.yml"
+  push:
+    paths:
+      - "public-web/**"
+      - ".github/workflows/public-web.yml"
+  workflow_dispatch:
+    inputs:
+      update_visual_baselines:
+        description: "Regenerate Linux visual baselines and upload as artifact (does not commit)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-web-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qa:
+    name: qa
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-jammy
+      options: --ipc=host
+    defaults:
+      run:
+        working-directory: public-web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.4.1 --activate
+        working-directory: .
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm check
+
+      - name: Build
+        run: pnpm build
+
+      - name: Start server
+        run: |
+          pnpm exec next start -p 3100 > /tmp/spyreels-public-web.log 2>&1 &
+          echo $! > /tmp/spyreels-public-web.pid
+
+      - name: Wait for health
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3100/health > /tmp/health.json; then
+              cat /tmp/health.json
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/spyreels-public-web.log || true
+          exit 1
+
+      - name: E2E (non-visual)
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100
+          CI: true
+        run: pnpm test:e2e
+
+      - name: FAQ spec
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100
+          CI: true
+        run: pnpm exec playwright test e2e/faq.spec.ts --project=desktop-1440
+
+      - name: Require Linux visual baselines
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.update_visual_baselines != true }}
+        run: |
+          count=$(find e2e/visual.spec.ts-snapshots -name '*-linux.png' 2>/dev/null | wc -l | tr -d ' ')
+          echo "Linux baseline count: ${count}"
+          if [ "${count}" -lt 1 ]; then
+            echo "::error::No *-linux.png baselines found. Generate them with:"
+            echo "  cd public-web && pnpm test:visual:update:docker"
+            echo "Or Actions → public-web → Run workflow → update_visual_baselines=true, then commit the artifact."
+            exit 1
+          fi
+
+      - name: Visual baselines (Linux)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.update_visual_baselines != true }}
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100
+          PLAYWRIGHT_VISUAL: "1"
+          PLAYWRIGHT_USE_SYSTEM_CHROME: "0"
+          CI: true
+        run: pnpm test:visual
+
+      - name: Update visual baselines (Linux)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.update_visual_baselines == true }}
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100
+          PLAYWRIGHT_VISUAL: "1"
+          PLAYWRIGHT_USE_SYSTEM_CHROME: "0"
+          CI: true
+        run: pnpm test:visual:update
+
+      - name: Upload Linux baseline pack (update mode)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.update_visual_baselines == true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-web-visual-baselines-linux-${{ github.run_id }}
+          path: public-web/e2e/visual.spec.ts-snapshots/*-linux.png
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Playwright failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-web-qa-artifacts-${{ github.run_id }}
+          path: |
+            public-web/test-results
+            public-web/playwright-report
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Show server log on failure
+        if: failure()
+        run: cat /tmp/spyreels-public-web.log || true
+        working-directory: .

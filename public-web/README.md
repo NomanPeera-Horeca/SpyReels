@@ -25,6 +25,20 @@ pnpm dev
 
 The isolated runtime listens on `http://localhost:3100` and exposes `GET /health`.
 
+## Visual QA (CI safety net)
+
+Linux Docker baselines are the source of truth (same image as GitHub Actions). See [docs/PUBLIC_WEB_VISUAL_CI.md](../docs/PUBLIC_WEB_VISUAL_CI.md).
+
+```bash
+# Update Linux baselines (one command)
+pnpm test:visual:update:docker
+
+# Compare against Linux baselines
+pnpm test:visual:docker
+```
+
+Optional macOS Chrome baselines: `pnpm test:visual` / `pnpm test:visual:update` (writes `*-darwin.png` only; CI does not use them).
+
 ## Guardrails
 
 Do not route production traffic here until the Viral Reel Finder pilot passes all acceptance checks:
