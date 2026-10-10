@@ -3,6 +3,7 @@ import {
   MarketingFooter,
   MarketingHeader,
 } from "./MarketingChrome";
+import { ProductDemoCameraController } from "./ProductDemoCameraController";
 import {
   MarketingFaq,
   MarketingFinalCta,
@@ -102,6 +103,7 @@ export function FinderMarketingPage({ config }: { config: FinderConfig }) {
 
       <MarketingFooter />
       <HomepageAuthGate />
+      <ProductDemoCameraController />
     </div>
   );
 }

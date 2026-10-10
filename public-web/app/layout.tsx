@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import { headers } from "next/headers";
+import Script from "next/script";
 import {
   publicWebIndexingEnabled,
   publicWebIndexingPolicy,
@@ -43,6 +44,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en" className={inter.variable}>
       <body>
+        <Script src="/marketing/product-demo-camera.js" strategy="beforeInteractive" />
         <PublicAnalytics />
         {children}
       </body>
