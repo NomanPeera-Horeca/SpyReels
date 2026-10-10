@@ -2558,3 +2558,91 @@ export const viralPostSeedCreators = mysqlTable(
 export type ViralPostSeedCreator = typeof viralPostSeedCreators.$inferSelect;
 export type InsertViralPostSeedCreator =
   typeof viralPostSeedCreators.$inferInsert;
+
+/**
+ * Platform-agnostic featured demo catalog (TikTok + YouTube first; Instagram
+ * migrates later). Visitor publicDemo reads these tables only. Scraping and
+ * R2 thumb mirroring happen in the daily refresh job, never on a GET.
+ *
+ * Takedown: set `isActive=0` to hide a handle immediately from publicDemo.
+ * Apply DDL via Railway console (Bug #63); do not drizzle-kit push.
+ */
+export const featuredDemoAccounts = mysqlTable(
+  "featured_demo_accounts",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    platform: mysqlEnum("platform", ["instagram", "tiktok", "youtube"]).notNull(),
+    handle: varchar("handle", { length: 128 }).notNull(),
+    displayName: varchar("displayName", { length: 256 }),
+    followerCount: int("followerCount").default(0).notNull(),
+    profilePicUrl: text("profilePicUrl"),
+    /** When false, publicDemo must hide this handle immediately (takedown). */
+    isActive: boolean("isActive").default(true).notNull(),
+    lastRefreshAt: timestamp("lastRefreshAt"),
+    lastSuccessAt: timestamp("lastSuccessAt"),
+    lastRefreshError: varchar("lastRefreshError", { length: 512 }),
+    refreshStatus: mysqlEnum("refreshStatus", [
+      "idle",
+      "running",
+      "success",
+      "error",
+    ])
+      .default("idle")
+      .notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    platformHandleUnique: uniqueIndex(
+      "featured_demo_accounts_platform_handle_unique"
+    ).on(table.platform, table.handle),
+    activePlatformIdx: index("featured_demo_accounts_active_platform_idx").on(
+      table.isActive,
+      table.platform
+    ),
+  })
+);
+
+export type FeaturedDemoAccount = typeof featuredDemoAccounts.$inferSelect;
+export type InsertFeaturedDemoAccount = typeof featuredDemoAccounts.$inferInsert;
+
+/**
+ * Top demo cards per featured_demo_accounts row (cap FEATURED_DEMO_ITEM_LIMIT).
+ * `thumbnailUrl` must be an R2/CloudFront URL after a successful refresh.
+ */
+export const featuredDemoItems = mysqlTable(
+  "featured_demo_items",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    accountId: int("accountId")
+      .notNull()
+      .references(() => featuredDemoAccounts.id, { onDelete: "cascade" }),
+    externalId: varchar("externalId", { length: 128 }).notNull(),
+    caption: text("caption"),
+    viewCount: int("viewCount").default(0).notNull(),
+    likeCount: int("likeCount").default(0).notNull(),
+    commentCount: int("commentCount").default(0).notNull(),
+    shareCount: int("shareCount").default(0).notNull(),
+    engagementRate: decimal("engagementRate", { precision: 8, scale: 2 }),
+    thumbnailUrl: text("thumbnailUrl"),
+    durationSec: int("durationSec"),
+    postedAt: timestamp("postedAt"),
+    videoPageUrl: text("videoPageUrl"),
+    rank: int("rank").notNull(),
+    scrapedAt: timestamp("scrapedAt").defaultNow().notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  (table) => ({
+    accountExternalUnique: uniqueIndex(
+      "featured_demo_items_account_external_unique"
+    ).on(table.accountId, table.externalId),
+    accountRankIdx: index("featured_demo_items_account_rank_idx").on(
+      table.accountId,
+      table.rank
+    ),
+  })
+);
+
+export type FeaturedDemoItem = typeof featuredDemoItems.$inferSelect;
+export type InsertFeaturedDemoItem = typeof featuredDemoItems.$inferInsert;
