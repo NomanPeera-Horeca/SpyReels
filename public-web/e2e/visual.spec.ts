@@ -1,6 +1,7 @@
 import { expect, test } from "@playwright/test";
 import {
   marketingFaq,
+  marketingFinalCta,
   marketingSectionHeader,
   marketingToolGrid,
   prepareVisualPage,
@@ -119,6 +120,16 @@ test.describe("public-web visual baselines", () => {
       await faq.scrollIntoViewIfNeeded();
       await expect(faq).toHaveScreenshot(
         `${pageDef.name}-faq.png`,
+        visualSectionScreenshotOptions
+      );
+
+      const finalCta = marketingFinalCta(page);
+      await expect(finalCta).toHaveCount(1);
+      await expect(finalCta.getByRole("heading", { level: 2 })).toBeVisible();
+      await expect(finalCta.locator("a.sr-primary-button")).toBeVisible();
+      await finalCta.scrollIntoViewIfNeeded();
+      await expect(finalCta).toHaveScreenshot(
+        `${pageDef.name}-final-cta.png`,
         visualSectionScreenshotOptions
       );
     });

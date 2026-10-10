@@ -6,6 +6,7 @@ import { HomepageAuthGate } from "../components/HomepageAuthGate";
 import { MarketingFooter, MarketingHeader } from "../components/MarketingChrome";
 import {
   MarketingFaq,
+  MarketingFinalCta,
   MarketingPlatformStrip,
   MarketingWorkspace,
 } from "../components/MarketingPageSections";
@@ -28,6 +29,7 @@ export const metadata: Metadata = {
 const HOMEPAGE_PLATFORM_MARKER = "<!--REACT:PLATFORM_STRIP-->";
 const HOMEPAGE_WORKSPACE_MARKER = "<!--REACT:WORKSPACE-->";
 const HOMEPAGE_FAQ_MARKER = "<!--REACT:FAQ-->";
+const HOMEPAGE_FINAL_CTA_MARKER = "<!--REACT:FINAL_CTA-->";
 
 /** Live homepage FAQ copy (keep wording identical to prior HTML segment). */
 const HOMEPAGE_FAQ_ITEMS = [
@@ -58,10 +60,17 @@ function loadHomepageSegments() {
   const [beforePlatform, afterPlatform] = raw.split(HOMEPAGE_PLATFORM_MARKER);
   const [throughGrowthSteps, afterWorkspace] = afterPlatform.split(HOMEPAGE_WORKSPACE_MARKER);
   const [beforeFaq, afterFaq] = afterWorkspace.split(HOMEPAGE_FAQ_MARKER);
-  if (!beforePlatform || !throughGrowthSteps || beforeFaq === undefined || afterFaq === undefined) {
+  const [beforeFinalCta, afterFinalCta] = (afterFaq ?? "").split(HOMEPAGE_FINAL_CTA_MARKER);
+  if (
+    !beforePlatform ||
+    !throughGrowthSteps ||
+    beforeFaq === undefined ||
+    beforeFinalCta === undefined ||
+    afterFinalCta === undefined
+  ) {
     throw new Error("homepage.html is missing React segment markers");
   }
-  return { beforePlatform, throughGrowthSteps, beforeFaq, afterFaq };
+  return { beforePlatform, throughGrowthSteps, beforeFaq, beforeFinalCta, afterFinalCta };
 }
 
 const homepageSegments = loadHomepageSegments();
@@ -108,7 +117,15 @@ export default function HomePage() {
           description="See how SpyReels finds promising content, helps you make it your own, and gets you ready to film."
           items={HOMEPAGE_FAQ_ITEMS}
         />
-        <div dangerouslySetInnerHTML={{ __html: homepageSegments.afterFaq }} />
+        <div dangerouslySetInnerHTML={{ __html: homepageSegments.beforeFinalCta }} />
+        <MarketingFinalCta
+          id="pricing"
+          title="Your next viral idea starts here."
+          body="Find proven Reels. Remake them in your voice."
+          buttonLabel="Find viral Reels for free"
+          href="/?auth=signup&returnTo=%2Fresearch"
+        />
+        <div dangerouslySetInnerHTML={{ __html: homepageSegments.afterFinalCta }} />
       </main>
       <MarketingFooter />
       <HomepageAuthGate />

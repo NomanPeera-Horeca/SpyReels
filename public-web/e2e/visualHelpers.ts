@@ -260,3 +260,8 @@ export function marketingToolGrid(page: Page) {
 export function marketingFaq(page: Page) {
   return page.locator("section#faq");
 }
+
+/** Marketing Final CTA section (shared MarketingFinalCta root). */
+export function marketingFinalCta(page: Page) {
+  return page.locator("[data-marketing-final-cta]");
+}

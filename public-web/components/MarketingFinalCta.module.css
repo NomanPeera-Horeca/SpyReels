@@ -1,0 +1,106 @@
+/**
+ * Marketing / Final CTA (Figma Page 09).
+ * Feature Surface box + dark text scope; button stays light-scope accent.
+ */
+
+.section {
+  padding: var(--sr-layout-section-gap) 0;
+}
+
+.shell {
+  width: min(
+    var(--sr-layout-container-max-width),
+    calc(100% - 2 * var(--sr-layout-page-gutter-desktop))
+  );
+  margin-inline: auto;
+}
+
+.box {
+  /* Dark scope: remap semantic text tokens for title/body on Feature Surface */
+  --sr-color-text-primary: var(--sr-color-text-inverse);
+  --sr-color-text-secondary: var(--sr-color-text-secondary-inverse);
+
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--sr-layout-content-gap);
+  padding: var(--sr-layout-section-compact-gap) var(--sr-layout-panel-padding);
+  border-radius: var(--sr-radius-modal);
+  background: var(--sr-surface-feature);
+  color: var(--sr-color-text-primary);
+}
+
+.copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sr-layout-stack-sm);
+  max-width: var(--sr-layout-content-reading-width);
+  position: relative;
+  z-index: 1;
+}
+
+.title {
+  margin: 0;
+  color: var(--sr-color-text-primary);
+  text-wrap: balance;
+}
+
+.body {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+}
+
+/* Light-scope accent button on dark Feature Surface (AA on accent). */
+.button {
+  position: relative;
+  z-index: 1;
+  box-shadow: none;
+  padding-inline: 20px;
+  background: var(--sr-color-marketing-accent);
+  color: var(--sr-color-text-on-brand);
+  font-weight: var(--sr-type-marketing-button-weight);
+  font-size: var(--sr-type-marketing-button-size);
+  line-height: var(--sr-type-marketing-button-line);
+  letter-spacing: var(--sr-type-marketing-button-tracking);
+}
+
+.button:hover:not(:disabled) {
+  background: var(--sr-color-action-primary-hover);
+  box-shadow: none;
+}
+
+.button:active:not(:disabled) {
+  background: var(--sr-color-action-primary-pressed);
+  box-shadow: none;
+}
+
+.buttonIcon {
+  width: var(--sr-size-icon);
+  height: var(--sr-size-icon);
+  flex: 0 0 var(--sr-size-icon);
+  display: block;
+}
+
+@media (max-width: 640px) {
+  .section {
+    padding: var(--sr-layout-section-compact-gap) 0;
+  }
+
+  .shell {
+    width: min(
+      var(--sr-layout-container-max-width),
+      calc(100% - 2 * var(--sr-layout-page-gutter-mobile))
+    );
+  }
+
+  .button {
+    width: 100%;
+    max-width: 340px;
+  }
+}

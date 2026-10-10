@@ -44,6 +44,8 @@
   --sr-color-text-brand: #433091;
   --sr-color-text-on-brand: #ffffff;
   --sr-color-text-inverse: #ffffff;
+  /* Dark-scope text/secondary (Feature Surface and other inverse surfaces) */
+  --sr-color-text-secondary-inverse: #d5d5dd;
 
   /* Marketing (Figma color/marketing/accent): large headline emphasis only */
   --sr-color-marketing-accent: var(--sr-purple-500);
@@ -56,6 +58,22 @@
   --sr-color-surface-hover: #f2f2f5;
   /* Tool / integration icon tile (Figma Tool Grid v1.1; marketing is light-only) */
   --sr-color-surface-icon-tile: var(--sr-neutral-100);
+  /*
+   * Feature Surface (Figma Marketing / Final CTA): base 135deg gradient +
+   * top-right purple glow at 20% opacity. No raw hex.
+   */
+  --sr-surface-feature:
+    radial-gradient(
+      ellipse 55% 70% at 100% 0%,
+      color-mix(in srgb, var(--sr-purple-500) 20%, transparent) 0%,
+      transparent 70%
+    ),
+    linear-gradient(
+      135deg,
+      var(--sr-neutral-950) 0%,
+      var(--sr-neutral-900) 55%,
+      var(--sr-purple-800) 100%
+    );
 
   /* Borders */
   --sr-color-border-subtle: #f2f2f5;

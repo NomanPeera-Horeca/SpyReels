@@ -83,7 +83,12 @@ export default function TikTokViralVideoFinderPage() {
       />
       <MarketingWorkspace toolsPage="tiktok" title="Find a strong TikTok. Make the next one yours." />
       <MarketingFaq title="Questions about finding viral TikToks." description="Research public creator videos and bring a promising idea into your own script workflow." items={faqs} />
-      <MarketingFinalCta title="Find your next video idea." description="Search a creator. Study what worked. Make the next script yours." label="Find viral TikToks" href="#finder" />
+      <MarketingFinalCta
+        title="Find your next video idea."
+        body="Search a creator. Remake their best TikTok in your voice."
+        buttonLabel="Find viral TikToks"
+        href="#finder"
+      />
     </main>
     <MarketingFooter /><HomepageAuthGate /><Script src="/marketing/chrome.js" strategy="afterInteractive" />
   </div>;

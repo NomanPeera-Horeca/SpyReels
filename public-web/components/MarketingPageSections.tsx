@@ -15,6 +15,7 @@ import {
 } from "./marketingTools";
 import styles from "./MarketingToolGrid.module.css";
 import faqStyles from "./MarketingFaq.module.css";
+import finalCtaStyles from "./MarketingFinalCta.module.css";
 import type { MarketingFaqItem } from "./marketingFaqJsonLd";
 
 const officialPlatformMark = (src: string, width: number, height: number, alt: string) => (
@@ -268,25 +269,29 @@ export function MarketingFaq({
 
 export function MarketingFinalCta({
   title,
-  description,
-  label,
+  body,
+  buttonLabel,
   href,
+  id,
 }: {
   title: string;
-  description: string;
-  label: string;
+  body: string;
+  buttonLabel: string;
   href: string;
+  /** Optional anchor id (homepage keeps id="pricing"). */
+  id?: string;
 }) {
   return (
-    <section className="cta">
-      <div className="shell">
-        <div className="cta-box">
-          <div>
-            <h2>{title}</h2>
-            <p>{description}</p>
+    <section className={finalCtaStyles.section} id={id} data-marketing-final-cta="">
+      <div className={finalCtaStyles.shell}>
+        <div className={finalCtaStyles.box}>
+          <div className={finalCtaStyles.copy}>
+            <h2 className={cx("sr-text-marketing-heading-2", finalCtaStyles.title)}>{title}</h2>
+            <p className={cx("sr-text-marketing-body-large", finalCtaStyles.body)}>{body}</p>
           </div>
-          <PrimaryButton href={href} size="large" glow>
-            {label} <span aria-hidden="true">→</span>
+          <PrimaryButton href={href} size="large" className={finalCtaStyles.button}>
+            <span className="sr-text-marketing-button">{buttonLabel}</span>
+            <MarketingIconArrowRight className={finalCtaStyles.buttonIcon} />
           </PrimaryButton>
         </div>
       </div>

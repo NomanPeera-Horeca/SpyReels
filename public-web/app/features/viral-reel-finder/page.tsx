@@ -171,8 +171,8 @@ export default function ViralReelFinderPilotPage() {
 
         <MarketingFinalCta
           title="Your next idea starts with a Reel worth studying."
-          description="Search a creator. Find a strong idea. Turn it into a script in your voice."
-          label="Find viral Reels"
+          body="Search a creator. Remake their best Reel in your voice."
+          buttonLabel="Find viral Reels"
           href="#live-demo"
         />
       </main>
