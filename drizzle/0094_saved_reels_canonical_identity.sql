@@ -1,3 +1,7 @@
+-- SUPERSEDED by drizzle/0102_saved_reels_canonical_identity.sql.
+-- Do not apply this file. It collides with 0094_carousel_remake_slot_style_overrides.sql
+-- and was never recorded on production. Keep for history only.
+--
 -- Saved Reels canonical identity foundation.
 -- Keep these columns nullable during the backfill and dedupe transition.
 -- Do not add a unique constraint until existing duplicate logical saves are audited.
