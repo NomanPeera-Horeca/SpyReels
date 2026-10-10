@@ -20,6 +20,15 @@
   --sr-type-marketing-display-weight: var(--sr-font-weight-bold);
   --sr-type-marketing-display-tracking: -0.75px;
 
+  /*
+   * Marketing / Display Hero (FLUID) — Product-led homepage hero only.
+   * Desktop: clamp(60px, 6.7vw, 90px) / line .96; Mobile ≤640: clamp(36px, 10.8vw, 44px) / .98.
+   */
+  --sr-type-marketing-display-hero-size: clamp(60px, 6.7vw, 90px);
+  --sr-type-marketing-display-hero-line: 0.96;
+  --sr-type-marketing-display-hero-weight: var(--sr-font-weight-bold);
+  --sr-type-marketing-display-hero-tracking: -0.035em;
+
   --sr-type-marketing-heading-1-size: 48px;
   --sr-type-marketing-heading-1-line: 56px;
   --sr-type-marketing-heading-1-weight: var(--sr-font-weight-bold);
@@ -178,6 +187,17 @@
   line-height: var(--sr-type-marketing-display-line);
   font-weight: var(--sr-type-marketing-display-weight);
   letter-spacing: var(--sr-type-marketing-display-tracking);
+}
+
+.sr-text-marketing-display-hero {
+  font-size: var(--sr-type-marketing-display-hero-size);
+  line-height: var(--sr-type-marketing-display-hero-line);
+  font-weight: var(--sr-type-marketing-display-hero-weight);
+  letter-spacing: var(--sr-type-marketing-display-hero-tracking);
+  text-wrap: balance;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
 }
 
 .sr-text-marketing-heading-1 {
@@ -375,6 +395,9 @@
   :root {
     --sr-type-marketing-display-size: 44px;
     --sr-type-marketing-display-line: 48px;
+
+    --sr-type-marketing-display-hero-size: clamp(36px, 10.8vw, 44px);
+    --sr-type-marketing-display-hero-line: 0.98;
 
     --sr-type-marketing-heading-1-size: 40px;
     --sr-type-marketing-heading-1-line: 44px;

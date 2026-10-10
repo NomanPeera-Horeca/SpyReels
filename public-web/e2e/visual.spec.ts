@@ -4,14 +4,18 @@ import {
   marketingFinalCta,
   marketingFooter,
   marketingHeader,
+  marketingHero,
   marketingPrimaryButton,
   marketingProcessSteps,
+  marketingProductDemo,
   marketingSectionHeader,
   marketingToolGrid,
+  PRODUCT_DEMO_SCENES,
   prepareVisualPage,
   screenshotWithoutStickyHeader,
   visualScreenshotOptions,
   visualSectionScreenshotOptions,
+  withProductDemoScenePaused,
 } from "./visualHelpers";
 
 const VISUAL_PROJECTS = new Set(["desktop-1440", "mobile-390"]);
@@ -144,6 +148,28 @@ test.describe("public-web visual baselines", () => {
             visualSectionScreenshotOptions
           );
         });
+
+        const hero = marketingHero(page);
+        await expect(hero).toHaveCount(1);
+        await screenshotWithoutStickyHeader(page, hero, async () => {
+          await expect(hero).toHaveScreenshot(
+            "marketing-hero.png",
+            visualSectionScreenshotOptions
+          );
+        });
+
+        const demo = marketingProductDemo(page);
+        await expect(demo).toHaveCount(1);
+        for (const scene of PRODUCT_DEMO_SCENES) {
+          await withProductDemoScenePaused(page, scene, async () => {
+            await screenshotWithoutStickyHeader(page, demo, async () => {
+              await expect(demo).toHaveScreenshot(
+                `marketing-product-demo-${scene}.png`,
+                visualSectionScreenshotOptions
+              );
+            });
+          });
+        }
       }
 
       for (const header of pageDef.sectionHeaders) {

@@ -286,6 +286,102 @@ export function marketingFooter(page: Page) {
   return page.locator("[data-marketing-footer]");
 }
 
+/** Homepage Product-led hero section. */
+export function marketingHero(page: Page) {
+  return page.locator("[data-marketing-hero]");
+}
+
+/** Homepage / finder Product Demo Stage shell. */
+export function marketingProductDemo(page: Page) {
+  return page.locator("[data-marketing-product-demo]");
+}
+
+export const PRODUCT_DEMO_SCENES = [
+  "search",
+  "results",
+  "winner",
+  "remake",
+  "script",
+  "success",
+] as const;
+
+export type ProductDemoScene = (typeof PRODUCT_DEMO_SCENES)[number];
+
+/**
+ * Freeze Product Demo on one scene for screenshots (animation paused).
+ * Restores previous inline styles after `fn` completes.
+ */
+export async function withProductDemoScenePaused<T>(
+  page: Page,
+  scene: ProductDemoScene,
+  fn: () => Promise<T>
+): Promise<T> {
+  const touched = await page.evaluate((sceneName) => {
+    const shell = document.querySelector<HTMLElement>("[data-marketing-product-demo] .motion-shell, .motion-shell");
+    if (!shell) return 0;
+    const nodes = Array.from(shell.querySelectorAll<HTMLElement>("*"));
+    nodes.unshift(shell);
+    for (const el of nodes) {
+      if (!el.hasAttribute("data-pw-style-backup")) {
+        el.setAttribute("data-pw-style-backup", el.getAttribute("style") ?? "");
+      }
+    }
+    for (const el of Array.from(shell.querySelectorAll<HTMLElement>(".motion-scene"))) {
+      el.style.animation = "none";
+      el.style.opacity = "0";
+    }
+    const active = shell.querySelector<HTMLElement>(`.${sceneName}-scene`);
+    if (!active) return nodes.length;
+    active.style.opacity = "1";
+    for (const kid of Array.from(
+      active.querySelectorAll<HTMLElement>(
+        ".motion-reel, .type-stage, .type-caret, .pointer, .viral-pill, .motion-btn, .script-heading, .voice-badge, .script-paper, .success-mark, .success-message, .calendar-chip, .final-line"
+      )
+    )) {
+      kid.style.animation = "none";
+      kid.style.opacity = "1";
+      kid.style.transform = "none";
+    }
+    if (sceneName === "search") {
+      for (const t of Array.from(active.querySelectorAll<HTMLElement>(".type-stage"))) {
+        t.style.opacity = t.classList.contains("type-final") ? "1" : "0";
+      }
+      const caret = active.querySelector<HTMLElement>(".type-caret");
+      if (caret) caret.style.opacity = "0";
+      const pointer = active.querySelector<HTMLElement>(".pointer");
+      if (pointer) pointer.style.opacity = "0";
+    }
+    if (sceneName === "winner") {
+      Array.from(active.querySelectorAll<HTMLElement>(".motion-reel")).forEach((reel, i) => {
+        reel.style.opacity = i === 0 ? "1" : "0.28";
+      });
+    }
+    return nodes.length;
+  }, scene);
+
+  try {
+    return await fn();
+  } finally {
+    if (touched) {
+      await page.evaluate(() => {
+        const shell = document.querySelector<HTMLElement>(
+          "[data-marketing-product-demo] .motion-shell, .motion-shell"
+        );
+        if (!shell) return;
+        const nodes = Array.from(shell.querySelectorAll<HTMLElement>("*"));
+        nodes.unshift(shell);
+        for (const el of nodes) {
+          if (!el.hasAttribute("data-pw-style-backup")) continue;
+          const prior = el.getAttribute("data-pw-style-backup");
+          if (prior) el.setAttribute("style", prior);
+          else el.removeAttribute("style");
+          el.removeAttribute("data-pw-style-backup");
+        }
+      });
+    }
+  }
+}
+
 /**
  * Hide sticky marketing header for section/element screenshots so it cannot
  * cover the crop. Restores previous visibility after `fn` completes.
