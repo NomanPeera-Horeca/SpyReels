@@ -388,6 +388,19 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Link react for shared UI imports
+        working-directory: .
+        run: |
+          mkdir -p node_modules shared/node_modules
+          REACT="$(realpath public-web/node_modules/react)"
+          TYPES="$(realpath public-web/node_modules/@types)"
+          ln -sfn "$REACT" node_modules/react
+          ln -sfn "$TYPES" node_modules/@types
+          ln -sfn "$REACT" shared/node_modules/react
+          ln -sfn "$TYPES" shared/node_modules/@types
+          test -f node_modules/react/jsx-runtime.js
+          test -f shared/node_modules/react/jsx-runtime.js
+
       - name: Build
         run: pnpm build
 
@@ -491,6 +504,19 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Link react for shared UI imports
+        working-directory: .
+        run: |
+          mkdir -p node_modules shared/node_modules
+          REACT="$(realpath public-web/node_modules/react)"
+          TYPES="$(realpath public-web/node_modules/@types)"
+          ln -sfn "$REACT" node_modules/react
+          ln -sfn "$TYPES" node_modules/@types
+          ln -sfn "$REACT" shared/node_modules/react
+          ln -sfn "$TYPES" shared/node_modules/@types
+          test -f node_modules/react/jsx-runtime.js
+          test -f shared/node_modules/react/jsx-runtime.js
 
       - name: Build
         run: pnpm build
