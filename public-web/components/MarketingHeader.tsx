@@ -153,7 +153,7 @@ export function MarketingHeader() {
       const inside = navInner.contains(document.activeElement);
       closeNav();
       if (inside) {
-        const mobile = window.matchMedia("(max-width: 1040px)").matches;
+        const mobile = window.matchMedia("(max-width: 1100px)").matches;
         (mobile ? menuToggle : opener)?.focus();
       }
     };
@@ -186,7 +186,7 @@ export function MarketingHeader() {
       summaryCleanups.push(() => menu.removeEventListener("toggle", onToggle));
 
       const onEnter = (event: PointerEvent) => {
-        if (event.pointerType !== "mouse" || window.matchMedia("(max-width: 1040px)").matches) return;
+        if (event.pointerType !== "mouse" || window.matchMedia("(max-width: 1100px)").matches) return;
         clearHover(menu);
         hoverTimers.set(menu, {
           open: window.setTimeout(() => {
@@ -195,7 +195,7 @@ export function MarketingHeader() {
         });
       };
       const onLeave = (event: PointerEvent) => {
-        if (event.pointerType !== "mouse" || window.matchMedia("(max-width: 1040px)").matches) return;
+        if (event.pointerType !== "mouse" || window.matchMedia("(max-width: 1100px)").matches) return;
         clearHover(menu);
         hoverTimers.set(menu, {
           close: window.setTimeout(() => {
@@ -218,7 +218,7 @@ export function MarketingHeader() {
       linkCleanups.push(() => link.removeEventListener("click", onClick));
     });
 
-    const mq = window.matchMedia("(min-width: 1041px)");
+    const mq = window.matchMedia("(min-width: 1101px)");
     const onMq = () => closeNav();
     mq.addEventListener("change", onMq);
 

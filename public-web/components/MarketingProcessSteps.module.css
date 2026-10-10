@@ -8,10 +8,12 @@
 }
 
 .shell {
+  box-sizing: border-box;
   width: min(
     var(--sr-layout-container-max-width),
     calc(100% - 2 * var(--sr-layout-page-gutter-desktop))
   );
+  max-width: 100%;
   margin-inline: auto;
   display: flex;
   flex-direction: column;
@@ -33,10 +35,11 @@
 
 .steps {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
   gap: var(--sr-layout-card-gap);
   align-items: stretch;
   width: 100%;
+  min-width: 0;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -151,9 +154,18 @@
   display: block;
 }
 
+@media (max-width: 1180px) {
+  .shell {
+    width: min(
+      var(--sr-layout-container-max-width),
+      calc(100% - 2 * var(--sr-layout-page-gutter-tablet))
+    );
+  }
+}
+
 @media (max-width: 980px) {
   .stepsIcon {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
     gap: var(--sr-layout-card-gap);
     align-items: stretch;
   }

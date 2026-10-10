@@ -8,10 +8,12 @@
 }
 
 .shell {
+  box-sizing: border-box;
   width: min(
     var(--sr-layout-container-max-width),
     calc(100% - 2 * var(--sr-layout-page-gutter-desktop))
   );
+  max-width: 100%;
   margin-inline: auto;
   display: flex;
   flex-direction: column;
@@ -26,7 +28,9 @@
 .card {
   box-sizing: border-box;
   width: min(880px, 100%);
+  max-width: 100%;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--sr-layout-card-gap);
@@ -72,10 +76,11 @@
 .label {
   margin: 0;
   color: inherit;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
-@media (max-width: 1040px) {
+@media (max-width: 1100px) {
   .shell {
     width: min(
       var(--sr-layout-container-max-width),

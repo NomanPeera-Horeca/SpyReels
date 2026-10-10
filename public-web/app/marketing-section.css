@@ -7,6 +7,8 @@
   box-sizing: border-box;
   margin: 0;
   padding-block: var(--sr-layout-section-gap);
+  max-width: 100%;
+  min-width: 0;
 }
 
 [data-marketing-section][data-marketing-section-pair="end"] {
