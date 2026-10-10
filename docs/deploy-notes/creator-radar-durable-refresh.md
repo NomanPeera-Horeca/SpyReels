@@ -25,7 +25,7 @@ Queued at 0% until the zombie sweeper (about 30 minutes).
 | `CREATOR_RADAR_REFRESH_POLL_MS` | `1000` | Idle poll interval. |
 | `CREATOR_RADAR_REFRESH_LEASE_SECONDS` | `900` | Claim lease; heartbeats renew it. |
 
-Requires the existing `durable_jobs` table (`drizzle/0096_durable_jobs.sql`).
+Requires the existing `durable_jobs` table (`drizzle/0096b_durable_jobs.sql`).
 
 ## Later (optional dedicated worker)
 
