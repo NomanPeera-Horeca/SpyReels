@@ -237,6 +237,7 @@ function sharedSlots(source) {
  */
 const PROTECTED_COPY_SLOTS = {
   "instagram.hero.lead": "protected copy, owner-approved",
+  "shared.integrations.aiTitle": "protected copy, owner-approved",
 };
 
 function loadProtectedSlotsFromTs() {
