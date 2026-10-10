@@ -58,14 +58,20 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # shared/ui/PlatformMarks.tsx is imported from public-web; tsc walks up to
-      # the repo root for react/jsx-runtime. Symlink public-web deps there.
+      # shared/ui/PlatformMarks.tsx is imported from public-web; tsc walks up for
+      # react/jsx-runtime. Use realpath so pnpm's relative .pnpm symlinks resolve.
       - name: Link react for shared UI imports
         working-directory: .
         run: |
-          mkdir -p node_modules
-          ln -sfn public-web/node_modules/react node_modules/react
-          ln -sfn public-web/node_modules/@types node_modules/@types
+          mkdir -p node_modules shared/node_modules
+          REACT="$(realpath public-web/node_modules/react)"
+          TYPES="$(realpath public-web/node_modules/@types)"
+          ln -sfn "$REACT" node_modules/react
+          ln -sfn "$TYPES" node_modules/@types
+          ln -sfn "$REACT" shared/node_modules/react
+          ln -sfn "$TYPES" shared/node_modules/@types
+          test -f node_modules/react/jsx-runtime.js
+          test -f shared/node_modules/react/jsx-runtime.js
 
       - name: Typecheck
         run: pnpm check

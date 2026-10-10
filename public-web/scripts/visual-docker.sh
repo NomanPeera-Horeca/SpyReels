@@ -51,9 +51,13 @@ docker run --rm \
     corepack enable
     corepack prepare pnpm@10.4.1 --activate
     pnpm install --frozen-lockfile
-    mkdir -p /repo/node_modules
-    ln -sfn /repo/public-web/node_modules/react /repo/node_modules/react
-    ln -sfn /repo/public-web/node_modules/@types /repo/node_modules/@types
+    mkdir -p /repo/node_modules /repo/shared/node_modules
+    REACT="$(realpath /repo/public-web/node_modules/react)"
+    TYPES="$(realpath /repo/public-web/node_modules/@types)"
+    ln -sfn "$REACT" /repo/node_modules/react
+    ln -sfn "$TYPES" /repo/node_modules/@types
+    ln -sfn "$REACT" /repo/shared/node_modules/react
+    ln -sfn "$TYPES" /repo/shared/node_modules/@types
     pnpm check
     pnpm build
     pnpm exec next start -p 3100 > /tmp/public-web.log 2>&1 &
