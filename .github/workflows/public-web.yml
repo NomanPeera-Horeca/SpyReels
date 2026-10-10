@@ -474,6 +474,8 @@ jobs:
       options: --ipc=host
     defaults:
       run:
+        # Playwright container default shell is dash; pipefail needs bash.
+        shell: bash
         working-directory: public-web
     steps:
       - name: Checkout PR branch
@@ -569,6 +571,7 @@ jobs:
       - name: Commit baselines to PR branch
         if: github.event_name == 'pull_request'
         working-directory: .
+        shell: bash
         env:
           BRANCH: ${{ github.head_ref }}
         run: |
@@ -586,6 +589,7 @@ jobs:
       - name: Remove update-baselines label
         if: github.event_name == 'pull_request'
         working-directory: .
+        shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
