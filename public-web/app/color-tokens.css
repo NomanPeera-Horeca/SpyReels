@@ -54,6 +54,8 @@
   --sr-color-surface-subtle: #fcfcfd;
   --sr-color-surface-raised: #ffffff;
   --sr-color-surface-hover: #f2f2f5;
+  /* Tool / integration icon tile (Figma Tool Grid v1.1; marketing is light-only) */
+  --sr-color-surface-icon-tile: var(--sr-neutral-100);
 
   /* Borders */
   --sr-color-border-subtle: #f2f2f5;

@@ -33,7 +33,7 @@
   height: 100%;
   display: flex;
   flex-direction: row;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--sr-layout-control-gap);
   padding: var(--sr-layout-card-padding);
   border: var(--sr-border-width-default) solid var(--sr-color-border-default);
@@ -59,7 +59,7 @@
   display: grid;
   place-items: center;
   border-radius: var(--sr-radius-control);
-  background: var(--sr-color-surface-subtle);
+  background: var(--sr-color-surface-icon-tile);
   color: var(--sr-color-text-primary);
 }
 

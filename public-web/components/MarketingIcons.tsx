@@ -73,11 +73,25 @@ export function MarketingIconTelegram(props: IconProps) {
   );
 }
 
-/** Sparkle (replaces ✦ glyph on Beyond / AI integration). */
+/** Sparkle — Figma Tool Grid v1.1 (Beyond / AI integration). */
 export function MarketingIconSparkle(props: IconProps) {
   return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor" {...props}>
-      <path d="M12 2.5c.35 2.85 1.65 5.15 4.5 6.5-2.85 1.35-4.15 3.65-4.5 6.5-.35-2.85-1.65-5.15-4.5-6.5 2.85-1.35 4.15-3.65 4.5-6.5Z" />
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden="true"
+      {...props}
+    >
+      <path
+        d="M8.2615 0.911133C8.9325 4.38813 10.8845 6.34013 14.3615 7.01113C10.8845 7.68213 8.9325 9.63413 8.2615 13.1111C7.5905 9.63413 5.6385 7.68213 2.1615 7.01113C5.6385 6.34013 7.5905 4.38813 8.2615 0.911133Z"
+        fill="currentColor"
+      />
+      <path
+        d="M14.7275 12.8672C15.0691 14.6362 16.0695 15.6366 17.8385 15.9782C16.0695 16.3198 15.0691 17.3202 14.7275 19.0892C14.3859 17.3202 13.3855 16.3198 11.6165 15.9782C13.3855 15.6366 14.3859 14.6362 14.7275 12.8672Z"
+        fill="currentColor"
+      />
     </svg>
   );
 }
