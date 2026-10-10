@@ -7,8 +7,8 @@ Safety net for `public-web`, split for speed:
 | `fast` | Every public-web push/PR | typecheck, content-spec (unit), build, SEO contract (target ≤3 min) |
 | `e2e` | After `fast` | Playwright e2e, `faq.spec`, marketing text wrap (pnpm + Chromium cache) |
 | `visual` | Only when UI files change | Linux visual baselines, sharded 1/2 + 2/2 in Playwright Docker |
-| `update-baselines` | PR label `update-baselines`, or dispatch | Regenerate `*-linux.png` (PR: commit to branch; dispatch: artifact) |
-| `qa` | Always (aggregate) | Merge gate; required check name stays `public-web / qa` |
+| `update-baselines` | PR label `update-baselines` (preferred); dispatch = artifact-only fallback | Regenerate `*-linux.png` (PR: commit to branch) |
+| `qa` | Always (aggregate) | Merge gate; required check name stays `public-web / qa` (skipped visuals count as pass) |
 
 ## Recommendation: Docker = source of truth for pixels
 
@@ -36,7 +36,9 @@ pnpm test:visual:update:docker
 
 Commit the new/updated `*-linux.png` files.
 
-### workflow_dispatch (artifact only)
+### workflow_dispatch (artifact only; prefer label instead)
+
+Use only if the PR label path is unavailable. Otherwise add **`update-baselines`** on the PR.
 
 1. GitHub → Actions → **public-web** → Run workflow
 2. Enable **update_visual_baselines**

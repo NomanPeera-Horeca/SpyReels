@@ -18,6 +18,14 @@ Production deploys only from **`main`**.
 
 After merging to `main`, confirm the deploy SHA matches `origin/main` (public-web: `GET /health` → `gitCommit`).
 
+### public-web CI + After CI Checks Pass
+
+Require the aggregate check **`public-web / qa`** (not individual `fast` / `e2e` / `visual` shards).
+
+- The `qa` job uses `if: always()` and treats `visual` / `update-baselines` results of `success` **or** `skipped` as pass.
+- Render counts GitHub check conclusions `success`, `neutral`, and `skipped` as passing for Auto-Deploy After CI Checks Pass ([Render deploys docs](https://render.com/docs/deploys)). Skipped visuals therefore do not block deploy.
+- Do not require shard check names like `visual (1/2)` in branch protection or Render.
+
 ## Reminder
 
 Delete merged feature branches after one stable day in production.
