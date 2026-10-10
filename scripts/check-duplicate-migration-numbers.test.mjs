@@ -24,7 +24,8 @@ import { findDuplicateMigrationPrefixes } from "./check-duplicate-migration-numb
     "0096b_durable_jobs.sql",
     "0079_carousel_remakes.sql",
     "0079b_carousel_remakes_workspace_idx.sql",
-    "0101_saved_reels_canonical_identity.sql",
+    "0101_featured_demo_bigint_counts.sql",
+    "0102_saved_reels_canonical_identity.sql",
   ]);
   assert.equal(dups.length, 0);
 }

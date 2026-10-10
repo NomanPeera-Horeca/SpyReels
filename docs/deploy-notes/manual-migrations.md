@@ -7,7 +7,9 @@ SpyReels does **not** rely on `drizzle-kit migrate` for late numbered SQL under
 
 When you apply a manual migration in production:
 
-1. **Backup first** (table dump or Railway volume snapshot).
+1. **Backup first** using Railway managed MySQL backups/snapshots. Do **not**
+   keep production dumps on a laptop (no local `mysqldump` retained after the
+   change; never commit user data).
 2. Apply the **exact reviewed SQL** only.
 3. **Record it** in `__drizzle_migrations` immediately:
 
