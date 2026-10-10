@@ -1,0 +1,28 @@
+{
+  "handle": "charlidamelio",
+  "medianViewCount": 1200000,
+  "totalVideoCount": 890,
+  "videos": [
+    {
+      "id": 2001,
+      "caption": "Fixture TikTok caption one",
+      "thumbnailUrl": "https://visual-fixture.local/thumb-1.png",
+      "viewCount": 5400000,
+      "engagementRate": 5.2
+    },
+    {
+      "id": 2002,
+      "caption": "Fixture TikTok caption two",
+      "thumbnailUrl": "https://visual-fixture.local/thumb-2.png",
+      "viewCount": 3100000,
+      "engagementRate": 4.1
+    },
+    {
+      "id": 2003,
+      "caption": "Fixture TikTok caption three",
+      "thumbnailUrl": "https://visual-fixture.local/thumb-3.png",
+      "viewCount": 2100000,
+      "engagementRate": 3.6
+    }
+  ]
+}

@@ -1,0 +1,181 @@
+# Public-web safety net: typecheck, build, e2e, faq.spec, SEO contract, visual baselines.
+# Visuals run inside the official Playwright image (Linux) for stable pixels.
+# macOS darwin baselines remain for optional local Chrome runs.
+#
+# Required check (repo settings → branch protection):
+#   public-web / qa
+#
+# Update Linux baselines (one command after Docker is installed):
+#   cd public-web && pnpm test:visual:update:docker
+# Or via Actions: workflow_dispatch → update_visual_baselines=true → download artifact.
+#
+# Update SEO contract baselines (indexing-enabled production robots):
+#   SPYREELS_PUBLIC_WEB_INDEXING_ENABLED=true pnpm start   # :3100
+#   pnpm test:seo:update
+# Requests send x-forwarded-host: spyreels.ai so baselines match prod index,follow.
+# Localhost without that header stays noindex (dev default).
+
+name: public-web
+
+on:
+  pull_request:
+    paths:
+      - "public-web/**"
+      - ".github/workflows/public-web.yml"
+  push:
+    paths:
+      - "public-web/**"
+      - ".github/workflows/public-web.yml"
+  workflow_dispatch:
+    inputs:
+      update_visual_baselines:
+        description: "Regenerate Linux visual baselines and upload as artifact (does not commit)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-web-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qa:
+    name: qa
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-jammy
+      options: --ipc=host
+    defaults:
+      run:
+        working-directory: public-web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.4.1 --activate
+        working-directory: .
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # shared/ui/PlatformMarks.tsx is imported from public-web; tsc walks up for
+      # react/jsx-runtime. Use realpath so pnpm's relative .pnpm symlinks resolve.
+      - name: Link react for shared UI imports
+        working-directory: .
+        run: |
+          mkdir -p node_modules shared/node_modules
+          REACT="$(realpath public-web/node_modules/react)"
+          TYPES="$(realpath public-web/node_modules/@types)"
+          ln -sfn "$REACT" node_modules/react
+          ln -sfn "$TYPES" node_modules/@types
+          ln -sfn "$REACT" shared/node_modules/react
+          ln -sfn "$TYPES" shared/node_modules/@types
+          test -f node_modules/react/jsx-runtime.js
+          test -f shared/node_modules/react/jsx-runtime.js
+
+      - name: Typecheck
+        run: pnpm check
+
+      - name: Build
+        run: pnpm build
+
+      - name: Start server
+        env:
+          # Enables index,follow when requests also send x-forwarded-host: spyreels.ai
+          # (SEO contract). Requests without that header stay noindex (seo.spec).
+          SPYREELS_PUBLIC_WEB_INDEXING_ENABLED: "true"
+        run: |
+          pnpm exec next start -p 3100 > /tmp/spyreels-public-web.log 2>&1 &
+          echo $! > /tmp/spyreels-public-web.pid
+
+      - name: Wait for health
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3100/health > /tmp/health.json; then
+              cat /tmp/health.json
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/spyreels-public-web.log || true
+          exit 1
+
+      - name: E2E (non-visual)
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100
+          CI: true
+        run: pnpm test:e2e
+
+      - name: FAQ spec
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100
+          CI: true
+        run: pnpm exec playwright test e2e/faq.spec.ts --project=desktop-1440
+
+      - name: SEO contract baselines
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100
+          SEO_SITEMAP_URL: https://spyreels.ai/sitemap.xml
+          CI: true
+        run: pnpm test:seo
+
+      - name: Require Linux visual baselines
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.update_visual_baselines != true }}
+        run: |
+          count=$(find e2e/visual.spec.ts-snapshots -name '*-linux.png' 2>/dev/null | wc -l | tr -d ' ')
+          echo "Linux baseline count: ${count}"
+          if [ "${count}" -lt 1 ]; then
+            echo "::error::No *-linux.png baselines found. Generate them with:"
+            echo "  cd public-web && pnpm test:visual:update:docker"
+            echo "Or Actions → public-web → Run workflow → update_visual_baselines=true, then commit the artifact."
+            exit 1
+          fi
+
+      - name: Visual baselines (Linux)
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.update_visual_baselines != true }}
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100
+          PLAYWRIGHT_VISUAL: "1"
+          PLAYWRIGHT_USE_SYSTEM_CHROME: "0"
+          CI: true
+        run: pnpm test:visual
+
+      - name: Update visual baselines (Linux)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.update_visual_baselines == true }}
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100
+          PLAYWRIGHT_VISUAL: "1"
+          PLAYWRIGHT_USE_SYSTEM_CHROME: "0"
+          CI: true
+        run: pnpm test:visual:update
+
+      - name: Upload Linux baseline pack (update mode)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.update_visual_baselines == true }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-web-visual-baselines-linux-${{ github.run_id }}
+          path: public-web/e2e/visual.spec.ts-snapshots/*-linux.png
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload Playwright failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-web-qa-artifacts-${{ github.run_id }}
+          path: |
+            public-web/test-results
+            public-web/playwright-report
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Show server log on failure
+        if: failure()
+        run: cat /tmp/spyreels-public-web.log || true
+        working-directory: .

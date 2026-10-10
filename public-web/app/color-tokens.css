@@ -1,0 +1,192 @@
+/**
+ * SpyReels Color Foundation tokens (Figma Page 01 + Hardening v1.1).
+ * Phase 0: define only. Consumers adopt in later phases.
+ */
+:root {
+  /* Color primitives (Figma naming) */
+  --sr-purple-50: #f5f2ff;
+  --sr-purple-100: #ece7ff;
+  --sr-purple-200: #dcd3ff;
+  --sr-purple-300: #c8bcff;
+  --sr-purple-400: #9b86ff;
+  --sr-purple-500: #7157ff;
+  --sr-purple-600: #4c3e9a;
+  --sr-purple-700: #433091;
+  --sr-purple-800: #382778;
+  --sr-blue-500: #46a0d0;
+  --sr-blue-600: #4e74b5;
+  --sr-cyan-400: #57c2e2;
+  --sr-cyan-500: #46afd8;
+  --sr-ink: #111116;
+  --sr-white: #ffffff;
+
+  /* Neutrals */
+  --sr-neutral-0: #ffffff;
+  --sr-neutral-25: #fcfcfd;
+  --sr-neutral-50: #f8f8fa;
+  --sr-neutral-100: #f2f2f5;
+  --sr-neutral-200: #e7e7ec;
+  --sr-neutral-300: #d5d5dd;
+  --sr-neutral-400: #a6a6b0;
+  --sr-neutral-450: #94949f;
+  --sr-neutral-500: #70707a;
+  --sr-neutral-600: #575761;
+  --sr-neutral-700: #3c3c44;
+  --sr-neutral-800: #27272e;
+  --sr-neutral-900: #19191f;
+  --sr-neutral-950: #101014;
+
+  /* Semantic text */
+  --sr-color-text-primary: #101014;
+  --sr-color-text-secondary: #575761;
+  --sr-color-text-tertiary: #70707a;
+  --sr-color-text-disabled: #a6a6b0;
+  --sr-color-text-brand: #433091;
+  --sr-color-text-on-brand: #ffffff;
+  --sr-color-text-inverse: #ffffff;
+  /* Dark-scope text/secondary (Feature Surface and other inverse surfaces) */
+  --sr-color-text-secondary-inverse: #d5d5dd;
+
+  /* Marketing (Figma color/marketing/accent): large headline emphasis only */
+  --sr-color-marketing-accent: var(--sr-purple-500);
+
+  /* Surfaces */
+  --sr-color-surface-page: #f8f8fa;
+  --sr-color-surface-default: #ffffff;
+  --sr-color-surface-subtle: #fcfcfd;
+  --sr-color-surface-raised: #ffffff;
+  --sr-color-surface-hover: #f2f2f5;
+  /* Tool / integration icon tile (Figma Tool Grid v1.1; marketing is light-only) */
+  --sr-color-surface-icon-tile: var(--sr-neutral-100);
+  /*
+   * Feature Surface (Figma Marketing / Final CTA): base 135deg gradient +
+   * top-right purple glow at 20% opacity. No raw hex.
+   */
+  --sr-surface-feature:
+    radial-gradient(
+      ellipse 55% 70% at 100% 0%,
+      color-mix(in srgb, var(--sr-purple-500) 20%, transparent) 0%,
+      transparent 70%
+    ),
+    linear-gradient(
+      135deg,
+      var(--sr-neutral-950) 0%,
+      var(--sr-neutral-900) 55%,
+      var(--sr-purple-800) 100%
+    );
+
+  /* Borders */
+  --sr-color-border-subtle: #f2f2f5;
+  --sr-color-border-default: #e7e7ec;
+  --sr-color-border-strong: #d5d5dd;
+  --sr-color-border-control: #94949f;
+
+  /* Brand semantic */
+  --sr-color-brand-primary: #4c3e9a;
+  --sr-color-brand-strong: #433091;
+  --sr-color-brand-secondary: #4e74b5;
+  --sr-color-brand-accent: #46afd8;
+  --sr-color-brand-surface-subtle: #f5f2ff;
+  --sr-color-brand-surface-selected: #ece7ff;
+
+  /* Actions / focus */
+  --sr-color-action-primary-default: #4c3e9a;
+  --sr-color-action-primary: var(--sr-color-action-primary-default);
+  --sr-color-action-primary-hover: #433091;
+  --sr-color-action-primary-pressed: #382778;
+  --sr-color-action-selected-subtle: #ece7ff;
+  --sr-color-action-selected-strong: #4c3e9a;
+  --sr-color-action-disabled-background: #f2f2f5;
+  --sr-color-action-destructive-default: #d92d20;
+  --sr-color-action-destructive-hover: #b42318;
+  /* Button / Dark (Figma Page 05) — marketing header Start free */
+  --sr-color-action-neutral-default: #111116;
+  --sr-color-action-neutral-hover: #19191f;
+  --sr-color-action-neutral-pressed: #101014;
+  --sr-color-focus-border: #4c3e9a;
+  /* Focus / Primary Action ring color (light). Dark Feature Surface remaps. */
+  --sr-color-focus-primary-action: #4c3e9a;
+  /* Focus / Neutral Action — Button / Dark (same purple ring recipe) */
+  --sr-color-focus-neutral-action: #4c3e9a;
+  --sr-elevation-focus-neutral-action: 0 0 0 4px
+    color-mix(in srgb, var(--sr-color-focus-neutral-action) 22%, transparent);
+
+  /* Status */
+  --sr-color-status-success-background: #eaf8f2;
+  --sr-color-status-success-foreground: #147a57;
+  --sr-color-status-success-border: #22a06b;
+  --sr-color-status-warning-background: #fff6dd;
+  --sr-color-status-warning-foreground: #a15c00;
+  --sr-color-status-warning-border: #e59500;
+  --sr-color-status-error-background: #fff0ee;
+  --sr-color-status-error-foreground: #b42318;
+  --sr-color-status-error-border: #d92d20;
+  --sr-color-status-info-background: #eef4ff;
+  --sr-color-status-info-foreground: #175cd3;
+  --sr-color-status-info-border: #2e6fe8;
+
+  /* Platform */
+  --sr-color-platform-instagram-accent: #e4405f;
+  --sr-color-platform-tiktok-accent: #25f4ee;
+  --sr-color-platform-tiktok-secondary: #fe2c55;
+  --sr-color-platform-youtube-accent: #ff0000;
+
+  /*
+   * Marketing layout (Figma Page 03 Spacing + Layout, locked).
+   * Semantic names mirror Figma: layout/page/gutter/desktop, etc.
+   * Phase 1: define only. Consumers adopt in later phases.
+   */
+  --sr-layout-page-gutter-desktop: 64px; /* layout/page/gutter/desktop */
+  --sr-layout-page-gutter-tablet: 32px; /* layout/page/gutter/tablet */
+  --sr-layout-page-gutter-mobile: 20px; /* layout/page/gutter/mobile */
+  --sr-layout-section-gap: 96px; /* layout/section/gap */
+  --sr-layout-section-compact-gap: 64px; /* layout/section/compact-gap */
+  --sr-layout-content-gap: 32px; /* layout/content/gap */
+  --sr-layout-card-gap: 24px; /* layout/card/gap */
+  --sr-layout-card-padding: 24px; /* layout/card/padding */
+  --sr-layout-panel-padding: 32px; /* layout/panel/padding */
+  --sr-layout-control-gap: 12px; /* layout/control/gap */
+  --sr-layout-inline-gap: 8px; /* layout/inline/gap */
+  --sr-layout-stack-sm: 12px; /* layout/stack/sm */
+  --sr-layout-stack-md: 24px; /* layout/stack/md */
+  --sr-layout-stack-lg: 40px; /* layout/stack/lg */
+  --sr-layout-grid-column-gap: 24px; /* layout/grid/column-gap */
+  --sr-layout-grid-row-gap: 32px; /* layout/grid/row-gap */
+  --sr-layout-container-max-width: 1200px; /* layout/container/max-width */
+  --sr-layout-content-reading-width: 720px; /* layout/content/reading-width */
+  --sr-layout-content-form-width: 560px; /* layout/content/form-width */
+  --sr-layout-marketing-header-height: 77px; /* layout/marketing/header-height (desktop) */
+  --sr-layout-icon-tile-size: 40px; /* layout/icon-tile/size (Process Steps + connectors) */
+  --sr-layout-button-large-padding-x: 18px; /* layout/button/large/padding-x */
+
+  /*
+   * Marketing radius, borders, elevation (Figma Page 04, locked).
+   * Phase 1: define only. Phase 2+ adopt via clear semantic remaps.
+   */
+  --sr-radius-control: 10px; /* radius/control */
+  --sr-radius-input: 10px; /* radius/input */
+  --sr-radius-card: 16px; /* radius/card */
+  --sr-radius-panel: 20px; /* radius/panel */
+  --sr-radius-menu: 14px; /* radius/menu */
+  --sr-radius-modal: 24px; /* radius/modal */
+  --sr-radius-full: 9999px; /* radius/full (pill, badge) */
+  --sr-border-width-none: 0px; /* border/width/none */
+  --sr-border-width-default: 1px; /* border/width/default */
+  --sr-border-width-strong: 2px; /* border/width/strong */
+  --sr-elevation-surface-default: none; /* elevation/surface/default */
+  --sr-elevation-surface-raised: 0 1px 4px rgba(16, 16, 20, 0.08); /* elevation/surface/raised */
+  --sr-elevation-menu: 0 4px 12px -2px rgba(16, 16, 20, 0.1); /* elevation/menu */
+  --sr-elevation-modal: 0 8px 24px -4px rgba(16, 16, 20, 0.14); /* elevation/modal */
+  /* Elevation / Primary Action — Button / Primary Large */
+  --sr-elevation-primary-action: 0 10px 28px rgba(76, 62, 154, 0.25);
+  /* Focus / Primary Action — 4px spread ring (a≈0.22) atop Primary Action elevation */
+  --sr-elevation-focus-primary-action: 0 0 0 4px
+    color-mix(in srgb, var(--sr-color-focus-primary-action) 22%, transparent);
+}
+
+/* Marketing header height: Compact (≤ 640px), matches Figma Marketing / Header */
+@media (max-width: 640px) {
+  :root {
+    --sr-layout-marketing-header-height: 65px; /* layout/marketing/header-height (mobile) */
+  }
+}

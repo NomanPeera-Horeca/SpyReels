@@ -1,0 +1,86 @@
+/**
+ * Marketing / Final CTA (Figma Page 09).
+ * Feature Surface box + dark text scope; button stays light-scope accent.
+ */
+
+.section {
+  padding: var(--sr-layout-section-gap) 0;
+}
+
+.shell {
+  width: min(
+    var(--sr-layout-container-max-width),
+    calc(100% - 2 * var(--sr-layout-page-gutter-desktop))
+  );
+  margin-inline: auto;
+}
+
+.box {
+  /* Dark scope: remap text + action-primary (never override button fills per instance) */
+  --sr-color-text-primary: var(--sr-color-text-inverse);
+  --sr-color-text-secondary: var(--sr-color-text-secondary-inverse);
+  --sr-color-action-primary-default: #7157ff;
+  /* Re-bind alias in this scope so Primary Large resolves dark default */
+  --sr-color-action-primary: var(--sr-color-action-primary-default);
+  --sr-color-action-primary-hover: #4c3e9a;
+  --sr-color-action-primary-pressed: #433091;
+  --sr-color-focus-primary-action: #9b86ff;
+
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: var(--sr-layout-content-gap);
+  padding: var(--sr-layout-section-compact-gap) var(--sr-layout-panel-padding);
+  border-radius: var(--sr-radius-modal);
+  background: var(--sr-surface-feature);
+  color: var(--sr-color-text-primary);
+}
+
+.copy {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sr-layout-stack-sm);
+  max-width: var(--sr-layout-content-reading-width);
+  position: relative;
+  z-index: 1;
+}
+
+.title {
+  margin: 0;
+  color: var(--sr-color-text-primary);
+  text-wrap: balance;
+}
+
+.body {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+}
+
+.button {
+  position: relative;
+  z-index: 1;
+}
+
+@media (max-width: 640px) {
+  .section {
+    padding: var(--sr-layout-section-compact-gap) 0;
+  }
+
+  .shell {
+    width: min(
+      var(--sr-layout-container-max-width),
+      calc(100% - 2 * var(--sr-layout-page-gutter-mobile))
+    );
+  }
+
+  .button {
+    width: 100%;
+    max-width: 340px;
+  }
+}

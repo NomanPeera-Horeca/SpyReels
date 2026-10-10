@@ -1,0 +1,80 @@
+/**
+ * Shared Primary Button (Figma Button / Primary, Page 05).
+ * Large = Core / Button Large + Elevation / Primary Action + Focus / Primary Action.
+ * Consumes semantic action tokens so Feature Surface dark scope can remap fills.
+ */
+
+.sr-primary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sr-layout-inline-gap);
+  box-sizing: border-box;
+  border: var(--sr-border-width-none);
+  border-radius: var(--sr-radius-control);
+  background: var(--sr-color-action-primary);
+  color: var(--sr-color-text-on-brand);
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+/* Figma Button / Primary — size Medium (unchanged product recipe) */
+.sr-primary-button-medium {
+  height: 44px;
+  min-height: 44px;
+  padding: 0 16px;
+  font-size: var(--sr-type-marketing-button-size);
+  line-height: var(--sr-type-marketing-button-line);
+  font-weight: var(--sr-type-marketing-button-weight);
+  letter-spacing: var(--sr-type-marketing-button-tracking);
+}
+
+/* Figma Button / Primary — size Large (Core / Button Large) */
+.sr-primary-button-large {
+  height: 52px;
+  min-height: 52px;
+  padding: 0 var(--sr-layout-button-large-padding-x);
+  font-size: var(--sr-type-core-button-large-size);
+  line-height: var(--sr-type-core-button-large-line);
+  font-weight: var(--sr-type-core-button-large-weight);
+  letter-spacing: var(--sr-type-core-button-large-tracking);
+  box-shadow: var(--sr-elevation-primary-action);
+}
+
+.sr-primary-button-icon {
+  width: var(--sr-size-icon);
+  height: var(--sr-size-icon);
+  flex: 0 0 var(--sr-size-icon);
+  display: block;
+  color: currentColor;
+}
+
+.sr-primary-button:hover:not(:disabled) {
+  background: var(--sr-color-action-primary-hover);
+}
+
+.sr-primary-button:active:not(:disabled) {
+  background: var(--sr-color-action-primary-pressed);
+}
+
+.sr-primary-button-medium:focus-visible {
+  outline: 2px solid var(--sr-color-focus-border);
+  outline-offset: 3px;
+}
+
+/* Focus / Primary Action: elevation + 4px spread ring */
+.sr-primary-button-large:focus-visible {
+  outline: none;
+  box-shadow:
+    var(--sr-elevation-primary-action),
+    var(--sr-elevation-focus-primary-action);
+}
+
+.sr-primary-button:disabled {
+  background: var(--sr-color-action-disabled-background);
+  color: var(--sr-color-text-disabled);
+  cursor: not-allowed;
+  box-shadow: none;
+}

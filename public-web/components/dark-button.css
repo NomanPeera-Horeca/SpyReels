@@ -1,0 +1,58 @@
+/**
+ * Button / Dark (Figma Page 05) — marketing header Start free.
+ * Small only: 40px high, padding-x 12, gap 8, Marketing / Button 14/20 SemiBold.
+ */
+
+.sr-dark-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 40px;
+  min-height: 40px;
+  min-width: 108px;
+  padding: 0 var(--sr-layout-control-gap);
+  gap: var(--sr-layout-inline-gap);
+  border: var(--sr-border-width-none);
+  border-radius: var(--sr-radius-control);
+  background: var(--sr-color-action-neutral-default);
+  color: var(--sr-color-text-on-brand);
+  font-size: var(--sr-type-marketing-button-size);
+  line-height: var(--sr-type-marketing-button-line);
+  font-weight: var(--sr-type-marketing-button-weight);
+  letter-spacing: var(--sr-type-marketing-button-tracking);
+  font-family: inherit;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: var(--sr-elevation-surface-default);
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.sr-dark-button-icon {
+  width: var(--sr-size-icon);
+  height: var(--sr-size-icon);
+  flex: 0 0 var(--sr-size-icon);
+  display: block;
+  color: currentColor;
+}
+
+.sr-dark-button:hover:not(:disabled) {
+  background: var(--sr-color-action-neutral-hover);
+}
+
+.sr-dark-button:active:not(:disabled) {
+  background: var(--sr-color-action-neutral-pressed);
+}
+
+.sr-dark-button:focus-visible {
+  outline: none;
+  box-shadow: var(--sr-elevation-focus-neutral-action);
+}
+
+.sr-dark-button:disabled {
+  background: var(--sr-color-action-disabled-background);
+  color: var(--sr-color-text-disabled);
+  cursor: not-allowed;
+  box-shadow: none;
+}

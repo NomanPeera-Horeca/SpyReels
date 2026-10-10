@@ -20,8 +20,8 @@ test.describe("Viral Reel Finder raw HTML", () => {
     expect(html).toContain("Questions about finding viral Reels.");
     expect(html).toContain("Is SpyReels a free viral finder?");
     expect(html).toContain("Reel finder vs Instagram Search");
-    expect(html).toContain("https://spyreels.ai/free-tools/tiktok-viral-video-finder");
-    expect(html).toContain("https://spyreels.ai/free-tools/viral-hooks");
+    expect(html).toContain('href="/free-tools/tiktok-viral-video-finder"');
+    expect(html).toContain('href="/free-tools/viral-hooks"');
     expect(html).toContain("How it works");
     expect(html).toContain("https://spyreels.ai/blog/guide-how-to-search-reels-on-instagram");
     expect(html).toContain("application/ld+json");

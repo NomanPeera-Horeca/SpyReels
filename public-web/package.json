@@ -7,7 +7,14 @@
     "build": "next build",
     "start": "next start -p 3100",
     "check": "tsc --noEmit",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:visual": "PLAYWRIGHT_VISUAL=1 playwright test e2e/visual.spec.ts --project=desktop-1440 --project=mobile-390",
+    "test:visual:update": "PLAYWRIGHT_VISUAL=1 playwright test e2e/visual.spec.ts --project=desktop-1440 --project=mobile-390 --update-snapshots",
+    "test:visual:docker": "bash scripts/visual-docker.sh test",
+    "test:visual:update:docker": "bash scripts/visual-docker.sh update",
+    "test:seo": "PLAYWRIGHT_SEO=1 playwright test e2e/seo-contract.spec.ts --project=desktop-1440",
+    "test:seo:update": "UPDATE_SEO_BASELINES=1 playwright test e2e/seo-update.spec.ts --project=desktop-1440",
+    "test:seo:smoke": "node scripts/production-seo-smoke.mjs"
   },
   "dependencies": {
     "next": "16.3.4",

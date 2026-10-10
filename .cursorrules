@@ -9,6 +9,13 @@ Before generating any new page, blog post, free tool page, feature page, compari
 3. Run the pre-ship checklist mentally before showing me the diff.
 4. If any item is missing, flag it BEFORE generating code.
 
+## Trunk-based workflow (NEVER VIOLATE)
+
+- Production deploys only from `main` (SpyReels web + spyreels-public-web).
+- Short-lived branches only; open a PR into `main` within 1 to 2 days.
+- All required checks green before merge; never deploy from a feature branch.
+- See `docs/deploy-notes/trunk-based-workflow.md`.
+
 ## Code rules
 
 - pnpm only, never npm
@@ -17,6 +24,8 @@ Before generating any new page, blog post, free tool page, feature page, compari
 - After every change run: npx tsc --noEmit
 - Exact file paths, no guessing
 - Commit only when explicitly told
+- public-web: use only --sr-* tokens and .sr-text-* text styles; use MarketingSectionHeader and MarketingWorkspace (Tool Grid) for those sections; never hardcode colors, sizes or fonts; never duplicate a shared section.
+- Every FAQ must use MarketingFaq; never hand-build FAQ markup or FAQPage JSON-LD. Use only --sr-* tokens with the Figma names.
 
 ## File creation policy
 
@@ -24,6 +33,10 @@ Before generating any new page, blog post, free tool page, feature page, compari
 - New routes: register in client/src/App.tsx
 - New blog posts: insert into blog_posts MySQL table via admin or seed script
 - Never create files in client/public/ without asking
+- NEVER remove or alter Google Search Console verification files:
+  `client/public/googleabadefc43201e81e.html` and
+  `public-web/public/googleabadefc43201e81e.html`
+  (see `docs/deploy-notes/google-site-verification.md`)
 
 ## New blog publish (always follow)
 

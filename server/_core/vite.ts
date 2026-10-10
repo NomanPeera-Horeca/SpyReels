@@ -136,6 +136,14 @@ export function serveStatic(app: Express) {
           res.setHeader("Expires", htmlNoCacheHeaders.Expires);
           return;
         }
+        // GSC HTML verification must stay fresh and must not be treated as a long-lived asset.
+        if (/google[a-z0-9]+\.html$/i.test(filePath)) {
+          res.setHeader("Cache-Control", htmlNoCacheHeaders["Cache-Control"]);
+          res.setHeader("Pragma", htmlNoCacheHeaders.Pragma);
+          res.setHeader("Expires", htmlNoCacheHeaders.Expires);
+          res.setHeader("Content-Type", "text/html; charset=utf-8");
+          return;
+        }
         if (filePath.includes(`${path.sep}assets${path.sep}`)) {
           res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
         }

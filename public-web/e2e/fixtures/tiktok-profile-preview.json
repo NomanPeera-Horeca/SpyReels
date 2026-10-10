@@ -1,0 +1,19 @@
+{
+  "result": {
+    "data": {
+      "json": {
+        "found": true,
+        "username": "charlidamelio",
+        "fullName": "charli d'amelio",
+        "biography": "Fixture TikTok biography for visual regression. Do not use live data.",
+        "profilePicUrl": "https://visual-fixture.local/profile-pic.png",
+        "followerCount": 151000000,
+        "followingCount": 1200,
+        "postCount": 2800,
+        "heartCount": 11500000000,
+        "isVerified": true,
+        "isPrivate": false
+      }
+    }
+  }
+}

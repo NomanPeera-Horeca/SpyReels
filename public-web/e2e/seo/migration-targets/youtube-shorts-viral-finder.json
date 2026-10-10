@@ -1,0 +1,149 @@
+{
+  "path": "/free-tools/youtube-shorts-viral-finder",
+  "status": 200,
+  "title": "YouTube Shorts Finder - Viral Shorts by Channel | SpyReels",
+  "description": "Free YouTube Shorts finder by channel. Paste any public handle, sort viral Shorts by views, engagement and outlier score, then remake winners in your voice.",
+  "canonical": "https://spyreels.ai/free-tools/youtube-shorts-viral-finder",
+  "robots": "index, follow",
+  "googlebot": null,
+  "verification": {
+    "google": "TfvQaX_pN1iSSkXBwgrUoK45mvnWKJTozdMdeZsgibs"
+  },
+  "openGraph": {
+    "description": "Free YouTube Shorts finder by channel. Paste any public handle, sort viral Shorts by views, engagement and outlier score, then remake winners in your voice.",
+    "image": "https://spyreels.ai/brand/og-default.jpg",
+    "title": "YouTube Shorts Finder - Viral Shorts by Channel | SpyReels",
+    "type": "website",
+    "url": "https://spyreels.ai/free-tools/youtube-shorts-viral-finder"
+  },
+  "twitter": {
+    "card": "summary_large_image",
+    "description": "Free YouTube Shorts finder by channel. Paste any public handle, sort viral Shorts by views, engagement and outlier score, then remake winners in your voice.",
+    "image": "https://spyreels.ai/brand/og-default.jpg",
+    "title": "YouTube Shorts Finder - Viral Shorts by Channel | SpyReels"
+  },
+  "h1": "YouTube Shorts Finder: any channel's most viral Shorts",
+  "hreflang": [],
+  "jsonLd": [
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "item": "https://spyreels.ai/",
+          "name": "Home",
+          "position": 1
+        },
+        {
+          "@type": "ListItem",
+          "item": "https://spyreels.ai/free-tools",
+          "name": "Free Tools",
+          "position": 2
+        },
+        {
+          "@type": "ListItem",
+          "item": "https://spyreels.ai/free-tools/youtube-shorts-viral-finder",
+          "name": "YouTube Shorts Finder",
+          "position": 3
+        }
+      ]
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "It depends on the job. Keyword libraries are best for browsing trends by topic. SpyReels is the free YouTube Shorts finder for the by-channel job: paste a public handle, sort viral Shorts by outlier score, then remake winners in your voice. Start free."
+          },
+          "name": "What is the best free YouTube Shorts finder?"
+        },
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Open a Shorts finder that supports username or channel search, paste the handle, and sort by outlier score or views. Native YouTube mostly shows recent uploads, so the best Shorts stay buried. SpyReels surfaces them first."
+          },
+          "name": "How do I find viral YouTube Shorts on a channel?"
+        },
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. SpyReels is built for that. Paste @username or a channel URL. Private or unlisted content cannot be researched."
+          },
+          "name": "Is there a YouTube Shorts finder by username?"
+        },
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Use a free YouTube Shorts viral finder, spy 3 peer channels, sort by outlier score, and read the hooks on the top five. The shared pattern is what you remake, not the exact video."
+          },
+          "name": "How do I find viral YouTube Shorts for free?"
+        },
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Research first. Find viral Shorts from channels like yours, copy the structure (hook, pacing, payoff), change the story to your niche, and post consistently. SpyReels turns that research into a script you can film the same day."
+          },
+          "name": "How to go viral on YouTube Shorts without guessing?"
+        },
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. Paste a public channel URL or @username. Private channels cannot be researched."
+          },
+          "name": "Can I paste a YouTube channel link?"
+        },
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. That is a different product. SpyReels spies one creator at a time and ranks their catalogue. If you only need a keyword search across a giant library, use a keyword library tool."
+          },
+          "name": "Is this the same as searching millions of Shorts by keyword?"
+        },
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. Formats that win on Shorts often travel. Remake the script once, then adapt the cut for TikTok or Reels. SpyReels also has a TikTok Viral Video Finder and an Instagram Viral Reel Finder."
+          },
+          "name": "Can I use findings for TikTok and Instagram Reels too?"
+        }
+      ]
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "bestRating": "5",
+        "ratingCount": "12000",
+        "ratingValue": "4.5",
+        "worstRating": "1"
+      },
+      "alternateName": [
+        "YouTube Shorts Finder",
+        "YouTube Shorts Viral Finder",
+        "YouTube Short Finder"
+      ],
+      "applicationCategory": "MultimediaApplication",
+      "description": "Free YouTube Shorts finder by channel. Sort viral Shorts by views, engagement and outlier score, then remake winners in your voice.",
+      "name": "SpyReels YouTube Shorts Finder",
+      "offers": {
+        "@type": "AggregateOffer",
+        "highPrice": "99",
+        "lowPrice": "0",
+        "priceCurrency": "USD"
+      },
+      "operatingSystem": "Web Browser"
+    }
+  ]
+}

@@ -1,0 +1,417 @@
+/**
+ * SpyReels Typography Foundation (Figma text styles, exact values).
+ * Marketing Responsive Typography v1.1: Desktop defaults; Mobile ≤ 640px overrides.
+ * Marketing + Product roles. Loaded globally via globals.css.
+ */
+:root {
+  /* Font weights */
+  --sr-font-weight-regular: 400;
+  --sr-font-weight-medium: 500;
+  --sr-font-weight-semibold: 600;
+  --sr-font-weight-bold: 700;
+
+  /* Icon sizes (shared foundation) */
+  --sr-size-icon-tile: 40px;
+  --sr-size-icon: 20px;
+
+  /* ——— Marketing ——— */
+  --sr-type-marketing-display-size: 64px;
+  --sr-type-marketing-display-line: 72px;
+  --sr-type-marketing-display-weight: var(--sr-font-weight-bold);
+  --sr-type-marketing-display-tracking: -0.75px;
+
+  /*
+   * Marketing / Display Hero (FLUID) — homepage + Finder Hero (IG/TikTok).
+   * Desktop: clamp(60px, 6.7vw, 90px) / line .96; Mobile ≤640: clamp(36px, 10.8vw, 44px) / .98.
+   */
+  --sr-type-marketing-display-hero-size: clamp(60px, 6.7vw, 90px);
+  --sr-type-marketing-display-hero-line: 0.96;
+  --sr-type-marketing-display-hero-weight: var(--sr-font-weight-bold);
+  --sr-type-marketing-display-hero-tracking: -0.035em;
+
+  --sr-type-marketing-heading-1-size: 48px;
+  --sr-type-marketing-heading-1-line: 56px;
+  --sr-type-marketing-heading-1-weight: var(--sr-font-weight-bold);
+  --sr-type-marketing-heading-1-tracking: -0.25px;
+
+  --sr-type-marketing-heading-2-size: 40px;
+  --sr-type-marketing-heading-2-line: 48px;
+  --sr-type-marketing-heading-2-weight: var(--sr-font-weight-bold);
+  --sr-type-marketing-heading-2-tracking: -0.25px;
+
+  --sr-type-marketing-heading-3-size: 32px;
+  --sr-type-marketing-heading-3-line: 40px;
+  --sr-type-marketing-heading-3-weight: var(--sr-font-weight-semibold);
+  --sr-type-marketing-heading-3-tracking: -0.25px;
+
+  --sr-type-marketing-heading-4-size: 24px;
+  --sr-type-marketing-heading-4-line: 32px;
+  --sr-type-marketing-heading-4-weight: var(--sr-font-weight-semibold);
+  --sr-type-marketing-heading-4-tracking: normal;
+
+  --sr-type-marketing-title-medium-size: 18px;
+  --sr-type-marketing-title-medium-line: 28px;
+  --sr-type-marketing-title-medium-weight: var(--sr-font-weight-semibold);
+  --sr-type-marketing-title-medium-tracking: normal;
+
+  --sr-type-marketing-body-large-size: 18px;
+  --sr-type-marketing-body-large-line: 28px;
+  --sr-type-marketing-body-large-weight: var(--sr-font-weight-regular);
+  --sr-type-marketing-body-large-tracking: normal;
+
+  --sr-type-marketing-body-medium-size: 16px;
+  --sr-type-marketing-body-medium-line: 24px;
+  --sr-type-marketing-body-medium-weight: var(--sr-font-weight-regular);
+  --sr-type-marketing-body-medium-tracking: normal;
+
+  --sr-type-marketing-body-small-size: 14px;
+  --sr-type-marketing-body-small-line: 20px;
+  --sr-type-marketing-body-small-weight: var(--sr-font-weight-regular);
+  --sr-type-marketing-body-small-tracking: normal;
+
+  --sr-type-marketing-label-size: 14px;
+  --sr-type-marketing-label-line: 20px;
+  --sr-type-marketing-label-weight: var(--sr-font-weight-medium);
+  --sr-type-marketing-label-tracking: normal;
+
+  --sr-type-marketing-caption-size: 12px;
+  --sr-type-marketing-caption-line: 16px;
+  --sr-type-marketing-caption-weight: var(--sr-font-weight-regular);
+  --sr-type-marketing-caption-tracking: normal;
+
+  --sr-type-marketing-button-size: 14px;
+  --sr-type-marketing-button-line: 20px;
+  --sr-type-marketing-button-weight: var(--sr-font-weight-semibold);
+  --sr-type-marketing-button-tracking: normal;
+
+  /* Core / Button Large (Figma Page 05 Button / Primary Large) */
+  --sr-type-core-button-large-size: 16px;
+  --sr-type-core-button-large-line: 1.2;
+  --sr-type-core-button-large-weight: var(--sr-font-weight-bold);
+  --sr-type-core-button-large-tracking: normal;
+
+  --sr-type-marketing-metric-size: 40px;
+  --sr-type-marketing-metric-line: 48px;
+  --sr-type-marketing-metric-weight: var(--sr-font-weight-bold);
+  --sr-type-marketing-metric-tracking: -0.25px;
+
+  --sr-type-marketing-eyebrow-size: 12px;
+  --sr-type-marketing-eyebrow-line: 16px;
+  --sr-type-marketing-eyebrow-weight: var(--sr-font-weight-semibold);
+  --sr-type-marketing-eyebrow-tracking: 0.12em;
+  --sr-type-marketing-eyebrow-transform: uppercase;
+
+  /* ——— Product ——— */
+  --sr-type-product-display-size: 48px;
+  --sr-type-product-display-line: 56px;
+  --sr-type-product-display-weight: var(--sr-font-weight-bold);
+  --sr-type-product-display-tracking: -0.75px;
+
+  --sr-type-product-heading-1-size: 32px;
+  --sr-type-product-heading-1-line: 40px;
+  --sr-type-product-heading-1-weight: var(--sr-font-weight-bold);
+  --sr-type-product-heading-1-tracking: -0.25px;
+
+  --sr-type-product-heading-2-size: 28px;
+  --sr-type-product-heading-2-line: 36px;
+  --sr-type-product-heading-2-weight: var(--sr-font-weight-semibold);
+  --sr-type-product-heading-2-tracking: -0.25px;
+
+  --sr-type-product-heading-3-size: 24px;
+  --sr-type-product-heading-3-line: 32px;
+  --sr-type-product-heading-3-weight: var(--sr-font-weight-semibold);
+  --sr-type-product-heading-3-tracking: -0.25px;
+
+  --sr-type-product-heading-4-size: 20px;
+  --sr-type-product-heading-4-line: 28px;
+  --sr-type-product-heading-4-weight: var(--sr-font-weight-semibold);
+  --sr-type-product-heading-4-tracking: normal;
+
+  --sr-type-product-body-large-size: 16px;
+  --sr-type-product-body-large-line: 24px;
+  --sr-type-product-body-large-weight: var(--sr-font-weight-regular);
+  --sr-type-product-body-large-tracking: normal;
+
+  --sr-type-product-body-medium-size: 16px;
+  --sr-type-product-body-medium-line: 24px;
+  --sr-type-product-body-medium-weight: var(--sr-font-weight-regular);
+  --sr-type-product-body-medium-tracking: normal;
+
+  --sr-type-product-body-small-size: 14px;
+  --sr-type-product-body-small-line: 20px;
+  --sr-type-product-body-small-weight: var(--sr-font-weight-regular);
+  --sr-type-product-body-small-tracking: normal;
+
+  --sr-type-product-label-size: 14px;
+  --sr-type-product-label-line: 20px;
+  --sr-type-product-label-weight: var(--sr-font-weight-medium);
+  --sr-type-product-label-tracking: normal;
+
+  --sr-type-product-caption-size: 12px;
+  --sr-type-product-caption-line: 16px;
+  --sr-type-product-caption-weight: var(--sr-font-weight-regular);
+  --sr-type-product-caption-tracking: normal;
+
+  --sr-type-product-button-size: 14px;
+  --sr-type-product-button-line: 20px;
+  --sr-type-product-button-weight: var(--sr-font-weight-semibold);
+  --sr-type-product-button-tracking: normal;
+
+  --sr-type-product-metric-size: 32px;
+  --sr-type-product-metric-line: 40px;
+  --sr-type-product-metric-weight: var(--sr-font-weight-bold);
+  --sr-type-product-metric-tracking: -0.25px;
+
+  --sr-type-product-card-title-size: 16px;
+  --sr-type-product-card-title-line: 20px;
+  --sr-type-product-card-title-weight: var(--sr-font-weight-semibold);
+  --sr-type-product-card-title-tracking: normal;
+}
+
+/* Composite text utilities — one class applies a full Figma text style */
+
+.sr-text-marketing-display,
+.sr-text-marketing-heading-1,
+.sr-text-marketing-heading-2,
+.sr-text-marketing-heading-3,
+.sr-text-marketing-heading-4 {
+  /* Headings never break mid-word; balance wraps across lines */
+  text-wrap: balance;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+
+.sr-text-marketing-display {
+  font-size: var(--sr-type-marketing-display-size);
+  line-height: var(--sr-type-marketing-display-line);
+  font-weight: var(--sr-type-marketing-display-weight);
+  letter-spacing: var(--sr-type-marketing-display-tracking);
+}
+
+.sr-text-marketing-display-hero {
+  font-size: var(--sr-type-marketing-display-hero-size);
+  line-height: var(--sr-type-marketing-display-hero-line);
+  font-weight: var(--sr-type-marketing-display-hero-weight);
+  letter-spacing: var(--sr-type-marketing-display-hero-tracking);
+  text-wrap: balance;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+
+.sr-text-marketing-heading-1 {
+  font-size: var(--sr-type-marketing-heading-1-size);
+  line-height: var(--sr-type-marketing-heading-1-line);
+  font-weight: var(--sr-type-marketing-heading-1-weight);
+  letter-spacing: var(--sr-type-marketing-heading-1-tracking);
+}
+
+.sr-text-marketing-heading-2 {
+  font-size: var(--sr-type-marketing-heading-2-size);
+  line-height: var(--sr-type-marketing-heading-2-line);
+  font-weight: var(--sr-type-marketing-heading-2-weight);
+  letter-spacing: var(--sr-type-marketing-heading-2-tracking);
+}
+
+.sr-text-marketing-heading-3 {
+  font-size: var(--sr-type-marketing-heading-3-size);
+  line-height: var(--sr-type-marketing-heading-3-line);
+  font-weight: var(--sr-type-marketing-heading-3-weight);
+  letter-spacing: var(--sr-type-marketing-heading-3-tracking);
+}
+
+.sr-text-marketing-heading-4 {
+  font-size: var(--sr-type-marketing-heading-4-size);
+  line-height: var(--sr-type-marketing-heading-4-line);
+  font-weight: var(--sr-type-marketing-heading-4-weight);
+  letter-spacing: var(--sr-type-marketing-heading-4-tracking);
+}
+
+.sr-text-marketing-title-medium {
+  font-size: var(--sr-type-marketing-title-medium-size);
+  line-height: var(--sr-type-marketing-title-medium-line);
+  font-weight: var(--sr-type-marketing-title-medium-weight);
+  letter-spacing: var(--sr-type-marketing-title-medium-tracking);
+}
+
+.sr-text-marketing-body-large {
+  font-size: var(--sr-type-marketing-body-large-size);
+  line-height: var(--sr-type-marketing-body-large-line);
+  font-weight: var(--sr-type-marketing-body-large-weight);
+  letter-spacing: var(--sr-type-marketing-body-large-tracking);
+}
+
+.sr-text-marketing-body-medium {
+  font-size: var(--sr-type-marketing-body-medium-size);
+  line-height: var(--sr-type-marketing-body-medium-line);
+  font-weight: var(--sr-type-marketing-body-medium-weight);
+  letter-spacing: var(--sr-type-marketing-body-medium-tracking);
+}
+
+.sr-text-marketing-body-small {
+  font-size: var(--sr-type-marketing-body-small-size);
+  line-height: var(--sr-type-marketing-body-small-line);
+  font-weight: var(--sr-type-marketing-body-small-weight);
+  letter-spacing: var(--sr-type-marketing-body-small-tracking);
+}
+
+.sr-text-marketing-label {
+  font-size: var(--sr-type-marketing-label-size);
+  line-height: var(--sr-type-marketing-label-line);
+  font-weight: var(--sr-type-marketing-label-weight);
+  letter-spacing: var(--sr-type-marketing-label-tracking);
+}
+
+.sr-text-marketing-caption {
+  font-size: var(--sr-type-marketing-caption-size);
+  line-height: var(--sr-type-marketing-caption-line);
+  font-weight: var(--sr-type-marketing-caption-weight);
+  letter-spacing: var(--sr-type-marketing-caption-tracking);
+}
+
+.sr-text-marketing-button {
+  font-size: var(--sr-type-marketing-button-size);
+  line-height: var(--sr-type-marketing-button-line);
+  font-weight: var(--sr-type-marketing-button-weight);
+  letter-spacing: var(--sr-type-marketing-button-tracking);
+}
+
+.sr-text-core-button-large {
+  font-size: var(--sr-type-core-button-large-size);
+  line-height: var(--sr-type-core-button-large-line);
+  font-weight: var(--sr-type-core-button-large-weight);
+  letter-spacing: var(--sr-type-core-button-large-tracking);
+}
+
+.sr-text-marketing-metric {
+  font-size: var(--sr-type-marketing-metric-size);
+  line-height: var(--sr-type-marketing-metric-line);
+  font-weight: var(--sr-type-marketing-metric-weight);
+  letter-spacing: var(--sr-type-marketing-metric-tracking);
+}
+
+.sr-text-marketing-eyebrow {
+  font-size: var(--sr-type-marketing-eyebrow-size);
+  line-height: var(--sr-type-marketing-eyebrow-line);
+  font-weight: var(--sr-type-marketing-eyebrow-weight);
+  letter-spacing: var(--sr-type-marketing-eyebrow-tracking);
+  text-transform: var(--sr-type-marketing-eyebrow-transform);
+}
+
+.sr-text-product-display {
+  font-size: var(--sr-type-product-display-size);
+  line-height: var(--sr-type-product-display-line);
+  font-weight: var(--sr-type-product-display-weight);
+  letter-spacing: var(--sr-type-product-display-tracking);
+}
+
+.sr-text-product-heading-1 {
+  font-size: var(--sr-type-product-heading-1-size);
+  line-height: var(--sr-type-product-heading-1-line);
+  font-weight: var(--sr-type-product-heading-1-weight);
+  letter-spacing: var(--sr-type-product-heading-1-tracking);
+}
+
+.sr-text-product-heading-2 {
+  font-size: var(--sr-type-product-heading-2-size);
+  line-height: var(--sr-type-product-heading-2-line);
+  font-weight: var(--sr-type-product-heading-2-weight);
+  letter-spacing: var(--sr-type-product-heading-2-tracking);
+}
+
+.sr-text-product-heading-3 {
+  font-size: var(--sr-type-product-heading-3-size);
+  line-height: var(--sr-type-product-heading-3-line);
+  font-weight: var(--sr-type-product-heading-3-weight);
+  letter-spacing: var(--sr-type-product-heading-3-tracking);
+}
+
+.sr-text-product-heading-4 {
+  font-size: var(--sr-type-product-heading-4-size);
+  line-height: var(--sr-type-product-heading-4-line);
+  font-weight: var(--sr-type-product-heading-4-weight);
+  letter-spacing: var(--sr-type-product-heading-4-tracking);
+}
+
+.sr-text-product-body-large {
+  font-size: var(--sr-type-product-body-large-size);
+  line-height: var(--sr-type-product-body-large-line);
+  font-weight: var(--sr-type-product-body-large-weight);
+  letter-spacing: var(--sr-type-product-body-large-tracking);
+}
+
+.sr-text-product-body-medium {
+  font-size: var(--sr-type-product-body-medium-size);
+  line-height: var(--sr-type-product-body-medium-line);
+  font-weight: var(--sr-type-product-body-medium-weight);
+  letter-spacing: var(--sr-type-product-body-medium-tracking);
+}
+
+.sr-text-product-body-small {
+  font-size: var(--sr-type-product-body-small-size);
+  line-height: var(--sr-type-product-body-small-line);
+  font-weight: var(--sr-type-product-body-small-weight);
+  letter-spacing: var(--sr-type-product-body-small-tracking);
+}
+
+.sr-text-product-label {
+  font-size: var(--sr-type-product-label-size);
+  line-height: var(--sr-type-product-label-line);
+  font-weight: var(--sr-type-product-label-weight);
+  letter-spacing: var(--sr-type-product-label-tracking);
+}
+
+.sr-text-product-caption {
+  font-size: var(--sr-type-product-caption-size);
+  line-height: var(--sr-type-product-caption-line);
+  font-weight: var(--sr-type-product-caption-weight);
+  letter-spacing: var(--sr-type-product-caption-tracking);
+}
+
+.sr-text-product-button {
+  font-size: var(--sr-type-product-button-size);
+  line-height: var(--sr-type-product-button-line);
+  font-weight: var(--sr-type-product-button-weight);
+  letter-spacing: var(--sr-type-product-button-tracking);
+}
+
+.sr-text-product-metric {
+  font-size: var(--sr-type-product-metric-size);
+  line-height: var(--sr-type-product-metric-line);
+  font-weight: var(--sr-type-product-metric-weight);
+  letter-spacing: var(--sr-type-product-metric-tracking);
+}
+
+.sr-text-product-card-title {
+  font-size: var(--sr-type-product-card-title-size);
+  line-height: var(--sr-type-product-card-title-line);
+  font-weight: var(--sr-type-product-card-title-weight);
+  letter-spacing: var(--sr-type-product-card-title-tracking);
+}
+
+/* Marketing Responsive Typography v1.1 — Mobile mode (≤ 640px) */
+@media (max-width: 640px) {
+  :root {
+    --sr-type-marketing-display-size: 44px;
+    --sr-type-marketing-display-line: 48px;
+
+    --sr-type-marketing-display-hero-size: clamp(36px, 10.8vw, 44px);
+    --sr-type-marketing-display-hero-line: 0.98;
+
+    --sr-type-marketing-heading-1-size: 40px;
+    --sr-type-marketing-heading-1-line: 44px;
+
+    --sr-type-marketing-heading-2-size: 32px;
+    --sr-type-marketing-heading-2-line: 40px;
+
+    --sr-type-marketing-heading-3-size: 28px;
+    --sr-type-marketing-heading-3-line: 36px;
+
+    --sr-type-marketing-heading-4-size: 22px;
+    --sr-type-marketing-heading-4-line: 28px;
+
+    --sr-type-marketing-metric-size: 32px;
+    --sr-type-marketing-metric-line: 40px;
+  }
+}

@@ -2,19 +2,14 @@ import { expect, test, type Page } from "@playwright/test";
 
 async function waitForDemoReady(page: Page) {
   await expect(page.getByText("Interactive example", { exact: true })).toBeVisible();
-  await expect(page.getByText("Loading Reel data…")).toHaveCount(0);
+  await expect(page.getByText("Loading results…")).toHaveCount(0);
   await expect(page.getByTestId("reel-card").first()).toBeVisible({ timeout: 20_000 });
-}
-
-async function reelOrder(page: Page): Promise<string[]> {
-  return page.getByTestId("reel-card").evaluateAll((buttons) =>
-    buttons.map((button) => (button.querySelector("strong")?.textContent || "").trim())
-  );
 }
 
 test.beforeEach(async ({ page }) => {
   const consoleErrors: string[] = [];
   const failedRequests: string[] = [];
+
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());
   });
@@ -23,35 +18,39 @@ test.beforeEach(async ({ page }) => {
       failedRequests.push(`${response.status()} ${response.url()}`);
     }
   });
+
   (page as Page & { __qa?: { consoleErrors: string[]; failedRequests: string[] } }).__qa = {
     consoleErrors,
     failedRequests,
   };
+
   await page.goto("/features/viral-reel-finder", { waitUntil: "networkidle" });
 });
 
 test("first paint asks for one account before showing Reels", async ({ page }) => {
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("Find viral Instagram Reels in your niche");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText(
+    "Find viral Instagram Reels in your niche"
+  );
   await expect(page.getByText("Free Instagram Reel Finder", { exact: true })).toBeVisible();
   await expect(page.getByLabel("Instagram username or profile link")).toBeVisible();
   await expect(page.getByRole("button", { name: "Find viral Reels", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "@garyvee", exact: true })).toBeVisible();
   await expect(page.getByTestId("reel-card")).toHaveCount(0);
   await expect(page.getByText("Interactive example", { exact: true })).toHaveCount(0);
-  await expect(page.getByText("This file shows the design.")).toHaveCount(0);
 });
 
 test("empty Finder submission visibly identifies the field and error", async ({ page }) => {
   await page.getByRole("button", { name: "Find viral Reels", exact: true }).click();
   const input = page.getByLabel("Instagram username or profile link");
-  const error = page.getByRole("alert");
+  const error = page.locator("#viral-finder-error");
+
   await expect(input).toBeFocused();
   await expect(input).toHaveAttribute("aria-invalid", "true");
   await expect(input).toHaveAttribute("aria-describedby", "viral-finder-error");
   await expect(error).toHaveText("Enter a valid Instagram username or profile link.");
-  await expect(page.locator("form[data-invalid='true']")).toBeVisible();
+
   await input.fill("hormozi");
-  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.locator("#viral-finder-error")).toHaveCount(0);
   await expect(input).toHaveAttribute("aria-invalid", "false");
 });
 
@@ -69,131 +68,110 @@ test("final CTA returns visitors to the visible Finder input", async ({ page }) 
   ).toBe(true);
 });
 
-test("visitor can understand and interact with the Reel Finder before signup", async ({ page }) => {
+test("approved Finder Results Preview matches the locked desktop/mobile pattern", async ({ page }, testInfo) => {
   const qa = (page as Page & { __qa: { consoleErrors: string[]; failedRequests: string[] } }).__qa;
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("Find viral Instagram Reels in your niche");
-  await expect(page.getByText("Free Instagram Reel Finder", { exact: true })).toBeVisible();
-  await expect(page.getByText(/top-performing Reels from any public Instagram creator/i)).toBeVisible();
-  await expect(page.getByText("Paste a public handle")).toBeVisible();
-  await expect(page.getByLabel("Instagram username or profile link")).toBeVisible();
-  await expect(page.getByTestId("reel-card")).toHaveCount(0);
-  await expect(page.locator("video")).toHaveCount(0);
-
-  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
-  expect(overflow).toBeLessThanOrEqual(2);
-
-  await page.route("**/api/trpc/featured.publicProfilePreview?input=*", (route) =>
-    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ result: { data: { json: {
-      found: true, username: "noman_peera", fullName: "Noman Peera",
-      biography: "Creator", profilePicUrl: "", followerCount: 1200,
-      followingCount: 150, postCount: 40, isVerified: false, isPrivate: false, category: "",
-    } } } }) })
-  );
-  await page.getByLabel("Instagram username or profile link").fill("noman_peera");
-  await expect(page.getByTestId("confirmed-instagram-profile")).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByTestId("confirmed-instagram-profile")).not.toContainText("40 posts");
-  await expect(page.getByTestId("reel-card")).toHaveCount(0);
-
-  await page.getByRole("button", { name: "@humphreytalks", exact: true }).click();
-  await expect(page.getByRole("button", { name: "@humphreytalks", exact: true })).toHaveAttribute("aria-pressed", "true");
-  await expect(page.locator("section[aria-label='Interactive Viral Reel Finder product example'] strong").first()).toHaveText(
-    "@humphreytalks"
-  );
-  await waitForDemoReady(page);
 
   await page.getByRole("button", { name: "@garyvee", exact: true }).click();
-  await expect(page.locator("section[aria-label='Interactive Viral Reel Finder product example'] strong").first()).toHaveText(
-    "@garyvee"
-  );
   await waitForDemoReady(page);
+
+  const preview = page.getByTestId("finder-results-preview");
+  const row = page.getByTestId("finder-results-row");
+  const cards = page.getByTestId("reel-card");
+
+  await expect(preview.getByText("Interactive example", { exact: true })).toBeVisible();
+  await expect(preview.locator("header").getByText("@garyvee", { exact: true })).toBeVisible();
+
+  await expect(preview.getByText("21 Reels available")).toHaveCount(0);
+  await expect(preview.getByRole("button", { name: "Views", exact: true })).toHaveCount(0);
+  await expect(preview.getByRole("button", { name: "Engagement", exact: true })).toHaveCount(0);
+  await expect(preview.getByRole("button", { name: /Show all/ })).toHaveCount(0);
 
   const demo = await page.evaluate(async () => {
     const response = await fetch("/features/viral-reel-finder/demo?handle=garyvee");
     return (await response.json()) as { reels: Array<{ id: number }> };
   });
-  expect(demo.reels.length).toBeGreaterThan(0);
+  await expect(cards).toHaveCount(Math.min(4, demo.reels.length));
 
-  const cards = page.getByTestId("reel-card");
-  const visibleBefore = await cards.count();
-  expect(visibleBefore).toBeGreaterThan(0);
-  expect(visibleBefore).toBeLessThanOrEqual(demo.reels.length);
+  for (let index = 0; index < (await cards.count()); index += 1) {
+    await expect(cards.nth(index).getByRole("button", { name: "Remake →", exact: true })).toBeVisible();
+  }
 
-  const first = cards.nth(0);
-  const middle = cards.nth(Math.min(1, visibleBefore - 1));
-  const last = cards.nth(visibleBefore - 1);
-
-  await first.click();
-  await expect(first).toHaveAttribute("aria-pressed", "true");
-  await expect(first.getByText("Selected", { exact: true })).toBeVisible();
-  const nextStep = page.getByRole("region", { name: "Selected Reel" });
-  await expect(nextStep).toBeVisible();
-  await expect(nextStep.getByText("This Reel")).toBeVisible();
-  await expect(nextStep.getByRole("button", { name: "What SpyReels can do next" })).toBeVisible();
-  await expect(nextStep.getByRole("button", { name: /Continue @|Research @/ })).toHaveCount(0);
-  await expect.poll(async () =>
-    nextStep.evaluate((element) => {
-      const rect = element.getBoundingClientRect();
-      return rect.top < window.innerHeight && rect.bottom > 0;
+  const boxes = await cards.evaluateAll((nodes) =>
+    nodes.map((node) => {
+      const rect = node.getBoundingClientRect();
+      return { x: rect.x, y: rect.y, width: rect.width, right: rect.right };
     })
-  ).toBe(true);
+  );
 
-  if (visibleBefore > 1) {
-    await middle.click();
-    await expect(middle).toHaveAttribute("aria-pressed", "true");
-    await expect(middle.getByText("Selected", { exact: true })).toBeVisible();
-    await expect(nextStep.getByRole("button", { name: "What SpyReels can do next" })).toBeVisible();
-  }
-  if (visibleBefore > 2) {
-    await last.click();
-    await expect(last).toHaveAttribute("aria-pressed", "true");
-    await expect(last.getByText("Selected", { exact: true })).toBeVisible();
-  }
-
-  await page.getByTestId("reveal-spyreels-next").click();
-  const stepDetail = page.getByTestId("workflow-step-detail");
-  await expect(stepDetail).toHaveAttribute("data-step", "next");
-  await expect(stepDetail.getByText("Transcribe this Reel, then write your own version.")).toBeVisible();
-  await expect(page.getByRole("button", { name: /Continue @/ })).toBeVisible();
-  await expect(page.getByRole("button", { name: "What SpyReels can do next" })).toHaveCount(0);
-
-  const showAll = page.getByRole("button", { name: /Show all \d+ Reels/ });
-  if (demo.reels.length > 4) {
-    await expect(showAll).toBeVisible();
-    await showAll.click();
-    await expect(cards).toHaveCount(demo.reels.length);
+  if (testInfo.project.name.startsWith("mobile-")) {
+    expect(boxes.length).toBeGreaterThan(1);
+    expect(boxes[0].width).toBeLessThan(190);
+    expect(Math.abs(boxes[0].y - boxes[1].y)).toBeLessThanOrEqual(2);
+    const previewBox = await preview.boundingBox();
+    expect(previewBox).not.toBeNull();
+    if (previewBox && boxes.length > 2) {
+      expect(boxes[2].x).toBeLessThan(previewBox.x + previewBox.width + boxes[2].width);
+    }
   } else {
-    await expect(showAll).toHaveCount(0);
-    await expect(cards).toHaveCount(demo.reels.length);
+    expect(boxes.length).toBeGreaterThan(1);
+    const firstY = boxes[0].y;
+    expect(boxes.every((box) => Math.abs(box.y - firstY) <= 2)).toBe(true);
   }
 
-  const viewsOrder = await reelOrder(page);
-  await page.getByRole("button", { name: "Engagement", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Engagement", exact: true })).toHaveAttribute("aria-pressed", "true");
-  const engagementOrder = await reelOrder(page);
-  await page.getByRole("button", { name: "Views", exact: true }).click();
-  await expect(page.getByRole("button", { name: "Views", exact: true })).toHaveAttribute("aria-pressed", "true");
-  const viewsAgain = await reelOrder(page);
-  expect(viewsAgain).toEqual(viewsOrder);
-  expect(engagementOrder).not.toEqual(viewsOrder);
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  expect(overflow).toBeLessThanOrEqual(2);
 
-  await expect(page.locator('a[href="/free-tools/tiktok-viral-video-finder"]').first()).toBeVisible();
-  await expect(page.locator('a[href="/free-tools/ai-script-generator"]').first()).toBeVisible();
-  await expect(page.locator('a[href="/free-tools/viral-hooks"]').first()).toBeVisible();
+  await preview.screenshot({ path: testInfo.outputPath("finder-results-preview.png") });
 
   expect(qa.consoleErrors, qa.consoleErrors.join(" | ")).toEqual([]);
   expect(qa.failedRequests, qa.failedRequests.join(" | ")).toEqual([]);
 });
 
-test("research CTA hands the selected Instagram account to the real app", async ({ page }, testInfo) => {
+test("Remake preserves the selected creator through signup", async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== "desktop-1440", "Auth handoff is viewport-independent");
+
+  await page.getByRole("button", { name: "@garyvee", exact: true }).click();
+  await waitForDemoReady(page);
+
+  await page.getByTestId("reel-card").first().getByRole("button", { name: "Remake →", exact: true }).click();
+
+  await expect(page).toHaveURL(/\/features\/viral-reel-finder\?auth=signup/);
+  await expect(page.getByRole("dialog", { name: "Join SpyReels" })).toBeVisible();
+
+  const target = new URL(page.url());
+  expect(target.searchParams.get("auth")).toBe("signup");
+  expect(target.searchParams.get("returnTo")).toBe("/research?creator=garyvee&start=1");
+});
+
+test("research CTA hands a confirmed Instagram account to the real app", async ({ page }, testInfo) => {
   test.skip(testInfo.project.name !== "desktop-1440", "Handoff URL is viewport-independent");
 
   await page.route("**/api/trpc/featured.publicProfilePreview?input=*", (route) =>
-    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ result: { data: { json: {
-      found: true, username: "noman_peera", fullName: "Noman Peera",
-      biography: "Creator", profilePicUrl: "", followerCount: 1200,
-      followingCount: 150, postCount: 40, isVerified: false, isPrivate: false, category: "",
-    } } } }) })
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        result: {
+          data: {
+            json: {
+              found: true,
+              username: "noman_peera",
+              fullName: "Noman Peera",
+              biography: "Creator",
+              profilePicUrl: "",
+              followerCount: 1200,
+              followingCount: 150,
+              postCount: 40,
+              isVerified: false,
+              isPrivate: false,
+              category: "",
+            },
+          },
+        },
+      }),
+    })
   );
+
   await page.getByLabel("Instagram username or profile link").fill("noman_peera");
   const researchButton = page.getByTestId("confirmed-instagram-profile");
   await expect(researchButton).toBeVisible();
@@ -201,6 +179,7 @@ test("research CTA hands the selected Instagram account to the real app", async 
 
   await expect(page).toHaveURL(/\/features\/viral-reel-finder\?auth=signup/);
   await expect(page.getByRole("dialog", { name: "Join SpyReels" })).toBeVisible();
+
   const target = new URL(page.url());
   expect(target.searchParams.get("auth")).toBe("signup");
   expect(target.searchParams.get("returnTo")).toBe("/research?creator=noman_peera&start=1");

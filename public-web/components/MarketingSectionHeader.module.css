@@ -1,0 +1,96 @@
+/**
+ * Marketing / Section Header (Figma Page 09).
+ * Eyebrow → Heading gap = layout/inline-gap (default).
+ * Large: column gap 12 (control-gap); Heading 1 + Body Large.
+ */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sr-layout-inline-gap);
+  margin: 0;
+}
+
+.rootCenter {
+  align-items: center;
+  text-align: center;
+}
+
+.rootLarge {
+  gap: var(--sr-layout-control-gap);
+  max-width: 1020px;
+}
+
+/* Large / Start: same H1 as Large / Center; width is container-controlled. */
+.rootLargeStart {
+  max-width: none;
+  align-items: flex-start;
+  text-align: start;
+}
+
+.root .eyebrow {
+  margin: 0;
+  color: var(--sr-color-marketing-accent);
+  font-size: var(--sr-type-marketing-eyebrow-size);
+  line-height: var(--sr-type-marketing-eyebrow-line);
+  font-weight: var(--sr-type-marketing-eyebrow-weight);
+  letter-spacing: var(--sr-type-marketing-eyebrow-tracking);
+  text-transform: var(--sr-type-marketing-eyebrow-transform);
+}
+
+.root .heading {
+  margin: 0;
+  color: var(--sr-color-text-primary);
+  font-size: var(--sr-type-marketing-heading-3-size);
+  line-height: var(--sr-type-marketing-heading-3-line);
+  font-weight: var(--sr-type-marketing-heading-3-weight);
+  letter-spacing: var(--sr-type-marketing-heading-3-tracking);
+  text-wrap: balance;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+
+.rootLarge .heading {
+  font-size: var(--sr-type-marketing-heading-1-size);
+  line-height: var(--sr-type-marketing-heading-1-line);
+  font-weight: var(--sr-type-marketing-heading-1-weight);
+  letter-spacing: var(--sr-type-marketing-heading-1-tracking);
+}
+
+/* Highlight phrase inside Large titles when showHighlight is on (Process Steps). */
+.showHighlight .heading span:not(.noBreak) {
+  color: var(--sr-color-marketing-accent);
+}
+
+.noBreak {
+  white-space: nowrap;
+}
+
+.root .subtitle {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+  font-size: var(--sr-type-marketing-body-small-size);
+  line-height: var(--sr-type-marketing-body-small-line);
+  font-weight: var(--sr-type-marketing-body-small-weight);
+  letter-spacing: var(--sr-type-marketing-body-small-tracking);
+}
+
+/* Large / Center subtitle = Body Large. */
+.rootLarge.rootCenter .subtitle {
+  font-size: var(--sr-type-marketing-body-large-size);
+  line-height: var(--sr-type-marketing-body-large-line);
+  font-weight: var(--sr-type-marketing-body-large-weight);
+  letter-spacing: var(--sr-type-marketing-body-large-tracking);
+  max-width: 850px;
+}
+
+/* Large / Start subtitle = Body Medium 16/24. */
+.rootLargeStart .subtitle {
+  font-size: var(--sr-type-marketing-body-medium-size);
+  line-height: var(--sr-type-marketing-body-medium-line);
+  font-weight: var(--sr-type-marketing-body-medium-weight);
+  letter-spacing: var(--sr-type-marketing-body-medium-tracking);
+  max-width: none;
+}

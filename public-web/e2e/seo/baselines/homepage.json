@@ -1,0 +1,113 @@
+{
+  "path": "/",
+  "status": 200,
+  "title": "SpyReels | Research Viral Reels and Remake Scripts in Your Voice",
+  "description": "SpyReels helps creators find viral Reels on Instagram, TikTok, and YouTube Shorts, then turn proven ideas into original scripts ready to film. Research, remake, and create in one workspace.",
+  "canonical": "https://spyreels.ai/",
+  "robots": "index, follow",
+  "googlebot": "index, follow",
+  "verification": {
+    "google": "TfvQaX_pN1iSSkXBwgrUoK45mvnWKJTozdMdeZsgibs"
+  },
+  "openGraph": {
+    "description": "SpyReels helps creators find viral Reels on Instagram, TikTok, and YouTube Shorts, then turn proven ideas into original scripts ready to film. Research, remake, and create in one workspace.",
+    "site_name": "SpyReels",
+    "title": "SpyReels | Research Viral Reels and Remake Scripts in Your Voice",
+    "type": "website",
+    "url": "https://spyreels.ai/"
+  },
+  "twitter": {
+    "card": "summary_large_image",
+    "description": "SpyReels helps creators find viral Reels on Instagram, TikTok, and YouTube Shorts, then turn proven ideas into original scripts ready to film. Research, remake, and create in one workspace.",
+    "title": "SpyReels | Research Viral Reels and Remake Scripts in Your Voice"
+  },
+  "h1": "Find what works.Remake. Go viral.",
+  "hreflang": [],
+  "jsonLd": [
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@id": "https://spyreels.ai/#organization",
+          "@type": "Organization",
+          "logo": "https://spyreels.ai/marketing/0a709293985f.png",
+          "name": "SpyReels",
+          "url": "https://spyreels.ai/"
+        },
+        {
+          "@id": "https://spyreels.ai/#website",
+          "@type": "WebSite",
+          "name": "SpyReels",
+          "publisher": {
+            "@id": "https://spyreels.ai/#organization"
+          },
+          "url": "https://spyreels.ai/"
+        },
+        {
+          "@id": "https://spyreels.ai/#software",
+          "@type": "SoftwareApplication",
+          "applicationCategory": "MultimediaApplication",
+          "description": "SpyReels helps creators find viral Reels on Instagram, TikTok, and YouTube Shorts, then turn proven ideas into original scripts ready to film. Research, remake, and create in one workspace.",
+          "name": "SpyReels",
+          "offers": {
+            "@type": "Offer",
+            "description": "Free tier available",
+            "price": "0",
+            "priceCurrency": "USD"
+          },
+          "operatingSystem": "Web Browser",
+          "provider": {
+            "@id": "https://spyreels.ai/#organization"
+          },
+          "url": "https://spyreels.ai/"
+        }
+      ]
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "SpyReels is a short-form content research and scripting platform for Instagram Reels, TikTok, and YouTube Shorts. It helps creators find viral videos in their niche, understand why they worked, and create original hooks and scripts in their own voice."
+          },
+          "name": "What is SpyReels?"
+        },
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Enter a public creator username. SpyReels compares recent post performance with that creator’s normal baseline and surfaces unusually successful content, so you can study genuine breakout posts instead of sorting by raw views alone."
+          },
+          "name": "How does the Viral Reel Finder work?"
+        },
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Start with the free Viral Reel Finder to explore standout Reels from a public creator. Sign up to bring your research and creative tools together in one workspace. Check the current plan details before choosing a subscription."
+          },
+          "name": "What can I do for free?"
+        },
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "The Viral Reel Finder focuses on Instagram Reels. You can adapt the ideas and scripts you create for TikTok and YouTube Shorts. Platform-specific research features may differ, so check each tool for its current availability."
+          },
+          "name": "Which platforms does SpyReels support?"
+        },
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. SpyReels helps you understand patterns such as hooks, formats, and topics. Its writing tools are intended to create original content adapted to your niche, voice, and audience."
+          },
+          "name": "Does SpyReels copy other creators?"
+        }
+      ]
+    }
+  ]
+}

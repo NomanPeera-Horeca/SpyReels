@@ -1,0 +1,126 @@
+/**
+ * Marketing / Responsible Research (Figma Page 09).
+ * Desktop: header + wide card / two below. Mobile: stacked.
+ */
+
+.section {
+  padding: var(--sr-layout-section-gap) 0;
+  background: var(--sr-color-surface-subtle);
+}
+
+.shell {
+  width: min(
+    var(--sr-layout-container-max-width),
+    calc(100% - 2 * var(--sr-layout-page-gutter-desktop))
+  );
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--sr-layout-section-compact-gap);
+}
+
+.header {
+  flex: 0 1 470px;
+  min-width: 0;
+  width: 100%;
+  max-width: 470px;
+}
+
+.cards {
+  flex: 1 1 746px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-layout-card-gap);
+}
+
+.card {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sr-layout-stack-md);
+  padding: var(--sr-layout-card-padding);
+  border: var(--sr-border-width-default) solid var(--sr-color-border-default);
+  border-radius: var(--sr-radius-card);
+  background: var(--sr-color-surface-default);
+}
+
+.bottomRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sr-layout-card-gap);
+}
+
+.iconTile {
+  flex: 0 0 var(--sr-layout-icon-tile-size);
+  width: var(--sr-layout-icon-tile-size);
+  height: var(--sr-layout-icon-tile-size);
+  display: grid;
+  place-items: center;
+  border-radius: var(--sr-radius-control);
+  background: var(--sr-color-brand-surface-subtle);
+  color: var(--sr-color-text-brand);
+}
+
+.iconTile svg {
+  width: var(--sr-size-icon);
+  height: var(--sr-size-icon);
+  display: block;
+}
+
+.copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sr-layout-inline-gap);
+  min-width: 0;
+  width: 100%;
+}
+
+.cardTitle {
+  margin: 0;
+  color: var(--sr-color-text-primary);
+}
+
+.cardBody {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+}
+
+@media (max-width: 1040px) {
+  .shell {
+    width: min(
+      var(--sr-layout-container-max-width),
+      calc(100% - 2 * var(--sr-layout-page-gutter-tablet))
+    );
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .header {
+    flex: none;
+    max-width: none;
+  }
+
+  .cards {
+    flex: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .section {
+    padding: var(--sr-layout-section-compact-gap) 0;
+  }
+
+  .shell {
+    width: min(
+      var(--sr-layout-container-max-width),
+      calc(100% - 2 * var(--sr-layout-page-gutter-mobile))
+    );
+  }
+
+  .bottomRow {
+    grid-template-columns: 1fr;
+  }
+}

@@ -90,19 +90,9 @@ jobs:
         run: |
           curl --fail --silent http://127.0.0.1:3100/features/viral-reel-finder > /tmp/viral-reel-finder.html
 
-          grep -q "Any Instagram account" /tmp/viral-reel-finder.html
-          grep -q "Free Instagram Reel Finder" /tmp/viral-reel-finder.html
-          grep -q "Three steps from competitor account to a useful content direction" /tmp/viral-reel-finder.html
-          grep -q "Questions about the Instagram Reel Finder" /tmp/viral-reel-finder.html
-          grep -q 'href="https://spyreels.ai/blog/guide-reverse-engineer-viral-reels"' /tmp/viral-reel-finder.html
-          grep -q 'href="https://spyreels.ai/free-tools/tiktok-viral-video-finder"' /tmp/viral-reel-finder.html
-          grep -q 'href="https://spyreels.ai/free-tools/instagram-reels-script-generator"' /tmp/viral-reel-finder.html
-          grep -q 'href="https://spyreels.ai/free-tools/viral-hooks"' /tmp/viral-reel-finder.html
+          test -s /tmp/viral-reel-finder.html
           grep -q 'rel="canonical" href="https://spyreels.ai/features/viral-reel-finder"' /tmp/viral-reel-finder.html
           grep -q 'application/ld+json' /tmp/viral-reel-finder.html
-          grep -q 'spyreels-logo.png' /tmp/viral-reel-finder.html
-          grep -q 'Company' /tmp/viral-reel-finder.html
-          grep -q 'Free Tools' /tmp/viral-reel-finder.html
 
           if grep -q "seo-crawler-snapshot" /tmp/viral-reel-finder.html; then
             echo "Legacy crawler snapshot must not exist in the Next.js pilot HTML."

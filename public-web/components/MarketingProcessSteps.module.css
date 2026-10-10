@@ -1,0 +1,188 @@
+/**
+ * Marketing / Process Steps (Figma Page 09).
+ * presentation=numbered | icon. Tokens only.
+ */
+
+.section {
+  padding: var(--sr-layout-section-gap) 0;
+  background: var(--sr-color-surface-page);
+}
+
+.shell {
+  width: min(
+    var(--sr-layout-container-max-width),
+    calc(100% - 2 * var(--sr-layout-page-gutter-desktop))
+  );
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-layout-stack-lg);
+}
+
+.shellIcon {
+  gap: var(--sr-layout-section-compact-gap);
+  align-items: center;
+}
+
+.headerNumbered {
+  width: 100%;
+}
+
+.headerIcon {
+  width: 100%;
+}
+
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sr-layout-card-gap);
+  align-items: stretch;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stepsIcon {
+  grid-template-columns:
+    minmax(0, 1fr)
+    var(--sr-layout-icon-tile-size)
+    minmax(0, 1fr)
+    var(--sr-layout-icon-tile-size)
+    minmax(0, 1fr);
+  align-items: stretch;
+  gap: 0;
+  column-gap: 0;
+}
+
+.stepsIcon .card {
+  /* Stretch cards; connectors self-center in their column */
+  align-self: stretch;
+}
+
+.stepsIcon .connector {
+  align-self: center;
+}
+
+.card {
+  box-sizing: border-box;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-layout-stack-sm);
+  padding: var(--sr-layout-card-padding);
+  border: var(--sr-border-width-default) solid var(--sr-color-border-default);
+  border-radius: var(--sr-radius-card);
+  background: var(--sr-color-surface-default);
+}
+
+.cardIcon {
+  background: var(--sr-color-surface-raised);
+}
+
+.headerBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-layout-stack-md);
+  min-width: 0;
+}
+
+.topRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sr-layout-inline-gap);
+  min-height: var(--sr-layout-icon-tile-size);
+}
+
+.iconTile {
+  flex: 0 0 var(--sr-layout-icon-tile-size);
+  width: var(--sr-layout-icon-tile-size);
+  height: var(--sr-layout-icon-tile-size);
+  display: grid;
+  place-items: center;
+  border-radius: var(--sr-radius-control);
+  background: var(--sr-color-brand-surface-subtle);
+  color: var(--sr-color-text-brand);
+}
+
+.iconTile svg {
+  width: var(--sr-size-icon);
+  height: var(--sr-size-icon);
+  display: block;
+}
+
+.number {
+  margin: 0;
+  color: var(--sr-color-text-brand);
+}
+
+.numberIcon {
+  color: var(--sr-color-text-tertiary);
+  flex: 0 0 auto;
+}
+
+.cardTitle {
+  margin: 0;
+  color: var(--sr-color-text-primary);
+}
+
+.cardBody {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+}
+
+.connector {
+  width: var(--sr-layout-icon-tile-size);
+  height: var(--sr-layout-icon-tile-size);
+  justify-self: center;
+  display: grid;
+  place-items: center;
+  border-radius: var(--sr-radius-full);
+  border: var(--sr-border-width-default) solid var(--sr-color-border-default);
+  background: var(--sr-color-surface-default);
+  color: var(--sr-color-text-brand);
+  flex: 0 0 var(--sr-layout-icon-tile-size);
+}
+
+.connector svg {
+  width: var(--sr-size-icon);
+  height: var(--sr-size-icon);
+  display: block;
+}
+
+@media (max-width: 980px) {
+  .stepsIcon {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--sr-layout-card-gap);
+    align-items: stretch;
+  }
+
+  .connector {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .section {
+    padding: var(--sr-layout-section-compact-gap) 0;
+  }
+
+  .shell {
+    width: min(
+      var(--sr-layout-container-max-width),
+      calc(100% - 2 * var(--sr-layout-page-gutter-mobile))
+    );
+  }
+
+  .steps,
+  .stepsIcon {
+    grid-template-columns: 1fr;
+    gap: var(--sr-layout-card-gap);
+  }
+
+  .connector {
+    display: none;
+  }
+}
