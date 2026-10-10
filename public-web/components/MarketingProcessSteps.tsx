@@ -1,5 +1,6 @@
 import type { ComponentType, ReactNode, SVGProps } from "react";
 import { Fragment } from "react";
+import { MarketingSection } from "./MarketingSection";
 import { MarketingSectionHeader } from "./MarketingSectionHeader";
 import {
   MarketingIconArrowRight,
@@ -51,7 +52,7 @@ export function MarketingProcessSteps({
   const isIcon = presentation === "icon";
 
   return (
-    <section
+    <MarketingSection
       id={id}
       className={cx(styles.section, className)}
       aria-labelledby={titleId}
@@ -106,7 +107,7 @@ export function MarketingProcessSteps({
           })}
         </div>
       </div>
-    </section>
+    </MarketingSection>
   );
 }
 

@@ -1,3 +1,4 @@
+import { MarketingSection } from "./MarketingSection";
 import { MarketingSectionHeader } from "./MarketingSectionHeader";
 import { MarketingIconStar } from "./MarketingIcons";
 import styles from "./MarketingCreatorStories.module.css";
@@ -76,7 +77,7 @@ export function MarketingCreatorStories() {
   const titleId = "stories-title";
 
   return (
-    <section
+    <MarketingSection
       className={styles.section}
       id="creator-stories"
       aria-labelledby={titleId}
@@ -124,6 +125,6 @@ export function MarketingCreatorStories() {
           <div className={styles.fadeRight} aria-hidden="true" />
         </div>
       </div>
-    </section>
+    </MarketingSection>
   );
 }

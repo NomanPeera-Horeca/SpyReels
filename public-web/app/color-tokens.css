@@ -141,6 +141,8 @@
   --sr-layout-page-gutter-mobile: 20px; /* layout/page/gutter/mobile */
   --sr-layout-section-gap: 96px; /* layout/section/gap */
   --sr-layout-section-compact-gap: 64px; /* layout/section/compact-gap */
+  /* Spacing Rule A (Figma Decision 31): gap inside paired sections. Aliases compact-gap on desktop. */
+  --sr-layout-section-paired-gap: var(--sr-layout-section-compact-gap);
   --sr-layout-content-gap: 32px; /* layout/content/gap */
   --sr-layout-card-gap: 24px; /* layout/card/gap */
   --sr-layout-card-padding: 24px; /* layout/card/padding */
@@ -158,6 +160,8 @@
   --sr-layout-marketing-header-height: 77px; /* layout/marketing/header-height (desktop) */
   --sr-layout-icon-tile-size: 40px; /* layout/icon-tile/size (Process Steps + connectors) */
   --sr-layout-button-large-padding-x: 18px; /* layout/button/large/padding-x */
+  /* Responsible Research start column (Figma Page 09 text column width). */
+  --sr-layout-responsible-research-column-width: 470px;
 
   /*
    * Marketing radius, borders, elevation (Figma Page 04, locked).
@@ -188,5 +192,7 @@
 @media (max-width: 640px) {
   :root {
     --sr-layout-marketing-header-height: 65px; /* layout/marketing/header-height (mobile) */
+    /* Spacing Rule A: paired gap aliases stack-lg on compact. */
+    --sr-layout-section-paired-gap: var(--sr-layout-stack-lg);
   }
 }

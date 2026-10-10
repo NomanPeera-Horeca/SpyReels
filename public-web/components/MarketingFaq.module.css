@@ -4,7 +4,6 @@
  */
 
 .section {
-  padding: var(--sr-layout-section-gap) 0;
   background: var(--sr-color-surface-default);
 }
 
@@ -30,6 +29,12 @@
   margin: 0;
   padding: var(--sr-layout-card-padding) 0;
   border-bottom: var(--sr-border-width-default) solid var(--sr-color-border-default);
+}
+
+/* Last accordion ends at the section padding edge (no trailing spacer). */
+.item:last-child {
+  padding-bottom: 0;
+  border-bottom: none;
 }
 
 .summary {

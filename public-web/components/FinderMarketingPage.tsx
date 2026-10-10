@@ -13,6 +13,7 @@ import { buildFaqPageJsonLd, jsonLdScript } from "./marketingFaqJsonLd";
 import { HomepageAuthGate } from "./HomepageAuthGate";
 import { MarketingHeroEyebrow } from "./MarketingHeroEyebrow";
 import { MarketingHowItWorksSection } from "./MarketingHowItWorksSection";
+import { MarketingSection } from "./MarketingSection";
 import { PlatformFinderExperience } from "./PlatformFinderExperience";
 import type { FinderConfig } from "../lib/finderConfigs/types";
 import styles from "./FinderMarketingPage.module.css";
@@ -41,7 +42,11 @@ export function FinderMarketingPage({ config }: { config: FinderConfig }) {
       <MarketingHeader />
 
       <main>
-        <section className={`${styles.shell} ${styles.hero}`} data-marketing-finder-hero="">
+        <MarketingSection
+          pair="end"
+          className={`${styles.shell} ${styles.hero}`}
+          data-marketing-finder-hero=""
+        >
           <MarketingHeroEyebrow>{hero.eyebrow}</MarketingHeroEyebrow>
           <h1 className="sr-text-marketing-display-hero">
             {hero.titleBefore}
@@ -59,13 +64,20 @@ export function FinderMarketingPage({ config }: { config: FinderConfig }) {
               demoHandleActive: styles.demoHandleActive,
             }}
           />
-        </section>
+        </MarketingSection>
 
-        <section className={styles.motionStage} aria-label="See the SpyReels workflow">
-          <div className={styles.motionFrame}>
-            <MarketingFinderMotion />
+        <MarketingSection
+          pair="start"
+          className={styles.motionSection}
+          aria-label="See the SpyReels workflow"
+          data-marketing-product-demo=""
+        >
+          <div className={styles.motionStage}>
+            <div className={styles.motionFrame}>
+              <MarketingFinderMotion />
+            </div>
           </div>
-        </section>
+        </MarketingSection>
 
         <MarketingPlatformStrip />
 

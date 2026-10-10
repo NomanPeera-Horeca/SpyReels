@@ -26,7 +26,6 @@
   flex-direction: column;
   align-items: center;
   gap: 22px;
-  padding: 76px 0 44px;
   text-align: center;
 }
 
@@ -125,13 +124,14 @@
   text-decoration: underline;
 }
 
+
 /* Instagram motion stage (width on stage, padding on stage) */
 .page[data-finder-platform="instagram"] .motionStage {
   width: min(
     var(--sr-layout-container-max-width),
     calc(100% - 2 * var(--sr-layout-page-gutter-desktop))
   );
-  margin: 0 auto 64px;
+  margin: 0 auto;
   padding: clamp(28px, 6vw, 76px);
   border-radius: 30px;
   background: #08080d;
@@ -148,7 +148,7 @@
 
 /* TikTok motion stage (padding on stage, chrome on frame) */
 .page[data-finder-platform="tiktok"] .motionStage {
-  padding: 0 20px 72px;
+  padding: 0 20px;
 }
 
 .page[data-finder-platform="tiktok"] .motionFrame {
@@ -177,10 +177,6 @@
 }
 
 @media (max-width: 640px) {
-  .hero {
-    padding-top: 50px;
-  }
-
   .heroLead {
     font-size: var(--sr-type-marketing-body-medium-size);
     line-height: var(--sr-type-marketing-body-medium-line);
@@ -210,6 +206,6 @@
 
 @media (max-width: 720px) {
   .page[data-finder-platform="tiktok"] .motionStage {
-    padding: 0 12px 45px;
+    padding: 0 12px;
   }
 }
