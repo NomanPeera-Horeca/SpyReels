@@ -2,6 +2,8 @@ import { PrimaryButton } from "./PrimaryButton";
 import { MarketingSectionHeader } from "./MarketingSectionHeader";
 import {
   MarketingIconArrowRight,
+  MarketingIconMinus,
+  MarketingIconPlus,
   MarketingIconSparkle,
   MarketingIconTelegram,
   MarketingToolIcon,
@@ -12,6 +14,8 @@ import {
   type MarketingToolsPage,
 } from "./marketingTools";
 import styles from "./MarketingToolGrid.module.css";
+import faqStyles from "./MarketingFaq.module.css";
+import type { MarketingFaqItem } from "./marketingFaqJsonLd";
 
 const officialPlatformMark = (src: string, width: number, height: number, alt: string) => (
   // Official platform marks from Marketing / Platform Strip (Figma Page 09).
@@ -215,17 +219,19 @@ export function MarketingWorkspace({
   );
 }
 
-type FaqItem = {
-  q: string;
-  a: string;
-  afterLink?: { href: string; label: string };
-};
-
-export function MarketingFaq({ title, description, items }: { title: string; description: string; items: readonly FaqItem[] }) {
+export function MarketingFaq({
+  title,
+  description,
+  items,
+}: {
+  title: string;
+  description: string;
+  items: readonly MarketingFaqItem[];
+}) {
   return (
-    <section className="seo-block" id="faq">
-      <div className="shell answer-grid">
-        <div className="answer-sticky">
+    <section className={faqStyles.section} id="faq">
+      <div className={cx("shell", faqStyles.grid)}>
+        <div className={faqStyles.sticky}>
           <MarketingSectionHeader
             eyebrow="Frequently asked questions"
             title={title}
@@ -233,16 +239,25 @@ export function MarketingFaq({ title, description, items }: { title: string; des
             headingLevel="h2"
           />
         </div>
-        <div className="answers">
+        <div className={faqStyles.list}>
           {items.map((item, index) => (
-            <details key={item.q} open={index === 0}>
-              <summary>{item.q}</summary>
-              <p>{item.a}</p>
-              {item.afterLink ? (
-                <p>
-                  <a href={item.afterLink.href}>{item.afterLink.label} →</a>
-                </p>
-              ) : null}
+            <details key={item.q} className={faqStyles.item} open={index === 0}>
+              <summary className={faqStyles.summary}>
+                <span className={cx("sr-text-marketing-title-medium", faqStyles.question)}>{item.q}</span>
+                <span className={faqStyles.icon} aria-hidden="true">
+                  <MarketingIconPlus className={faqStyles.iconPlus} />
+                  <MarketingIconMinus className={faqStyles.iconMinus} />
+                </span>
+              </summary>
+              <div className={faqStyles.answer}>
+                <p className={cx("sr-text-marketing-body-medium", faqStyles.answerText)}>{item.a}</p>
+                {item.afterLink ? (
+                  <a href={item.afterLink.href} className={cx("sr-text-marketing-body-medium", faqStyles.link)}>
+                    <span>{item.afterLink.label}</span>
+                    <MarketingIconArrowRight className={faqStyles.linkIcon} />
+                  </a>
+                ) : null}
+              </div>
             </details>
           ))}
         </div>

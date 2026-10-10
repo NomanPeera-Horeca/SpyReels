@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import { MarketingFinderMotion, MarketingFooter, MarketingHeader } from "../../../components/MarketingChrome";
 import { MarketingFaq, MarketingFinalCta, MarketingPlatformStrip, MarketingWorkspace } from "../../../components/MarketingPageSections";
+import { buildFaqPageJsonLd, jsonLdScript } from "../../../components/marketingFaqJsonLd";
 import { HomepageAuthGate } from "../../../components/HomepageAuthGate";
 import { MarketingHeroEyebrow } from "../../../components/MarketingHeroEyebrow";
 import {
@@ -58,9 +59,12 @@ const schema = {
   offers: { "@type": "Offer", price: "0", priceCurrency: "USD", description: "Free tier available" },
 };
 
+const faqJsonLd = buildFaqPageJsonLd(faqs);
+
 export default function TikTokViralVideoFinderPage() {
   return <div className={styles.page}>
-    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(schema).replace(/</g, "\\u003c") }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(schema) }} />
+    <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(faqJsonLd) }} />
     <MarketingHeader />
     <main>
       <section className={`${styles.shell} ${styles.hero}`}>

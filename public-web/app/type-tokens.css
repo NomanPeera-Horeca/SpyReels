@@ -40,6 +40,11 @@
   --sr-type-marketing-heading-4-weight: var(--sr-font-weight-semibold);
   --sr-type-marketing-heading-4-tracking: normal;
 
+  --sr-type-marketing-title-medium-size: 18px;
+  --sr-type-marketing-title-medium-line: 28px;
+  --sr-type-marketing-title-medium-weight: var(--sr-font-weight-semibold);
+  --sr-type-marketing-title-medium-tracking: normal;
+
   --sr-type-marketing-body-large-size: 18px;
   --sr-type-marketing-body-large-line: 28px;
   --sr-type-marketing-body-large-weight: var(--sr-font-weight-regular);
@@ -195,6 +200,13 @@
   line-height: var(--sr-type-marketing-heading-4-line);
   font-weight: var(--sr-type-marketing-heading-4-weight);
   letter-spacing: var(--sr-type-marketing-heading-4-tracking);
+}
+
+.sr-text-marketing-title-medium {
+  font-size: var(--sr-type-marketing-title-medium-size);
+  line-height: var(--sr-type-marketing-title-medium-line);
+  font-weight: var(--sr-type-marketing-title-medium-weight);
+  letter-spacing: var(--sr-type-marketing-title-medium-tracking);
 }
 
 .sr-text-marketing-body-large {

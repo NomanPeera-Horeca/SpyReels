@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Script from "next/script";
 import { MarketingFinderMotion, MarketingFooter, MarketingHeader } from "../../../components/MarketingChrome";
 import { MarketingFaq, MarketingFinalCta, MarketingPlatformStrip, MarketingWorkspace } from "../../../components/MarketingPageSections";
+import { buildFaqPageJsonLd, jsonLdScript } from "../../../components/marketingFaqJsonLd";
 import ViralFinderExperience from "./ViralFinderExperience";
 import { HomepageAuthGate } from "../../../components/HomepageAuthGate";
 import { MarketingHeroEyebrow } from "../../../components/MarketingHeroEyebrow";
@@ -122,32 +123,14 @@ const softwareJsonLd = {
   },
 };
 
-const faqJsonLd = {
-  "@context": "https://schema.org",
-  "@type": "FAQPage",
-  mainEntity: FAQ_ITEMS.map((item) => ({
-    "@type": "Question",
-    name: item.q,
-    acceptedAnswer: {
-      "@type": "Answer",
-      text:
-        "afterLink" in item && item.afterLink
-          ? `${item.a} ${item.afterLink.label}: ${item.afterLink.href}`
-          : item.a,
-    },
-  })),
-};
-
-function jsonLd(value: unknown): string {
-  return JSON.stringify(value).replace(/</g, "\\u003c");
-}
+const faqJsonLd = buildFaqPageJsonLd(FAQ_ITEMS);
 
 export default function ViralReelFinderPilotPage() {
   return (
     <div className={styles.page}>
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(breadcrumbJsonLd) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(softwareJsonLd) }} />
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLd(faqJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(breadcrumbJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(softwareJsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(faqJsonLd) }} />
 
       <MarketingHeader />
 

@@ -111,6 +111,24 @@ export function MarketingIconArrowRight(props: IconProps) {
   );
 }
 
+/** Marketing / FAQ Plus — Figma Page 09. */
+export function MarketingIconPlus(props: IconProps) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" fill="none" {...props}>
+      <path d="M10 4.5V15.5M4.5 10H15.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** Marketing / FAQ Minus — Figma Page 09. */
+export function MarketingIconMinus(props: IconProps) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" fill="none" {...props}>
+      <path d="M4.5 10H15.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export type MarketingToolIconId =
   | "script"
   | "hooks"

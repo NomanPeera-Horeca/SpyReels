@@ -18,6 +18,7 @@ Before generating any new page, blog post, free tool page, feature page, compari
 - Exact file paths, no guessing
 - Commit only when explicitly told
 - public-web: use only --sr-* tokens and .sr-text-* text styles; use MarketingSectionHeader and MarketingWorkspace (Tool Grid) for those sections; never hardcode colors, sizes or fonts; never duplicate a shared section.
+- Every FAQ must use MarketingFaq; never hand-build FAQ markup or FAQPage JSON-LD. Use only --sr-* tokens with the Figma names.
 
 ## File creation policy
 

@@ -126,6 +126,7 @@
   --sr-layout-container-max-width: 1200px; /* layout/container/max-width */
   --sr-layout-content-reading-width: 720px; /* layout/content/reading-width */
   --sr-layout-content-form-width: 560px; /* layout/content/form-width */
+  --sr-layout-marketing-header-height: 77px; /* layout/marketing/header-height (desktop) */
 
   /*
    * Marketing radius, borders, elevation (Figma Page 04, locked).
@@ -145,4 +146,11 @@
   --sr-elevation-surface-raised: 0 1px 4px rgba(16, 16, 20, 0.08); /* elevation/surface/raised */
   --sr-elevation-menu: 0 4px 12px -2px rgba(16, 16, 20, 0.1); /* elevation/menu */
   --sr-elevation-modal: 0 8px 24px -4px rgba(16, 16, 20, 0.14); /* elevation/modal */
+}
+
+/* Marketing header height: Compact (≤ 640px), matches Figma Marketing / Header */
+@media (max-width: 640px) {
+  :root {
+    --sr-layout-marketing-header-height: 65px; /* layout/marketing/header-height (mobile) */
+  }
 }

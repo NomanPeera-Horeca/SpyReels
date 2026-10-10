@@ -1,0 +1,124 @@
+/**
+ * Marketing / FAQ (Figma Page 09).
+ * Sticky left header + accordion list. Tokens only.
+ */
+
+.section {
+  padding: var(--sr-layout-section-gap) 0;
+  background: var(--sr-color-surface-default);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 440px) minmax(0, 1fr);
+  gap: var(--sr-layout-content-gap);
+  align-items: start;
+}
+
+.sticky {
+  position: sticky;
+  top: calc(var(--sr-layout-marketing-header-height) + var(--sr-layout-content-gap));
+}
+
+.list {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.item {
+  margin: 0;
+  padding: var(--sr-layout-card-padding) 0;
+  border-bottom: var(--sr-border-width-default) solid var(--sr-color-border-default);
+}
+
+.summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sr-layout-card-gap);
+  cursor: pointer;
+  list-style: none;
+  color: var(--sr-color-text-primary);
+}
+
+.summary::-webkit-details-marker {
+  display: none;
+}
+
+.question {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.icon {
+  flex: 0 0 var(--sr-size-icon);
+  width: var(--sr-size-icon);
+  height: var(--sr-size-icon);
+  display: grid;
+  place-items: center;
+  color: var(--sr-color-marketing-accent);
+}
+
+.icon svg {
+  width: var(--sr-size-icon);
+  height: var(--sr-size-icon);
+  display: block;
+}
+
+.iconMinus {
+  display: none;
+}
+
+.item[open] .iconPlus {
+  display: none;
+}
+
+.item[open] .iconMinus {
+  display: block;
+}
+
+.answer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-layout-stack-sm);
+  margin: var(--sr-layout-stack-sm) 0 0;
+}
+
+.answerText {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sr-layout-inline-gap);
+  color: var(--sr-color-text-brand);
+  text-decoration: none;
+  width: fit-content;
+}
+
+.link:hover,
+.link:focus-visible {
+  text-decoration: underline;
+  outline: none;
+}
+
+.linkIcon {
+  width: var(--sr-size-icon);
+  height: var(--sr-size-icon);
+  flex: 0 0 auto;
+}
+
+@media (max-width: 760px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sticky {
+    position: static;
+    top: auto;
+  }
+}
