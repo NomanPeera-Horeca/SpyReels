@@ -4,7 +4,6 @@
  */
 
 .section {
-  padding: var(--sr-layout-section-gap) 0;
   background: var(--sr-color-surface-subtle);
 }
 
@@ -20,10 +19,11 @@
 }
 
 .header {
-  flex: 0 1 470px;
-  min-width: 0;
-  width: 100%;
-  max-width: 470px;
+  /* Figma text column; do not shrink (orphans "work." below this width). */
+  flex: 0 0 var(--sr-layout-responsible-research-column-width);
+  width: var(--sr-layout-responsible-research-column-width);
+  max-width: var(--sr-layout-responsible-research-column-width);
+  min-width: var(--sr-layout-responsible-research-column-width);
 }
 
 .cards {
@@ -100,7 +100,9 @@
 
   .header {
     flex: none;
+    width: 100%;
     max-width: none;
+    min-width: 0;
   }
 
   .cards {
@@ -109,10 +111,6 @@
 }
 
 @media (max-width: 640px) {
-  .section {
-    padding: var(--sr-layout-section-compact-gap) 0;
-  }
-
   .shell {
     width: min(
       var(--sr-layout-container-max-width),

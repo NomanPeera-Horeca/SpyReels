@@ -1,4 +1,5 @@
 import type { ComponentType, SVGProps } from "react";
+import { MarketingSection } from "./MarketingSection";
 import { MarketingSectionHeader } from "./MarketingSectionHeader";
 import {
   MarketingIconCheck,
@@ -47,7 +48,7 @@ export function MarketingResponsibleResearch() {
   const WideIcon = wide.icon;
 
   return (
-    <section
+    <MarketingSection
       className={styles.section}
       id="responsible-research"
       aria-labelledby={titleId}
@@ -101,6 +102,6 @@ export function MarketingResponsibleResearch() {
           </div>
         </div>
       </div>
-    </section>
+    </MarketingSection>
   );
 }

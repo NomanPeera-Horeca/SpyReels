@@ -3,10 +3,6 @@
  * Feature Surface box + dark text scope; button stays light-scope accent.
  */
 
-.section {
-  padding: var(--sr-layout-section-gap) 0;
-}
-
 .shell {
   width: min(
     var(--sr-layout-container-max-width),
@@ -68,10 +64,6 @@
 }
 
 @media (max-width: 640px) {
-  .section {
-    padding: var(--sr-layout-section-compact-gap) 0;
-  }
-
   .shell {
     width: min(
       var(--sr-layout-container-max-width),

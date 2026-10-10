@@ -4,7 +4,6 @@
  */
 
 .section {
-  padding: var(--sr-layout-section-compact-gap) 0;
   background: var(--sr-color-surface-subtle);
   overflow: hidden;
 }

@@ -1,4 +1,5 @@
 import { PrimaryButton } from "./PrimaryButton";
+import { MarketingSection } from "./MarketingSection";
 import { MarketingSectionHeader } from "./MarketingSectionHeader";
 import {
   MarketingIconArrowRight,
@@ -57,7 +58,7 @@ export function MarketingPlatformStrip() {
   const titleId = "platform-strip-title";
 
   return (
-    <section
+    <MarketingSection
       className={platformStripStyles.section}
       aria-labelledby={titleId}
       data-marketing-platform-strip=""
@@ -90,7 +91,7 @@ export function MarketingPlatformStrip() {
           ))}
         </div>
       </div>
-    </section>
+    </MarketingSection>
   );
 }
 
@@ -112,35 +113,21 @@ function cx(...parts: Array<string | false | undefined>) {
   return parts.filter(Boolean).join(" ");
 }
 
-function MarketingWorkspaceBody({
+export function MarketingWorkspace({
   title,
   toolsPage,
-  hiddenToolIds,
-  titleHeadingLevel,
-  extensionsHeadingLevel,
+  hiddenToolIds = [],
+  layout = "standalone",
+  titleHeadingLevel = layout === "embedded" ? "h3" : "h2",
+  extensionsHeadingLevel = layout === "embedded" ? "h4" : "h3",
   freeToolsId,
-  extensionsAriaLabel,
-  layout,
-}: Required<
-  Pick<
-    MarketingWorkspaceProps,
-    | "title"
-    | "toolsPage"
-    | "titleHeadingLevel"
-    | "extensionsHeadingLevel"
-    | "extensionsAriaLabel"
-    | "layout"
-  >
-> &
-  Pick<MarketingWorkspaceProps, "freeToolsId" | "hiddenToolIds">) {
+  extensionsAriaLabel = layout === "embedded" ? "Upcoming ways to use SpyReels" : "Other ways to use SpyReels",
+}: MarketingWorkspaceProps) {
   const tools = resolveMarketingTools(toolsPage, hiddenToolIds);
   const titleId = titleHeadingLevel === "h2" ? "finder-workspace-title" : undefined;
 
-  return (
-    <div
-      className={cx(styles.root, layout === "embedded" && styles.rootEmbedded)}
-      id={freeToolsId}
-    >
+  const toolsInner = (
+    <div className={cx("shell", styles.root)} id={freeToolsId}>
       <MarketingSectionHeader
         eyebrow="Everything in one workspace"
         title={title}
@@ -166,87 +153,71 @@ function MarketingWorkspaceBody({
           </a>
         ))}
       </div>
+    </div>
+  );
 
-      <div className={styles.beyond} aria-label={extensionsAriaLabel}>
-        <MarketingSectionHeader
-          eyebrow="Beyond the workspace"
-          title="Your ideas travel with you."
-          subtitle="Save inspiration wherever you find it and bring SpyReels research into your writing flow."
-          headingLevel={extensionsHeadingLevel}
-        />
-        <div className={styles.integrations}>
-          <div className={styles.integration} id="telegram-extension">
-            <span className={styles.iconTile} aria-hidden="true">
-              <MarketingIconTelegram />
-            </span>
-            <div className={styles.integrationCopy}>
-              <div className={styles.integrationTitleRow}>
-                <strong className={cx(styles.integrationTitle, "sr-text-product-card-title")}>
-                  Save Reels with Telegram
-                </strong>
-              </div>
-              <p className={cx(styles.integrationDescription, "sr-text-marketing-body-small")}>
-                Send a Reel while you browse. Pick it up later in your SpyReels workspace.
-              </p>
+  const beyondInner = (
+    <div className={cx("shell", styles.beyond)}>
+      <MarketingSectionHeader
+        eyebrow="Beyond the workspace"
+        title="Your ideas travel with you."
+        subtitle="Save inspiration wherever you find it and bring SpyReels research into your writing flow."
+        headingLevel={extensionsHeadingLevel}
+      />
+      <div className={styles.integrations}>
+        <div className={styles.integration} id="telegram-extension">
+          <span className={styles.iconTile} aria-hidden="true">
+            <MarketingIconTelegram />
+          </span>
+          <div className={styles.integrationCopy}>
+            <div className={styles.integrationTitleRow}>
+              <strong className={cx(styles.integrationTitle, "sr-text-product-card-title")}>
+                Save Reels with Telegram
+              </strong>
             </div>
+            <p className={cx(styles.integrationDescription, "sr-text-marketing-body-small")}>
+              Send a Reel while you browse. Pick it up later in your SpyReels workspace.
+            </p>
           </div>
-          <div className={styles.integration} id="ai-extension">
-            <span className={styles.iconTile} aria-hidden="true">
-              <MarketingIconSparkle />
-            </span>
-            <div className={styles.integrationCopy}>
-              <div className={styles.integrationTitleRow}>
-                <strong className={cx(styles.integrationTitle, "sr-text-product-card-title")}>
-                  SpyReels in ChatGPT and Claude
-                </strong>
-                <span className={cx(styles.badge, "sr-text-marketing-caption")}>Coming soon</span>
-              </div>
-              <p className={cx(styles.integrationDescription, "sr-text-marketing-body-small")}>
-                Bring SpyReels viral-post research into the conversation where you develop ideas.
-              </p>
+        </div>
+        <div className={styles.integration} id="ai-extension">
+          <span className={styles.iconTile} aria-hidden="true">
+            <MarketingIconSparkle />
+          </span>
+          <div className={styles.integrationCopy}>
+            <div className={styles.integrationTitleRow}>
+              <strong className={cx(styles.integrationTitle, "sr-text-product-card-title")}>
+                SpyReels in ChatGPT and Claude
+              </strong>
+              <span className={cx(styles.badge, "sr-text-marketing-caption")}>Coming soon</span>
             </div>
+            <p className={cx(styles.integrationDescription, "sr-text-marketing-body-small")}>
+              Bring SpyReels viral-post research into the conversation where you develop ideas.
+            </p>
           </div>
         </div>
       </div>
     </div>
   );
-}
-
-export function MarketingWorkspace({
-  title,
-  toolsPage,
-  hiddenToolIds = [],
-  layout = "standalone",
-  titleHeadingLevel = layout === "embedded" ? "h3" : "h2",
-  extensionsHeadingLevel = layout === "embedded" ? "h4" : "h3",
-  freeToolsId,
-  extensionsAriaLabel = layout === "embedded" ? "Upcoming ways to use SpyReels" : "Other ways to use SpyReels",
-}: MarketingWorkspaceProps) {
-  const body = (
-    <MarketingWorkspaceBody
-      title={title}
-      toolsPage={toolsPage}
-      hiddenToolIds={hiddenToolIds}
-      titleHeadingLevel={titleHeadingLevel}
-      extensionsHeadingLevel={extensionsHeadingLevel}
-      freeToolsId={freeToolsId}
-      extensionsAriaLabel={extensionsAriaLabel}
-      layout={layout}
-    />
-  );
-
-  if (layout === "embedded") {
-    // Same centered max-width + page gutters as other homepage / finder shells.
-    return <div className="shell">{body}</div>;
-  }
 
   return (
-    <section
-      className={cx("shell", styles.sectionStandalone)}
-      aria-labelledby="finder-workspace-title"
-    >
-      {body}
-    </section>
+    <>
+      <MarketingSection
+        pair="end"
+        aria-labelledby={titleId}
+        data-marketing-tool-grid=""
+      >
+        {toolsInner}
+      </MarketingSection>
+      <MarketingSection
+        pair="start"
+        className={styles.beyondSection}
+        aria-label={extensionsAriaLabel}
+        data-marketing-beyond=""
+      >
+        {beyondInner}
+      </MarketingSection>
+    </>
   );
 }
 
@@ -260,7 +231,7 @@ export function MarketingFaq({
   items: readonly MarketingFaqItem[];
 }) {
   return (
-    <section className={faqStyles.section} id="faq">
+    <MarketingSection className={faqStyles.section} id="faq" data-marketing-faq="">
       <div className={cx("shell", faqStyles.grid)}>
         <div className={faqStyles.sticky}>
           <MarketingSectionHeader
@@ -293,7 +264,7 @@ export function MarketingFaq({
           ))}
         </div>
       </div>
-    </section>
+    </MarketingSection>
   );
 }
 
@@ -312,7 +283,7 @@ export function MarketingFinalCta({
   id?: string;
 }) {
   return (
-    <section className={finalCtaStyles.section} id={id} data-marketing-final-cta="">
+    <MarketingSection id={id} data-marketing-final-cta="">
       <div className={finalCtaStyles.shell}>
         <div className={finalCtaStyles.box}>
           <div className={finalCtaStyles.copy}>
@@ -329,6 +300,6 @@ export function MarketingFinalCta({
           </PrimaryButton>
         </div>
       </div>
-    </section>
+    </MarketingSection>
   );
 }

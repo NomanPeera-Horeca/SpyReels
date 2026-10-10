@@ -4,7 +4,6 @@
  */
 
 .section {
-  padding: var(--sr-layout-section-gap) 0;
   background: var(--sr-color-surface-page);
 }
 
@@ -165,10 +164,6 @@
 }
 
 @media (max-width: 640px) {
-  .section {
-    padding: var(--sr-layout-section-compact-gap) 0;
-  }
-
   .shell {
     width: min(
       var(--sr-layout-container-max-width),

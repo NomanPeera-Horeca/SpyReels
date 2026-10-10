@@ -1,0 +1,32 @@
+/**
+ * Marketing / Section shell (Figma Decision 31, Spacing Rule A).
+ * Shared by MarketingSection and HTML segments (homepage hero / workflow).
+ */
+
+[data-marketing-section] {
+  box-sizing: border-box;
+  margin: 0;
+  padding-block: var(--sr-layout-section-gap);
+}
+
+[data-marketing-section][data-marketing-section-pair="end"] {
+  padding-bottom: var(--sr-layout-section-paired-gap);
+}
+
+[data-marketing-section][data-marketing-section-pair="start"] {
+  padding-top: 0;
+}
+
+@media (max-width: 640px) {
+  [data-marketing-section] {
+    padding-block: var(--sr-layout-section-compact-gap);
+  }
+
+  [data-marketing-section][data-marketing-section-pair="end"] {
+    padding-bottom: var(--sr-layout-section-paired-gap);
+  }
+
+  [data-marketing-section][data-marketing-section-pair="start"] {
+    padding-top: 0;
+  }
+}

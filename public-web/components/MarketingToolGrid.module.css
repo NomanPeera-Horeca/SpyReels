@@ -7,17 +7,12 @@
   display: flex;
   flex-direction: column;
   gap: var(--sr-layout-content-gap);
-}
-
-.rootEmbedded {
-  margin-top: var(--sr-layout-section-compact-gap);
-  padding-top: var(--sr-layout-content-gap);
-  border-top: var(--sr-border-width-default) solid var(--sr-color-border-default);
   scroll-margin-top: var(--sr-layout-section-gap);
 }
 
-.sectionStandalone {
-  padding: var(--sr-layout-inline-gap) 0 var(--sr-layout-section-gap);
+/* Tool Grid → Beyond: single paired-gap from prior section; divider on this edge. */
+.beyondSection {
+  border-top: var(--sr-border-width-default) solid var(--sr-color-border-default);
 }
 
 .tools {
@@ -106,13 +101,11 @@
   display: block;
 }
 
-/* Beyond the workspace */
+/* Beyond the workspace (paired follow section content) */
 .beyond {
   display: flex;
   flex-direction: column;
   gap: var(--sr-layout-stack-md);
-  padding-top: var(--sr-layout-content-gap);
-  border-top: var(--sr-border-width-default) solid var(--sr-color-border-default);
 }
 
 .integrations {
