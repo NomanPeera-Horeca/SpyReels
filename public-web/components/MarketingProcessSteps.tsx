@@ -67,6 +67,7 @@ export function MarketingProcessSteps({
           titleId={titleId}
           size={isIcon ? "large" : "default"}
           align={isIcon ? "center" : "start"}
+          showHighlight={isIcon}
         />
 
         <div

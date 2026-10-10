@@ -22,6 +22,13 @@
   max-width: 1020px;
 }
 
+/* Large / Start: same H1 as Large / Center; width is container-controlled. */
+.rootLargeStart {
+  max-width: none;
+  align-items: flex-start;
+  text-align: start;
+}
+
 .root .eyebrow {
   margin: 0;
   color: var(--sr-color-marketing-accent);
@@ -52,8 +59,8 @@
   letter-spacing: var(--sr-type-marketing-heading-1-tracking);
 }
 
-/* Highlight phrase inside Large titles (homepage Process Steps). */
-.rootLarge .heading span:not(.noBreak) {
+/* Highlight phrase inside Large titles when showHighlight is on (Process Steps). */
+.showHighlight .heading span:not(.noBreak) {
   color: var(--sr-color-marketing-accent);
 }
 
@@ -70,10 +77,20 @@
   letter-spacing: var(--sr-type-marketing-body-small-tracking);
 }
 
-.rootLarge .subtitle {
+/* Large / Center subtitle = Body Large. */
+.rootLarge.rootCenter .subtitle {
   font-size: var(--sr-type-marketing-body-large-size);
   line-height: var(--sr-type-marketing-body-large-line);
   font-weight: var(--sr-type-marketing-body-large-weight);
   letter-spacing: var(--sr-type-marketing-body-large-tracking);
   max-width: 850px;
+}
+
+/* Large / Start subtitle = Body Medium 16/24. */
+.rootLargeStart .subtitle {
+  font-size: var(--sr-type-marketing-body-medium-size);
+  line-height: var(--sr-type-marketing-body-medium-line);
+  font-weight: var(--sr-type-marketing-body-medium-weight);
+  letter-spacing: var(--sr-type-marketing-body-medium-tracking);
+  max-width: none;
 }

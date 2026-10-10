@@ -1,13 +1,16 @@
 import { expect, test } from "@playwright/test";
 import {
+  marketingCreatorStories,
   marketingFaq,
   marketingFinalCta,
   marketingFooter,
   marketingHeader,
   marketingHero,
+  marketingPlatformStrip,
   marketingPrimaryButton,
   marketingProcessSteps,
   marketingProductDemo,
+  marketingResponsibleResearch,
   marketingSectionHeader,
   marketingToolGrid,
   PRODUCT_DEMO_SCENES,
@@ -227,6 +230,37 @@ test.describe("public-web visual baselines", () => {
           visualSectionScreenshotOptions
         );
       });
+
+      const platformStrip = marketingPlatformStrip(page);
+      await expect(platformStrip).toHaveCount(1);
+      await screenshotWithoutStickyHeader(page, platformStrip, async () => {
+        await expect(platformStrip).toHaveScreenshot(
+          `${pageDef.name}-platform-strip.png`,
+          visualSectionScreenshotOptions
+        );
+      });
+
+      if (pageDef.name === "homepage") {
+        const responsibleResearch = marketingResponsibleResearch(page);
+        await expect(responsibleResearch).toHaveCount(1);
+        await expect(responsibleResearch.locator("article")).toHaveCount(3);
+        await screenshotWithoutStickyHeader(page, responsibleResearch, async () => {
+          await expect(responsibleResearch).toHaveScreenshot(
+            "homepage-responsible-research.png",
+            visualSectionScreenshotOptions
+          );
+        });
+
+        const creatorStories = marketingCreatorStories(page);
+        await expect(creatorStories).toHaveCount(1);
+        await expect(creatorStories.locator("#stories-rail > article")).toHaveCount(6);
+        await screenshotWithoutStickyHeader(page, creatorStories, async () => {
+          await expect(creatorStories).toHaveScreenshot(
+            "homepage-creator-stories.png",
+            visualSectionScreenshotOptions
+          );
+        });
+      }
 
       for (const kind of pageDef.primaryButtons) {
         const button = marketingPrimaryButton(page, kind);

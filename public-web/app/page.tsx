@@ -5,9 +5,11 @@ import { join } from "node:path";
 import { HomepageAuthGate } from "../components/HomepageAuthGate";
 import { MarketingFooter, MarketingHeader } from "../components/MarketingChrome";
 import {
+  MarketingCreatorStories,
   MarketingFaq,
   MarketingFinalCta,
   MarketingPlatformStrip,
+  MarketingResponsibleResearch,
   MarketingWorkspace,
 } from "../components/MarketingPageSections";
 import {
@@ -33,6 +35,8 @@ export const metadata: Metadata = {
 const HOMEPAGE_PLATFORM_MARKER = "<!--REACT:PLATFORM_STRIP-->";
 const HOMEPAGE_PROCESS_STEPS_MARKER = "<!--REACT:PROCESS_STEPS-->";
 const HOMEPAGE_WORKSPACE_MARKER = "<!--REACT:WORKSPACE-->";
+const HOMEPAGE_RESPONSIBLE_RESEARCH_MARKER = "<!--REACT:RESPONSIBLE_RESEARCH-->";
+const HOMEPAGE_CREATOR_STORIES_MARKER = "<!--REACT:CREATOR_STORIES-->";
 const HOMEPAGE_FAQ_MARKER = "<!--REACT:FAQ-->";
 const HOMEPAGE_FINAL_CTA_MARKER = "<!--REACT:FINAL_CTA-->";
 
@@ -86,12 +90,20 @@ function loadHomepageSegments() {
   const [beforePlatform, afterPlatform] = raw.split(HOMEPAGE_PLATFORM_MARKER);
   const [beforeProcessSteps, afterProcessSteps] = (afterPlatform ?? "").split(HOMEPAGE_PROCESS_STEPS_MARKER);
   const [beforeWorkspace, afterWorkspace] = (afterProcessSteps ?? "").split(HOMEPAGE_WORKSPACE_MARKER);
-  const [beforeFaq, afterFaq] = (afterWorkspace ?? "").split(HOMEPAGE_FAQ_MARKER);
+  const [beforeResponsibleResearch, afterResponsibleResearch] = (afterWorkspace ?? "").split(
+    HOMEPAGE_RESPONSIBLE_RESEARCH_MARKER
+  );
+  const [beforeCreatorStories, afterCreatorStories] = (afterResponsibleResearch ?? "").split(
+    HOMEPAGE_CREATOR_STORIES_MARKER
+  );
+  const [beforeFaq, afterFaq] = (afterCreatorStories ?? "").split(HOMEPAGE_FAQ_MARKER);
   const [beforeFinalCta, afterFinalCta] = (afterFaq ?? "").split(HOMEPAGE_FINAL_CTA_MARKER);
   if (
     !beforePlatform ||
     beforeProcessSteps === undefined ||
     beforeWorkspace === undefined ||
+    beforeResponsibleResearch === undefined ||
+    beforeCreatorStories === undefined ||
     beforeFaq === undefined ||
     beforeFinalCta === undefined ||
     afterFinalCta === undefined
@@ -102,6 +114,8 @@ function loadHomepageSegments() {
     beforePlatform,
     beforeProcessSteps,
     beforeWorkspace,
+    beforeResponsibleResearch,
+    beforeCreatorStories,
     beforeFaq,
     beforeFinalCta,
     afterFinalCta,
@@ -160,6 +174,10 @@ export default function HomePage() {
           title="Find it. Make it yours. Get ready to post."
           freeToolsId="free-tools"
         />
+        <div dangerouslySetInnerHTML={{ __html: homepageSegments.beforeResponsibleResearch }} />
+        <MarketingResponsibleResearch />
+        <div dangerouslySetInnerHTML={{ __html: homepageSegments.beforeCreatorStories }} />
+        <MarketingCreatorStories />
         <div dangerouslySetInnerHTML={{ __html: homepageSegments.beforeFaq }} />
         <MarketingFaq
           title="Everything you need to know about SpyReels."

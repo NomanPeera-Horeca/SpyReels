@@ -16,9 +16,18 @@ export type MarketingSectionHeaderProps = {
   headingLevel?: "h2" | "h3" | "h4";
   titleId?: string;
   className?: string;
-  /** Default = Heading 3 + Body Small. Large = Heading 1 + Body Large. */
+  /**
+   * Default = Heading 3 + Body Small.
+   * Large + center = Heading 1 + Body Large.
+   * Large + start = Heading 1 + Body Medium.
+   */
   size?: "default" | "large";
   align?: "start" | "center";
+  /**
+   * When true, non-noBreak spans inside Large titles use marketing accent.
+   * Defaults off so unused highlight content does not tint layout.
+   */
+  showHighlight?: boolean;
 };
 
 function cx(...parts: Array<string | false | undefined>) {
@@ -68,9 +77,8 @@ function wrapHyphenatedCompounds(node: ReactNode): ReactNode {
 }
 
 /**
- * Marketing / Section Header — Figma Page 09.
- * Default: eyebrow, Heading 3, optional Body Small.
- * Large + center: Heading 1 (highlight spans use marketing accent), Body Large.
+ * Marketing / Section Header — Figma Page 09 v1.2.
+ * Default/Start, Large/Center, Large/Start. showHighlight defaults off.
  */
 export function MarketingSectionHeader({
   eyebrow,
@@ -81,6 +89,7 @@ export function MarketingSectionHeader({
   className,
   size = "default",
   align = "start",
+  showHighlight = false,
 }: MarketingSectionHeaderProps) {
   const HeadingTag = headingLevel;
 
@@ -90,6 +99,8 @@ export function MarketingSectionHeader({
         styles.root,
         size === "large" && styles.rootLarge,
         align === "center" && styles.rootCenter,
+        size === "large" && align === "start" && styles.rootLargeStart,
+        showHighlight && styles.showHighlight,
         className
       )}
     >

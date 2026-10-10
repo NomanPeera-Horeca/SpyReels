@@ -192,6 +192,48 @@ export function MarketingIconMinus(props: IconProps) {
   );
 }
 
+/** Icon / Check — Figma Page 05 (20×20, currentColor). */
+export function MarketingIconCheck(props: IconProps) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" fill="none" {...props}>
+      <path
+        d="M5 10.5L8.2 13.5L15 6.5"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Icon / Tool Finder — Figma Page 05 (20×20, currentColor). */
+export function MarketingIconToolFinder(props: IconProps) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" fill="none" {...props}>
+      <path
+        d="M3 4H17V16H3V4ZM8 7L13 10L8 13V7Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Icon / Star — Figma Page 05 (16×16, currentColor fill). */
+export function MarketingIconStar(props: IconProps) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="none" {...props}>
+      <path
+        d="M8 0L10.4704 5.26156L16 6.10934L11.9936 10.2136L12.9408 16L8 13.2548L3.0592 16L4.0064 10.2136L0 6.10934L5.5296 5.26156L8 0Z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
 /** Icon / Menu — Figma Page 05 (20×20, currentColor). */
 export function MarketingIconMenu(props: IconProps) {
   return (

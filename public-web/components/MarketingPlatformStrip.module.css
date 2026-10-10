@@ -1,0 +1,106 @@
+/**
+ * Marketing / Platform Strip (Figma Page 09).
+ * Desktop row · Mobile 390 stacked. Tokens only.
+ */
+
+.section {
+  padding: var(--sr-layout-section-gap) 0;
+  background: var(--sr-color-surface-page);
+}
+
+.shell {
+  width: min(
+    var(--sr-layout-container-max-width),
+    calc(100% - 2 * var(--sr-layout-page-gutter-desktop))
+  );
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sr-layout-content-gap);
+}
+
+.header {
+  width: min(900px, 100%);
+}
+
+.card {
+  box-sizing: border-box;
+  width: min(880px, 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sr-layout-card-gap);
+  padding: var(--sr-layout-card-padding);
+  border: var(--sr-border-width-default) solid var(--sr-color-border-default);
+  border-radius: var(--sr-radius-card);
+  background: var(--sr-color-surface-default);
+  box-shadow: var(--sr-elevation-surface-default);
+}
+
+.platform {
+  display: flex;
+  align-items: center;
+  gap: var(--sr-layout-control-gap);
+  min-width: 0;
+  color: var(--sr-color-text-primary);
+  text-decoration: none;
+}
+
+.platform:hover,
+.platform:focus-visible {
+  color: var(--sr-color-text-brand);
+}
+
+.platform:focus-visible {
+  outline: 2px solid var(--sr-color-focus-border);
+  outline-offset: 6px;
+  border-radius: var(--sr-radius-control);
+}
+
+.mark {
+  display: block;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+}
+
+.markYoutube {
+  width: 38px;
+  height: 32px;
+}
+
+.label {
+  margin: 0;
+  color: inherit;
+  white-space: nowrap;
+}
+
+@media (max-width: 1040px) {
+  .shell {
+    width: min(
+      var(--sr-layout-container-max-width),
+      calc(100% - 2 * var(--sr-layout-page-gutter-tablet))
+    );
+  }
+}
+
+@media (max-width: 640px) {
+  .shell {
+    width: min(
+      var(--sr-layout-container-max-width),
+      calc(100% - 2 * var(--sr-layout-page-gutter-mobile))
+    );
+  }
+
+  .card {
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: var(--sr-layout-page-gutter-mobile);
+  }
+
+  .platform {
+    width: 100%;
+  }
+}

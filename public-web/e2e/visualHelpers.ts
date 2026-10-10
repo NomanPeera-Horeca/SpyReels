@@ -271,6 +271,21 @@ export function marketingProcessSteps(page: Page) {
   return page.locator("[data-marketing-process-steps]");
 }
 
+/** Marketing Platform Strip section. */
+export function marketingPlatformStrip(page: Page) {
+  return page.locator("[data-marketing-platform-strip]");
+}
+
+/** Marketing Responsible Research section. */
+export function marketingResponsibleResearch(page: Page) {
+  return page.locator("[data-marketing-responsible-research]");
+}
+
+/** Marketing Creator Stories section. */
+export function marketingCreatorStories(page: Page) {
+  return page.locator("[data-marketing-creator-stories]");
+}
+
 /** Shared Primary Large button close-up target. */
 export function marketingPrimaryButton(page: Page, kind: string) {
   return page.locator(`[data-marketing-primary-button="${kind}"]`);

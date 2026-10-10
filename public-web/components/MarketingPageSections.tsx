@@ -16,48 +16,78 @@ import {
 import styles from "./MarketingToolGrid.module.css";
 import faqStyles from "./MarketingFaq.module.css";
 import finalCtaStyles from "./MarketingFinalCta.module.css";
+import platformStripStyles from "./MarketingPlatformStrip.module.css";
 import type { MarketingFaqItem } from "./marketingFaqJsonLd";
 
-const officialPlatformMark = (src: string, width: number, height: number, alt: string) => (
-  // Official platform marks from Marketing / Platform Strip (Figma Page 09).
-  <img src={src} width={width} height={height} alt="" aria-hidden="true" data-platform-mark={alt} />
-);
+export { MarketingResponsibleResearch } from "./MarketingResponsibleResearch";
+export { MarketingCreatorStories } from "./MarketingCreatorStories";
 
 const channels = [
   {
     name: "Instagram Reels",
     href: "/features/viral-reel-finder",
-    className: "instagram",
-    icon: officialPlatformMark("/marketing/platform-marks/instagram.svg", 32, 32, "Instagram"),
+    markSrc: "/marketing/platform-marks/instagram.svg",
+    markWidth: 32,
+    markHeight: 32,
+    markClass: platformStripStyles.mark,
   },
   {
     name: "TikTok",
     href: "/free-tools/tiktok-viral-video-finder",
-    className: "tiktok",
-    icon: officialPlatformMark("/marketing/platform-marks/tiktok.svg", 32, 32, "TikTok"),
+    markSrc: "/marketing/platform-marks/tiktok.svg",
+    markWidth: 32,
+    markHeight: 32,
+    markClass: platformStripStyles.mark,
   },
   {
     name: "YouTube Shorts",
     href: "/free-tools/youtube-shorts-viral-finder",
-    className: "youtube",
-    icon: officialPlatformMark("/marketing/platform-marks/youtube.svg", 38, 32, "YouTube"),
+    markSrc: "/marketing/platform-marks/youtube.svg",
+    markWidth: 38,
+    markHeight: 32,
+    markClass: `${platformStripStyles.mark} ${platformStripStyles.markYoutube}`,
   },
-];
+] as const;
 
+/**
+ * Marketing / Platform Strip (Figma Page 09).
+ * Large/Center header + Page 05 full-color platform marks.
+ */
 export function MarketingPlatformStrip() {
+  const titleId = "platform-strip-title";
+
   return (
-    <section className="trusted" aria-label="Short-form channels">
-      <div className="shell">
-        <h2>One workflow for every short-form channel.</h2>
-        <div className="platform-strip">
-          <div className="platform-logos" aria-label="Supported short-form platforms">
-            {channels.map((channel) => (
-              <a key={channel.name} className={`platform-logo ${channel.className}`} href={channel.href}>
-                {channel.icon}
-                <span>{channel.name}</span>
-              </a>
-            ))}
-          </div>
+    <section
+      className={platformStripStyles.section}
+      aria-labelledby={titleId}
+      data-marketing-platform-strip=""
+    >
+      <div className={platformStripStyles.shell}>
+        <MarketingSectionHeader
+          className={platformStripStyles.header}
+          title="One workflow for every short-form channel."
+          headingLevel="h2"
+          titleId={titleId}
+          size="large"
+          align="center"
+        />
+        <div className={platformStripStyles.card} aria-label="Supported short-form platforms">
+          {channels.map((channel) => (
+            <a key={channel.name} className={platformStripStyles.platform} href={channel.href}>
+              <img
+                className={channel.markClass}
+                src={channel.markSrc}
+                width={channel.markWidth}
+                height={channel.markHeight}
+                alt=""
+                aria-hidden="true"
+                data-platform-mark={channel.name}
+              />
+              <span className={`sr-text-marketing-title-medium ${platformStripStyles.label}`}>
+                {channel.name}
+              </span>
+            </a>
+          ))}
         </div>
       </div>
     </section>
