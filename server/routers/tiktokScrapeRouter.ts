@@ -5,16 +5,15 @@ import { tiktokScrapeJobs, tiktokVideos } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { clientIpFromRequest, isPublicIpRateLimited } from "../publicRateLimit";
 import { checkUsageLimit, incrementUsage } from "../stripe/stripe-service";
-import { scrapeTikTokVideos, fetchTikTokVideoInfo, fetchTikTokProfile } from "../tiktok";
+import { fetchTikTokVideoInfo, fetchTikTokProfile } from "../tiktok";
 import { ensureProfilePicOnR2 } from "../profilePicR2";
-import { mirrorTiktokThumbnailsBounded } from "../tiktokScrape/mediaMirror";
 import { repairTikTokProfilePicsBounded } from "../tiktokScrape/repairProfilePics";
 import { runTikTokScrapeJob } from "../tiktokScrape/runJob";
 import { scheduleCreatorRadarRefresh } from "../creatorRadarRefreshQueue";
 import { isDurableTiktokVideoUrl, scheduleTiktokVideoMirror } from "../tiktokVideoR2";
-import { PUBLIC_TIKTOK_DEMO_HANDLES, PUBLIC_TIKTOK_DEMO_VIDEO_LIMIT, isPublicTikTokDemoHandle } from "@shared/publicTikTokDemoAccounts";
+import { loadFeaturedDemoPublicPayload } from "../featuredDemo/publicDemo";
 import { not, eq, desc, sql, and, inArray, or } from "drizzle-orm";
-import { PUBLIC_TIKTOK_DEMO_CACHE_TTL_MS, PUBLIC_TIKTOK_DEMO_EMPTY_CACHE_TTL_MS, PublicTikTokDemoPayload, publicTikTokDemoCache, emptyPublicTikTokDemoPayload, readPublicTikTokDemoCache, writePublicTikTokDemoCache } from "./_shared";
+import { PublicTikTokDemoPayload } from "./_shared";
 
 const TIKTOK_HANDLE_INVALID_MESSAGE =
   "TikTok usernames can only contain letters, numbers, periods and underscores.";
@@ -77,9 +76,8 @@ function writePublicTikTokProfilePreviewCache(
 
 export const tiktokScrapeRouter = router({
     /**
-     * Logged-out TikTok finder landing preview. Allow-list only
-     * (`PUBLIC_TIKTOK_DEMO_HANDLES`), capped at `PUBLIC_TIKTOK_DEMO_VIDEO_LIMIT`,
-     * display fields only — never videoUrl / download URLs.
+     * Logged-out TikTok finder landing preview. DB-only catalog read from
+     * `featured_demo_*` (daily refresh job). Never scrapes or mirrors on GET.
      */
     publicDemo: publicProcedure
       .input(z.object({ handle: z.string().optional() }).optional())
@@ -92,105 +90,17 @@ export const tiktokScrapeRouter = router({
           });
         }
 
-        const requested = (input?.handle ?? "")
-          .replace(/^@/, "")
-          .trim()
-          .toLowerCase();
-        const tryOrder: string[] = [];
-        if (isPublicTikTokDemoHandle(requested)) tryOrder.push(requested);
-        for (const h of PUBLIC_TIKTOK_DEMO_HANDLES) {
-          if (!tryOrder.includes(h)) tryOrder.push(h);
+        const payload = await loadFeaturedDemoPublicPayload(
+          "tiktok",
+          input?.handle
+        );
+        if (!payload) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "This creator isn't available",
+          });
         }
-
-        for (const handle of tryOrder) {
-          const cached = readPublicTikTokDemoCache(handle);
-          if (cached) {
-            if (cached.videos.length > 0) return cached;
-            continue;
-          }
-
-          try {
-            const result = await scrapeTikTokVideos(handle, undefined, {
-              maxVideos: Math.max(PUBLIC_TIKTOK_DEMO_VIDEO_LIMIT * 3, 24),
-              timeoutMs: 45_000,
-            });
-
-            const sorted = [...result.videos].sort(
-              (a, b) => b.viewCount - a.viewCount
-            );
-            const top = sorted.slice(0, PUBLIC_TIKTOK_DEMO_VIDEO_LIMIT);
-            if (top.length === 0) {
-              writePublicTikTokDemoCache(handle, emptyPublicTikTokDemoPayload(handle));
-              continue;
-            }
-
-            const mirrored = await mirrorTiktokThumbnailsBounded(
-              top.map((v) => ({
-                awemeId: v.awemeId,
-                thumbnailUrl: v.thumbnailUrl,
-              }))
-            );
-
-            const viewCounts = result.videos
-              .map((v) => v.viewCount)
-              .filter((n) => Number.isFinite(n) && n > 0)
-              .sort((a, b) => a - b);
-            let medianViewCount = 0;
-            if (viewCounts.length > 0) {
-              const mid = Math.floor(viewCounts.length / 2);
-              medianViewCount =
-                viewCounts.length % 2 === 0
-                  ? Math.round(
-                      (viewCounts[mid - 1]! + viewCounts[mid]!) / 2
-                    )
-                  : viewCounts[mid]!;
-            }
-
-            const followerCount = result.followerCount || 0;
-            const payload: PublicTikTokDemoPayload = {
-              handle: result.videos[0]?.ownerUsername || handle,
-              totalVideoCount: result.videos.length,
-              medianViewCount,
-              followerCount,
-              videos: top.map((v) => ({
-                id: v.awemeId,
-                awemeId: v.awemeId,
-                caption: v.caption ?? "",
-                viewCount: v.viewCount,
-                likeCount: v.likeCount,
-                commentCount: v.commentCount,
-                shareCount: v.shareCount,
-                engagementRate:
-                  followerCount > 0
-                    ? Math.round(
-                        ((v.likeCount + v.commentCount + v.shareCount) /
-                          followerCount) *
-                          10000
-                      ) / 100
-                    : 0,
-                thumbnailUrl: mirrored.get(v.awemeId) || v.thumbnailUrl || "",
-                durationSec: v.durationSec,
-                postedAt: v.postedAt,
-                videoPageUrl: v.videoPageUrl,
-              })),
-            };
-
-            writePublicTikTokDemoCache(handle, payload);
-            return payload;
-          } catch (err) {
-            console.warn(
-              `[tiktokScrape.publicDemo] handle=@${handle} failed:`,
-              err instanceof Error ? err.message : err
-            );
-            writePublicTikTokDemoCache(handle, emptyPublicTikTokDemoPayload(handle));
-            continue;
-          }
-        }
-
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "This creator isn't available",
-        });
+        return payload as PublicTikTokDemoPayload;
       }),
 
     /**

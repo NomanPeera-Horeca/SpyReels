@@ -15,7 +15,8 @@ export async function GET(request: NextRequest) {
     const upstream = await fetch(`${origin}/api/trpc/tiktokScrape.publicDemo?input=${input}`, {
       headers: { accept: "application/json", ...(forwardedFor ? { "x-forwarded-for": forwardedFor } : {}), "user-agent": "SpyReels-Public-Web/1.0" },
       cache: "no-store",
-      signal: AbortSignal.timeout(55_000),
+      // Catalog is DB-backed; keep a short guard so a stuck upstream never hangs the page.
+      signal: AbortSignal.timeout(3_000),
     });
     const envelope = await upstream.json().catch(() => null);
     const data = envelope?.result?.data?.json ?? envelope?.result?.data;

@@ -7,7 +7,8 @@ Production deploys only from **`main`**.
 1. **Short-lived branches only.** Cut a branch from `main`, ship in **1 to 2 days**, then open a PR into `main`.
 2. **All required checks green before merge.** At minimum: SpyReels App CI, public-web qa (when `public-web/**` or related CI changes), and Public Web Pilot when pilot/proxy/shared ownership files change.
 3. **Never deploy a feature branch** to Render (SpyReels web or spyreels-public-web). Point both services at `main` with Auto-Deploy **After CI Checks Pass**.
-4. Prefer merge commits (or an explicit squash) that keep reviewable history; do not leave long-running integration branches as the deploy source.
+4. **Production jobs (cron / one-off) run only on Render from `main`.** Never run production refresh, seed, or scrape scripts locally against production credentials.
+5. Prefer merge commits (or an explicit squash) that keep reviewable history; do not leave long-running integration branches as the deploy source.
 
 ## Render services
 

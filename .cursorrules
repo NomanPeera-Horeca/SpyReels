@@ -16,6 +16,12 @@ Before generating any new page, blog post, free tool page, feature page, compari
 - All required checks green before merge; never deploy from a feature branch.
 - See `docs/deploy-notes/trunk-based-workflow.md`.
 
+## Production jobs (NEVER VIOLATE)
+
+- Production one-off jobs and cron (including `pnpm featured-demo:refresh` and any seed/scrape against prod) run ONLY as Render jobs on the SpyReels service, using code deployed from `main`.
+- Never run production refresh/seed/scrape scripts locally against production `DATABASE_URL`, R2, or ScrapeCreators credentials.
+- Never store production secrets in local `.env*` files or shell history. Prod credentials live only in Render / Railway service env.
+
 ## Code rules
 
 - pnpm only, never npm

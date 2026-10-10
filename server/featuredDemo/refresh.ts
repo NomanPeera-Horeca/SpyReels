@@ -16,10 +16,21 @@ import { getDb } from "../db";
 import { alertOwnerThrottled } from "../monitoring/alerts";
 import { scrapeTikTokVideos } from "../tiktok";
 import { scrapeYouTubeShorts } from "../youtube";
-import { mirrorFeaturedDemoThumb } from "./webOptimizedThumb";
+import {
+  isFeaturedDemoR2ThumbUrl,
+  mirrorFeaturedDemoThumb,
+} from "./webOptimizedThumb";
 
 const SCRAPE_TIMEOUT_MS = 30_000;
 const MAX_ENGAGEMENT_RATE = 999999.99;
+
+/** Integer seconds only for featured_demo_items.durationSec. */
+export function toStoredDurationSec(
+  value: number | null | undefined
+): number | null {
+  if (value == null || !Number.isFinite(value)) return null;
+  return Math.max(0, Math.round(value));
+}
 
 export type ScrapedDemoItem = {
   externalId: string;
@@ -95,10 +106,14 @@ export type FeaturedDemoRefreshDeps = {
     accountId: number,
     items: Array<Omit<InsertFeaturedDemoItem, "accountId" | "id">>
   ) => Promise<void>;
+  getExistingItems: (
+    accountId: number
+  ) => Promise<Array<{ externalId: string; thumbnailUrl: string | null }>>;
   scrape: (
     platform: FeaturedDemoRefreshPlatform,
     handle: string
   ) => Promise<ScrapedDemoAccount>;
+  /** Must return an R2 featured-demo-thumbs URL, or "" on failure (never CDN). */
   mirrorThumb: (
     platform: FeaturedDemoRefreshPlatform,
     externalId: string,
@@ -146,7 +161,7 @@ export async function scrapePlatformDemoAccount(
         commentCount: v.commentCount,
         shareCount: v.shareCount,
         thumbnailUrl: v.thumbnailUrl || "",
-        durationSec: v.durationSec ?? null,
+        durationSec: toStoredDurationSec(v.durationSec),
         postedAt: v.postedAt ?? null,
         videoPageUrl: v.videoPageUrl || "",
       })),
@@ -171,7 +186,7 @@ export async function scrapePlatformDemoAccount(
       commentCount: v.commentCount,
       shareCount: 0,
       thumbnailUrl: v.thumbnailUrl || "",
-      durationSec: v.durationSec ?? null,
+      durationSec: toStoredDurationSec(v.durationSec),
       postedAt: v.postedAt ?? null,
       videoPageUrl: v.videoPageUrl || "",
     })),
@@ -290,6 +305,16 @@ export async function createDefaultFeaturedDemoRefreshDeps(): Promise<FeaturedDe
       );
     },
 
+    async getExistingItems(accountId) {
+      return db
+        .select({
+          externalId: featuredDemoItems.externalId,
+          thumbnailUrl: featuredDemoItems.thumbnailUrl,
+        })
+        .from(featuredDemoItems)
+        .where(eq(featuredDemoItems.accountId, accountId));
+    },
+
     scrape: scrapePlatformDemoAccount,
 
     mirrorThumb: (platform, externalId, sourceUrl) =>
@@ -351,19 +376,33 @@ export async function refreshFeaturedDemoCatalog(
         continue;
       }
 
+      const existing = await deps.getExistingItems(account.id);
+      const existingById = new Map(
+        existing.map((row) => [row.externalId, row.thumbnailUrl])
+      );
+
       const mirroredItems: Array<
         Omit<InsertFeaturedDemoItem, "accountId" | "id">
       > = [];
 
-      for (let i = 0; i < scraped.items.length; i++) {
-        const item = scraped.items[i]!;
-        const thumbnailUrl = item.thumbnailUrl
+      for (const item of scraped.items) {
+        let thumbnailUrl = item.thumbnailUrl
           ? await deps.mirrorThumb(
               account.platform,
               item.externalId,
               item.thumbnailUrl
             )
           : "";
+
+        if (!isFeaturedDemoR2ThumbUrl(thumbnailUrl)) {
+          const previous = existingById.get(item.externalId) ?? null;
+          if (isFeaturedDemoR2ThumbUrl(previous)) {
+            thumbnailUrl = previous!.trim();
+          } else {
+            // Never persist CDN/HEIC; skip this item.
+            continue;
+          }
+        }
 
         mirroredItems.push({
           externalId: item.externalId,
@@ -378,13 +417,29 @@ export async function refreshFeaturedDemoCatalog(
             item.commentCount,
             item.shareCount
           ),
-          thumbnailUrl: thumbnailUrl || null,
-          durationSec: item.durationSec,
+          thumbnailUrl,
+          durationSec: toStoredDurationSec(item.durationSec),
           postedAt: item.postedAt,
           videoPageUrl: item.videoPageUrl || null,
-          rank: i + 1,
+          rank: mirroredItems.length + 1,
           scrapedAt: deps.now(),
         });
+      }
+
+      // Success requires at least one stored item, and every stored item R2.
+      if (
+        mirroredItems.length === 0 ||
+        !mirroredItems.every((row) => isFeaturedDemoR2ThumbUrl(row.thumbnailUrl))
+      ) {
+        await deps.markFailure(account.id, deps.now(), "no_r2_thumbs");
+        results.push({
+          platform: account.platform,
+          handle,
+          status: account.lastSuccessAt ? "kept_last_good" : "error",
+          itemCount: 0,
+          error: "no_r2_thumbs",
+        });
+        continue;
       }
 
       await deps.replaceItems(account.id, mirroredItems);

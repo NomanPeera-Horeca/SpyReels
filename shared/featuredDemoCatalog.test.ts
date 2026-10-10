@@ -8,20 +8,18 @@ import {
 } from "./featuredDemoCatalog";
 
 describe("featuredDemoCatalog", () => {
-  it("keeps TikTok + YouTube allow-lists and 8-item cap", () => {
+  it("keeps TikTok + YouTube allow-lists (3 each) and 8-item cap", () => {
     expect([...FEATURED_DEMO_REFRESH_PLATFORMS]).toEqual(["tiktok", "youtube"]);
     expect(FEATURED_DEMO_ITEM_LIMIT).toBe(8);
     expect([...FEATURED_DEMO_HANDLES.tiktok]).toEqual([
       "charlidamelio",
       "khaby.lame",
-      "zachking",
       "mrbeast",
     ]);
     expect([...FEATURED_DEMO_HANDLES.youtube]).toEqual([
       "mrbeast",
       "mkbhd",
       "aliabdaal",
-      "souravjoshivlogs",
     ]);
   });
 

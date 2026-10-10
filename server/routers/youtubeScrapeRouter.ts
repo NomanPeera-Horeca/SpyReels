@@ -1,16 +1,46 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, protectedProcedure } from "../_core/trpc";
+import { router, publicProcedure, protectedProcedure } from "../_core/trpc";
 import { youtubeScrapeJobs, youtubeVideos } from "../../drizzle/schema";
 import { getDb } from "../db";
+import { clientIpFromRequest, isPublicIpRateLimited } from "../publicRateLimit";
 import { checkUsageLimit, incrementUsage } from "../stripe/stripe-service";
 import { runYouTubeScrapeJob } from "../youtubeScrape/runJob";
 import { scheduleCreatorRadarRefresh } from "../creatorRadarRefreshQueue";
+import { loadFeaturedDemoPublicPayload } from "../featuredDemo/publicDemo";
 import { not, eq, desc, sql, and, inArray } from "drizzle-orm";
 
 
 
 export const youtubeScrapeRouter = router({
+    /**
+     * Logged-out YouTube Shorts finder preview. DB-only catalog read from
+     * `featured_demo_*` (daily refresh job). Never scrapes or mirrors on GET.
+     */
+    publicDemo: publicProcedure
+      .input(z.object({ handle: z.string().optional() }).optional())
+      .query(async ({ ctx, input }) => {
+        const ip = clientIpFromRequest(ctx.req);
+        if (isPublicIpRateLimited(ip)) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: "Too many requests. Please try again in a minute.",
+          });
+        }
+
+        const payload = await loadFeaturedDemoPublicPayload(
+          "youtube",
+          input?.handle
+        );
+        if (!payload) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "This creator isn't available",
+          });
+        }
+        return payload;
+      }),
+
     start: protectedProcedure
       .input(
         z.object({

@@ -28,6 +28,15 @@ export function featuredDemoThumbR2Key(
   return `featured-demo-thumbs/${platformSafe}/${id}.${ext}`;
 }
 
+/** True when URL points at our featured-demo-thumbs R2 prefix (never CDN/HEIC). */
+export function isFeaturedDemoR2ThumbUrl(
+  url: string | null | undefined
+): boolean {
+  const value = (url ?? "").trim();
+  if (!value) return false;
+  return /\/featured-demo-thumbs\//i.test(value);
+}
+
 export async function optimizeThumbBuffer(
   buf: Buffer
 ): Promise<{ buffer: Buffer; contentType: string; ext: "webp" | "jpg" }> {
@@ -52,6 +61,7 @@ export async function optimizeThumbBuffer(
 /**
  * Download a source cover, resize to ~480px wide, store as webp (jpeg fallback)
  * under featured-demo-thumbs/. Idempotent when the canonical key already exists.
+ * On failure returns "" (never a CDN/HEIC URL). Callers must not persist CDN.
  */
 export async function mirrorFeaturedDemoThumb(
   platform: string,
@@ -63,7 +73,7 @@ export async function mirrorFeaturedDemoThumb(
   if (!src) return "";
 
   const id = safeId(externalId);
-  if (!id) return src;
+  if (!id) return "";
 
   const fetchBuffer =
     deps?.fetchBuffer ??
@@ -95,18 +105,18 @@ export async function mirrorFeaturedDemoThumb(
   for (const ext of ["webp", "jpg"] as const) {
     const key = featuredDemoThumbR2Key(platform, id, ext);
     const canonical = publicBase ? `${publicBase}/${key}` : publicUrl(key);
-    if (src === canonical || src.endsWith(`/${key}`)) return src;
+    if (src === canonical || src.endsWith(`/${key}`)) return canonical;
     if (await headExists(key)) return canonical;
   }
 
   try {
     const buf = await fetchBuffer(src);
-    if (!buf) return src;
+    if (!buf) return "";
     const optimized = await optimizeThumbBuffer(buf);
     const key = featuredDemoThumbR2Key(platform, id, optimized.ext);
     const { url } = await putObject(key, optimized.buffer, optimized.contentType);
-    return url;
+    return isFeaturedDemoR2ThumbUrl(url) ? url : "";
   } catch {
-    return src;
+    return "";
   }
 }

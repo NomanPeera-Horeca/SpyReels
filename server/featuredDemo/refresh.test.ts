@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   refreshFeaturedDemoCatalog,
+  toStoredDurationSec,
   type FeaturedDemoAccountRow,
   type FeaturedDemoRefreshDeps,
   type ScrapedDemoAccount,
@@ -82,6 +83,7 @@ function makeDeps(
     replaceItems: async (accountId, items) => {
       replaced.set(accountId, items);
     },
+    getExistingItems: async () => [],
     scrape: async (platform, handle) => scraped(`${platform}-${handle}`),
     mirrorThumb: async (_platform, externalId) =>
       `https://r2.example/featured-demo-thumbs/${externalId}.webp`,
@@ -99,6 +101,16 @@ function makeDeps(
   return deps;
 }
 
+describe("toStoredDurationSec", () => {
+  it("rounds float durations to integer seconds", () => {
+    expect(toStoredDurationSec(12.4)).toBe(12);
+    expect(toStoredDurationSec(12.6)).toBe(13);
+    expect(toStoredDurationSec(15.001)).toBe(15);
+    expect(toStoredDurationSec(null)).toBeNull();
+    expect(toStoredDurationSec(Number.NaN)).toBeNull();
+  });
+});
+
 describe("refreshFeaturedDemoCatalog", () => {
   it("scrapes allow-listed active handles and replaces items with mirrored thumbs", async () => {
     const targets = [
@@ -112,9 +124,50 @@ describe("refreshFeaturedDemoCatalog", () => {
     expect(summary.succeeded).toBe(2);
     expect(deps.replaced.get(1)?.length).toBe(2);
     expect(deps.replaced.get(2)?.length).toBe(2);
-    const first = deps.replaced.get(1)?.[0] as { thumbnailUrl?: string; rank?: number };
+    const first = deps.replaced.get(1)?.[0] as {
+      thumbnailUrl?: string;
+      rank?: number;
+    };
     expect(first.thumbnailUrl).toContain("featured-demo-thumbs");
     expect(first.rank).toBe(1);
+  });
+
+  it("persists view counts above signed INT max and rounded durations", async () => {
+    const targets = [account({ id: 1, platform: "tiktok", handle: "mrbeast" })];
+    const deps = makeDeps(targets, {
+      scrape: async () => ({
+        handle: "mrbeast",
+        followerCount: 100,
+        profilePicUrl: "",
+        items: [
+          {
+            externalId: "mega",
+            caption: "huge",
+            viewCount: 2_380_000_000,
+            likeCount: 2_200_000_000,
+            commentCount: 50_000_000,
+            shareCount: 10_000_000,
+            thumbnailUrl: "https://cdn.example/mega.jpg",
+            durationSec: 12.7,
+            postedAt: new Date("2026-09-01T00:00:00.000Z"),
+            videoPageUrl: "https://example.com/mega",
+          },
+        ],
+      }),
+    });
+
+    const summary = await refreshFeaturedDemoCatalog(deps);
+    expect(summary.succeeded).toBe(1);
+    const row = deps.replaced.get(1)?.[0] as {
+      viewCount: number;
+      likeCount: number;
+      durationSec: number | null;
+      thumbnailUrl: string;
+    };
+    expect(row.viewCount).toBe(2_380_000_000);
+    expect(row.likeCount).toBe(2_200_000_000);
+    expect(row.durationSec).toBe(13);
+    expect(row.thumbnailUrl).toContain("featured-demo-thumbs");
   });
 
   it("skips inactive handles immediately (takedown path)", async () => {
@@ -141,7 +194,7 @@ describe("refreshFeaturedDemoCatalog", () => {
       account({
         id: 1,
         platform: "tiktok",
-        handle: "zachking",
+        handle: "mrbeast",
         lastSuccessAt: new Date("2026-10-09T00:00:00.000Z"),
       }),
     ];
@@ -176,6 +229,80 @@ describe("refreshFeaturedDemoCatalog", () => {
 
     expect(summary.skippedEmpty).toBe(1);
     expect(deps.replaced.size).toBe(0);
+  });
+
+  it("does not store CDN thumbs; keeps last-good R2 per item or skips", async () => {
+    const targets = [account({ id: 1, platform: "tiktok", handle: "mrbeast" })];
+    const deps = makeDeps(targets, {
+      getExistingItems: async () => [
+        {
+          externalId: "keep-me",
+          thumbnailUrl:
+            "https://r2.example/featured-demo-thumbs/tiktok/keep-me.webp",
+        },
+      ],
+      scrape: async () => ({
+        handle: "mrbeast",
+        followerCount: 1,
+        profilePicUrl: "",
+        items: [
+          {
+            externalId: "keep-me",
+            caption: "old",
+            viewCount: 10,
+            likeCount: 1,
+            commentCount: 0,
+            shareCount: 0,
+            thumbnailUrl: "https://cdn.example/keep-me.heic",
+            durationSec: 10,
+            postedAt: null,
+            videoPageUrl: "https://example.com/keep-me",
+          },
+          {
+            externalId: "skip-me",
+            caption: "new",
+            viewCount: 9,
+            likeCount: 1,
+            commentCount: 0,
+            shareCount: 0,
+            thumbnailUrl: "https://cdn.example/skip-me.heic",
+            durationSec: 10,
+            postedAt: null,
+            videoPageUrl: "https://example.com/skip-me",
+          },
+        ],
+      }),
+      mirrorThumb: async () => "",
+    });
+
+    const summary = await refreshFeaturedDemoCatalog(deps);
+    expect(summary.succeeded).toBe(1);
+    const items = deps.replaced.get(1) as Array<{
+      externalId: string;
+      thumbnailUrl: string;
+    }>;
+    expect(items).toHaveLength(1);
+    expect(items[0]?.externalId).toBe("keep-me");
+    expect(items[0]?.thumbnailUrl).toContain("featured-demo-thumbs");
+  });
+
+  it("keeps prior catalog when no item can get an R2 thumb", async () => {
+    const targets = [
+      account({
+        id: 1,
+        platform: "tiktok",
+        handle: "khaby.lame",
+        lastSuccessAt: new Date("2026-10-09T00:00:00.000Z"),
+      }),
+    ];
+    const deps = makeDeps(targets, {
+      mirrorThumb: async () => "",
+    });
+
+    const summary = await refreshFeaturedDemoCatalog(deps);
+    expect(summary.keptLastGood).toBe(1);
+    expect(deps.replaced.size).toBe(0);
+    expect(deps.failures.get(1)).toBe("no_r2_thumbs");
   });
 
   it("alerts when active handle has no successful refresh for 3+ days", async () => {
