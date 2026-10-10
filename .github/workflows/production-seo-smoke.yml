@@ -86,13 +86,28 @@ jobs:
               core.info(`Opened issue #${created.data.number}`);
             }
 
+      - name: Detect optional SMTP email config
+        id: mailcfg
+        if: failure()
+        env:
+          SEO_SMOKE_NOTIFY_TO: ${{ secrets.SEO_SMOKE_NOTIFY_TO }}
+          SEO_SMOKE_SMTP_PASSWORD: ${{ secrets.SEO_SMOKE_SMTP_PASSWORD }}
+          SEO_SMOKE_SMTP_SERVER: ${{ secrets.SEO_SMOKE_SMTP_SERVER }}
+        run: |
+          if [ -n "$SEO_SMOKE_NOTIFY_TO" ] && [ -n "$SEO_SMOKE_SMTP_PASSWORD" ] && [ -n "$SEO_SMOKE_SMTP_SERVER" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "SMTP secrets not set; skipping email (GitHub issue + Actions failure email still notify)."
+          fi
+
       - name: Email on failure (optional SMTP secrets)
-        if: ${{ failure() && secrets.SEO_SMOKE_SMTP_PASSWORD != '' && secrets.SEO_SMOKE_NOTIFY_TO != '' }}
+        if: failure() && steps.mailcfg.outputs.enabled == 'true'
         continue-on-error: true
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: ${{ secrets.SEO_SMOKE_SMTP_SERVER }}
-          server_port: ${{ secrets.SEO_SMOKE_SMTP_PORT || 587 }}
+          server_port: 587
           username: ${{ secrets.SEO_SMOKE_SMTP_USER }}
           password: ${{ secrets.SEO_SMOKE_SMTP_PASSWORD }}
           subject: "[SpyReels] Production SEO smoke FAILED"
@@ -101,4 +116,4 @@ jobs:
           body: |
             Production SEO smoke failed.
             Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-            Check the job log and the seo-smoke GitHub issue.
+            Check the job log and the "Production SEO smoke FAILED" GitHub issue.
