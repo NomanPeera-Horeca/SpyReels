@@ -4,6 +4,7 @@ const PAGES = [
   "/",
   "/features/viral-reel-finder",
   "/free-tools/tiktok-viral-video-finder",
+  "/free-tools/youtube-shorts-viral-finder",
 ] as const;
 
 type MidWordBreak = {
