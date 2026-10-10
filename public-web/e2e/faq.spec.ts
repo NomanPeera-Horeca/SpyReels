@@ -6,6 +6,10 @@ const FAQ_PAGES = [
   { name: "homepage", path: "/" },
   { name: "viral-reel-finder", path: "/features/viral-reel-finder" },
   { name: "tiktok-viral-video-finder", path: "/free-tools/tiktok-viral-video-finder" },
+  {
+    name: "youtube-shorts-viral-finder",
+    path: "/free-tools/youtube-shorts-viral-finder",
+  },
 ] as const;
 
 function decodeHtmlEntities(value: string): string {

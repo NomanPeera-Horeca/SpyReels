@@ -225,6 +225,85 @@ async function readHandleFromDb(
   };
 }
 
+export type FeaturedDemoProfilePreview =
+  | {
+      found: true;
+      username: string;
+      fullName: string;
+      biography: string;
+      profilePicUrl: string;
+      followerCount: number;
+      followingCount: number;
+      postCount: number;
+      isVerified: boolean;
+      isPrivate: boolean;
+    }
+  | { found: false; error: string };
+
+/**
+ * Display-only profile card for allow-listed featured demo handles.
+ * DB read only; never scrapes.
+ */
+export async function loadFeaturedDemoProfilePreview(
+  platform: FeaturedDemoRefreshPlatform,
+  requestedHandle: string
+): Promise<FeaturedDemoProfilePreview> {
+  const handle = normalizeFeaturedDemoHandle(requestedHandle);
+  if (!(FEATURED_DEMO_HANDLES[platform] as readonly string[]).includes(handle)) {
+    return {
+      found: false,
+      error: "Sign in to research this creator in SpyReels.",
+    };
+  }
+
+  const db = await getDb();
+  if (!db) {
+    return { found: false, error: "Profile lookup is temporarily unavailable." };
+  }
+
+  const rows = await db
+    .select({
+      id: featuredDemoAccounts.id,
+      handle: featuredDemoAccounts.handle,
+      displayName: featuredDemoAccounts.displayName,
+      followerCount: featuredDemoAccounts.followerCount,
+      profilePicUrl: featuredDemoAccounts.profilePicUrl,
+    })
+    .from(featuredDemoAccounts)
+    .where(
+      and(
+        eq(featuredDemoAccounts.platform, platform),
+        eq(featuredDemoAccounts.handle, handle),
+        eq(featuredDemoAccounts.isActive, true)
+      )
+    )
+    .limit(1);
+
+  const account = rows[0];
+  if (!account) {
+    return { found: false, error: "This creator isn't available for preview." };
+  }
+
+  const items = await db
+    .select({ id: featuredDemoItems.id })
+    .from(featuredDemoItems)
+    .where(eq(featuredDemoItems.accountId, account.id))
+    .limit(FEATURED_DEMO_ITEM_LIMIT);
+
+  return {
+    found: true,
+    username: account.handle,
+    fullName: account.displayName ?? account.handle,
+    biography: "",
+    profilePicUrl: account.profilePicUrl ?? "",
+    followerCount: account.followerCount || 0,
+    followingCount: 0,
+    postCount: items.length,
+    isVerified: false,
+    isPrivate: false,
+  };
+}
+
 /**
  * DB-only featured demo catalog read for visitor publicDemo.
  * Never scrapes. Never writes R2. Serves last-good rows; skips isActive=0.

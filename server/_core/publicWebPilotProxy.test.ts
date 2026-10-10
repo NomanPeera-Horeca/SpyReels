@@ -3,9 +3,13 @@ import http from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { sdk } from "./sdk";
 import {
+  TIKTOK_VIRAL_FINDER_DEMO_PATH,
+  TIKTOK_VIRAL_FINDER_PATH,
   VIRAL_REEL_FINDER_DEMO_PATH,
   VIRAL_REEL_FINDER_PILOT_PATH,
   VIRAL_REEL_FINDER_PROFILE_PATH,
+  YOUTUBE_SHORTS_FINDER_DEMO_PATH,
+  YOUTUBE_SHORTS_FINDER_PATH,
   getPublicWebPilotConfig,
   isPublicWebPilotRequest,
   registerPublicWebPilotProxy,
@@ -66,6 +70,10 @@ describe("publicWebPilotProxy", () => {
     expect(isPublicWebPilotRequest(`${VIRAL_REEL_FINDER_DEMO_PATH}/`, "HEAD", config)).toBe(true);
     expect(isPublicWebPilotRequest(VIRAL_REEL_FINDER_PROFILE_PATH, "GET", config)).toBe(true);
     expect(isPublicWebPilotRequest(`${VIRAL_REEL_FINDER_PROFILE_PATH}/`, "HEAD", config)).toBe(true);
+    expect(isPublicWebPilotRequest(TIKTOK_VIRAL_FINDER_PATH, "GET", config)).toBe(true);
+    expect(isPublicWebPilotRequest(TIKTOK_VIRAL_FINDER_DEMO_PATH, "GET", config)).toBe(true);
+    expect(isPublicWebPilotRequest(YOUTUBE_SHORTS_FINDER_PATH, "GET", config)).toBe(true);
+    expect(isPublicWebPilotRequest(YOUTUBE_SHORTS_FINDER_DEMO_PATH, "GET", config)).toBe(true);
     expect(isPublicWebPilotRequest("/_next/static/chunks/app.js", "GET", config)).toBe(true);
 
     expect(isPublicWebPilotRequest("/", "GET", config)).toBe(false);

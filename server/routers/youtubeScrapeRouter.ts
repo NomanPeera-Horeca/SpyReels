@@ -7,7 +7,10 @@ import { clientIpFromRequest, isPublicIpRateLimited } from "../publicRateLimit";
 import { checkUsageLimit, incrementUsage } from "../stripe/stripe-service";
 import { runYouTubeScrapeJob } from "../youtubeScrape/runJob";
 import { scheduleCreatorRadarRefresh } from "../creatorRadarRefreshQueue";
-import { loadFeaturedDemoPublicPayload } from "../featuredDemo/publicDemo";
+import {
+  loadFeaturedDemoProfilePreview,
+  loadFeaturedDemoPublicPayload,
+} from "../featuredDemo/publicDemo";
 import { not, eq, desc, sql, and, inArray } from "drizzle-orm";
 
 
@@ -39,6 +42,23 @@ export const youtubeScrapeRouter = router({
           });
         }
         return payload;
+      }),
+
+    /**
+     * Unauthenticated YouTube channel card for the public finder hero.
+     * Allow-listed demo handles only (featured_demo catalog). Never scrapes.
+     */
+    publicProfilePreview: publicProcedure
+      .input(z.object({ handle: z.string().min(1).max(128) }))
+      .query(async ({ ctx, input }) => {
+        const ip = clientIpFromRequest(ctx.req);
+        if (isPublicIpRateLimited(ip)) {
+          throw new TRPCError({
+            code: "TOO_MANY_REQUESTS",
+            message: "Too many requests. Please try again in a minute.",
+          });
+        }
+        return loadFeaturedDemoProfilePreview("youtube", input.handle);
       }),
 
     start: protectedProcedure

@@ -12,7 +12,7 @@ import {
 
 type FinderSearchProps = {
   platformMark: ReactNode;
-  platform?: "instagram" | "tiktok";
+  platform?: "instagram" | "tiktok" | "youtube";
   label: string;
   inputId: string;
   value: string;

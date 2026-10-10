@@ -11,9 +11,10 @@ export type MarketingToolId =
   | "hooks"
   | "broll"
   | "carousel"
-  | "tiktok";
+  | "tiktok"
+  | "youtube";
 
-export type MarketingToolsPage = "homepage" | "instagram" | "tiktok";
+export type MarketingToolsPage = "homepage" | "instagram" | "tiktok" | "youtube";
 
 export type MarketingTool = {
   id: MarketingToolId;
@@ -105,6 +106,17 @@ const CATALOG: Record<MarketingToolId, CatalogEntry> = {
     icon: "finder",
     descriptions: {
       instagram: "Find more ideas on TikTok.",
+      youtube: "Find more ideas on TikTok.",
+    },
+  },
+  youtube: {
+    id: "youtube",
+    title: "YouTube Shorts Viral Finder",
+    href: "/free-tools/youtube-shorts-viral-finder",
+    icon: "finder",
+    descriptions: {
+      instagram: "Find more ideas on YouTube Shorts.",
+      tiktok: "Find more ideas on YouTube Shorts.",
     },
   },
 };
@@ -112,8 +124,9 @@ const CATALOG: Record<MarketingToolId, CatalogEntry> = {
 /** Page tool order — matches live lists today. */
 export const MARKETING_TOOL_ORDER: Record<MarketingToolsPage, readonly MarketingToolId[]> = {
   homepage: ["creators", "finder", "script", "hooks", "broll", "carousel"],
-  instagram: ["script", "hooks", "broll", "creators", "carousel", "tiktok"],
-  tiktok: ["script", "hooks", "broll", "finder", "creators", "carousel"],
+  instagram: ["script", "hooks", "broll", "creators", "carousel", "tiktok", "youtube"],
+  tiktok: ["script", "hooks", "broll", "finder", "creators", "carousel", "youtube"],
+  youtube: ["script", "hooks", "broll", "finder", "creators", "carousel", "tiktok"],
 };
 
 export function resolveMarketingTools(

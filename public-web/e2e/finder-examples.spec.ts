@@ -13,6 +13,12 @@ const FINDERS = [
     prefix: "Try ",
     handles: ["charlidamelio", "khaby.lame", "mrbeast"],
   },
+  {
+    name: "youtube",
+    path: "/free-tools/youtube-shorts-viral-finder",
+    prefix: "Try ",
+    handles: ["mrbeast", "mkbhd", "aliabdaal"],
+  },
 ] as const;
 
 test.describe("Finder example handles (Figma locked)", () => {
