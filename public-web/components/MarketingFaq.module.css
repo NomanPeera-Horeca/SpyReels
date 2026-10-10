@@ -61,24 +61,29 @@
   color: var(--sr-color-marketing-accent);
 }
 
-.icon svg {
+.iconPlus,
+.iconMinus {
+  grid-area: 1 / 1;
   width: var(--sr-size-icon);
   height: var(--sr-size-icon);
+}
+
+/* Closed: Plus only. Open: Minus only. (Must beat any svg display rules.) */
+.icon .iconPlus {
   display: block;
 }
 
-.iconMinus {
+.icon .iconMinus {
   display: none;
 }
 
-.item[open] .iconPlus {
+.item[open] .icon .iconPlus {
   display: none;
 }
 
-.item[open] .iconMinus {
+.item[open] .icon .iconMinus {
   display: block;
 }
-
 .answer {
   display: flex;
   flex-direction: column;

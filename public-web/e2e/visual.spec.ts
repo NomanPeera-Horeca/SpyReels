@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import {
+  marketingFaq,
   marketingSectionHeader,
   marketingToolGrid,
   prepareVisualPage,
@@ -107,6 +108,17 @@ test.describe("public-web visual baselines", () => {
       await toolGrid.scrollIntoViewIfNeeded();
       await expect(toolGrid).toHaveScreenshot(
         `${pageDef.name}-tool-grid.png`,
+        visualSectionScreenshotOptions
+      );
+
+      const faq = marketingFaq(page);
+      await expect(faq).toHaveCount(1);
+      await expect
+        .poll(async () => faq.locator("details").count())
+        .toBeGreaterThanOrEqual(5);
+      await faq.scrollIntoViewIfNeeded();
+      await expect(faq).toHaveScreenshot(
+        `${pageDef.name}-faq.png`,
         visualSectionScreenshotOptions
       );
     });

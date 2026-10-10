@@ -105,3 +105,66 @@ test.describe("Marketing FAQ SSR + FAQPage JSON-LD parity", () => {
     });
   }
 });
+
+/** Plus is horizontal+vertical path; Minus is horizontal only. */
+async function assertFaqIconState(
+  row: import("@playwright/test").Locator,
+  expected: "plus" | "minus"
+) {
+  const plus = row.locator("summary svg").nth(0);
+  const minus = row.locator("summary svg").nth(1);
+  await expect(plus).toHaveCount(1);
+  await expect(minus).toHaveCount(1);
+
+  const plusVisible = await plus.isVisible();
+  const minusVisible = await minus.isVisible();
+  expect(
+    Number(plusVisible) + Number(minusVisible),
+    "exactly one FAQ icon must be visible"
+  ).toBe(1);
+
+  if (expected === "plus") {
+    expect(plusVisible, "closed row must show Plus").toBe(true);
+    expect(minusVisible, "closed row must hide Minus").toBe(false);
+  } else {
+    expect(minusVisible, "open row must show Minus").toBe(true);
+    expect(plusVisible, "open row must hide Plus").toBe(false);
+  }
+}
+
+test.describe("Marketing FAQ icon toggle", () => {
+  test.beforeEach(({}, testInfo) => {
+    test.skip(testInfo.project.name !== "desktop-1440", "FAQ icon assertions run once");
+  });
+
+  for (const pageDef of FAQ_PAGES) {
+    test(`${pageDef.name}: Plus when closed, Minus when open, toggle swaps`, async ({ page }) => {
+      await page.goto(pageDef.path, { waitUntil: "networkidle" });
+      const rows = page.locator("#faq details");
+      const count = await rows.count();
+      expect(count).toBeGreaterThanOrEqual(5);
+
+      for (let i = 0; i < count; i++) {
+        const row = rows.nth(i);
+        const isOpen = await row.evaluate((el) => (el as HTMLDetailsElement).open);
+        await assertFaqIconState(row, isOpen ? "minus" : "plus");
+      }
+
+      // Toggle a closed row open, then closed again; assert icon swap each time.
+      const closedIndex = await rows.evaluateAll((els) =>
+        els.findIndex((el) => !(el as HTMLDetailsElement).open)
+      );
+      expect(closedIndex, "need at least one closed FAQ row").toBeGreaterThanOrEqual(0);
+      const target = rows.nth(closedIndex);
+      const summary = target.locator("summary");
+
+      await summary.click();
+      await expect(target).toHaveAttribute("open", "");
+      await assertFaqIconState(target, "minus");
+
+      await summary.click();
+      await expect(target).not.toHaveAttribute("open");
+      await assertFaqIconState(target, "plus");
+    });
+  }
+});

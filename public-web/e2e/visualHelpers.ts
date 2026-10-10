@@ -255,3 +255,8 @@ export function marketingSectionHeader(page: Page, eyebrow: string) {
 export function marketingToolGrid(page: Page) {
   return page.locator('[id^="tool-"]').first().locator("xpath=..");
 }
+
+/** Marketing FAQ section (shared MarketingFaq root). */
+export function marketingFaq(page: Page) {
+  return page.locator("section#faq");
+}
