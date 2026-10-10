@@ -26,6 +26,10 @@ Before generating any new page, blog post, free tool page, feature page, compari
 - New routes: register in client/src/App.tsx
 - New blog posts: insert into blog_posts MySQL table via admin or seed script
 - Never create files in client/public/ without asking
+- NEVER remove or alter Google Search Console verification files:
+  `client/public/googleabadefc43201e81e.html` and
+  `public-web/public/googleabadefc43201e81e.html`
+  (see `docs/deploy-notes/google-site-verification.md`)
 
 ## New blog publish (always follow)
 
