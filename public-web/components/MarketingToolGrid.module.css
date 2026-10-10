@@ -1,6 +1,6 @@
 /**
  * Marketing / Tool Grid (Figma Page 09).
- * Comfortable (desktop) + Compact (≤640px). Tokens only.
+ * Fluid auto-fit columns; 1 column ≤640. Tokens only.
  */
 
 .root {
@@ -8,6 +8,10 @@
   flex-direction: column;
   gap: var(--sr-layout-content-gap);
   scroll-margin-top: var(--sr-layout-section-gap);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 /* Tool Grid → Beyond: single paired-gap from prior section; divider on this edge. */
@@ -17,14 +21,17 @@
 
 .tools {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22.5rem), 1fr));
   gap: var(--sr-layout-card-gap);
   align-items: stretch;
+  width: 100%;
+  min-width: 0;
 }
 
 .tool {
   box-sizing: border-box;
   min-width: 0;
+  max-width: 100%;
   height: 100%;
   display: flex;
   flex-direction: row;
@@ -51,6 +58,7 @@
   flex: 0 0 var(--sr-size-icon-tile);
   width: var(--sr-size-icon-tile);
   height: var(--sr-size-icon-tile);
+  max-width: 100%;
   display: grid;
   place-items: center;
   border-radius: var(--sr-radius-control);
@@ -75,12 +83,15 @@
 .title {
   margin: 0;
   color: var(--sr-color-text-primary);
+  overflow-wrap: break-word;
+  word-break: normal;
+  hyphens: none;
 }
 
 .description {
   margin: 0;
   color: var(--sr-color-text-secondary);
-  overflow-wrap: normal;
+  overflow-wrap: break-word;
   word-break: normal;
   hyphens: none;
   white-space: normal;
@@ -108,17 +119,24 @@
   display: flex;
   flex-direction: column;
   gap: var(--sr-layout-stack-md);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 .integrations {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 18rem), 1fr));
   gap: var(--sr-layout-card-gap);
   align-items: stretch;
+  width: 100%;
+  min-width: 0;
 }
 
 .integration {
   min-width: 0;
+  max-width: 100%;
   height: 100%;
   display: flex;
   flex-direction: row;
@@ -128,6 +146,7 @@
   border: var(--sr-border-width-default) solid var(--sr-color-border-default);
   border-radius: var(--sr-radius-card);
   background: var(--sr-color-surface-default);
+  box-sizing: border-box;
 }
 
 .integrationCopy {
@@ -148,7 +167,7 @@
 .integrationTitle {
   margin: 0;
   color: var(--sr-color-text-primary);
-  overflow-wrap: normal;
+  overflow-wrap: break-word;
   word-break: normal;
   hyphens: none;
 }
@@ -156,7 +175,7 @@
 .integrationDescription {
   margin: 0;
   color: var(--sr-color-text-secondary);
-  overflow-wrap: normal;
+  overflow-wrap: break-word;
   word-break: normal;
   hyphens: none;
   white-space: normal;
@@ -174,10 +193,10 @@
   white-space: nowrap;
 }
 
-/* Compact ≤640px */
+/* Compact ≤640px: one column */
 @media (max-width: 640px) {
   .tools {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .tool {
@@ -191,7 +210,6 @@
     display: none;
   }
 
-  /* Figma: one Beyond card per row on compact */
   .integrations {
     grid-template-columns: minmax(0, 1fr);
   }
