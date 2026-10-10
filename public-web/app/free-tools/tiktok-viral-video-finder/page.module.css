@@ -1,8 +1,8 @@
-.page{min-height:100vh;background:var(--sr-color-surface-page);color:var(--sr-brand-ink)}
+.page{min-height:100vh;background:var(--sr-color-surface-page);color:var(--sr-ink)}
 .shell{width:min(var(--sr-layout-container-max-width),calc(100% - 2 * var(--sr-layout-page-gutter-desktop)));margin:auto}
 .hero{padding:76px 0 54px;text-align:center}
 .hero h1{max-width:980px;margin:24px auto 0;font-size:clamp(44px,6.2vw,78px);line-height:1.02;letter-spacing:-.035em;text-wrap:balance}
-.hero h1 span{color:var(--sr-color-marketing-live-accent)}
+.hero h1 span{color:var(--sr-color-marketing-accent)}
 .hero>p{max-width:720px;margin:22px auto 0;color:var(--sr-color-text-tertiary);font-size:clamp(16px,2vw,19px);line-height:1.65}
 .experience{max-width:1000px;margin:34px auto 0;text-align:left;scroll-margin-top:100px}
 .finderIsland{max-width:760px;margin:0 auto}

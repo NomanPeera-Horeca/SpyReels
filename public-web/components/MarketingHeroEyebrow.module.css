@@ -4,7 +4,7 @@
   align-items: center;
   gap: var(--sr-layout-inline-gap);
   padding: 7px 11px;
-  border: var(--sr-border-width-default) solid var(--sr-brand-purple-200);
+  border: var(--sr-border-width-default) solid var(--sr-purple-200);
   border-radius: var(--sr-radius-full);
   background: var(--sr-color-surface-default);
   color: var(--sr-color-text-brand);

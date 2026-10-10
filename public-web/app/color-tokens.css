@@ -3,22 +3,22 @@
  * Phase 0: define only. Consumers adopt in later phases.
  */
 :root {
-  /* Brand primitives */
-  --sr-brand-purple-50: #f5f2ff;
-  --sr-brand-purple-100: #ece7ff;
-  --sr-brand-purple-200: #dcd3ff;
-  --sr-brand-purple-300: #c8bcff;
-  --sr-brand-purple-400: #9b86ff;
-  --sr-brand-purple-500: #7157ff;
-  --sr-brand-purple-600: #4c3e9a;
-  --sr-brand-purple-700: #433091;
-  --sr-brand-purple-800: #382778;
-  --sr-brand-blue-500: #46a0d0;
-  --sr-brand-blue-600: #4e74b5;
-  --sr-brand-cyan-400: #57c2e2;
-  --sr-brand-cyan-500: #46afd8;
-  --sr-brand-ink: #111116;
-  --sr-brand-white: #ffffff;
+  /* Color primitives (Figma naming) */
+  --sr-purple-50: #f5f2ff;
+  --sr-purple-100: #ece7ff;
+  --sr-purple-200: #dcd3ff;
+  --sr-purple-300: #c8bcff;
+  --sr-purple-400: #9b86ff;
+  --sr-purple-500: #7157ff;
+  --sr-purple-600: #4c3e9a;
+  --sr-purple-700: #433091;
+  --sr-purple-800: #382778;
+  --sr-blue-500: #46a0d0;
+  --sr-blue-600: #4e74b5;
+  --sr-cyan-400: #57c2e2;
+  --sr-cyan-500: #46afd8;
+  --sr-ink: #111116;
+  --sr-white: #ffffff;
 
   /* Neutrals */
   --sr-neutral-0: #ffffff;
@@ -45,8 +45,8 @@
   --sr-color-text-on-brand: #ffffff;
   --sr-color-text-inverse: #ffffff;
 
-  /* Marketing (Figma color/marketing/live/accent) — large headline emphasis only */
-  --sr-color-marketing-live-accent: var(--sr-brand-purple-500);
+  /* Marketing (Figma color/marketing/accent): large headline emphasis only */
+  --sr-color-marketing-accent: var(--sr-purple-500);
 
   /* Surfaces */
   --sr-color-surface-page: #f8f8fa;

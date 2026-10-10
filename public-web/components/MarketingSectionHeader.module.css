@@ -13,7 +13,7 @@
 
 .root .eyebrow {
   margin: 0;
-  color: var(--sr-color-marketing-live-accent);
+  color: var(--sr-color-marketing-accent);
   font-size: var(--sr-type-marketing-eyebrow-size);
   line-height: var(--sr-type-marketing-eyebrow-line);
   font-weight: var(--sr-type-marketing-eyebrow-weight);
