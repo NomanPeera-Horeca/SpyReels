@@ -9,6 +9,13 @@ Before generating any new page, blog post, free tool page, feature page, compari
 3. Run the pre-ship checklist mentally before showing me the diff.
 4. If any item is missing, flag it BEFORE generating code.
 
+## Trunk-based workflow (NEVER VIOLATE)
+
+- Production deploys only from `main` (SpyReels web + spyreels-public-web).
+- Short-lived branches only; open a PR into `main` within 1 to 2 days.
+- All required checks green before merge; never deploy from a feature branch.
+- See `docs/deploy-notes/trunk-based-workflow.md`.
+
 ## Code rules
 
 - pnpm only, never npm
