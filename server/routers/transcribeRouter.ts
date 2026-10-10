@@ -22,6 +22,26 @@ function sourcePlatformFromUrl(url: string | null | undefined): "instagram" | "t
   return "instagram";
 }
 
+/** Empty completed rows are retriable (e.g. false no-speech from forced English STT). */
+function transcriptionHasSpeech(t: {
+  transcript?: string | null;
+  segments?: unknown;
+} | null | undefined): boolean {
+  if (!t) return false;
+  if (String(t.transcript ?? "").trim()) return true;
+  const segs = t.segments;
+  if (!Array.isArray(segs) || segs.length === 0) return false;
+  return segs.some((s) =>
+    String((s as { text?: string } | null)?.text ?? "").trim()
+  );
+}
+
+async function deleteTranscriptionRow(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db.delete(transcriptions).where(eq(transcriptions.id, id));
+}
+
 const sourceReferenceInput = z
   .object({
     reelId: z.number().optional(),
@@ -80,11 +100,15 @@ export const transcribeRouter = router({
             throw new TRPCError({ code: "NOT_FOUND", message: "Featured reel not found" });
           }
           if (
-            fr.transcriptionStatus === "completed" ||
-            fr.transcriptionStatus === "no_speech"
+            fr.transcriptionStatus === "completed" &&
+            transcriptionHasSpeech({
+              transcript: fr.transcript,
+              segments: fr.transcriptSegments,
+            })
           ) {
             return { transcriptionId: fr.id, status: "completed" as const };
           }
+          // no_speech / empty completed: allow retry so language-detect STT can recover
           if (fr.transcriptionStatus === "processing") {
             return {
               transcriptionId: fr.id,
@@ -166,7 +190,7 @@ export const transcribeRouter = router({
           }
 
           const existing = await getTranscriptionByTiktokVideoId(video.id);
-          if (existing && existing.status === "completed") {
+          if (existing && existing.status === "completed" && transcriptionHasSpeech(existing)) {
             return {
               transcriptionId: existing.id,
               status: "completed" as const,
@@ -200,7 +224,11 @@ export const transcribeRouter = router({
             }
           }
 
-          if (existing && existing.status === "failed") {
+          if (
+            existing &&
+            (existing.status === "failed" ||
+              (existing.status === "completed" && !transcriptionHasSpeech(existing)))
+          ) {
             await db
               .delete(transcriptions)
               .where(eq(transcriptions.id, existing.id));
@@ -367,7 +395,7 @@ export const transcribeRouter = router({
         };
 
         const existing = await getTranscriptionByReelId(input.reelId!);
-        if (existing && existing.status === "completed") {
+        if (existing && existing.status === "completed" && transcriptionHasSpeech(existing)) {
           return { transcriptionId: existing.id, status: "completed" as const };
         }
         if (existing && existing.status === "processing") {
@@ -396,14 +424,12 @@ export const transcribeRouter = router({
             });
           }
         }
-        if (existing && existing.status === "failed") {
-          const { getDb } = await import("../db");
-          const db = await getDb();
-          if (db) {
-            const { transcriptions: transcriptionsTable } = await import("../../drizzle/schema");
-            const { eq } = await import("drizzle-orm");
-            await db.delete(transcriptionsTable).where(eq(transcriptionsTable.id, existing.id));
-          }
+        if (
+          existing &&
+          (existing.status === "failed" ||
+            (existing.status === "completed" && !transcriptionHasSpeech(existing)))
+        ) {
+          await deleteTranscriptionRow(existing.id);
         }
 
         const transcriptionId = await createTranscription({

@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { TeleprompterMode } from "@/pages/TeleprompterMode";
+import { RemakeReadyToPostPack } from "@/components/RemakeReadyToPostPack";
 
 const QUICK_AI_ACTIONS = [
   {
@@ -459,6 +460,10 @@ export function ScriptReaderWorkspace({
           </section>
 
           <aside className="space-y-4">
+            <div className="rounded-2xl border bg-card/40 p-4">
+              <RemakeReadyToPostPack scriptId={scriptId} compact />
+            </div>
+
             <div className="rounded-2xl border bg-card/40 p-4">
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
                 Script details

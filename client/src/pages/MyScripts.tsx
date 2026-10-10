@@ -31,10 +31,12 @@ import {
   Lock,
   Send,
   Link2,
+  Package,
 } from "lucide-react";
 import { openSendToWorkspaceModal } from "@/components/SendToWorkspaceModal";
 import { openShareLinkModal } from "@/components/ShareLinkModal";
 import { SentFromBadge } from "@/components/SentFromBadge";
+import { RemakeReadyToPostPack } from "@/components/RemakeReadyToPostPack";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -119,6 +121,7 @@ export default function MyScripts() {
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("#7c3aed");
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
+  const [readyToPostScriptId, setReadyToPostScriptId] = useState<number | null>(null);
 
   const kanbanLock = useFeatureLock("kanban");
   const calendarLock = useFeatureLock("calendar");
@@ -617,6 +620,7 @@ export default function MyScripts() {
               assignTagMutation={assignTagMutation}
               removeTagMutation={removeTagMutation}
               openScript={openScript}
+              onReadyToPost={(id) => setReadyToPostScriptId(id)}
               updateScriptMutation={updateScriptMutation}
               deleteScriptMutation={deleteScriptMutation}
               formatDate={formatDate}
@@ -865,6 +869,22 @@ export default function MyScripts() {
         </div>
       )}
 
+      <Dialog
+        open={readyToPostScriptId != null}
+        onOpenChange={(open) => {
+          if (!open) setReadyToPostScriptId(null);
+        }}
+      >
+        <DialogContent className="max-h-[90vh] max-w-lg overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Ready to post</DialogTitle>
+          </DialogHeader>
+          {readyToPostScriptId != null ? (
+            <RemakeReadyToPostPack scriptId={readyToPostScriptId} />
+          ) : null}
+        </DialogContent>
+      </Dialog>
+
       {/* New Tag Dialog */}
       <Dialog open={showNewTagDialog} onOpenChange={setShowNewTagDialog}>
         <DialogContent className="max-w-sm">
@@ -921,6 +941,7 @@ function ScriptCard({
   assignTagMutation,
   removeTagMutation,
   openScript,
+  onReadyToPost,
   updateScriptMutation,
   deleteScriptMutation,
   formatDate,
@@ -934,6 +955,7 @@ function ScriptCard({
   assignTagMutation: any;
   removeTagMutation: any;
   openScript: (script: { id: number; coachScriptId?: number | null }) => void;
+  onReadyToPost: (scriptId: number) => void;
   updateScriptMutation: any;
   deleteScriptMutation: any;
   formatDate: (date: Date | string | null) => string;
@@ -1003,6 +1025,16 @@ function ScriptCard({
               >
                 <Edit3 className="w-3.5 h-3.5 mr-2" /> Edit
               </DropdownMenuItem>
+              {script.recreatedScriptId != null ? (
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onReadyToPost(script.id);
+                  }}
+                >
+                  <Package className="w-3.5 h-3.5 mr-2" /> Ready to post
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation();

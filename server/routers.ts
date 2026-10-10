@@ -216,6 +216,7 @@ import {
   createSavedScript,
   getSavedScriptsByWorkspace,
   getSavedScriptIdForRecreated,
+  getSavedScriptIdForReel,
   updateSavedScript,
   deleteSavedScript,
   assignTagToScript,

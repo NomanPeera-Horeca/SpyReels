@@ -39,6 +39,7 @@ import {
   buildLibraryOneClickRemake,
   reelClassificationFromRow,
 } from "@/lib/oneClickRemakeAction";
+import { buildRemakeIntentMedia } from "@/lib/remakeIntent";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { BrandCoachBadge } from "@/components/BrandCoachBadge";
 import { useBrandCoachBatchPrefetched } from "@/hooks/useBrandCoachBatchPrefetched";
@@ -61,6 +62,8 @@ import {
   QuietReelCaption,
   QuietReelMetrics,
   QuietRemakeActions,
+  QuietRemakeStatusChip,
+  quietRemakeStatusFromState,
 } from "@/components/QuietWorkspaceReelChrome";
 import { useOpenCreatorInApp } from "@/hooks/useOpenCreatorInApp";
 import {
@@ -818,6 +821,15 @@ export default function SavedReels() {
                             batchEntry,
                             hookState: getRemakeState(libraryRemakeKey(librarySource)),
                             librarySource,
+                            media: buildRemakeIntentMedia({
+                              thumbnailUrl: reel.thumbnailUrl,
+                              videoUrl: reel.videoUrl,
+                              shortcode: reel.shortcode,
+                              reelId: reel.id,
+                              platform: "instagram",
+                              reelUrl: reel.reelUrl,
+                              duration: reel.duration,
+                            }),
                             startRemake,
                             retryRemake,
                             startInspirationSave,
@@ -1025,6 +1037,10 @@ export default function SavedReels() {
                       recreateSt === "none";
 
                     const librarySource = savedItemToLibraryRemakeSource(item);
+                    const hookState =
+                      librarySource != null
+                        ? getRemakeState(libraryRemakeKey(librarySource))
+                        : null;
                     const batchEntry = recreateEntryForItem(
                       item,
                       scrapedRecreateMap,
@@ -1032,7 +1048,7 @@ export default function SavedReels() {
                     );
                     const alreadyTranscribed = hasTranscription && !isNoSpeech;
                     const oneClickRemake =
-                      librarySource != null
+                      librarySource != null && hookState != null
                         ? buildLibraryOneClickRemake({
                             openScriptReelId: reel.id,
                             jobId: librarySource.source === "user" ? (item.jobId ?? 0) : undefined,
@@ -1043,14 +1059,28 @@ export default function SavedReels() {
                             classification: reelClassificationFromRow(reel),
                             batchRecreateSt: recreateSt,
                             batchEntry,
-                            hookState: getRemakeState(libraryRemakeKey(librarySource)),
+                            hookState,
                             librarySource,
+                            media: buildRemakeIntentMedia({
+                              thumbnailUrl: reel.thumbnailUrl,
+                              videoUrl: reel.videoUrl,
+                              shortcode: reel.shortcode,
+                              reelId: reel.id,
+                              platform: "instagram",
+                              reelUrl: reel.reelUrl,
+                              duration: reel.duration,
+                            }),
                             startRemake,
                             retryRemake,
                             startInspirationSave,
                             openRemakeWorkspace,
                           })
                         : undefined;
+                    const remakeStatusLabel = quietRemakeStatusFromState({
+                      hookStage: hookState?.stage,
+                      batchState: recreateSt,
+                      hasSavedScript: Boolean(batchEntry?.latestScriptId || hookState?.scriptId),
+                    });
 
                     return (
                       <WorkspaceReelGridTile
@@ -1069,6 +1099,12 @@ export default function SavedReels() {
                         onInlinePlayRequest={() => setInlinePlayingId(item.id)}
                         onInlinePlayStop={() =>
                           setInlinePlayingId((cur) => (cur === item.id ? null : cur))
+                        }
+                        onMetaClick={() => setGridModalSavedId(item.id)}
+                        statusChip={
+                          remakeStatusLabel ? (
+                            <QuietRemakeStatusChip label={remakeStatusLabel} />
+                          ) : undefined
                         }
                         caption={
                           <QuietReelCaption>

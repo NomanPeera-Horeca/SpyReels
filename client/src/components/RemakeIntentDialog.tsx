@@ -18,28 +18,24 @@ import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
 import { ReelGridThumbnail } from "@/components/ReelGridThumbnail";
 import { ReelSourcePlatformMark } from "@/components/ReelSourcePlatformMark";
 import { YouTubeInlineEmbed } from "@/components/YouTubeInlineEmbed";
-import {
-  clearPendingRemakeIntentMedia,
-  getPendingRemakeIntentMedia,
-  type RemakeIntent,
-  type RemakeIntentMedia,
-} from "@/lib/remakeIntent";
+import type { RemakeIntent, RemakeIntentMedia } from "@/lib/remakeIntent";
 import { resolveYouTubeVideoId } from "@/lib/youtubeVideoId";
 
 export function RemakeIntentDialog({
   open,
   progressPercent,
+  media,
   onSubmit,
   onCancel,
 }: {
   open: boolean;
   progressPercent: number;
+  media: RemakeIntentMedia | null;
   onSubmit: (intent: RemakeIntent) => void;
   onCancel: () => void;
 }) {
   const [mode, setMode] = useState<RemakeIntent["mode"]>("custom");
   const [angle, setAngle] = useState("");
-  const [media, setMedia] = useState<RemakeIntentMedia | null>(null);
 
   // Transcription still runs in the background. It is intentionally not exposed
   // here because the creator only needs to decide what they want to make.
@@ -49,7 +45,6 @@ export function RemakeIntentDialog({
     if (!open) return;
     setMode("custom");
     setAngle("");
-    setMedia(getPendingRemakeIntentMedia());
   }, [open]);
 
   const canSubmit = mode !== "custom" || angle.trim().length > 0;
@@ -60,12 +55,10 @@ export function RemakeIntentDialog({
     else if (mode === "same_topic") intent = { mode: "same_topic" };
     else if (angle.trim()) intent = { mode: "custom", angle: angle.trim() };
     if (!intent) return;
-    clearPendingRemakeIntentMedia();
     onSubmit(intent);
   };
 
   const cancel = () => {
-    clearPendingRemakeIntentMedia();
     onCancel();
   };
 

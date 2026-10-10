@@ -14,29 +14,52 @@ export type RemakeIntentMedia = {
   durationSec?: number | null;
 };
 
-type PendingRemakeIntentMedia = {
-  media: RemakeIntentMedia;
-  capturedAt: number;
+export type RemakeIntentMediaInput = {
+  thumbnailUrl?: string | null;
+  videoUrl?: string | null;
+  shortcode?: string | null;
+  reelId?: number | null;
+  platform?: string | null;
+  videoPageUrl?: string | null;
+  originalUrl?: string | null;
+  reelUrl?: string | null;
+  sourceUrl?: string | null;
+  durationSec?: number | null;
+  duration?: number | null;
 };
 
-const REMAKE_MEDIA_TTL_MS = 5_000;
-let pendingRemakeIntentMedia: PendingRemakeIntentMedia | null = null;
-
-export function setPendingRemakeIntentMedia(media: RemakeIntentMedia | null | undefined) {
-  pendingRemakeIntentMedia = media ? { media, capturedAt: Date.now() } : null;
-}
-
-export function getPendingRemakeIntentMedia(): RemakeIntentMedia | null {
-  if (!pendingRemakeIntentMedia) return null;
-  if (Date.now() - pendingRemakeIntentMedia.capturedAt > REMAKE_MEDIA_TTL_MS) {
-    pendingRemakeIntentMedia = null;
+/** Normalize source preview fields for RemakeIntentDialog from any Remake entry surface. */
+export function buildRemakeIntentMedia(
+  input: RemakeIntentMediaInput | null | undefined
+): RemakeIntentMedia | null {
+  if (!input) return null;
+  const platformRaw = (input.platform ?? "instagram").toString().trim().toLowerCase();
+  const platform: RemakeIntentMedia["platform"] =
+    platformRaw === "tiktok" || platformRaw === "youtube" ? platformRaw : "instagram";
+  const pageUrl =
+    (input.videoPageUrl ?? "").trim() ||
+    (input.originalUrl ?? "").trim() ||
+    (input.reelUrl ?? "").trim() ||
+    (input.sourceUrl ?? "").trim() ||
+    null;
+  const thumbnailUrl = (input.thumbnailUrl ?? "").trim() || null;
+  const videoUrl = (input.videoUrl ?? "").trim() || null;
+  const shortcode = (input.shortcode ?? "").trim() || null;
+  const reelId = input.reelId ?? null;
+  const durationSec = input.durationSec ?? input.duration ?? null;
+  if (!thumbnailUrl && !videoUrl && !shortcode && !pageUrl && reelId == null) {
     return null;
   }
-  return pendingRemakeIntentMedia.media;
-}
-
-export function clearPendingRemakeIntentMedia() {
-  pendingRemakeIntentMedia = null;
+  return {
+    thumbnailUrl,
+    videoUrl,
+    shortcode,
+    reelId,
+    platform,
+    videoPageUrl: pageUrl,
+    originalUrl: pageUrl,
+    durationSec,
+  };
 }
 
 export function remakeIntentToTopic(intent: RemakeIntent): string {

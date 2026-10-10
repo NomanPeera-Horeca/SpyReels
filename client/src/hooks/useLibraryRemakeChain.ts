@@ -31,6 +31,7 @@ import {
   isValidRemakeIntent,
   remakeIntentToTopic,
   type RemakeIntent,
+  type RemakeIntentMedia,
 } from "@/lib/remakeIntent";
 
 export type LibrarySaveState = "idle" | "saved" | "error";
@@ -42,6 +43,8 @@ export type StartRemakeOptions = {
   classification?: ReelClassificationLike;
   /** Required for saved.toggle on user_job reels when jobId !== 0 */
   jobId?: number;
+  /** Source preview for RemakeIntentDialog (owned by the remake chain, not a side channel). */
+  media?: RemakeIntentMedia | null;
 };
 
 function sleep(ms: number): Promise<void> {
@@ -109,6 +112,7 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
   const [intentPrompt, setIntentPrompt] = useState<{
     source: LibraryRemakeSource;
     key: string;
+    media: RemakeIntentMedia | null;
   } | null>(null);
 
   const pendingRemakeRef = useRef<{
@@ -122,7 +126,19 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
   const workspaceKeyRef = useRef<string | null>(null);
   const stateByKeyRef = useRef(stateByKey);
   const intentByKeyRef = useRef<Map<string, RemakeIntent>>(new Map());
+  const mediaByKeyRef = useRef<Map<string, RemakeIntentMedia>>(new Map());
   stateByKeyRef.current = stateByKey;
+
+  const resolveIntentMedia = useCallback(
+    (key: string, media?: RemakeIntentMedia | null): RemakeIntentMedia | null => {
+      if (media) {
+        mediaByKeyRef.current.set(key, media);
+        return media;
+      }
+      return mediaByKeyRef.current.get(key) ?? null;
+    },
+    []
+  );
 
   const openWorkspaceForSource = useCallback(
     (
@@ -278,11 +294,12 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
       runningRef.current.add(key);
       cancelledRef.current.delete(key);
 
+      const media = resolveIntentMedia(key, opts.media);
       const existingIntent = intentByKeyRef.current.get(key);
       if (existingIntent) {
         openWorkspaceForSource(source);
       } else {
-        setIntentPrompt({ source, key });
+        setIntentPrompt({ source, key, media });
       }
 
       const classification = opts.classification;
@@ -326,9 +343,9 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
               runningRef.current.delete(key);
               setIntentPrompt((current) => (current?.key === key ? null : current));
               patchState(source, {
-                stage: "inspiration",
-                progressPercent: 100,
-                classificationReason: message,
+                stage: "error",
+                progressPercent: 0,
+                errorMessage: message,
                 ...resolveLibraryIds(source, reelId),
               });
               setWorkspaceOpen(false);
@@ -602,9 +619,9 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
         if (isNoCaptionsOrNoVoiceFailure(message)) {
           runningRef.current.delete(key);
           patchState(source, {
-            stage: "inspiration",
-            progressPercent: 100,
-            classificationReason: message,
+            stage: "error",
+            progressPercent: 0,
+            errorMessage: message,
             ...resolveLibraryIds(source, reelId),
           });
           setWorkspaceOpen(false);
@@ -623,6 +640,7 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
       generateMutation,
       openWorkspaceForSource,
       patchState,
+      resolveIntentMedia,
       transcribeStartMutation,
       trpcUtils,
       waitForIntent,
@@ -658,6 +676,7 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
     (source: LibraryRemakeSource, opts?: StartRemakeOptions) => {
       const key = libraryRemakeKey(source);
       const current = stateByKey[key];
+      const media = resolveIntentMedia(key, opts?.media);
 
       if (current?.stage === "transcribing") {
         if (intentByKeyRef.current.has(key)) {
@@ -666,7 +685,7 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
             reelId: current.reelId ?? null,
           });
         } else {
-          setIntentPrompt({ source, key });
+          setIntentPrompt({ source, key, media });
         }
         return;
       }
@@ -688,17 +707,19 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
         return;
       }
 
+      const nextOpts = { ...opts, media };
       if (!hasVoiceProfile(onboardingStateQuery.data)) {
-        pendingRemakeRef.current = { source, opts, mode: "start" };
+        pendingRemakeRef.current = { source, opts: nextOpts, mode: "start" };
         setVoiceGateOpen(true);
         return;
       }
-      void runChain(source, opts);
+      void runChain(source, nextOpts);
     },
     [
       onboardingStateQuery.data,
       openRemakeWorkspace,
       openWorkspaceForSource,
+      resolveIntentMedia,
       runChain,
       stateByKey,
     ]
@@ -706,14 +727,17 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
 
   const retryRemake = useCallback(
     (source: LibraryRemakeSource, opts?: StartRemakeOptions) => {
+      const key = libraryRemakeKey(source);
+      const media = resolveIntentMedia(key, opts?.media);
+      const nextOpts = { ...opts, media };
       if (!hasVoiceProfile(onboardingStateQuery.data)) {
-        pendingRemakeRef.current = { source, opts, mode: "retry" };
+        pendingRemakeRef.current = { source, opts: nextOpts, mode: "retry" };
         setVoiceGateOpen(true);
         return;
       }
-      void runChain(source, opts);
+      void runChain(source, nextOpts);
     },
-    [onboardingStateQuery.data, runChain]
+    [onboardingStateQuery.data, resolveIntentMedia, runChain]
   );
 
   const onVoiceGateSaved = useCallback(() => {
@@ -746,6 +770,7 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
     createElement(RemakeIntentDialog, {
       open: intentPrompt != null,
       progressPercent: intentPromptState?.progressPercent ?? 0,
+      media: intentPrompt?.media ?? null,
       onSubmit: submitRemakeIntent,
       onCancel: cancelRemakeIntent,
     }),

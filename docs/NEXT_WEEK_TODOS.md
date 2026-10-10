@@ -139,7 +139,8 @@ These three channels are **critical** for SpyReels distribution and Facebook ads
 
 ## P2 — product polish / bugs
 
-- [x] **Remake output language = English** (Sep 26): non-English source transcripts still remake into English spoken scripts (`remakeOutputLanguage.ts`); deploy pending
+- [x] **Remake output language = English** (Sep 26): non-English source transcripts still remake into English spoken scripts (`remakeOutputLanguage.ts`)
+- [x] **Deepgram detect_language for non-English source audio** (Oct 3): STT no longer forces `language=en`; empty no-speech rows are retriable; no-voice CTA is Retry not Save for Inspiration (`d96e8b3` on main, Render deployed)
 - [x] **Creator Radar refresh → durable jobs** (reliability; exposed by host-split deploy churn Sep 26)
   - Shipped: `creator_radar_refresh` on `durable_jobs`; API enqueues; serial web claimer resumes after deploy; scrape tables stay UI source of truth
   - Docs: `docs/deploy-notes/creator-radar-durable-refresh.md`
@@ -161,6 +162,10 @@ These three channels are **critical** for SpyReels distribution and Facebook ads
 - [x] AI Coach empty state: stop dumping niche bio; Claude-style composer (`AiCoachCommandShell`)
 
 ## P3 — backlog (only if P0–P2 clear)
+
+- [x] **Ready-to-post pack outside Remake** (Phase C, Oct 3): `RemakeReadyToPostPack` on Script Reader + My Scripts menu (copy caption/hashtags/hook; download B-roll via existing `BrollBeatsView`). No Instagram publish.
+- [x] **Remake Phase A integrity** (approved Oct 3): X-only dismiss; hydrate B-roll/caption/hook on Remake open; quiet card center play; meta → details drawer; status chip + Open remake when work exists (Dashboard / Collected / Saved); Frame0 persisted on `saved_scripts.frame0OnScreenText` (migration `0099`)
+- [x] **Remake Phase B continuity** (Oct 3): Script Reader shows Remake pack from the same script + `broll_generations` (no re-run)
 
 - [ ] **Buzzli competitive teardown → SpyReels roadmap** (LinkedIn “SpyReels-class” product)
   - Competitor: [buzzli.io](https://buzzli.io/) — personal branding + LinkedIn content stack (agents, viral posts, carousels, profile analysis, credits)

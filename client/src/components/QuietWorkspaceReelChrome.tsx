@@ -109,6 +109,42 @@ export function QuietReelMetrics({
   );
 }
 
+/** Quiet-card status chip when a remake already exists for this reel. */
+export function QuietRemakeStatusChip({
+  label,
+}: {
+  label: "Remaking…" | "Draft" | "Ready" | "Scheduled";
+}) {
+  const tone =
+    label === "Remaking…"
+      ? "border-[rgba(155,108,255,.35)] bg-[rgba(155,108,255,.14)] text-[#d7c7ff]"
+      : label === "Scheduled"
+        ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-200"
+        : "border-[rgba(66,211,146,.35)] bg-[rgba(66,211,146,.12)] text-[#b7f0d0]";
+  return (
+    <span
+      className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold tracking-wide ${tone}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+export function quietRemakeStatusFromState(args: {
+  hookStage?: string | null;
+  batchState?: "none" | "generating" | "ready" | "failed";
+  hasSavedScript?: boolean;
+  scheduled?: boolean;
+}): "Remaking…" | "Draft" | "Ready" | "Scheduled" | null {
+  if (args.hookStage === "transcribing" || args.hookStage === "generating" || args.batchState === "generating") {
+    return "Remaking…";
+  }
+  if (args.scheduled) return "Scheduled";
+  if (args.hookStage === "ready" || args.batchState === "ready") return "Ready";
+  if (args.hasSavedScript) return "Draft";
+  return null;
+}
+
 type QuietRemakeActionsProps = {
   remakeLabel: string;
   remakeDisabled?: boolean;

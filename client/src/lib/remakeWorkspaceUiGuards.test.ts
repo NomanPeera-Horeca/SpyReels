@@ -23,6 +23,38 @@ const chainHookSource = readFileSync(
   "utf8"
 );
 
+describe("Remake workspace persistence + dismiss contract", () => {
+  it("hydrates saved B-roll on open and does not dismiss on outside click", () => {
+    expect(workspaceSource).toContain("getBrollGeneration");
+    expect(workspaceSource).toContain("brollHydratedScriptId");
+    expect(workspaceSource).toContain("onPointerDownOutside");
+    expect(workspaceSource).toContain("onInteractOutside");
+    expect(workspaceSource).toContain("onEscapeKeyDown");
+    expect(workspaceSource).toContain("event.preventDefault()");
+  });
+
+  it("persists Opening Hook / Frame0 on the Remake script", () => {
+    expect(workspaceSource).toContain("frame0OnScreenText");
+    expect(workspaceSource).toContain("frame0Text");
+    expect(workspaceSource).toContain("onTextChange={setFrame0Text}");
+  });
+});
+
+describe("Quiet card remake CTA contract", () => {
+  const oneClickSource = readFileSync(
+    resolve(__dirname, "./oneClickRemakeAction.ts"),
+    "utf8"
+  );
+
+  it("opens existing remake work instead of a fresh Remake CTA", () => {
+    expect(oneClickSource).toContain(
+      "Any prior remake artifact: open the durable workspace"
+    );
+    expect(oneClickSource).toContain("args.batchEntry?.latestScriptId");
+    expect(oneClickSource).toContain("READY_TO_FILM_CTA_LABEL");
+  });
+});
+
 describe("Remake workspace agent UI cleanup", () => {
   it("does not render the four large left-side quick-action boxes", () => {
     expect(workspaceSource).not.toMatch(/quickActions/);
@@ -62,7 +94,12 @@ describe("Viral Posts remake path parity", () => {
     expect(viralLegacySource).toContain("useLibraryRemakeChain");
     expect(viralLegacySource).toContain("startRemake");
     expect(ingestSource).toContain('source: "collected"');
-    expect(ingestSource).toContain("deps.startRemake(source)");
+    expect(ingestSource).toContain("deps.startRemake(source,");
+    expect(ingestSource).toContain("media:");
+    expect(viralLegacySource).toContain("buildRemakeIntentMedia");
+    expect(chainHookSource).toContain("media: intentPrompt?.media ?? null");
+    expect(chainHookSource).not.toContain("getPendingRemakeIntentMedia");
+    expect(chainHookSource).not.toContain("setPendingRemakeIntentMedia");
   });
 
   it("Collected Reels still uses the same library remake chain", () => {

@@ -7,6 +7,7 @@ import {
   type LibraryRemakeSource,
   type LibraryRemakeState,
 } from "@/lib/libraryRemakeChainCore";
+import type { RemakeIntentMedia } from "@/lib/remakeIntent";
 import type { ReelClassificationLike } from "@/lib/remakeability";
 
 type RecreateBatchEntry = { latestScriptId: number; status: string };
@@ -48,6 +49,7 @@ export function buildLibraryOneClickRemake(args: {
   batchEntry: RecreateBatchEntry | undefined;
   hookState: LibraryRemakeState;
   librarySource: LibraryRemakeSource;
+  media?: RemakeIntentMedia | null;
   startRemake: (source: LibraryRemakeSource, opts?: StartRemakeOptions) => void;
   retryRemake: (source: LibraryRemakeSource, opts?: StartRemakeOptions) => void;
   startInspirationSave: (
@@ -59,6 +61,7 @@ export function buildLibraryOneClickRemake(args: {
   const startOpts: StartRemakeOptions = {
     alreadyTranscribed: args.alreadyTranscribed,
     classification: args.classification,
+    media: args.media ?? null,
     ...(args.librarySource.source === "user" && args.jobId != null
       ? { jobId: args.jobId }
       : {}),
@@ -128,7 +131,9 @@ export function buildLibraryOneClickRemake(args: {
         }),
     };
   }
-  if (args.batchRecreateSt === "ready" && args.batchEntry?.latestScriptId) {
+  // Any prior remake artifact: open the durable workspace (never look like a fresh Remake).
+  // Generating is handled above; here ready / failed / other still open existing work.
+  if (args.batchEntry?.latestScriptId) {
     return {
       label: READY_TO_FILM_CTA_LABEL,
       tone: "ready",
@@ -143,10 +148,14 @@ export function buildLibraryOneClickRemake(args: {
   }
   if (args.isNoSpeech) {
     return {
-      label: "No voice",
-      disabled: true,
-      tooltip: "No transcript available. Click the reel to view details.",
-      onClick: () => {},
+      label: "Retry",
+      tooltip:
+        "No transcript yet. Tap to try transcription again (works for non-English speech too).",
+      onClick: () =>
+        void args.startRemake(librarySource, {
+          ...startOpts,
+          alreadyTranscribed: false,
+        }),
     };
   }
   if (args.idleNotRemakeable) {

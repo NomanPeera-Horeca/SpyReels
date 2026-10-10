@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { isValidRemakeIntent, remakeIntentToTopic } from "./remakeIntent";
+import {
+  buildRemakeIntentMedia,
+  isValidRemakeIntent,
+  remakeIntentToTopic,
+} from "./remakeIntent";
 
 describe("remakeIntent", () => {
   it("uses an empty topic when adapting to the creator niche", () => {
@@ -26,5 +30,30 @@ describe("remakeIntent", () => {
   it("accepts the two one-click directions", () => {
     expect(isValidRemakeIntent({ mode: "niche" })).toBe(true);
     expect(isValidRemakeIntent({ mode: "same_topic" })).toBe(true);
+  });
+
+  it("normalizes source preview media from Viral Posts fields", () => {
+    expect(
+      buildRemakeIntentMedia({
+        thumbnailUrl: " https://cdn.example/thumb.jpg ",
+        videoUrl: "https://cdn.example/video.mp4",
+        reelId: 42,
+        platform: "tiktok",
+        sourceUrl: "https://www.tiktok.com/@x/video/1",
+      })
+    ).toEqual({
+      thumbnailUrl: "https://cdn.example/thumb.jpg",
+      videoUrl: "https://cdn.example/video.mp4",
+      shortcode: null,
+      reelId: 42,
+      platform: "tiktok",
+      videoPageUrl: "https://www.tiktok.com/@x/video/1",
+      originalUrl: "https://www.tiktok.com/@x/video/1",
+      durationSec: null,
+    });
+  });
+
+  it("returns null when no preview identity exists", () => {
+    expect(buildRemakeIntentMedia({})).toBeNull();
   });
 });

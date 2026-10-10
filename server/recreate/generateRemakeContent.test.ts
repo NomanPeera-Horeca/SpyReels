@@ -8,7 +8,10 @@ vi.mock("../_core/llm", () => ({
   invokeLLM: mocks.invokeLLM,
 }));
 
-import { generateRemakeContent } from "./generateRemakeContent";
+import {
+  generateRemakeContent,
+  REMAKE_CONTENT_FAILED_USER_MESSAGE,
+} from "./generateRemakeContent";
 
 const structure = {
   hook: {
@@ -167,6 +170,97 @@ describe("generateRemakeContent hardening", () => {
     expect(result.generatedScript).not.toContain(
       "Start early and write the plan down"
     );
+  });
+
+  it("silently retries writer+repair when fact integrity fails once", async () => {
+    mocks.invokeLLM
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content:
+                "His name is Marcus. He opened a restaurant in 2019 and doubled profit in 30 days.",
+            },
+          },
+        ],
+      })
+      // Repair still unsafe.
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content:
+                "Marcus still claims a 2019 launch doubled profit in 30 days.",
+            },
+          },
+        ],
+      })
+      // Second writer attempt succeeds without unsupported specifics.
+      .mockResolvedValueOnce({
+        choices: [
+          {
+            message: {
+              content:
+                "Restaurant operators who ignore food and labor costs usually find problems late. Track those numbers early.",
+            },
+          },
+        ],
+      });
+
+    const result = await generateRemakeContent({
+      originalTranscript: "A source story with a strong curiosity hook.",
+      caption: "",
+      sourceKey: "RETRY123",
+      topic: "No custom angle from the creator. Choose a specific topic using profile + audience research.",
+      gradeLevel: "auto",
+      addCues: false,
+      researchGroundingBlock:
+        "1. Restaurant costs\n   Fact/detail: Operators track food and labor costs to understand performance.\n   Source: https://example.com/costs",
+      trustedResearchTexts: [
+        "Operators track food and labor costs to understand performance.",
+      ],
+      platformLabel: "Instagram Reel",
+      viralStructureOverride: structure,
+    });
+
+    expect(mocks.invokeLLM).toHaveBeenCalledTimes(3);
+    expect(result.generatedScript).toContain("food and labor costs");
+    expect(result.generatedScript).not.toContain("Marcus");
+  });
+
+  it("surfaces a calm error after silent retries are exhausted", async () => {
+    const unsafe = {
+      choices: [
+        {
+          message: {
+            content:
+              "His name is Marcus. He opened a restaurant in 2019 and doubled profit in 30 days.",
+          },
+        },
+      ],
+    };
+    mocks.invokeLLM.mockResolvedValue(unsafe);
+
+    await expect(
+      generateRemakeContent({
+        originalTranscript: "A source story with a strong curiosity hook.",
+        caption: "",
+        sourceKey: "FAIL123",
+        topic: "No custom angle from the creator. Choose a specific topic using profile + audience research.",
+        gradeLevel: "auto",
+        addCues: false,
+        researchGroundingBlock:
+          "1. Restaurant costs\n   Fact/detail: Operators track food and labor costs to understand performance.\n   Source: https://example.com/costs",
+        trustedResearchTexts: [
+          "Operators track food and labor costs to understand performance.",
+        ],
+        platformLabel: "Instagram Reel",
+        viralStructureOverride: structure,
+      })
+    ).rejects.toThrow(REMAKE_CONTENT_FAILED_USER_MESSAGE);
+
+    // 3 attempts × (writer + failed repair)
+    expect(mocks.invokeLLM).toHaveBeenCalledTimes(6);
   });
 
   it("makes interaction-led source format explicit in the writer prompt", async () => {

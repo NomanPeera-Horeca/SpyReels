@@ -23,7 +23,10 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { AgentProgressPanel } from "@/components/AgentProgressPanel";
-import { BrollBeatsView } from "@/components/BrollResultsPanel";
+import {
+  BrollBeatsView,
+  type RegenerateBrollBeatOptions,
+} from "@/components/BrollResultsPanel";
 import { Frame0TextPreview } from "@/components/Frame0TextPreview";
 import { RemakeSourceDrawer } from "@/components/RemakeSourceDrawer";
 import { trpc } from "@/lib/trpc";
@@ -32,7 +35,7 @@ import type {
   LibraryRemakeState,
 } from "@/lib/libraryRemakeChainCore";
 import type { AgentProgressStep } from "@shared/agentProgress";
-import type { SuggestBrollResult } from "@shared/broll";
+import type { BrollBeat, SuggestBrollResult } from "@shared/broll";
 import {
   formatSchedulePostButtonSubtitle,
   pickNextOpenPostSchedule,
@@ -226,11 +229,12 @@ export function RemakeWorkspaceDialog({
   const hydratedId = useRef<number | null>(null);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const autosaveTimer = useRef<number | null>(null);
-  const lastSaved = useRef({ script: "", caption: "" });
+  const lastSaved = useRef({ script: "", caption: "", frame0: "" });
 
   const [tab, setTab] = useState<WorkspaceTab>("script");
   const [script, setScript] = useState("");
   const [caption, setCaption] = useState("");
+  const [frame0Text, setFrame0Text] = useState("");
   const [captionOpen, setCaptionOpen] = useState(false);
   const [captionStyle, setCaptionStyle] = useState<CaptionStyle>("educational");
   const [captionLength, setCaptionLength] = useState<CaptionLength>("auto");
@@ -250,10 +254,21 @@ export function RemakeWorkspaceDialog({
   const [scheduleTime, setScheduleTime] = useState("12:00");
   const [scheduledLabel, setScheduledLabel] = useState<string | null>(null);
   const [broll, setBroll] = useState<SuggestBrollResult | null>(null);
+  const [regeneratingBeatIndex, setRegeneratingBeatIndex] = useState<number | null>(null);
+  const regeneratingBeatIndexRef = useRef<number | null>(null);
+  /** Prevents re-hydrating B-roll over an in-session match for the same script. */
+  const brollHydratedScriptId = useRef<number | null>(null);
 
   const scriptQuery = trpc.scripts.get.useQuery(
     { id: scriptId ?? 0 },
     { enabled: open && scriptId != null && !isPreview, staleTime: 10_000 }
+  );
+  const brollQuery = trpc.scripts.getBrollGeneration.useQuery(
+    { scriptId: scriptId ?? 0 },
+    {
+      enabled: open && scriptId != null && !isPreview,
+      staleTime: 30_000,
+    }
   );
   const scriptsListQuery = trpc.scripts.list.useQuery(
     {},
@@ -278,6 +293,36 @@ export function RemakeWorkspaceDialog({
   const grammar = trpc.scripts.grammarCheck.useMutation();
   const generateCaption = trpc.scripts.generateCaption.useMutation();
   const suggestBroll = trpc.scripts.suggestBroll.useMutation();
+  const regenerateBrollBeat = trpc.scripts.regenerateBrollBeat.useMutation({
+    onSuccess: (data) => {
+      const beatIndex = regeneratingBeatIndexRef.current;
+      regeneratingBeatIndexRef.current = null;
+      setRegeneratingBeatIndex(null);
+      if (beatIndex == null) return;
+      setBroll((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          beats: prev.beats.map((beat) =>
+            beat.index === beatIndex ? { ...beat, clips: data.clips } : beat
+          ),
+        };
+      });
+      if (scriptId != null) {
+        void utils.scripts.getBrollGeneration.invalidate({ scriptId });
+      }
+      if (data.clips.length === 0) {
+        toast.error("No new clip found for this beat");
+      } else {
+        toast.success("Clip updated");
+      }
+    },
+    onError: (error) => {
+      regeneratingBeatIndexRef.current = null;
+      setRegeneratingBeatIndex(null);
+      toast.error(error.message || "Could not regenerate beat");
+    },
+  });
 
   const voiceSummary = useMemo(() => {
     const audience = onboardingQuery.data?.targetAudience?.trim();
@@ -320,32 +365,37 @@ export function RemakeWorkspaceDialog({
     nextScript: string,
     nextCaption: string,
     changeType: "manual_edit" | "ai_rewrite",
-    description: string
+    description: string,
+    nextFrame0?: string
   ) => {
     if (scriptId == null || isPreview) return false;
     setSaveState("saving");
+    const frame0 = (nextFrame0 ?? frame0Text).trim().slice(0, 120);
     try {
       await updateMutation.mutateAsync({
         id: scriptId,
         content: nextScript,
         generatedCaption: nextCaption || null,
+        frame0OnScreenText: frame0 || null,
         changeType,
         changeDescription: description.slice(0, 120),
       });
-      lastSaved.current = { script: nextScript, caption: nextCaption };
+      lastSaved.current = { script: nextScript, caption: nextCaption, frame0 };
       setSaveState("saved");
       return true;
     } catch {
       return false;
     }
-  }, [isPreview, scriptId, updateMutation]);
+  }, [frame0Text, isPreview, scriptId, updateMutation]);
 
   useEffect(() => {
     if (!open) {
       hydratedId.current = null;
+      brollHydratedScriptId.current = null;
       return;
     }
     hydratedId.current = null;
+    brollHydratedScriptId.current = null;
     setTab("script");
     setScript("");
     setCaption("");
@@ -361,10 +411,30 @@ export function RemakeWorkspaceDialog({
     setSelection(null);
     setUndo(null);
     setBroll(null);
+    setFrame0Text("");
     setSourceOpen(false);
     setScheduledLabel(null);
     setSaveState("idle");
   }, [open, target?.remakeKey]);
+
+  // Hydrate saved B-roll (DB) so Visuals does not look empty after reopen.
+  useEffect(() => {
+    if (!open || isPreview || scriptId == null) return;
+    if (brollQuery.isLoading || brollQuery.isFetching) return;
+    if (brollHydratedScriptId.current === scriptId) return;
+    brollHydratedScriptId.current = scriptId;
+    const saved = brollQuery.data?.result;
+    if (saved?.beats?.length) {
+      setBroll(saved as SuggestBrollResult);
+    }
+  }, [
+    open,
+    isPreview,
+    scriptId,
+    brollQuery.isLoading,
+    brollQuery.isFetching,
+    brollQuery.data,
+  ]);
 
   useEffect(() => {
     if (!open || scriptId == null || remakeState?.stage !== "ready") return;
@@ -377,8 +447,9 @@ export function RemakeWorkspaceDialog({
     if (previewSeed && scriptId == null) {
       setScript(previewSeed.script);
       setCaption(previewSeed.caption);
+      setFrame0Text("");
       setCaptionHashtags([]);
-      lastSaved.current = { script: previewSeed.script, caption: previewSeed.caption };
+      lastSaved.current = { script: previewSeed.script, caption: previewSeed.caption, frame0: "" };
       setSaveState("idle");
       return;
     }
@@ -391,15 +462,18 @@ export function RemakeWorkspaceDialog({
       generatedCaption?: string | null;
       generatedHashtags?: string | null;
       captionStyle?: string | null;
+      frame0OnScreenText?: string | null;
       postDate?: string | Date | null;
       postTime?: string | null;
     };
     const generatedCaption = captionMeta.generatedCaption?.trim() || "";
+    const savedFrame0 = captionMeta.frame0OnScreenText?.trim() || "";
     setScript(content);
     setCaption(generatedCaption);
+    setFrame0Text(savedFrame0);
     setCaptionHashtags(parseSavedHashtags(captionMeta.generatedHashtags));
     if (isCaptionStyle(captionMeta.captionStyle)) setCaptionStyle(captionMeta.captionStyle);
-    lastSaved.current = { script: content, caption: generatedCaption };
+    lastSaved.current = { script: content, caption: generatedCaption, frame0: savedFrame0 };
     setSaveState("saved");
 
     if (captionMeta.postDate) {
@@ -418,7 +492,13 @@ export function RemakeWorkspaceDialog({
 
   useEffect(() => {
     if (!open || isPreview || scriptId == null || hydratedId.current !== scriptId) return;
-    if (script === lastSaved.current.script && caption === lastSaved.current.caption) return;
+    if (
+      script === lastSaved.current.script &&
+      caption === lastSaved.current.caption &&
+      frame0Text === lastSaved.current.frame0
+    ) {
+      return;
+    }
     setSaveState("unsaved");
     if (autosaveTimer.current != null) window.clearTimeout(autosaveTimer.current);
     autosaveTimer.current = window.setTimeout(() => {
@@ -427,18 +507,21 @@ export function RemakeWorkspaceDialog({
     return () => {
       if (autosaveTimer.current != null) window.clearTimeout(autosaveTimer.current);
     };
-  }, [caption, isPreview, open, persist, script, scriptId]);
+  }, [caption, frame0Text, isPreview, open, persist, script, scriptId]);
 
   const closeWorkspace = useCallback(async () => {
     if (autosaveTimer.current != null) window.clearTimeout(autosaveTimer.current);
-    const changed = script !== lastSaved.current.script || caption !== lastSaved.current.caption;
+    const changed =
+      script !== lastSaved.current.script ||
+      caption !== lastSaved.current.caption ||
+      frame0Text !== lastSaved.current.frame0;
     if (changed && scriptId != null && !isPreview) {
       const saved = await persist(script, caption, "manual_edit", "Remake workspace close");
       if (!saved) return;
     }
     setSourceOpen(false);
     onOpenChange(false);
-  }, [caption, isPreview, onOpenChange, persist, script, scriptId]);
+  }, [caption, frame0Text, isPreview, onOpenChange, persist, script, scriptId]);
 
   const undoAi = useCallback(async () => {
     if (!undo) return;
@@ -462,13 +545,14 @@ export function RemakeWorkspaceDialog({
         id: scriptId,
         content: script,
         generatedCaption: caption || null,
+        frame0OnScreenText: frame0Text.trim() || null,
         postDate: toLocalYmd(date),
         postTime: time,
         status: "approved",
         changeType: "manual_edit",
         changeDescription: `Scheduled for ${label}`,
       });
-      lastSaved.current = { script, caption };
+      lastSaved.current = { script, caption, frame0: frame0Text };
       setSaveState("saved");
       setScheduleDate(toLocalYmd(date));
       setScheduleTime(time);
@@ -483,7 +567,7 @@ export function RemakeWorkspaceDialog({
     } finally {
       setAgentBusy(false);
     }
-  }, [addTurn, caption, isPreview, script, scriptId, updateMutation, utils.scripts.list]);
+  }, [addTurn, caption, frame0Text, isPreview, script, scriptId, updateMutation, utils.scripts.list]);
 
   const scheduleFromAgent = useCallback(async (input: string) => {
     const result = resolveSchedule(input);
@@ -520,7 +604,7 @@ export function RemakeWorkspaceDialog({
       setCaptionStyle(nextStyle);
       setCaptionLength(nextLength);
       setCaptionOpen(true);
-      lastSaved.current = { script, caption: generated.caption };
+      lastSaved.current = { script, caption: generated.caption, frame0: frame0Text };
       setSaveState("saved");
       void utils.scripts.get.invalidate({ id: scriptId });
       void utils.scripts.list.invalidate();
@@ -531,6 +615,7 @@ export function RemakeWorkspaceDialog({
   }, [
     captionLength,
     captionStyle,
+    frame0Text,
     generateCaption,
     onboardingQuery.data?.targetAudience,
     script,
@@ -565,7 +650,7 @@ export function RemakeWorkspaceDialog({
         captionStyle,
       });
       setCaptionHashtags(tags);
-      lastSaved.current = { script, caption };
+      lastSaved.current = { script, caption, frame0: frame0Text };
       setSaveState("saved");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not refresh hashtags";
@@ -701,7 +786,7 @@ export function RemakeWorkspaceDialog({
       setTab("script");
 
       if (captionOnly) {
-        lastSaved.current = { script: nextScript, caption: nextCaption };
+        lastSaved.current = { script: nextScript, caption: nextCaption, frame0: frame0Text };
         setSaveState("saved");
         void utils.scripts.get.invalidate({ id: scriptId });
         void utils.scripts.list.invalidate();
@@ -773,16 +858,49 @@ export function RemakeWorkspaceDialog({
     try {
       const result = await suggestBroll.mutateAsync({ scriptId, content: script });
       setBroll(result as SuggestBrollResult);
+      brollHydratedScriptId.current = scriptId;
+      setRegeneratingBeatIndex(null);
+      regeneratingBeatIndexRef.current = null;
+      void utils.scripts.getBrollGeneration.invalidate({ scriptId });
       addTurn({
         role: "agent",
         kind: "action",
         text: "Stock B-roll matched",
-        detail: "I matched real clips to the moments that benefit from B-roll. Review them on the right.",
+        detail: "I matched real clips to the moments that benefit from B-roll. Open a clip to preview or regenerate it.",
       });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not match B-roll");
     }
-  }, [addTurn, script, scriptId, suggestBroll]);
+  }, [addTurn, script, scriptId, suggestBroll, utils.scripts.getBrollGeneration]);
+
+  const handleRegenerateBeat = useCallback(
+    (beat: BrollBeat, options?: RegenerateBrollBeatOptions) => {
+      if (regenerateBrollBeat.isPending) return;
+      const searchQuery = beat.searchQuery.trim() || beat.visualSummary.trim();
+      if (!searchQuery) {
+        toast.error("This beat has no search query to regenerate");
+        return;
+      }
+      const excludeUrls = beat.clips
+        .flatMap((c) => [c.previewUrl, c.sourceUrl])
+        .map((u) => u.trim())
+        .filter(Boolean);
+      const userContext = options?.userContext?.trim();
+      setRegeneratingBeatIndex(beat.index);
+      regeneratingBeatIndexRef.current = beat.index;
+      regenerateBrollBeat.mutate({
+        searchQuery,
+        visualSummary: beat.visualSummary || undefined,
+        theme: broll?.theme || undefined,
+        excludeUrls: excludeUrls.length ? excludeUrls : undefined,
+        clipsPerBeat: 1,
+        scriptId: scriptId ?? undefined,
+        beatIndex: beat.index,
+        userContext: userContext || undefined,
+      });
+    },
+    [broll?.theme, regenerateBrollBeat, scriptId]
+  );
 
   const restoreVersion = useCallback(async (version: { content: string; versionNumber: number }) => {
     setScript(version.content);
@@ -811,9 +929,19 @@ export function RemakeWorkspaceDialog({
 
   return (
     <>
-      <Dialog open={open} onOpenChange={(next) => { if (!next) void closeWorkspace(); }}>
+      <Dialog
+        open={open}
+        onOpenChange={(next) => {
+          // Remake closes only via the X control (closeWorkspace). Ignore
+          // overlay / Escape driven dismiss requests from Radix.
+          if (next) return;
+        }}
+      >
         <DialogContent
           showCloseButton={false}
+          onPointerDownOutside={(event) => event.preventDefault()}
+          onInteractOutside={(event) => event.preventDefault()}
+          onEscapeKeyDown={(event) => event.preventDefault()}
           className="flex h-[min(92vh,850px)] max-h-[92vh] w-[min(1180px,100%)] max-w-[calc(100%-1rem)] flex-col gap-0 overflow-hidden border-[#2d2940] bg-[#1c1926] p-0 text-[#f5f2fa] sm:max-w-[min(1180px,calc(100%-1.5rem))]"
         >
           <DialogHeader className="sr-only">
@@ -1124,9 +1252,9 @@ export function RemakeWorkspaceDialog({
                       <div className="mb-5 flex items-start justify-between gap-4">
                         <div>
                           <h3 className="text-base font-bold text-white">Recommended B-roll</h3>
-                          <p className="mt-1 max-w-lg text-xs leading-relaxed text-[#8f879f]">Match real stock clips to the moments that benefit from B-roll, then keep or regenerate the clips you want.</p>
+                          <p className="mt-1 max-w-lg text-xs leading-relaxed text-[#8f879f]">Preview a clip, then regenerate that moment.</p>
                         </div>
-                        <button type="button" disabled={!script.trim() || suggestBroll.isPending} onClick={() => void matchStockBroll()} className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-3.5 py-2 text-xs font-semibold text-white hover:bg-violet-500 disabled:opacity-40">
+                        <button type="button" disabled={!script.trim() || suggestBroll.isPending} onClick={() => void matchStockBroll()} className="inline-flex items-center gap-2 rounded-lg border border-[#332e45] bg-transparent px-3.5 py-2 text-xs font-semibold text-[#aaa3b8] hover:bg-white/5 hover:text-white disabled:opacity-40">
                           {suggestBroll.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
                           {suggestBroll.isPending ? "Matching..." : broll ? "Match again" : "Find stock clips"}
                         </button>
@@ -1140,19 +1268,31 @@ export function RemakeWorkspaceDialog({
                           <button type="button" disabled={!script.trim() || suggestBroll.isPending} onClick={() => void matchStockBroll()} className="mt-5 inline-flex items-center gap-2 rounded-lg bg-violet-600 px-4 py-2.5 text-xs font-semibold text-white disabled:opacity-40"><Wand2 className="h-4 w-4" /> Find stock clips</button>
                         </div>
                       ) : (
-                        <div className="rounded-2xl border border-[#332e45] bg-[#17141f] p-3"><BrollBeatsView result={broll} /></div>
+                        <BrollBeatsView
+                          result={broll}
+                          variant="workspace"
+                          regeneratingBeatIndex={regeneratingBeatIndex}
+                          onRegenerateBeat={handleRegenerateBeat}
+                        />
                       )}
                     </div>
                   </div>
                 ) : null}
 
-                {tab === "preview" ? (
+                {/* Keep Preview mounted across tab switches so Opening Hook edits are not wiped. */}
+                <div
+                  className={tab === "preview" ? "h-full" : "hidden"}
+                  aria-hidden={tab !== "preview"}
+                >
                   <Frame0TextPreview
+                    key={`${target?.remakeKey ?? "frame0"}:${scriptId ?? "preview"}:${open ? "open" : "closed"}`}
                     script={script}
+                    savedText={frame0Text}
+                    onTextChange={setFrame0Text}
                     source={target?.source ?? null}
                     reelId={target?.reelId ?? null}
                   />
-                ) : null}
+                </div>
               </div>
 
               <RemakeSourceDrawer

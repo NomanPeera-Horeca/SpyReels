@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { trpc } from "@/lib/trpc";
 import { useLibraryRemakeChain } from "@/hooks/useLibraryRemakeChain";
 import { ingestUrlAndStartLibraryRemake } from "@/lib/ingestUrlAndStartLibraryRemake";
+import { buildRemakeIntentMedia } from "@/lib/remakeIntent";
 import { navigateAfterScrapeStart } from "@/lib/scrapeNavigation";
 import {
   findOpenableCreatorJob,
@@ -491,6 +492,13 @@ export default function ViralPosts() {
           addByUrl: (pasteUrl) => addByUrlMutation.mutateAsync({ url: pasteUrl }),
           fetchCollectedList: () => utils.collected.list.fetch(),
           startRemake,
+          media: buildRemakeIntentMedia({
+            thumbnailUrl: post.thumbnailUrl,
+            videoUrl: post.videoUrl,
+            reelId: post.reelId,
+            platform: post.platform,
+            sourceUrl: post.sourceUrl,
+          }),
         });
         toast.success("Remake started", { id: toastId });
       } catch (err) {

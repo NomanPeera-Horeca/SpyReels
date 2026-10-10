@@ -1943,7 +1943,28 @@ export async function getSavedScriptsByWorkspace(workspaceId: string): Promise<S
     .orderBy(desc(savedScripts.postDate), desc(savedScripts.updatedAt));
 }
 
-export async function updateSavedScript(id: number, data: Partial<Pick<SavedScript, "title" | "content" | "wordCount" | "postDate" | "postTime" | "status" | "notes" | "gradeLevel">>): Promise<void> {
+export async function updateSavedScript(
+  id: number,
+  data: Partial<
+    Pick<
+      SavedScript,
+      | "title"
+      | "content"
+      | "originalContent"
+      | "wordCount"
+      | "postDate"
+      | "postTime"
+      | "status"
+      | "notes"
+      | "gradeLevel"
+      | "recreatedScriptId"
+      | "generatedCaption"
+      | "generatedHashtags"
+      | "captionStyle"
+      | "frame0OnScreenText"
+    >
+  >
+): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.update(savedScripts).set(data).where(eq(savedScripts.id, id));
@@ -2098,6 +2119,31 @@ export async function getSavedScriptIdForRecreated(
         eq(savedScripts.workspaceId, workspaceId),
         eq(savedScripts.userId, userId),
         eq(savedScripts.recreatedScriptId, recreatedScriptId)
+      )
+    )
+    .limit(1);
+  return row?.id ?? null;
+}
+
+/**
+ * Canonical My Scripts identity for a source reel: one row per
+ * (workspace, user, reel). Used when re-remaking the same reel.
+ */
+export async function getSavedScriptIdForReel(
+  workspaceId: string,
+  userId: number,
+  reelId: number
+): Promise<number | null> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const [row] = await db
+    .select({ id: savedScripts.id })
+    .from(savedScripts)
+    .where(
+      and(
+        eq(savedScripts.workspaceId, workspaceId),
+        eq(savedScripts.userId, userId),
+        eq(savedScripts.reelId, reelId)
       )
     )
     .limit(1);

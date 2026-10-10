@@ -52,6 +52,7 @@ import {
   buildLibraryOneClickRemake,
   reelClassificationFromRow,
 } from "@/lib/oneClickRemakeAction";
+import { buildRemakeIntentMedia } from "@/lib/remakeIntent";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import {
   InlineWorkflow,
@@ -65,6 +66,8 @@ import {
   QuietReelCaption,
   QuietReelMetrics,
   QuietRemakeActions,
+  QuietRemakeStatusChip,
+  quietRemakeStatusFromState,
 } from "@/components/QuietWorkspaceReelChrome";
 import { useOpenCreatorInApp } from "@/hooks/useOpenCreatorInApp";
 import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
@@ -792,6 +795,15 @@ export default function CollectedReels() {
         : undefined;
     const alreadyTranscribed = mappedReelId != null && hasTranscription && !isNoSpeech;
     const resolvedOpenReelId = mappedReelId ?? hookState.reelId ?? null;
+    const remakeMedia = buildRemakeIntentMedia({
+      thumbnailUrl: reel.thumbnailUrl,
+      videoUrl: reel.videoUrl,
+      shortcode: reel.shortcode,
+      reelId: mappedReelId,
+      platform: collectedPlatform(reel),
+      reelUrl: reel.reelUrl,
+      duration: reel.duration,
+    });
     const oneClickRemake = buildLibraryOneClickRemake({
       openScriptReelId: resolvedOpenReelId,
       isNoSpeech,
@@ -803,6 +815,7 @@ export default function CollectedReels() {
       batchEntry,
       hookState,
       librarySource,
+      media: remakeMedia,
       startRemake,
       retryRemake,
       startInspirationSave,
@@ -1344,10 +1357,26 @@ export default function CollectedReels() {
                   batchEntry,
                   hookState,
                   librarySource,
+                  media: buildRemakeIntentMedia({
+                    thumbnailUrl: reel.thumbnailUrl,
+                    videoUrl: reel.videoUrl,
+                    shortcode: reel.shortcode,
+                    reelId: mappedReelId,
+                    platform: collectedPlatform(reel),
+                    reelUrl: reel.reelUrl,
+                    duration: reel.duration,
+                  }),
                   startRemake,
                   retryRemake,
                   startInspirationSave,
                   openRemakeWorkspace,
+                })
+              : null;
+            const remakeStatusLabel = isReady
+              ? quietRemakeStatusFromState({
+                  hookStage: hookState.stage,
+                  batchState: recreateSt,
+                  hasSavedScript: Boolean(batchEntry?.latestScriptId || hookState.scriptId),
                 })
               : null;
 
@@ -1368,6 +1397,12 @@ export default function CollectedReels() {
                 onInlinePlayRequest={() => setInlinePlayingId(reel.id)}
                 onInlinePlayStop={() =>
                   setInlinePlayingId((cur) => (cur === reel.id ? null : cur))
+                }
+                onMetaClick={isReady ? () => setGridModalCollectedId(reel.id) : undefined}
+                statusChip={
+                  remakeStatusLabel ? (
+                    <QuietRemakeStatusChip label={remakeStatusLabel} />
+                  ) : undefined
                 }
                 mediaPlatform={collectedPlatform(reel)}
                 mediaFallback={
