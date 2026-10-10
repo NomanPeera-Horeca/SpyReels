@@ -230,3 +230,28 @@ export const visualScreenshotOptions = {
   caret: "hide" as const,
   maxDiffPixelRatio: 0.001,
 };
+
+/** Strict component shots: pixel count is the gate (ratio disabled). */
+export const visualSectionScreenshotOptions = {
+  animations: "disabled" as const,
+  caret: "hide" as const,
+  maxDiffPixels: 50,
+  maxDiffPixelRatio: 1,
+  /**
+   * Catch soft color shifts (e.g. #fcfcfd → #f2f2f5).
+   * pixelmatch: 0.05 still reports 0 diffs for that pair; 0.03 detects ~8k px.
+   */
+  threshold: 0.03,
+};
+
+/** MarketingSectionHeader root: <header> whose first <p> is the eyebrow. */
+export function marketingSectionHeader(page: Page, eyebrow: string) {
+  return page.locator("header").filter({
+    has: page.locator(":scope > p").filter({ hasText: new RegExp(`^${eyebrow}$`, "i") }),
+  });
+}
+
+/** Tool Grid: direct parent of the shared tool-* links. */
+export function marketingToolGrid(page: Page) {
+  return page.locator('[id^="tool-"]').first().locator("xpath=..");
+}

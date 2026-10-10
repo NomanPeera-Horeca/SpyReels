@@ -1,12 +1,50 @@
 import { expect, test } from "@playwright/test";
-import { prepareVisualPage, visualScreenshotOptions } from "./visualHelpers";
+import {
+  marketingSectionHeader,
+  marketingToolGrid,
+  prepareVisualPage,
+  visualScreenshotOptions,
+  visualSectionScreenshotOptions,
+} from "./visualHelpers";
 
 const VISUAL_PROJECTS = new Set(["desktop-1440", "mobile-390"]);
 
-const PAGES = [
-  { name: "viral-reel-finder", path: "/features/viral-reel-finder" },
-  { name: "homepage", path: "/" },
-  { name: "tiktok-viral-video-finder", path: "/free-tools/tiktok-viral-video-finder" },
+type PageDef = {
+  name: string;
+  path: string;
+  /** MarketingSectionHeader eyebrows present on this page (in page order). */
+  sectionHeaders: readonly { slug: string; eyebrow: string }[];
+};
+
+const PAGES: readonly PageDef[] = [
+  {
+    name: "viral-reel-finder",
+    path: "/features/viral-reel-finder",
+    sectionHeaders: [
+      { slug: "how-it-works", eyebrow: "How it works" },
+      { slug: "workspace", eyebrow: "Everything in one workspace" },
+      { slug: "beyond", eyebrow: "Beyond the workspace" },
+      { slug: "faq", eyebrow: "Frequently asked questions" },
+    ],
+  },
+  {
+    name: "homepage",
+    path: "/",
+    sectionHeaders: [
+      { slug: "workspace", eyebrow: "Everything in one workspace" },
+      { slug: "beyond", eyebrow: "Beyond the workspace" },
+    ],
+  },
+  {
+    name: "tiktok-viral-video-finder",
+    path: "/free-tools/tiktok-viral-video-finder",
+    sectionHeaders: [
+      { slug: "how-it-works", eyebrow: "How it works" },
+      { slug: "workspace", eyebrow: "Everything in one workspace" },
+      { slug: "beyond", eyebrow: "Beyond the workspace" },
+      { slug: "faq", eyebrow: "Frequently asked questions" },
+    ],
+  },
 ] as const;
 
 test.describe("public-web visual baselines", () => {
@@ -49,6 +87,27 @@ test.describe("public-web visual baselines", () => {
       await expect(page).toHaveScreenshot(`${pageDef.name}.png`, {
         ...visualScreenshotOptions,
       });
+
+      for (const header of pageDef.sectionHeaders) {
+        const loc = marketingSectionHeader(page, header.eyebrow);
+        await expect(loc).toHaveCount(1);
+        await loc.scrollIntoViewIfNeeded();
+        await expect(loc).toHaveScreenshot(
+          `${pageDef.name}-section-header-${header.slug}.png`,
+          visualSectionScreenshotOptions
+        );
+      }
+
+      const toolGrid = marketingToolGrid(page);
+      await expect(toolGrid.locator('[id^="tool-"]').first()).toBeVisible();
+      await expect
+        .poll(async () => toolGrid.locator('[id^="tool-"]').count())
+        .toBeGreaterThanOrEqual(4);
+      await toolGrid.scrollIntoViewIfNeeded();
+      await expect(toolGrid).toHaveScreenshot(
+        `${pageDef.name}-tool-grid.png`,
+        visualSectionScreenshotOptions
+      );
     });
   }
 });
