@@ -41,6 +41,7 @@ import {
 } from "@shared/spyreelsOrigins";
 import { parse as parseCookieHeader } from "cookie";
 import { checkReadiness } from "../health";
+import { checkCriticalSchemaDriftAndAlert } from "../schemaDrift";
 import { sdk } from "./sdk";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -409,6 +410,8 @@ async function startServer() {
       kind: "startup",
       message: `Server started on ${port} — error monitoring online`,
     });
+
+    void checkCriticalSchemaDriftAndAlert();
 
     // Set up Telegram webhook after server starts (non-blocking)
     if (process.env.NODE_ENV === "production") {

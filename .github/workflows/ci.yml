@@ -26,6 +26,9 @@ jobs:
           node-version: 22
           cache: pnpm
 
+      - name: Fail on duplicate drizzle migration numbers
+        run: node scripts/check-duplicate-migration-numbers.mjs
+
       - name: Install SpyReels dependencies
         run: pnpm install --frozen-lockfile
 
