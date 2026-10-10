@@ -6,12 +6,14 @@
 #   pnpm test:visual:docker
 #   pnpm test:visual:update:docker
 #
-# Requires Docker Desktop (or compatible).
+# Requires Docker Desktop (or compatible). Mounts the repo root so
+# shared/ui imports resolve during typecheck/build.
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PUBLIC_WEB="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_ROOT="$(cd "${PUBLIC_WEB}/.." && pwd)"
 MODE="${1:-test}"
 
 PLAYWRIGHT_VERSION="$(
@@ -36,8 +38,8 @@ echo "Mode: ${MODE}"
 
 docker run --rm \
   --ipc=host \
-  -v "${PUBLIC_WEB}:/work" \
-  -w /work \
+  -v "${REPO_ROOT}:/repo" \
+  -w /repo/public-web \
   -e CI=1 \
   -e PLAYWRIGHT_VISUAL=1 \
   -e PLAYWRIGHT_USE_SYSTEM_CHROME=0 \
@@ -49,6 +51,9 @@ docker run --rm \
     corepack enable
     corepack prepare pnpm@10.4.1 --activate
     pnpm install --frozen-lockfile
+    mkdir -p /repo/node_modules
+    ln -sfn /repo/public-web/node_modules/react /repo/node_modules/react
+    ln -sfn /repo/public-web/node_modules/@types /repo/node_modules/@types
     pnpm check
     pnpm build
     pnpm exec next start -p 3100 > /tmp/public-web.log 2>&1 &
