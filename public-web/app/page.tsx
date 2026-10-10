@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { HomepageAuthGate } from "../components/HomepageAuthGate";
 import { MarketingFooter, MarketingHeader } from "../components/MarketingChrome";
+import { ProductDemoCameraController } from "../components/ProductDemoCameraController";
 import {
   MarketingCreatorStories,
   MarketingFaq,
@@ -198,6 +199,7 @@ export default function HomePage() {
       <MarketingFooter />
       <HomepageAuthGate />
       <Script src="/marketing/homepage.js" strategy="afterInteractive" />
+      <ProductDemoCameraController />
     </>
   );
 }

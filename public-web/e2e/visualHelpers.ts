@@ -373,12 +373,28 @@ export async function withProductDemoScenePaused<T>(
     active.style.opacity = "1";
     for (const kid of Array.from(
       active.querySelectorAll<HTMLElement>(
-        ".motion-reel, .type-stage, .type-caret, .pointer, .viral-pill, .motion-btn, .script-heading, .voice-badge, .script-paper, .success-mark, .success-message, .calendar-chip, .final-line"
+        ".motion-reel, .type-stage, .type-caret, .pointer, .viral-pill, .motion-btn, .script-heading, .voice-badge, .script-paper, .success-mark, .success-message, .calendar-chip, .final-line, .tap-indicator"
       )
     )) {
       kid.style.animation = "none";
-      kid.style.opacity = "1";
-      kid.style.transform = "none";
+      kid.style.opacity = kid.classList.contains("tap-indicator") ? "0" : "1";
+      kid.style.transform = kid.classList.contains("tap-indicator") ? "" : "none";
+    }
+    const camera = shell.closest<HTMLElement>(".product-demo-camera-scene");
+    if (camera) {
+      if (!camera.hasAttribute("data-pw-style-backup")) {
+        camera.setAttribute("data-pw-style-backup", camera.getAttribute("style") ?? "");
+      }
+      const focus: Record<string, string> = {
+        search: "translate(-187.5px, -90.62px) scale(0.625)",
+        results: "translate(-72.92px, -72.4px) scale(0.7292)",
+        winner: "translate(-8.33px, -100px) scale(0.8333)",
+        remake: "translate(-83.33px, -116.67px) scale(0.8333)",
+        script: "translate(-60.58px, -48.56px) scale(0.6731)",
+        success: "translate(-266.3px, -101.09px) scale(0.7609)",
+      };
+      camera.style.animation = "none";
+      camera.style.transform = focus[sceneName] ?? focus.success;
     }
     if (sceneName === "search") {
       for (const t of Array.from(active.querySelectorAll<HTMLElement>(".type-stage"))) {
@@ -406,8 +422,10 @@ export async function withProductDemoScenePaused<T>(
           "[data-marketing-product-demo] .motion-shell, .motion-shell"
         );
         if (!shell) return;
+        const camera = shell.closest<HTMLElement>(".product-demo-camera-scene");
         const nodes = Array.from(shell.querySelectorAll<HTMLElement>("*"));
         nodes.unshift(shell);
+        if (camera) nodes.push(camera);
         for (const el of nodes) {
           if (!el.hasAttribute("data-pw-style-backup")) continue;
           const prior = el.getAttribute("data-pw-style-backup");

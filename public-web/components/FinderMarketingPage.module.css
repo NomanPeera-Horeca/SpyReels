@@ -191,8 +191,19 @@
 
   .page[data-finder-platform="instagram"] .motionStage {
     width: calc(100% - 2 * var(--sr-layout-page-gutter-mobile));
-    padding: 12px;
+    padding: 0;
     border-radius: 20px;
+    background: transparent;
+  }
+
+  .page[data-finder-platform="tiktok"] .motionStage {
+    padding: 0;
+  }
+
+  .page[data-finder-platform="tiktok"] .motionFrame {
+    padding: 0;
+    background: transparent;
+    border-radius: 0;
   }
 }
 

@@ -56,8 +56,108 @@
     @keyframes scene-script{0%,63.152%{opacity:0}64.606%,85.455%{opacity:1}87.03%,100%{opacity:0}}@keyframes script-heading{0%,63.394%{opacity:0;transform:translateY(18px)}66.303%{opacity:1}67.273%,100%{opacity:1;transform:none}}@keyframes voice-in{0%,64.606%{opacity:0;transform:translateY(12px)}67.515%{opacity:1}68.485%,100%{opacity:1;transform:none}}@keyframes script-paper{0%,66.061%{opacity:0;transform:translateY(28px)}68.97%{opacity:1}80%,100%{opacity:1;transform:translateY(-10px)}}@keyframes schedule-press{0%,74.303%{opacity:0;transform:translateY(16px);scale:1}77.212%{opacity:1}78.182%{transform:none}82.424%{scale:1}83.394%{scale:.96}84.727%,100%{opacity:1;scale:1}}@keyframes schedule-pointer{0%,76.848%{opacity:0;transform:translate(-17.36cqw,-13.1cqw)}76.97%{opacity:1}82.182%,100%{opacity:1;transform:none}}
     @keyframes scene-success{0%,85.455%{opacity:0}87.03%,98.424%{opacity:1}100%{opacity:0}}@keyframes success-pop{0%,85.818%{opacity:0;scale:.55}89.697%{opacity:1;scale:1.1}92.364%,100%{opacity:1;scale:1}}@keyframes success-message{0%,87.515%{opacity:0;transform:translateY(18px)}90.545%{opacity:1}91.152%,100%{opacity:1;transform:none}}@keyframes calendar-in{0%,89.212%{opacity:0;transform:translateY(18px)}92.242%{opacity:1}92.848%,100%{opacity:1;transform:none}}@keyframes final-in{0%,91.152%{opacity:0;transform:translateY(18px)}94.182%{opacity:1}94.788%,100%{opacity:1;transform:none}}
     @media(max-width:980px){.motion-shell{max-width:760px}.hero-grid{align-items:start}}
-    @media(max-width:640px){.motion-shell{border-radius:var(--sr-radius-panel)}.motion-title{font-size:3.2em}.motion-sub{font-size:1.3em}.reel-grid{gap:2%}.motion-reel small{display:none}.winner-grid{gap:2%}.calendar-chip{left:34%;right:34%}}
-    @media(prefers-reduced-motion:reduce){.motion-scene{animation:none!important;opacity:0}.remake-scene{opacity:1}.remake-pointer,.remake-btn{animation:none!important}.pointer{display:none}}
+    @media(max-width:640px){.motion-shell{border-radius:var(--sr-radius-panel)}}
+    @media(prefers-reduced-motion:reduce){.motion-scene{animation:none!important;opacity:0}.success-scene{opacity:1}.success-mark,.success-message,.calendar-chip,.final-line{animation:none!important;opacity:1;transform:none}.pointer{display:none}.product-demo-camera-scene{animation:none!important;transform:translate(-266.3px,-101.09px) scale(0.7609)!important}.tap-indicator{animation:none!important;opacity:0!important}}
+
+    /* Product Demo mobile camera: desktop scene inside fixed 350×300 stage */
+    .product-demo-camera-stage{display:block;width:100%}
+    .product-demo-camera-scene{display:block;width:100%}
+    .tap-indicator{display:none}
+    @media(max-width:640px){
+      .product-demo .product-stage .glow{display:none}
+      .product-demo-camera-stage{
+        width:min(350px,100%);
+        height:300px;
+        margin-inline:auto;
+        overflow:hidden;
+        position:relative;
+        border-radius:var(--sr-radius-panel);
+        background:var(--sr-neutral-950);
+        border:1px solid var(--sr-neutral-700);
+        box-shadow:var(--sr-elevation-modal);
+        contain:strict;
+        cursor:pointer;
+        -webkit-tap-highlight-color:transparent;
+      }
+      .product-demo-camera-stage[data-product-demo-paused="true"]{cursor:pointer}
+      .product-demo-camera-scene{
+        width:1160px;
+        height:725px;
+        transform-origin:0 0;
+        will-change:transform;
+        animation:product-demo-camera 8.25s ease-in-out infinite;
+      }
+      .product-demo-camera-stage .motion-shell{
+        width:1160px;
+        max-width:none;
+        height:725px;
+        aspect-ratio:auto;
+        border:0;
+        border-radius:0;
+        box-shadow:none;
+        background:var(--sr-neutral-950);
+      }
+      .product-demo-camera-stage .pointer{display:none}
+      .tap-indicator{
+        display:block;
+        position:absolute;
+        right:0;
+        top:50%;
+        width:1.35em;
+        height:1.35em;
+        margin:0;
+        border-radius:var(--sr-radius-full);
+        background:var(--sr-color-marketing-accent);
+        box-shadow:0 0 0 0 color-mix(in srgb, var(--sr-color-marketing-accent) 55%, transparent);
+        transform:translate(55%,-50%);
+        opacity:0;
+        pointer-events:none;
+        z-index:10;
+      }
+      .tap-indicator-card{
+        right:8%;
+        top:42%;
+        transform:translate(50%,-50%);
+      }
+      .search-btn .tap-indicator{animation:tap-search 8.25s linear infinite}
+      .remake-btn .tap-indicator{animation:tap-remake 8.25s linear infinite}
+      .schedule-btn .tap-indicator{animation:tap-schedule 8.25s linear infinite}
+      .winner-scene .tap-indicator-card{animation:tap-winner 8.25s linear infinite}
+    }
+    @keyframes product-demo-camera{
+      /* Desktop scene coords → 350×300 stage; zoomed to keep titles/buttons inside edges */
+      /* Search 300,175,560×420 · Results 100,115,480×380 · Winner 20,120,400×360 */
+      /* Remake A 110,140,400×360 → Remake B 450,155,520×400 */
+      /* Script A 90,95,520×400 → Script B 600,330,480×380 · Success 350,140,460×380 */
+      0%,14.8%{transform:translate(-187.5px,-90.62px) scale(0.625)}
+      22.1%,31.3%{transform:translate(-72.92px,-72.4px) scale(0.7292)}
+      38.5%,43.3%{transform:translate(-8.33px,-100px) scale(0.8333)}
+      50.6%,54.5%{transform:translate(-83.33px,-116.67px) scale(0.8333)}
+      61.8%,63.2%{transform:translate(-259.48px,-67.24px) scale(0.6034)}
+      70.5%,76.5%{transform:translate(-60.58px,-48.56px) scale(0.6731)}
+      83.8%,85.5%{transform:translate(-437.5px,-229.17px) scale(0.7292)}
+      92.7%,100%{transform:translate(-266.3px,-101.09px) scale(0.7609)}
+    }
+    @keyframes tap-search{
+      0%,16.5%{opacity:0;transform:translate(55%,-50%) scale(.7);box-shadow:0 0 0 0 color-mix(in srgb, var(--sr-color-marketing-accent) 55%, transparent)}
+      17.2%,19.6%{opacity:1;transform:translate(55%,-50%) scale(1);box-shadow:0 0 0 .55em color-mix(in srgb, var(--sr-color-marketing-accent) 0%, transparent)}
+      20.5%,100%{opacity:0;transform:translate(55%,-50%) scale(.7);box-shadow:0 0 0 0 color-mix(in srgb, var(--sr-color-marketing-accent) 55%, transparent)}
+    }
+    @keyframes tap-winner{
+      0%,40%{opacity:0;transform:translate(50%,-50%) scale(.7);box-shadow:0 0 0 0 color-mix(in srgb, var(--sr-color-marketing-accent) 55%, transparent)}
+      42%,48%{opacity:1;transform:translate(50%,-50%) scale(1);box-shadow:0 0 0 .55em color-mix(in srgb, var(--sr-color-marketing-accent) 0%, transparent)}
+      50%,100%{opacity:0;transform:translate(50%,-50%) scale(.7);box-shadow:0 0 0 0 color-mix(in srgb, var(--sr-color-marketing-accent) 55%, transparent)}
+    }
+    @keyframes tap-remake{
+      0%,56.2%{opacity:0;transform:translate(55%,-50%) scale(.7);box-shadow:0 0 0 0 color-mix(in srgb, var(--sr-color-marketing-accent) 55%, transparent)}
+      57%,60%{opacity:1;transform:translate(55%,-50%) scale(1);box-shadow:0 0 0 .55em color-mix(in srgb, var(--sr-color-marketing-accent) 0%, transparent)}
+      61.5%,100%{opacity:0;transform:translate(55%,-50%) scale(.7);box-shadow:0 0 0 0 color-mix(in srgb, var(--sr-color-marketing-accent) 55%, transparent)}
+    }
+    @keyframes tap-schedule{
+      0%,81.5%{opacity:0;transform:translate(55%,-50%) scale(.7);box-shadow:0 0 0 0 color-mix(in srgb, var(--sr-color-marketing-accent) 55%, transparent)}
+      82.2%,84.5%{opacity:1;transform:translate(55%,-50%) scale(1);box-shadow:0 0 0 .55em color-mix(in srgb, var(--sr-color-marketing-accent) 0%, transparent)}
+      85.5%,100%{opacity:0;transform:translate(55%,-50%) scale(.7);box-shadow:0 0 0 0 color-mix(in srgb, var(--sr-color-marketing-accent) 55%, transparent)}
+    }
 
     /* Marketing / Hero — Product-led v1.1 */
     .hero{overflow:hidden}/* padding-block via [data-marketing-section] */
