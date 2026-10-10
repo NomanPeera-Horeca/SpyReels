@@ -1,0 +1,122 @@
+{
+  "path": "/features/viral-reel-finder",
+  "status": 200,
+  "title": "Viral Reel Finder for Instagram | SpyReels",
+  "description": "Free viral Reel finder for Instagram. Paste a public creator handle, rank Reels by views and engagement, then remake what worked in your own voice.",
+  "canonical": "https://spyreels.ai/features/viral-reel-finder",
+  "robots": "index, follow",
+  "googlebot": "index, follow",
+  "verification": {
+    "google": "TfvQaX_pN1iSSkXBwgrUoK45mvnWKJTozdMdeZsgibs"
+  },
+  "openGraph": {
+    "description": "Free viral Reel finder for Instagram. Paste a public creator handle, rank Reels by views and engagement, then remake what worked in your own voice.",
+    "site_name": "SpyReels",
+    "title": "Viral Reel Finder for Instagram | SpyReels",
+    "type": "website",
+    "url": "https://spyreels.ai/features/viral-reel-finder"
+  },
+  "twitter": {
+    "card": "summary_large_image",
+    "description": "Free viral Reel finder for Instagram. Paste a public creator handle, rank Reels by views and engagement, then remake what worked in your own voice.",
+    "title": "Viral Reel Finder for Instagram | SpyReels"
+  },
+  "h1": "Find viral Instagram Reels in your niche",
+  "hreflang": [],
+  "jsonLd": [
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "item": "https://spyreels.ai/",
+          "name": "Home",
+          "position": 1
+        },
+        {
+          "@type": "ListItem",
+          "item": "https://spyreels.ai/features/viral-reel-finder",
+          "name": "Viral Reel Finder",
+          "position": 2
+        }
+      ]
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "An Instagram Reel finder (also called a viral Reel finder or Reels finder) pulls a public creator's Reels into one research view so you can compare posts by views and engagement instead of scrolling the profile manually."
+          },
+          "name": "What is an Instagram Reel finder?"
+        },
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. SpyReels includes a free viral finder tier so you can paste a public Instagram handle, preview ranked Reels, and try the research workflow before upgrading."
+          },
+          "name": "Is SpyReels a free viral finder?"
+        },
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Use Instagram Search when you need native discovery by keyword, audio, or hashtag. Use a Reel finder when you already know the creator and want their Reels ranked by performance."
+          },
+          "name": "Reel finder vs Instagram Search: which should I use?"
+        },
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "This viral Reel finder focuses on Reels performance for a public account. Viral posts and feed carousels are a different format; start with Reels here, then use SpyReels research tools when you want to turn a winning idea into a script."
+          },
+          "name": "Can I find viral Instagram posts, not only Reels?"
+        },
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. Enter a public Instagram handle to confirm the profile. Select it to sign in and open Creator Radar with that creator ready for Reel research."
+          },
+          "name": "Can I search any public Instagram account?"
+        },
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "This page shows the hook and performance numbers. In SpyReels you can transcribe the Reel and use that research as context for an original script in your voice."
+          },
+          "name": "What does SpyReels do after I find a strong Reel?"
+        }
+      ]
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "alternateName": [
+        "Viral Reel Finder",
+        "Instagram Reel Finder",
+        "Reel Finder",
+        "Reels Finder",
+        "Instagram Reel Spy Tool"
+      ],
+      "applicationCategory": "MultimediaApplication",
+      "description": "Free viral Reel finder for Instagram. Paste a public creator handle, rank Reels by views and engagement, then remake what worked in your own voice.",
+      "name": "SpyReels Viral Reel Finder",
+      "offers": {
+        "@type": "Offer",
+        "description": "Free tier available",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "operatingSystem": "Web Browser",
+      "url": "https://spyreels.ai/features/viral-reel-finder"
+    }
+  ]
+}

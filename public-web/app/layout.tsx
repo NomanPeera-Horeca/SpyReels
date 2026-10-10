@@ -24,6 +24,11 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     title: "SpyReels Public Web Architecture",
     description: "Isolated Next.js rendering foundation for SpyReels public acquisition pages.",
+    // Same token as client/index.html so Search Console stays verified when
+    // homepage / finders are served by the Next pilot instead of Vite.
+    verification: {
+      google: "TfvQaX_pN1iSSkXBwgrUoK45mvnWKJTozdMdeZsgibs",
+    },
     robots: publicWebRobotsMetadata(
       publicWebIndexingPolicy({
         host: headerStore.get("host"),

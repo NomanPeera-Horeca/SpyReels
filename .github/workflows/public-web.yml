@@ -1,4 +1,4 @@
-# Public-web safety net: typecheck, build, e2e, faq.spec, visual baselines.
+# Public-web safety net: typecheck, build, e2e, faq.spec, SEO contract, visual baselines.
 # Visuals run inside the official Playwright image (Linux) for stable pixels.
 # macOS darwin baselines remain for optional local Chrome runs.
 #
@@ -8,6 +8,12 @@
 # Update Linux baselines (one command after Docker is installed):
 #   cd public-web && pnpm test:visual:update:docker
 # Or via Actions: workflow_dispatch → update_visual_baselines=true → download artifact.
+#
+# Update SEO contract baselines (indexing-enabled production robots):
+#   SPYREELS_PUBLIC_WEB_INDEXING_ENABLED=true pnpm start   # :3100
+#   pnpm test:seo:update
+# Requests send x-forwarded-host: spyreels.ai so baselines match prod index,follow.
+# Localhost without that header stays noindex (dev default).
 
 name: public-web
 
@@ -80,6 +86,10 @@ jobs:
         run: pnpm build
 
       - name: Start server
+        env:
+          # Enables index,follow when requests also send x-forwarded-host: spyreels.ai
+          # (SEO contract). Requests without that header stay noindex (seo.spec).
+          SPYREELS_PUBLIC_WEB_INDEXING_ENABLED: "true"
         run: |
           pnpm exec next start -p 3100 > /tmp/spyreels-public-web.log 2>&1 &
           echo $! > /tmp/spyreels-public-web.pid
@@ -107,6 +117,13 @@ jobs:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100
           CI: true
         run: pnpm exec playwright test e2e/faq.spec.ts --project=desktop-1440
+
+      - name: SEO contract baselines
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100
+          SEO_SITEMAP_URL: https://spyreels.ai/sitemap.xml
+          CI: true
+        run: pnpm test:seo
 
       - name: Require Linux visual baselines
         if: ${{ github.event_name != 'workflow_dispatch' || inputs.update_visual_baselines != true }}

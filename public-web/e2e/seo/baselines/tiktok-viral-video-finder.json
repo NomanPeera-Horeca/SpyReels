@@ -1,0 +1,89 @@
+{
+  "path": "/free-tools/tiktok-viral-video-finder",
+  "status": 200,
+  "title": "TikTok Viral Video Finder by Username | SpyReels",
+  "description": "Find viral TikTok videos from a public creator. Compare views and engagement, then turn a strong idea into an original script in your voice with SpyReels.",
+  "canonical": "https://spyreels.ai/free-tools/tiktok-viral-video-finder",
+  "robots": "index, follow",
+  "googlebot": "index, follow",
+  "verification": {
+    "google": "TfvQaX_pN1iSSkXBwgrUoK45mvnWKJTozdMdeZsgibs"
+  },
+  "openGraph": {
+    "description": "Find viral TikTok videos from a public creator. Compare views and engagement, then turn a strong idea into an original script in your voice with SpyReels.",
+    "site_name": "SpyReels",
+    "title": "TikTok Viral Video Finder by Username | SpyReels",
+    "type": "website",
+    "url": "https://spyreels.ai/free-tools/tiktok-viral-video-finder"
+  },
+  "twitter": {
+    "card": "summary_large_image",
+    "description": "Find viral TikTok videos from a public creator. Compare views and engagement, then turn a strong idea into an original script in your voice with SpyReels.",
+    "title": "TikTok Viral Video Finder by Username | SpyReels"
+  },
+  "h1": "Find viral TikTok videos in your niche",
+  "hreflang": [],
+  "jsonLd": [
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "A TikTok viral video finder helps you research public videos from a creator account and compare which posts performed best. SpyReels lets you search by creator handle, study standout videos, and take a promising idea into your own script workflow."
+          },
+          "name": "What is a TikTok viral video finder?"
+        },
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. Enter a public TikTok username or profile link. Select a featured creator to preview public video results, or sign in to research another account in SpyReels."
+          },
+          "name": "Can I search a public TikTok account by username?"
+        },
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Compare public view counts and engagement with a creator’s other posts. This helps you spot videos worth studying without assuming that one metric alone explains why a video worked."
+          },
+          "name": "How does SpyReels identify a standout video?"
+        },
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Study the opening, pacing, and structure. In SpyReels you can use that research to write an original script in your own voice and plan what to film."
+          },
+          "name": "What can I do after finding a strong TikTok?"
+        },
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. Use the useful pattern as research, then adapt your own story and edit for the channel where you will publish."
+          },
+          "name": "Can I use a TikTok idea for Instagram Reels or YouTube Shorts?"
+        }
+      ]
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "applicationCategory": "MultimediaApplication",
+      "description": "Find viral TikTok videos from a public creator. Compare views and engagement, then turn a strong idea into an original script in your voice with SpyReels.",
+      "name": "SpyReels TikTok Viral Video Finder",
+      "offers": {
+        "@type": "Offer",
+        "description": "Free tier available",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "operatingSystem": "Web Browser",
+      "url": "https://spyreels.ai/free-tools/tiktok-viral-video-finder"
+    }
+  ]
+}
