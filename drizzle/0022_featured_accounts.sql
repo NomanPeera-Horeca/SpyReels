@@ -2,7 +2,7 @@
 -- Four new tables: niches, featured_accounts, featured_account_niches, featured_reels.
 -- Applied to staging via `drizzle-kit push` (see staging DATABASE_URL). This file
 -- mirrors the DDL for source-of-truth / audit purposes and matches the style of
--- 0016_password_reset_tokens.sql and 0020_add_transcription_reel_id.sql.
+-- 0016b_password_reset_tokens.sql and 0020_add_transcription_reel_id.sql.
 
 CREATE TABLE `niches` (
   `id` INT NOT NULL AUTO_INCREMENT,
