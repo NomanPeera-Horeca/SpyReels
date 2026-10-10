@@ -83,7 +83,7 @@
 .title {
   margin: 0;
   color: var(--sr-color-text-primary);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   word-break: normal;
   hyphens: none;
 }
@@ -91,7 +91,7 @@
 .description {
   margin: 0;
   color: var(--sr-color-text-secondary);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   word-break: normal;
   hyphens: none;
   white-space: normal;
@@ -167,7 +167,7 @@
 .integrationTitle {
   margin: 0;
   color: var(--sr-color-text-primary);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   word-break: normal;
   hyphens: none;
 }
@@ -175,7 +175,7 @@
 .integrationDescription {
   margin: 0;
   color: var(--sr-color-text-secondary);
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   word-break: normal;
   hyphens: none;
   white-space: normal;

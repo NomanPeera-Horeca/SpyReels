@@ -1,5 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
+const WIDTHS = [390, 768, 1024, 1180, 1280, 1440] as const;
+
 const PAGES = [
   "/",
   "/features/viral-reel-finder",
@@ -89,15 +91,22 @@ async function findMidWordBreaks(page: Page, path: string): Promise<MidWordBreak
 }
 
 test.describe("Marketing text wrap (no mid-word breaks)", () => {
-  test.beforeEach(({}, testInfo) => {
-    test.skip(testInfo.project.name !== "mobile-390", "mid-word wrap check runs at 390");
-  });
-
   for (const path of PAGES) {
-    test(`${path}: no marketing text breaks inside a word`, async ({ page }) => {
-      await page.goto(path, { waitUntil: "networkidle" });
-      const failures = await findMidWordBreaks(page, path);
-      expect(failures, JSON.stringify(failures, null, 2)).toEqual([]);
-    });
+    for (const width of WIDTHS) {
+      test(`${path} @ ${width}px: no marketing text breaks inside a word`, async ({
+        page,
+      }, testInfo) => {
+        // Run once per page×width (avoid project multiplies).
+        test.skip(
+          testInfo.project.name !== "desktop-1440",
+          "mid-word wrap matrix runs on desktop-1440 project only"
+        );
+
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto(path, { waitUntil: "networkidle" });
+        const failures = await findMidWordBreaks(page, path);
+        expect(failures, JSON.stringify(failures, null, 2)).toEqual([]);
+      });
+    }
   }
 });
