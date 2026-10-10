@@ -33,6 +33,7 @@ const PAGES: readonly PageDef[] = [
     sectionHeaders: [
       { slug: "workspace", eyebrow: "Everything in one workspace" },
       { slug: "beyond", eyebrow: "Beyond the workspace" },
+      { slug: "faq", eyebrow: "Frequently asked questions" },
     ],
   },
   {
