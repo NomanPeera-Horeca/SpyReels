@@ -1,11 +1,16 @@
-# Public-web safety net: typecheck, build, e2e, faq.spec, SEO contract, visual baselines.
+# Public-web safety net: fast lane (typecheck, content-spec, SEO) on every push;
+# e2e always; Linux visual baselines only when UI files change (sharded).
 # Visuals run inside the official Playwright image (Linux) for stable pixels.
 # macOS darwin baselines remain for optional local Chrome runs.
 #
 # Required check (repo settings → branch protection):
 #   public-web / qa
 #
-# Update Linux baselines (one command after Docker is installed):
+# Fast lane target: ≤3 min (no Playwright container, pnpm cache).
+#
+# Update Linux baselines in a PR (preferred):
+#   Add label "update-baselines" → CI regenerates *-linux.png and commits to the PR branch.
+# Local/Docker:
 #   cd public-web && pnpm test:visual:update:docker
 # Or via Actions: workflow_dispatch → update_visual_baselines=true → download artifact.
 #
@@ -19,6 +24,7 @@ name: public-web
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - "public-web/**"
       - ".github/workflows/public-web.yml"
@@ -40,14 +46,98 @@ concurrency:
   group: public-web-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  PLAYWRIGHT_VERSION: "1.63.0"
+  PNPM_VERSION: "10.4.1"
+
 jobs:
-  qa:
-    name: qa
+  changes:
+    name: changes
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    container:
-      image: mcr.microsoft.com/playwright:v1.63.0-jammy
-      options: --ipc=host
+    timeout-minutes: 5
+    outputs:
+      ui: ${{ steps.filter.outputs.ui }}
+      update_baselines: ${{ steps.filter.outputs.update_baselines }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect UI / baseline-update intent
+        id: filter
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          update=false
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.update_visual_baselines }}" == "true" ]]; then
+            update=true
+          fi
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            labels='${{ join(github.event.pull_request.labels.*.name, ',') }}'
+            if [[ ",${labels}," == *",update-baselines,"* ]]; then
+              update=true
+            fi
+          fi
+          echo "update_baselines=${update}" >> "$GITHUB_OUTPUT"
+
+          if [[ "${update}" == "true" || "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "ui=true" >> "$GITHUB_OUTPUT"
+            echo "UI gate: forced (update or workflow_dispatch)"
+            exit 0
+          fi
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            base_sha="${{ github.event.pull_request.base.sha }}"
+            head_sha="${{ github.event.pull_request.head.sha }}"
+          else
+            base_sha="${{ github.event.before }}"
+            head_sha="${{ github.sha }}"
+            if [[ -z "${base_sha}" || "${base_sha}" == "0000000000000000000000000000000000000000" ]]; then
+              base_sha="$(git rev-parse HEAD~1)"
+            fi
+          fi
+
+          changed="$(git diff --name-only "${base_sha}" "${head_sha}" || true)"
+          printf 'Changed files:\n%s\n' "${changed:-"(none)"}"
+
+          # Visuals only when UI-capable paths change (skip SEO/content-spec/docs-only churn).
+          if printf '%s\n' "${changed}" | grep -E \
+            -e '^(\.github/workflows/public-web\.yml)$' \
+            -e '^public-web/(playwright\.config\.ts|package\.json|pnpm-lock\.yaml|next\.config\..+)$' \
+            -e '^public-web/(app|src|components|public)/' \
+            -e '^public-web/e2e/visual(\.spec\.ts|Helpers\.ts|\.spec\.ts-snapshots/)' \
+            -e '^public-web/scripts/visual-docker\.sh$' \
+            -e '^public-web/.*\.(tsx|jsx|css|scss|sass)$' \
+            >/dev/null; then
+            # Subtract pure non-visual e2e / content-spec script hits from the extension match.
+            ui_hits="$(printf '%s\n' "${changed}" | grep -E \
+              -e '^(\.github/workflows/public-web\.yml)$' \
+              -e '^public-web/(playwright\.config\.ts|package\.json|pnpm-lock\.yaml|next\.config\..+)$' \
+              -e '^public-web/(app|src|components|public)/' \
+              -e '^public-web/e2e/visual(\.spec\.ts|Helpers\.ts|\.spec\.ts-snapshots/)' \
+              -e '^public-web/scripts/visual-docker\.sh$' \
+              -e '^public-web/.*\.(tsx|jsx|css|scss|sass)$' \
+              | grep -Ev \
+              -e '^public-web/e2e/(seo|faq|finder|marketing-text|marketing-content|viral-reel)' \
+              -e '^public-web/scripts/check-marketing-content-spec' \
+              || true)"
+            if [[ -n "${ui_hits}" ]]; then
+              echo "ui=true" >> "$GITHUB_OUTPUT"
+              echo "UI gate: true"
+              printf 'UI hits:\n%s\n' "${ui_hits}"
+              exit 0
+            fi
+          fi
+
+          echo "ui=false" >> "$GITHUB_OUTPUT"
+          echo "UI gate: false"
+
+  fast:
+    name: fast
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: public-web
@@ -55,11 +145,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Enable pnpm
-        run: |
-          corepack enable
-          corepack prepare pnpm@10.4.1 --activate
-        working-directory: .
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: public-web/package.json
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: public-web/pnpm-lock.yaml
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -82,16 +178,121 @@ jobs:
       - name: Typecheck
         run: pnpm check
 
-      - name: Marketing content-spec (Figma Decision 32)
+      - name: Unit / marketing content-spec (Figma Decision 32)
         run: pnpm test:content-spec
 
       - name: Build
         run: pnpm build
 
+      - name: Upload Next build
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-web-next-build-${{ github.run_id }}
+          path: public-web/.next
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Start server
         env:
-          # Enables index,follow when requests also send x-forwarded-host: spyreels.ai
-          # (SEO contract). Requests without that header stay noindex (seo.spec).
+          SPYREELS_PUBLIC_WEB_INDEXING_ENABLED: "true"
+        run: |
+          pnpm exec next start -p 3100 > /tmp/spyreels-public-web.log 2>&1 &
+          echo $! > /tmp/spyreels-public-web.pid
+
+      - name: Wait for health
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3100/health > /tmp/health.json; then
+              cat /tmp/health.json
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/spyreels-public-web.log || true
+          exit 1
+
+      # SEO contract uses Playwright request fixture only (no browser install).
+      - name: SEO contract baselines
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100
+          SEO_SITEMAP_URL: https://spyreels.ai/sitemap.xml
+          CI: true
+        run: pnpm test:seo
+
+      - name: Show server log on failure
+        if: failure()
+        run: cat /tmp/spyreels-public-web.log || true
+        working-directory: .
+
+  e2e:
+    name: e2e
+    needs: [fast]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: public-web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: public-web/package.json
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: public-web/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ env.PLAYWRIGHT_VERSION }}-${{ runner.os }}-chromium
+
+      - name: Install Playwright Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Install Playwright OS deps (cache hit)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps chromium
+
+      - name: Download Next build
+        uses: actions/download-artifact@v4
+        with:
+          name: public-web-next-build-${{ github.run_id }}
+          path: /tmp/next-build
+
+      - name: Restore Next build
+        working-directory: .
+        run: |
+          set -euo pipefail
+          if [[ -d /tmp/next-build/public-web/.next ]]; then
+            rm -rf public-web/.next
+            mv /tmp/next-build/public-web/.next public-web/.next
+          elif [[ -f /tmp/next-build/BUILD_ID || -d /tmp/next-build/server ]]; then
+            rm -rf public-web/.next
+            mkdir -p public-web/.next
+            cp -a /tmp/next-build/. public-web/.next/
+          else
+            echo "Unexpected Next build artifact layout:"
+            find /tmp/next-build -maxdepth 3 -type d | head -n 50
+            exit 1
+          fi
+          test -d public-web/.next
+
+      - name: Start server
+        env:
           SPYREELS_PUBLIC_WEB_INDEXING_ENABLED: "true"
         run: |
           pnpm exec next start -p 3100 > /tmp/spyreels-public-web.log 2>&1 &
@@ -127,57 +328,11 @@ jobs:
           CI: true
         run: pnpm exec playwright test e2e/marketing-text-wrap.spec.ts --project=mobile-390
 
-      - name: SEO contract baselines
-        env:
-          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100
-          SEO_SITEMAP_URL: https://spyreels.ai/sitemap.xml
-          CI: true
-        run: pnpm test:seo
-
-      - name: Require Linux visual baselines
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.update_visual_baselines != true }}
-        run: |
-          count=$(find e2e/visual.spec.ts-snapshots -name '*-linux.png' 2>/dev/null | wc -l | tr -d ' ')
-          echo "Linux baseline count: ${count}"
-          if [ "${count}" -lt 1 ]; then
-            echo "::error::No *-linux.png baselines found. Generate them with:"
-            echo "  cd public-web && pnpm test:visual:update:docker"
-            echo "Or Actions → public-web → Run workflow → update_visual_baselines=true, then commit the artifact."
-            exit 1
-          fi
-
-      - name: Visual baselines (Linux)
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.update_visual_baselines != true }}
-        env:
-          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100
-          PLAYWRIGHT_VISUAL: "1"
-          PLAYWRIGHT_USE_SYSTEM_CHROME: "0"
-          CI: true
-        run: pnpm test:visual
-
-      - name: Update visual baselines (Linux)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.update_visual_baselines == true }}
-        env:
-          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100
-          PLAYWRIGHT_VISUAL: "1"
-          PLAYWRIGHT_USE_SYSTEM_CHROME: "0"
-          CI: true
-        run: pnpm test:visual:update
-
-      - name: Upload Linux baseline pack (update mode)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.update_visual_baselines == true }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: public-web-visual-baselines-linux-${{ github.run_id }}
-          path: public-web/e2e/visual.spec.ts-snapshots/*-linux.png
-          if-no-files-found: error
-          retention-days: 14
-
       - name: Upload Playwright failure artifacts
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: public-web-qa-artifacts-${{ github.run_id }}
+          name: public-web-e2e-artifacts-${{ github.run_id }}
           path: |
             public-web/test-results
             public-web/playwright-report
@@ -188,3 +343,300 @@ jobs:
         if: failure()
         run: cat /tmp/spyreels-public-web.log || true
         working-directory: .
+
+  visual:
+    name: visual (${{ matrix.shard }}/2)
+    needs: [changes, fast]
+    if: |
+      needs.changes.outputs.ui == 'true'
+      && needs.changes.outputs.update_baselines != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-jammy
+      options: --ipc=host
+    defaults:
+      run:
+        working-directory: public-web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Enable pnpm
+        working-directory: .
+        run: |
+          corepack enable
+          corepack prepare pnpm@${{ env.PNPM_VERSION }} --activate
+
+      - name: Resolve pnpm store path
+        id: pnpm-store
+        working-directory: .
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: pnpm-store-public-web-${{ hashFiles('public-web/pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-store-public-web-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Link react for shared UI imports
+        working-directory: .
+        run: |
+          mkdir -p node_modules shared/node_modules
+          REACT="$(realpath public-web/node_modules/react)"
+          TYPES="$(realpath public-web/node_modules/@types)"
+          ln -sfn "$REACT" node_modules/react
+          ln -sfn "$TYPES" node_modules/@types
+          ln -sfn "$REACT" shared/node_modules/react
+          ln -sfn "$TYPES" shared/node_modules/@types
+          test -f node_modules/react/jsx-runtime.js
+          test -f shared/node_modules/react/jsx-runtime.js
+
+      - name: Build
+        run: pnpm build
+
+      - name: Start server
+        env:
+          SPYREELS_PUBLIC_WEB_INDEXING_ENABLED: "true"
+        run: |
+          pnpm exec next start -p 3100 > /tmp/spyreels-public-web.log 2>&1 &
+          echo $! > /tmp/spyreels-public-web.pid
+
+      - name: Wait for health
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3100/health > /tmp/health.json; then
+              cat /tmp/health.json
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/spyreels-public-web.log || true
+          exit 1
+
+      - name: Require Linux visual baselines
+        run: |
+          count=$(find e2e/visual.spec.ts-snapshots -name '*-linux.png' 2>/dev/null | wc -l | tr -d ' ')
+          echo "Linux baseline count: ${count}"
+          if [ "${count}" -lt 1 ]; then
+            echo "::error::No *-linux.png baselines found. Add label update-baselines on the PR, or:"
+            echo "  cd public-web && pnpm test:visual:update:docker"
+            exit 1
+          fi
+
+      - name: Visual baselines (Linux, shard ${{ matrix.shard }}/2)
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100
+          PLAYWRIGHT_VISUAL: "1"
+          PLAYWRIGHT_USE_SYSTEM_CHROME: "0"
+          CI: true
+        run: >
+          pnpm exec playwright test e2e/visual.spec.ts
+          --project=desktop-1440 --project=mobile-390
+          --shard=${{ matrix.shard }}/2
+
+      - name: Upload Playwright failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-web-visual-artifacts-${{ github.run_id }}-shard-${{ matrix.shard }}
+          path: |
+            public-web/test-results
+            public-web/playwright-report
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Show server log on failure
+        if: failure()
+        run: cat /tmp/spyreels-public-web.log || true
+        working-directory: .
+
+  update-baselines:
+    name: update-baselines
+    needs: [changes, fast]
+    if: needs.changes.outputs.update_baselines == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: write
+      pull-requests: write
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-jammy
+      options: --ipc=host
+    defaults:
+      run:
+        working-directory: public-web
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Enable pnpm
+        working-directory: .
+        run: |
+          corepack enable
+          corepack prepare pnpm@${{ env.PNPM_VERSION }} --activate
+
+      - name: Resolve pnpm store path
+        id: pnpm-store
+        working-directory: .
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: pnpm-store-public-web-${{ hashFiles('public-web/pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-store-public-web-
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Link react for shared UI imports
+        working-directory: .
+        run: |
+          mkdir -p node_modules shared/node_modules
+          REACT="$(realpath public-web/node_modules/react)"
+          TYPES="$(realpath public-web/node_modules/@types)"
+          ln -sfn "$REACT" node_modules/react
+          ln -sfn "$TYPES" node_modules/@types
+          ln -sfn "$REACT" shared/node_modules/react
+          ln -sfn "$TYPES" shared/node_modules/@types
+          test -f node_modules/react/jsx-runtime.js
+          test -f shared/node_modules/react/jsx-runtime.js
+
+      - name: Build
+        run: pnpm build
+
+      - name: Start server
+        env:
+          SPYREELS_PUBLIC_WEB_INDEXING_ENABLED: "true"
+        run: |
+          pnpm exec next start -p 3100 > /tmp/spyreels-public-web.log 2>&1 &
+          echo $! > /tmp/spyreels-public-web.pid
+
+      - name: Wait for health
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3100/health > /tmp/health.json; then
+              cat /tmp/health.json
+              exit 0
+            fi
+            sleep 1
+          done
+          cat /tmp/spyreels-public-web.log || true
+          exit 1
+
+      - name: Update visual baselines (Linux)
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100
+          PLAYWRIGHT_VISUAL: "1"
+          PLAYWRIGHT_USE_SYSTEM_CHROME: "0"
+          CI: true
+        run: pnpm test:visual:update
+
+      # GITHUB_TOKEN pushes do not re-trigger workflows; verify in this same job.
+      - name: Verify updated baselines (Linux)
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100
+          PLAYWRIGHT_VISUAL: "1"
+          PLAYWRIGHT_USE_SYSTEM_CHROME: "0"
+          CI: true
+        run: pnpm test:visual
+
+      - name: Upload Linux baseline pack (dispatch / artifact mode)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-web-visual-baselines-linux-${{ github.run_id }}
+          path: public-web/e2e/visual.spec.ts-snapshots/*-linux.png
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Commit baselines to PR branch
+        if: github.event_name == 'pull_request'
+        working-directory: .
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add public-web/e2e/visual.spec.ts-snapshots/*-linux.png
+          if git diff --staged --quiet; then
+            echo "No baseline file changes to commit."
+            exit 0
+          fi
+          git commit -m "Update Linux visual baselines."
+          git push origin "HEAD:${BRANCH}"
+
+      - name: Remove update-baselines label
+        if: github.event_name == 'pull_request'
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          curl -sS -X DELETE \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/${PR_NUMBER}/labels/update-baselines" \
+            || true
+
+      - name: Show server log on failure
+        if: failure()
+        run: cat /tmp/spyreels-public-web.log || true
+        working-directory: .
+
+  qa:
+    name: qa
+    needs: [changes, fast, e2e, visual, update-baselines]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Merge gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "changes=${{ needs.changes.result }}"
+          echo "fast=${{ needs.fast.result }}"
+          echo "e2e=${{ needs.e2e.result }}"
+          echo "visual=${{ needs.visual.result }}"
+          echo "update-baselines=${{ needs.update-baselines.result }}"
+
+          [[ "${{ needs.changes.result }}" == "success" ]]
+          [[ "${{ needs.fast.result }}" == "success" ]]
+          [[ "${{ needs.e2e.result }}" == "success" ]]
+
+          case "${{ needs.visual.result }}" in
+            success|skipped) ;;
+            *)
+              echo "::error::visual job failed (${{ needs.visual.result }})"
+              exit 1
+              ;;
+          esac
+
+          case "${{ needs.update-baselines.result }}" in
+            success|skipped) ;;
+            *)
+              echo "::error::update-baselines job failed (${{ needs.update-baselines.result }})"
+              exit 1
+              ;;
+          esac
+
+          echo "public-web qa gate passed"
