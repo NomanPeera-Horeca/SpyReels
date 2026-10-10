@@ -566,6 +566,9 @@ export type InsertRecreatedScript = typeof recreatedScripts.$inferInsert;
  *   - TikTok: `tiktokVideoId` non-null; other ID cols null.
  *   - YouTube: `youtubeVideoId` non-null; other ID cols null.
  * Enforced in the `saved.toggle` handler.
+ *
+ * `platform` + `sourceId` are the nullable canonical external identity used by
+ * Viral Posts library sync (see drizzle/0101_saved_reels_canonical_identity.sql).
  */
 export const savedReels = mysqlTable(
   "saved_reels",
@@ -582,6 +585,9 @@ export const savedReels = mysqlTable(
   featuredReelId: int("featuredReelId"),
   tiktokVideoId: int("tiktokVideoId"),
   youtubeVideoId: int("youtubeVideoId"),
+  /** External platform identity for Viral Posts / cross-surface library sync. */
+  platform: varchar("platform", { length: 16 }),
+  sourceId: varchar("sourceId", { length: 128 }),
   note: text("note"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   },
@@ -607,6 +613,9 @@ export const savedReels = mysqlTable(
       table.userId,
       table.youtubeVideoId
     ),
+    workspaceUserPlatformSourceIdx: index(
+      "idx_saved_reels_workspace_user_platform_source"
+    ).on(table.workspaceId, table.userId, table.platform, table.sourceId),
   })
 );
 

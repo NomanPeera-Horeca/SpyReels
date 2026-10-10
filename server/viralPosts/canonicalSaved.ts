@@ -2,6 +2,10 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { reels, viralPostCandidates } from "../../drizzle/schema";
 import { getDb } from "../db";
 import { getPersonalWorkspaceId } from "../personalWorkspace";
+import {
+  planCanonicalLibrarySave,
+  type CanonicalSavedRow,
+} from "./canonicalLibrarySavePlan";
 
 /**
  * Bridge Viral Posts into the existing global saved_reels library.
@@ -46,41 +50,88 @@ export async function saveViralCandidateCanonical(
     hintedReelId: candidate.mirroredReelId,
   });
 
-  // Cheap lazy upgrade: only use a reelId that belongs to this workspace.
-  if (mirroredReelId != null && mirroredReelId > 0) {
+  const existing = await loadCanonicalLibraryRows({
+    workspaceId,
+    userId,
+    platform,
+    sourceId,
+    mirroredReelId,
+  });
+
+  if (existing.kind === "missing-columns") {
+    await insertLegacyMirrorSave({
+      userId,
+      workspaceId,
+      mirroredReelId,
+    });
+    return;
+  }
+
+  const plan = planCanonicalLibrarySave({
+    rows: existing.rows,
+    platform,
+    sourceId,
+    mirroredReelId,
+  });
+
+  if (plan.type === "noop") return;
+
+  if (plan.type === "stamp-identity") {
     await db.execute(sql`
       UPDATE saved_reels
       SET platform = ${platform}, sourceId = ${sourceId}
-      WHERE workspaceId = ${workspaceId}
+      WHERE id = ${plan.id}
+        AND workspaceId = ${workspaceId}
         AND userId = ${userId}
-        AND reelId = ${mirroredReelId}
-        AND (platform IS NULL OR sourceId IS NULL)
     `);
+    return;
   }
 
-  // INSERT IGNORE keeps this idempotent against the existing reelId unique
-  // key while the canonical unique key is intentionally not enforced yet.
+  if (plan.type === "attach-reel") {
+    await db.execute(sql`
+      UPDATE saved_reels
+      SET reelId = ${plan.reelId}, jobId = 0
+      WHERE id = ${plan.id}
+        AND workspaceId = ${workspaceId}
+        AND userId = ${userId}
+        AND reelId IS NULL
+    `);
+    return;
+  }
+
+  if (plan.type === "merge") {
+    // Delete the identity-only row first so stamping the mirrored row cannot
+    // collide with uniq(workspace, user, platform, sourceId) if it exists.
+    await db.execute(sql`
+      DELETE FROM saved_reels
+      WHERE id = ${plan.deleteId}
+        AND workspaceId = ${workspaceId}
+        AND userId = ${userId}
+    `);
+    await db.execute(sql`
+      UPDATE saved_reels
+      SET platform = ${platform}, sourceId = ${sourceId}
+      WHERE id = ${plan.keepId}
+        AND workspaceId = ${workspaceId}
+        AND userId = ${userId}
+    `);
+    return;
+  }
+
   await db.execute(sql`
     INSERT IGNORE INTO saved_reels
       (userId, workspaceId, reelId, jobId, featuredReelId, tiktokVideoId, youtubeVideoId, platform, sourceId, createdAt)
-    SELECT
+    VALUES (
       ${userId},
       ${workspaceId},
-      ${mirroredReelId},
-      ${mirroredReelId != null && mirroredReelId > 0 ? 0 : null},
+      ${plan.reelId},
+      ${plan.reelId != null ? 0 : null},
       NULL,
       NULL,
       NULL,
       ${platform},
       ${sourceId},
       NOW()
-    WHERE NOT EXISTS (
-      SELECT 1
-      FROM saved_reels
-      WHERE workspaceId = ${workspaceId}
-        AND userId = ${userId}
-        AND platform = ${platform}
-        AND sourceId = ${sourceId}
     )
   `);
 }
@@ -96,7 +147,6 @@ export async function unsaveViralCandidateCanonical(
     .select({
       platform: viralPostCandidates.platform,
       sourceId: viralPostCandidates.sourceId,
-      mirroredReelId: viralPostCandidates.mirroredReelId,
     })
     .from(viralPostCandidates)
     .where(eq(viralPostCandidates.id, candidateId))
@@ -107,33 +157,93 @@ export async function unsaveViralCandidateCanonical(
   const workspaceId = await getPersonalWorkspaceId(userId);
   const platform = (candidate.platform || "instagram").trim().toLowerCase();
   const sourceId = candidate.sourceId.trim();
-  const mirroredReelId = await resolveWorkspaceMirrorId({
-    workspaceId,
-    platform,
-    sourceId,
-    hintedReelId: candidate.mirroredReelId,
-  });
+  if (!sourceId) return;
 
-  if (mirroredReelId != null && mirroredReelId > 0) {
+  try {
+    // Only remove rows that carry this canonical identity. Never delete a
+    // workspace reel save that the user collected independently.
     await db.execute(sql`
       DELETE FROM saved_reels
       WHERE workspaceId = ${workspaceId}
         AND userId = ${userId}
+        AND platform = ${platform}
+        AND sourceId = ${sourceId}
+    `);
+  } catch (err) {
+    if (isMissingCanonicalIdentityColumn(err)) return;
+    throw err;
+  }
+}
+
+async function loadCanonicalLibraryRows(args: {
+  workspaceId: string;
+  userId: number;
+  platform: string;
+  sourceId: string;
+  mirroredReelId: number | null;
+}): Promise<
+  { kind: "ready"; rows: CanonicalSavedRow[] } | { kind: "missing-columns" }
+> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  try {
+    const result = await db.execute(sql`
+      SELECT id, reelId, platform, sourceId
+      FROM saved_reels
+      WHERE workspaceId = ${args.workspaceId}
+        AND userId = ${args.userId}
         AND (
-          (platform = ${platform} AND sourceId = ${sourceId})
-          OR reelId = ${mirroredReelId}
+          (platform = ${args.platform} AND sourceId = ${args.sourceId})
+          OR (${args.mirroredReelId} IS NOT NULL AND reelId = ${args.mirroredReelId})
         )
     `);
-    return;
+    const raw = result[0] as unknown;
+    const rows = Array.isArray(raw) ? (raw as CanonicalSavedRow[]) : [];
+    return {
+      kind: "ready",
+      rows,
+    };
+  } catch (err) {
+    if (isMissingCanonicalIdentityColumn(err)) {
+      return { kind: "missing-columns" };
+    }
+    throw err;
   }
+}
 
+async function insertLegacyMirrorSave(args: {
+  userId: number;
+  workspaceId: string;
+  mirroredReelId: number | null;
+}): Promise<void> {
+  if (args.mirroredReelId == null || args.mirroredReelId <= 0) return;
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
   await db.execute(sql`
-    DELETE FROM saved_reels
-    WHERE workspaceId = ${workspaceId}
-      AND userId = ${userId}
-      AND platform = ${platform}
-      AND sourceId = ${sourceId}
+    INSERT IGNORE INTO saved_reels
+      (userId, workspaceId, reelId, jobId, createdAt)
+    VALUES (
+      ${args.userId},
+      ${args.workspaceId},
+      ${args.mirroredReelId},
+      0,
+      NOW()
+    )
   `);
+}
+
+function isMissingCanonicalIdentityColumn(err: unknown): boolean {
+  const message = [
+    err instanceof Error ? err.message : "",
+    err instanceof Error && err.cause instanceof Error ? err.cause.message : "",
+  ]
+    .join(" ")
+    .toLowerCase();
+  return (
+    message.includes("unknown column") &&
+    (message.includes("platform") || message.includes("sourceid"))
+  );
 }
 
 /**
