@@ -11,6 +11,7 @@
   },
   "openGraph": {
     "description": "Find viral TikTok videos from a public creator. Compare views and engagement, then turn a strong idea into an original script in your voice with SpyReels.",
+    "image": "https://spyreels.ai/brand/og-default.jpg",
     "site_name": "SpyReels",
     "title": "TikTok Viral Video Finder by Username | SpyReels",
     "type": "website",
@@ -19,6 +20,7 @@
   "twitter": {
     "card": "summary_large_image",
     "description": "Find viral TikTok videos from a public creator. Compare views and engagement, then turn a strong idea into an original script in your voice with SpyReels.",
+    "image": "https://spyreels.ai/brand/og-default.jpg",
     "title": "TikTok Viral Video Finder by Username | SpyReels"
   },
   "h1": "Find viral TikTok videos in your niche.",

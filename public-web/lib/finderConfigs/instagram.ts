@@ -1,3 +1,4 @@
+import { DEFAULT_OG_IMAGE } from "../../../shared/defaultOgImage";
 import { researchReturnTo } from "../../../shared/researchIntent";
 import { buildFaqPageJsonLd } from "../../components/marketingFaqJsonLd";
 import type { FinderConfig, FinderDemoItem, FinderProfileLookupResult } from "./types";
@@ -126,11 +127,13 @@ export const instagramFinderConfig: FinderConfig = {
       siteName: "SpyReels",
       title: TITLE,
       description: DESCRIPTION,
+      images: [{ url: DEFAULT_OG_IMAGE }],
     },
     twitter: {
       card: "summary_large_image",
       title: TITLE,
       description: DESCRIPTION,
+      images: [DEFAULT_OG_IMAGE],
     },
   },
   hero: {
