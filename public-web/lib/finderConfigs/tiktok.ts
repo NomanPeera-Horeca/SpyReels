@@ -127,11 +127,11 @@ export const tiktokFinderConfig: FinderConfig = {
   hero: {
     eyebrow: "TikTok viral video finder",
     titleBefore: "Find ",
-    titleAfter: " TikTok videos in your niche",
+    titleAfter: " TikTok videos in your niche.",
     lead: "Search a public TikTok creator. See which videos broke through. Turn a strong idea into a script in your voice.",
   },
   howItWorks: {
-    title: "Research to ready-to-film in 3 minutes",
+    title: "Research to ready-to-film in 3 minutes.",
     description: "Go from a public TikTok creator to a video idea you can make your own.",
     steps: [
       {
@@ -153,12 +153,12 @@ export const tiktokFinderConfig: FinderConfig = {
   },
   workspace: {
     toolsPage: "tiktok",
-    title: "Find a strong TikTok. Make the next one yours.",
+    title: "Find a strong TikTok. Make it yours.",
   },
   faq: {
     title: "Questions about finding viral TikToks.",
     description:
-      "Research public creator videos and bring a promising idea into your own script workflow.",
+      "Research public creator TikToks and bring a promising idea into your own script workflow.",
     items: faqs,
   },
   finalCta: {
@@ -200,7 +200,7 @@ export const tiktokFinderConfig: FinderConfig = {
     spellCheck: false,
     examplesVariant: "tryInline",
     examplesPrefix: "Try ",
-    demoHandles: ["charlidamelio", "khaby.lame", "zachking", "mrbeast"],
+    demoHandles: ["charlidamelio", "khaby.lame", "mrbeast"],
     platformLabel: "TikTok",
     profileMetaKind: "followersVideos",
     normalizeHandle: parseHandle,

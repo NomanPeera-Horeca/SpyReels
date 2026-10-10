@@ -67,12 +67,14 @@
   margin: 0;
   max-width: 310px;
   color: var(--sr-color-text-primary);
+  text-wrap: balance;
 }
 
 .blurb {
   margin: 0;
   max-width: 340px;
   color: var(--sr-color-text-tertiary);
+  text-wrap: pretty;
 }
 
 .cta {

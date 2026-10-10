@@ -1,10 +1,11 @@
 import { MarketingIconArrowRight, MarketingIconPlus } from "./MarketingIcons";
 import { HOME_HREF, LOGO_MARK_SRC, SIGNUP_HREF } from "./marketingNavData";
+import { marketingSharedCopy } from "../lib/marketingSharedCopy";
 import styles from "./MarketingFooter.module.css";
 
 const FOOTER_COLUMNS = [
   {
-    title: "Product",
+    title: marketingSharedCopy.footer.categories[0],
     links: [
       ["/features/viral-reel-finder", "Viral Reel Finder"],
       ["/?auth=signup&returnTo=%2Fdiscover-creators", "Find Creators"],
@@ -14,7 +15,7 @@ const FOOTER_COLUMNS = [
     ],
   },
   {
-    title: "Free tools",
+    title: marketingSharedCopy.footer.categories[1],
     links: [
       ["/features/viral-reel-finder", "Reel Finder"],
       ["/free-tools/ai-script-generator", "AI Script Generator"],
@@ -24,7 +25,7 @@ const FOOTER_COLUMNS = [
     ],
   },
   {
-    title: "Platforms",
+    title: marketingSharedCopy.footer.categories[2],
     links: [
       ["/features/viral-reel-finder", "Instagram Reels"],
       ["/free-tools/tiktok-viral-video-finder", "TikTok"],
@@ -32,7 +33,7 @@ const FOOTER_COLUMNS = [
     ],
   },
   {
-    title: "Resources",
+    title: marketingSharedCopy.footer.categories[3],
     links: [
       ["/blog", "Blog"],
       ["/#answers", "Help Center"],
@@ -40,7 +41,7 @@ const FOOTER_COLUMNS = [
     ],
   },
   {
-    title: "Company",
+    title: marketingSharedCopy.footer.categories[4],
     links: [
       ["/about", "About"],
       ["/privacy", "Privacy"],
@@ -70,12 +71,10 @@ export function MarketingFooter() {
               <span className={styles.logoWordmark}>SpyReels</span>
             </a>
             <h2 className={`${styles.headline} sr-text-marketing-title-medium`}>
-              Find Viral Reels
-              <br />
-              in your niche.
+              {marketingSharedCopy.footer.headline}
             </h2>
             <p className={`${styles.blurb} sr-text-marketing-body-small`}>
-              Turn proven Reels into scripts in your voice. Research to ready-to-film in 3 minutes.
+              {marketingSharedCopy.footer.support}
             </p>
             <a className={`${styles.cta} sr-text-core-button-large`} href={SIGNUP_HREF}>
               Start free

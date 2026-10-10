@@ -75,6 +75,7 @@
   line-height: var(--sr-type-marketing-body-small-line);
   font-weight: var(--sr-type-marketing-body-small-weight);
   letter-spacing: var(--sr-type-marketing-body-small-tracking);
+  text-wrap: pretty;
 }
 
 /* Large / Center subtitle = Body Large. */

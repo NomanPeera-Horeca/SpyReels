@@ -6,7 +6,6 @@ export const dynamic = "force-dynamic";
 const DEMO_HANDLES = new Set([
   "garyvee",
   "humphreytalks",
-  "russellbrunson",
   "codiesanchez",
 ]);
 

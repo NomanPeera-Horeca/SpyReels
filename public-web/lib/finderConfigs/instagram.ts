@@ -136,11 +136,11 @@ export const instagramFinderConfig: FinderConfig = {
   hero: {
     eyebrow: "Free Instagram Reel Finder",
     titleBefore: "Find ",
-    titleAfter: " Instagram Reels in your niche",
+    titleAfter: " Instagram Reels in your niche.",
     lead: "Find top-performing Reels from any public Instagram creator, then remake the winning format in your own voice in under 3 minutes.",
   },
   howItWorks: {
-    title: "Research to ready-to-film in 3 minutes",
+    title: "Research to ready-to-film in 3 minutes.",
     steps: [
       {
         number: "01",
@@ -221,9 +221,9 @@ export const instagramFinderConfig: FinderConfig = {
     profileContinueAriaLabel: (username) => `Continue with @${username} in Creator Radar`,
     inputName: "handle",
     dataFinderReady: true,
-    examplesVariant: "tryRow",
-    examplesPrefix: "Or try an example:",
-    demoHandles: ["garyvee", "humphreytalks", "russellbrunson", "codiesanchez"],
+    examplesVariant: "tryInline",
+    examplesPrefix: "Try ",
+    demoHandles: ["garyvee", "humphreytalks", "codiesanchez"],
     platformLabel: "Reels",
     normalizeHandle,
     validHandle,

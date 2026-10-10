@@ -1,3 +1,4 @@
+import { marketingSharedCopy } from "../lib/marketingSharedCopy";
 import { PrimaryButton } from "./PrimaryButton";
 import { MarketingSection } from "./MarketingSection";
 import { MarketingSectionHeader } from "./MarketingSectionHeader";
@@ -172,11 +173,11 @@ export function MarketingWorkspace({
           <div className={styles.integrationCopy}>
             <div className={styles.integrationTitleRow}>
               <strong className={cx(styles.integrationTitle, "sr-text-product-card-title")}>
-                Save Reels with Telegram
+                {marketingSharedCopy.integrations.telegramTitle}
               </strong>
             </div>
             <p className={cx(styles.integrationDescription, "sr-text-marketing-body-small")}>
-              Send a Reel while you browse. Pick it up later in your SpyReels workspace.
+              {marketingSharedCopy.integrations.telegram}
             </p>
           </div>
         </div>
@@ -187,12 +188,12 @@ export function MarketingWorkspace({
           <div className={styles.integrationCopy}>
             <div className={styles.integrationTitleRow}>
               <strong className={cx(styles.integrationTitle, "sr-text-product-card-title")}>
-                SpyReels in ChatGPT and Claude
+                {marketingSharedCopy.integrations.aiTitle}
               </strong>
               <span className={cx(styles.badge, "sr-text-marketing-caption")}>Coming soon</span>
             </div>
             <p className={cx(styles.integrationDescription, "sr-text-marketing-body-small")}>
-              Bring SpyReels viral-post research into the conversation where you develop ideas.
+              {marketingSharedCopy.integrations.ai}
             </p>
           </div>
         </div>

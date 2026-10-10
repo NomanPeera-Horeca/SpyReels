@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { marketingSharedCopy } from "../lib/marketingSharedCopy";
 import {
   MarketingIconBroll,
   MarketingIconCarousel,
@@ -37,7 +38,7 @@ const strokeIcon = (node: ReactNode) => node;
 
 export const PRODUCT_SECTIONS: MegaSection[] = [
   {
-    label: "The core workflow",
+    label: marketingSharedCopy.headerGroupLabels[0],
     items: [
       {
         href: "/features/viral-reel-finder",
@@ -56,7 +57,7 @@ export const PRODUCT_SECTIONS: MegaSection[] = [
     ],
   },
   {
-    label: "Explore the toolkit",
+    label: marketingSharedCopy.headerGroupLabels[1],
     items: [
       {
         href: "/?auth=signup&returnTo=%2Fdiscover-creators",
@@ -89,7 +90,7 @@ export const PRODUCT_SECTIONS: MegaSection[] = [
     ],
   },
   {
-    label: "Also in your workspace",
+    label: marketingSharedCopy.headerGroupLabels[2],
     items: [
       {
         href: "/#telegram-extension",

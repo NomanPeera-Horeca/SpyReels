@@ -420,3 +420,22 @@
 .product-demo .hero-grid{display:block;width:min(var(--sr-layout-container-max-width),calc(100% - 2 * var(--sr-layout-page-gutter-desktop)));margin-inline:auto}
 @media(max-width:980px){.product-demo .hero-grid{width:min(var(--sr-layout-container-max-width),calc(100% - 2 * var(--sr-layout-page-gutter-tablet)))}}
 @media(max-width:640px){.product-demo .hero-grid{width:min(var(--sr-layout-container-max-width),calc(100% - 2 * var(--sr-layout-page-gutter-mobile)))}}
+
+/* Decision 32: labels stored sentence case; display uppercase via style */
+.motion-kicker,
+.viral-pill,
+.voice-badge,
+.script-paper label{
+  text-transform:uppercase;
+}
+.pain-head p,
+.section-head p{
+  text-wrap:pretty;
+}
+.script-heading,
+.motion-title,
+.success-message,
+.pain-head h2,
+.section-head h2{
+  text-wrap:balance;
+}

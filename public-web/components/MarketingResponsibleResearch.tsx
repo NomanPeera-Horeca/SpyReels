@@ -1,4 +1,5 @@
 import type { ComponentType, SVGProps } from "react";
+import { marketingSharedCopy } from "../lib/marketingSharedCopy";
 import { MarketingSection } from "./MarketingSection";
 import { MarketingSectionHeader } from "./MarketingSectionHeader";
 import {
@@ -64,7 +65,7 @@ export function MarketingResponsibleResearch() {
               Make original work.
             </>
           }
-          subtitle="SpyReels helps creators understand public content patterns while keeping judgment, voice, and publishing decisions in their hands."
+          subtitle={marketingSharedCopy.responsibleResearch.support}
           headingLevel="h2"
           titleId={titleId}
           size="large"

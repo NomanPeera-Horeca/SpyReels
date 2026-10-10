@@ -80,7 +80,9 @@
 .description {
   margin: 0;
   color: var(--sr-color-text-secondary);
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
   white-space: normal;
 }
 
@@ -140,23 +142,30 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--sr-layout-inline-gap);
+  min-width: 0;
 }
 
 .integrationTitle {
   margin: 0;
   color: var(--sr-color-text-primary);
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
 }
 
 .integrationDescription {
   margin: 0;
   color: var(--sr-color-text-secondary);
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
   white-space: normal;
 }
 
 .badge {
   display: inline-flex;
   align-items: center;
+  flex: 0 0 auto;
   padding: 0 var(--sr-layout-inline-gap);
   border-radius: var(--sr-radius-full);
   border: var(--sr-border-width-default) solid var(--sr-color-border-default);
@@ -182,7 +191,8 @@
     display: none;
   }
 
+  /* Figma: one Beyond card per row on compact */
   .integrations {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
   }
 }
