@@ -16,6 +16,7 @@ Apply via Railway MySQL console (Bug #63), or Railway CLI `railway connect MySQL
 | Migration | Environment | Applied at (UTC) | Applied by | Method | Notes |
 |---|---|---|---|---|---|
 | `drizzle/0100_featured_demo_catalog.sql` | SpyReels production MySQL (`respectful-rejoicing` / service `MySQL`) | 2026-10-10 ~20:50 UTC | Cursor agent (Noman-approved) via Railway CLI | `railway connect MySQL --no-ssh < 0100_featured_demo_catalog.sql` once | Additive only: created `featured_demo_accounts` + `featured_demo_items` + indexes. Verified with `SHOW TABLES LIKE 'featured_demo_%'` and `SHOW CREATE TABLE`. |
+| `drizzle/0101_featured_demo_bigint_counts.sql` | SpyReels production MySQL (`respectful-rejoicing` / service `MySQL`) | 2026-10-10 ~21:12 UTC | Cursor agent (Noman-approved) via Railway CLI | `railway connect MySQL --no-ssh < 0101_featured_demo_bigint_counts.sql` once | Widened `viewCount`/`likeCount`/`commentCount`/`shareCount` to `BIGINT`. Verified with `SHOW COLUMNS`. |
 
 ## Cron (same model as viral-posts pool refresh)
 
