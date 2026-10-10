@@ -220,11 +220,60 @@ function sharedSlots(source) {
   return slots;
 }
 
-/** @param {Slot[]} slots */
-function failuresFor(slots) {
+/**
+ * Keep in sync with PROTECTED_COPY_SLOTS in lib/marketingContentSpec.ts.
+ * Reason must stay "protected copy, owner-approved".
+ * @type {Record<string, "protected copy, owner-approved">}
+ */
+const PROTECTED_COPY_SLOTS = {
+  "instagram.hero.lead": "protected copy, owner-approved",
+};
+
+function loadProtectedSlotsFromTs() {
+  const source = read("lib/marketingContentSpec.ts");
+  const block = source.match(
+    /export const PROTECTED_COPY_SLOTS[\s\S]*?=\s*\{([\s\S]*?)\}\s*;/
+  );
+  if (!block) {
+    throw new Error("PROTECTED_COPY_SLOTS missing from lib/marketingContentSpec.ts");
+  }
+  /** @type {Record<string, string>} */
+  const fromTs = {};
+  for (const match of block[1].matchAll(
+    /"((?:\\.|[^"\\])*)"\s*:\s*"((?:\\.|[^"\\])*)"/g
+  )) {
+    fromTs[match[1]] = match[2];
+  }
+  for (const [slot, reason] of Object.entries(PROTECTED_COPY_SLOTS)) {
+    if (fromTs[slot] !== reason) {
+      throw new Error(
+        `PROTECTED_COPY_SLOTS drift: mjs has ${slot}=${JSON.stringify(reason)} but TS has ${JSON.stringify(fromTs[slot])}`
+      );
+    }
+  }
+  for (const [slot, reason] of Object.entries(fromTs)) {
+    if (PROTECTED_COPY_SLOTS[slot] !== reason) {
+      throw new Error(
+        `PROTECTED_COPY_SLOTS drift: TS has ${slot}=${JSON.stringify(reason)} but mjs is missing it`
+      );
+    }
+    if (reason !== "protected copy, owner-approved") {
+      throw new Error(
+        `PROTECTED_COPY_SLOTS[${JSON.stringify(slot)}] reason must be "protected copy, owner-approved"`
+      );
+    }
+  }
+  return fromTs;
+}
+
+/** @param {Slot[]} slots @param {Record<string, string>} protectedSlots */
+function failuresFor(slots, protectedSlots) {
   /** @type {string[]} */
   const failures = [];
   for (const { slot, value, kind } of slots) {
+    if (slot in protectedSlots) {
+      continue;
+    }
     if (kind === "button") {
       const words = wordCount(value);
       if (words > LIMITS.buttonWords) {
@@ -240,15 +289,19 @@ function failuresFor(slots) {
   return failures;
 }
 
+const protectedSlots = loadProtectedSlotsFromTs();
 const ig = read("lib/finderConfigs/instagram.ts");
 const tt = read("lib/finderConfigs/tiktok.ts");
 const shared = read("lib/marketingSharedCopy.ts");
 const slots = [...slotsForFinder("instagram", ig), ...slotsForFinder("tiktok", tt), ...sharedSlots(shared)];
-const failures = failuresFor(slots);
+const failures = failuresFor(slots, protectedSlots);
 
 if (failures.length > 0) {
   console.error(`Marketing content-spec failed (${failures.length}):`);
   for (const line of failures) console.error(`  - ${line}`);
   process.exit(1);
 }
-console.log(`Marketing content-spec OK (${slots.length} slots)`);
+const protectedCount = Object.keys(protectedSlots).length;
+console.log(
+  `Marketing content-spec OK (${slots.length} slots, ${protectedCount} protected)`
+);

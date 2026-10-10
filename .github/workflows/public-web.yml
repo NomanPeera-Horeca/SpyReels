@@ -121,6 +121,12 @@ jobs:
           CI: true
         run: pnpm exec playwright test e2e/faq.spec.ts --project=desktop-1440
 
+      - name: Marketing text wrap (390)
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100
+          CI: true
+        run: pnpm exec playwright test e2e/marketing-text-wrap.spec.ts --project=mobile-390
+
       - name: SEO contract baselines
         env:
           PLAYWRIGHT_BASE_URL: http://127.0.0.1:3100

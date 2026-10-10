@@ -1,6 +1,9 @@
 /**
  * Figma Decision 32 / Text Rules B — content-spec character limits.
  * CI fails with the slot name and measured length when a slot exceeds its limit.
+ *
+ * Never rewrite copy to pass this gate. If owner-approved copy must exceed a limit,
+ * add its slot id to PROTECTED_COPY_SLOTS with reason "protected copy, owner-approved".
  */
 
 export const CONTENT_SPEC_LIMITS = {
@@ -21,6 +24,14 @@ export const CONTENT_SPEC_LIMITS = {
   /** Card / integration description */
   cardDescription: 70,
 } as const;
+
+/**
+ * Slots that may exceed Figma limits without failing CI.
+ * Reason must stay "protected copy, owner-approved".
+ */
+export const PROTECTED_COPY_SLOTS: Readonly<Record<string, "protected copy, owner-approved">> = {
+  "instagram.hero.lead": "protected copy, owner-approved",
+};
 
 export type ContentSpecKind =
   | "heroOrSectionTitle"
@@ -46,6 +57,9 @@ function wordCount(value: string): number {
 export function marketingCopySpecFailures(slots: readonly MarketingCopySlot[]): string[] {
   const failures: string[] = [];
   for (const { slot, value, kind } of slots) {
+    if (slot in PROTECTED_COPY_SLOTS) {
+      continue;
+    }
     if (kind === "button") {
       const words = wordCount(value);
       const limit = CONTENT_SPEC_LIMITS.buttonWords;

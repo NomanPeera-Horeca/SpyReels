@@ -137,7 +137,7 @@ export const instagramFinderConfig: FinderConfig = {
     eyebrow: "Free Instagram Reel Finder",
     titleBefore: "Find ",
     titleAfter: " Instagram Reels in your niche.",
-    lead: "Find top-performing Reels from any public Instagram creator, then remake the winning format in your own voice.",
+    lead: "Find top-performing Reels from any public Instagram creator, then remake the winning format in your own voice in under 3 minutes.",
   },
   howItWorks: {
     title: "Research to ready-to-film in 3 minutes.",
