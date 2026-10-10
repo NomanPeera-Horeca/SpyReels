@@ -1,17 +1,18 @@
 /**
- * Curated TikTok handles the logged-out TikTok finder page may preview through
- * `tiktokScrape.publicDemo`. Hardcoded so adding scrape volume never silently
- * widens what unauthenticated visitors can read. First entry is the default.
+ * Curated TikTok handles the logged-out TikTok finder page may preview.
+ * Source of truth lives in `featuredDemoCatalog` (platform-agnostic catalog).
  */
-export const PUBLIC_TIKTOK_DEMO_HANDLES = [
-  "charlidamelio",
-  "khaby.lame",
-  "zachking",
-  "mrbeast",
-] as const;
+import {
+  FEATURED_DEMO_HANDLES,
+  FEATURED_DEMO_ITEM_LIMIT,
+  isFeaturedDemoHandle,
+  normalizeFeaturedDemoHandle,
+} from "./featuredDemoCatalog";
 
-export const PUBLIC_TIKTOK_DEMO_VIDEO_LIMIT = 8;
+export const PUBLIC_TIKTOK_DEMO_HANDLES = FEATURED_DEMO_HANDLES.tiktok;
+
+export const PUBLIC_TIKTOK_DEMO_VIDEO_LIMIT = FEATURED_DEMO_ITEM_LIMIT;
 
 export function isPublicTikTokDemoHandle(handle: string): boolean {
-  return (PUBLIC_TIKTOK_DEMO_HANDLES as readonly string[]).includes(handle);
+  return isFeaturedDemoHandle("tiktok", normalizeFeaturedDemoHandle(handle));
 }
