@@ -10,6 +10,8 @@ type FinderSearchShellProps = {
   children?: never;
   /** Platform mark rendered inside the shell (InstagramMark / TikTokMark / etc.) */
   platformMark: ReactNode;
+  /** Drives mark visibility (IG mobile hides mark, keeps inset) and mark sizing. */
+  platform?: "instagram" | "tiktok";
   /** Accessible label text for the visible input */
   label: string;
   inputId: string;
@@ -40,6 +42,7 @@ function cx(...parts: Array<string | false | undefined>) {
 
 export function FinderSearchShell({
   platformMark,
+  platform = "instagram",
   label,
   inputId,
   value,
@@ -57,6 +60,7 @@ export function FinderSearchShell({
     <form
       {...formProps}
       className={cx(styles.shell, className)}
+      data-platform={platform}
       data-invalid={invalid ? "true" : undefined}
       onSubmit={onSubmit}
       noValidate={noValidate}

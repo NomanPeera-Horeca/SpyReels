@@ -1,17 +1,18 @@
-/* Hero pill eyebrow (Figma Page 05). Not for kicker, auth, or text-only eyebrows. */
+/* Hero pill eyebrow (Figma Marketing / Finder Hero + Product-led Hero). */
 .root {
   display: inline-flex;
   align-items: center;
   gap: var(--sr-layout-inline-gap);
   padding: 7px 11px;
-  border: var(--sr-border-width-default) solid var(--sr-purple-200);
+  border: var(--sr-border-width-default) solid var(--sr-color-border-default);
   border-radius: var(--sr-radius-full);
   background: var(--sr-color-surface-default);
-  color: var(--sr-color-text-brand);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  color: var(--sr-color-marketing-accent);
+  font-size: var(--sr-type-marketing-eyebrow-size);
+  line-height: var(--sr-type-marketing-eyebrow-line);
+  font-weight: var(--sr-type-marketing-eyebrow-weight);
+  letter-spacing: var(--sr-type-marketing-eyebrow-tracking);
+  text-transform: var(--sr-type-marketing-eyebrow-transform);
 }
 
 .dot {

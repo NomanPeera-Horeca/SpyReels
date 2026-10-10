@@ -292,6 +292,7 @@ export default function TikTokFinderExperience() {
           invalid={inputInvalid}
           onSubmit={onSubmit}
           noValidate
+          platform="tiktok"
           platformMark={<TikTokMark />}
           label="TikTok username or profile link"
           inputId="tiktok-handle"

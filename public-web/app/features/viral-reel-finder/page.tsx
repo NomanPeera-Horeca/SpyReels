@@ -134,12 +134,12 @@ export default function ViralReelFinderPilotPage() {
       <MarketingHeader />
 
       <main>
-        <section className={`${styles.shell} ${styles.hero}`}>
+        <section className={`${styles.shell} ${styles.hero}`} data-marketing-finder-hero="">
           <MarketingHeroEyebrow>Free Instagram Reel Finder</MarketingHeroEyebrow>
-          <h1>
+          <h1 className="sr-text-marketing-display-hero">
             Find <span className={styles.accent}>viral</span> Instagram Reels in your niche
           </h1>
-          <p className={styles.heroLead}>
+          <p className={`sr-text-marketing-body-large ${styles.heroLead}`}>
             Find top-performing Reels from any public Instagram creator, then remake
             the winning format in your own voice in under 3 minutes.
           </p>
@@ -169,7 +169,7 @@ export default function ViralReelFinderPilotPage() {
         />
 
         <MarketingFinalCta
-          title="Your next idea starts with a Reel worth studying."
+          title="Find your next Reel idea without endless scrolling."
           body="Search a creator. Remake their best Reel in your voice."
           buttonLabel="Find viral Reels"
           href="#live-demo"

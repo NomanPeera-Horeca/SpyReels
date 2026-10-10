@@ -306,12 +306,13 @@ export default function ViralFinderExperience() {
           formProps={{
             "data-finder-ready": finderReady ? "true" : "false",
           }}
+          platform="instagram"
           platformMark={<InstagramMark />}
           label="Instagram username or profile link"
           inputId="viral-finder-handle"
           value={input}
           onChange={(event) => setInput(event.target.value)}
-          placeholder="@username"
+          placeholder="@username or instagram.com/username"
           inputProps={{
             name: "handle",
             autoComplete: "off",

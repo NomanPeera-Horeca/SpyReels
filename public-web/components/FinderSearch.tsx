@@ -12,6 +12,7 @@ import {
 
 type FinderSearchProps = {
   platformMark: ReactNode;
+  platform?: "instagram" | "tiktok";
   label: string;
   inputId: string;
   value: string;
@@ -52,6 +53,7 @@ type FinderSearchProps = {
  */
 export function FinderSearch({
   platformMark,
+  platform = "instagram",
   label,
   inputId,
   value,
@@ -80,6 +82,7 @@ export function FinderSearch({
     <>
       <FinderSearchShell
         platformMark={platformMark}
+        platform={platform}
         label={label}
         inputId={inputId}
         value={value}

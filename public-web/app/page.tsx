@@ -170,7 +170,7 @@ export default function HomePage() {
         <MarketingFinalCta
           id="pricing"
           title="Your next viral idea starts here."
-          body="Find proven Reels. Remake them in your voice."
+          body="Find proven videos in your niche. Remake them in your voice."
           buttonLabel="Find viral Reels for free"
           href="/?auth=signup&returnTo=%2Fresearch"
         />

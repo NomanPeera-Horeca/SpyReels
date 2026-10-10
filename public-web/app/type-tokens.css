@@ -21,7 +21,7 @@
   --sr-type-marketing-display-tracking: -0.75px;
 
   /*
-   * Marketing / Display Hero (FLUID) — Product-led homepage hero only.
+   * Marketing / Display Hero (FLUID) — homepage + Finder Hero (IG/TikTok).
    * Desktop: clamp(60px, 6.7vw, 90px) / line .96; Mobile ≤640: clamp(36px, 10.8vw, 44px) / .98.
    */
   --sr-type-marketing-display-hero-size: clamp(60px, 6.7vw, 90px);

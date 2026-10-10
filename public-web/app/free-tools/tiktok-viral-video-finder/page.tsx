@@ -66,10 +66,14 @@ export default function TikTokViralVideoFinderPage() {
     <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdScript(faqJsonLd) }} />
     <MarketingHeader />
     <main>
-      <section className={`${styles.shell} ${styles.hero}`}>
+      <section className={`${styles.shell} ${styles.hero}`} data-marketing-finder-hero="">
         <MarketingHeroEyebrow>TikTok viral video finder</MarketingHeroEyebrow>
-        <h1>Find <span>viral</span> TikTok videos in your niche</h1>
-        <p>Search a public TikTok creator. See which videos broke through. Turn a strong idea into a script in your voice.</p>
+        <h1 className="sr-text-marketing-display-hero">
+          Find <span className={styles.accent}>viral</span> TikTok videos in your niche
+        </h1>
+        <p className={`sr-text-marketing-body-large ${styles.heroLead}`}>
+          Search a public TikTok creator. See which videos broke through. Turn a strong idea into a script in your voice.
+        </p>
         <TikTokFinderExperience />
       </section>
       <section className={styles.motionStage} aria-label="See the SpyReels workflow"><div className={styles.motionFrame}><MarketingFinderMotion /></div></section>
@@ -83,7 +87,7 @@ export default function TikTokViralVideoFinderPage() {
       <MarketingWorkspace toolsPage="tiktok" title="Find a strong TikTok. Make the next one yours." />
       <MarketingFaq title="Questions about finding viral TikToks." description="Research public creator videos and bring a promising idea into your own script workflow." items={faqs} />
       <MarketingFinalCta
-        title="Find your next video idea."
+        title="Find your next TikTok idea without endless scrolling."
         body="Search a creator. Remake their best TikTok in your voice."
         buttonLabel="Find viral TikToks"
         href="#finder"

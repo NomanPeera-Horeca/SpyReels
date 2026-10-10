@@ -36,34 +36,40 @@
 }
 
 .hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
   padding: 76px 0 44px;
   text-align: center;
 }
 
-.hero h1 {
+.hero h1.sr-text-marketing-display-hero {
   max-width: 980px;
-  margin: 24px auto 0;
-  font-size: clamp(44px, 6.2vw, 78px);
-  line-height: 1.02;
-  letter-spacing: -0.035em;
-  text-wrap: balance;
+  margin: 0;
+  color: var(--sr-color-text-primary);
+  font-family: var(--font-inter), "Helvetica Neue", Arial, sans-serif;
+  font-size: var(--sr-type-marketing-display-hero-size);
+  line-height: var(--sr-type-marketing-display-hero-line);
+  font-weight: var(--sr-type-marketing-display-hero-weight);
+  letter-spacing: var(--sr-type-marketing-display-hero-tracking);
 }
 
 .accent {
   color: var(--sr-color-marketing-accent);
+  font: inherit;
 }
 
 .heroLead {
-  max-width: 720px;
-  margin: 22px auto 0;
-  color: var(--sr-color-text-tertiary);
-  font-size: clamp(16px, 2vw, 19px);
-  line-height: 1.65;
+  max-width: var(--sr-layout-content-reading-width);
+  margin: 0;
+  color: var(--sr-color-text-secondary);
 }
 
 .experience {
+  width: 100%;
   max-width: 1000px;
-  margin: 34px auto 0;
+  margin: 0;
   text-align: left;
   scroll-margin-top: 112px;
 }
@@ -90,10 +96,13 @@
   display: flex;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
+  gap: var(--sr-layout-inline-gap);
+  margin-top: 22px;
   color: var(--sr-color-text-tertiary);
-  font-size: 12px;
+  font-size: var(--sr-type-marketing-caption-size);
+  line-height: var(--sr-type-marketing-caption-line);
+  font-weight: var(--sr-type-marketing-caption-weight);
+  letter-spacing: var(--sr-type-marketing-caption-tracking);
 }
 
 .tryRow button {
@@ -103,7 +112,7 @@
   color: var(--sr-color-text-brand);
   cursor: pointer;
   font: inherit;
-  font-weight: 700;
+  font-weight: var(--sr-font-weight-bold);
 }
 
 .srOnly {
@@ -450,8 +459,11 @@
     padding-top: 50px;
   }
 
-  .hero h1 {
-    font-size: 40px;
+  .heroLead {
+    font-size: var(--sr-type-marketing-body-medium-size);
+    line-height: var(--sr-type-marketing-body-medium-line);
+    font-weight: var(--sr-type-marketing-body-medium-weight);
+    letter-spacing: var(--sr-type-marketing-body-medium-tracking);
   }
 
   .previewHeader,
