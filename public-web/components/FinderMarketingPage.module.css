@@ -1,3 +1,8 @@
+/**
+ * Shared Finder marketing page shell (IG + TikTok).
+ * Platform-specific motion / experience spacing kept via [data-finder-platform].
+ */
+
 .page {
   min-height: 100vh;
   background: var(--sr-color-surface-page);
@@ -9,6 +14,10 @@
     var(--sr-layout-container-max-width),
     calc(100% - 2 * var(--sr-layout-page-gutter-desktop))
   );
+  margin: 0 auto;
+}
+
+.page[data-finder-platform="tiktok"] .shell {
   margin: auto;
 }
 
@@ -48,6 +57,13 @@
   max-width: 1000px;
   margin: 0;
   text-align: left;
+}
+
+.page[data-finder-platform="instagram"] .experience {
+  scroll-margin-top: 112px;
+}
+
+.page[data-finder-platform="tiktok"] .experience {
   scroll-margin-top: 100px;
 }
 
@@ -56,12 +72,33 @@
   margin: 0 auto;
 }
 
-.error {
-  max-width: 760px;
-  margin: 10px auto 0;
-  color: var(--sr-color-status-error-foreground);
-  font-size: 13px;
-  font-weight: 600;
+.tryRow {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--sr-layout-inline-gap);
+  margin-top: 22px;
+  color: var(--sr-color-text-tertiary);
+  font-size: var(--sr-type-marketing-caption-size);
+  line-height: var(--sr-type-marketing-caption-line);
+  font-weight: var(--sr-type-marketing-caption-weight);
+  letter-spacing: var(--sr-type-marketing-caption-tracking);
+}
+
+.tryRow button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--sr-color-text-brand);
+  cursor: pointer;
+  font: inherit;
+  font-weight: var(--sr-font-weight-bold);
+}
+
+.demoHandleActive {
+  color: var(--sr-color-text-brand) !important;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .examples {
@@ -88,129 +125,33 @@
   text-decoration: underline;
 }
 
-.results {
-  margin: 44px auto 0;
-  padding: var(--sr-layout-panel-padding);
-  border: 1px solid var(--sr-color-border-default);
-  border-radius: 24px;
-  background: var(--sr-color-surface-raised);
-  scroll-margin-top: 100px;
+/* Instagram motion stage (width on stage, padding on stage) */
+.page[data-finder-platform="instagram"] .motionStage {
+  width: min(
+    var(--sr-layout-container-max-width),
+    calc(100% - 2 * var(--sr-layout-page-gutter-desktop))
+  );
+  margin: 0 auto 64px;
+  padding: clamp(28px, 6vw, 76px);
+  border-radius: 30px;
+  background: #08080d;
 }
 
-.resultsHeader {
-  display: flex;
-  justify-content: space-between;
-  align-items: end;
-  gap: 20px;
-  margin-bottom: 22px;
+.page[data-finder-platform="instagram"] .motionFrame {
+  max-width: 1000px;
+  margin: auto;
 }
 
-.resultsHeader small {
-  color: var(--sr-color-text-brand);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-weight: 700;
+.page[data-finder-platform="instagram"] .motionFrame :global(.motion-shell) {
+  transform: none;
 }
 
-.resultsHeader h2 {
-  font-size: 28px;
-  letter-spacing: -0.025em;
-  margin: 6px 0;
-}
-
-.resultsHeader p {
-  color: var(--sr-color-text-tertiary);
-  font-size: 14px;
-  margin: 0;
-}
-
-.resultsHeader label {
-  font-size: 13px;
-  color: var(--sr-color-text-tertiary);
-  white-space: nowrap;
-}
-
-.resultsHeader select {
-  margin-left: 8px;
-  border: 1px solid var(--sr-color-border-default);
-  border-radius: var(--sr-radius-control);
-  padding: 8px;
-  background: var(--sr-color-surface-default);
-  font: inherit;
-}
-
-.resultsStatus {
-  padding: 20px 0;
-  color: var(--sr-color-text-tertiary);
-}
-
-.videoGrid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--sr-layout-card-gap);
-}
-
-.videoCard {
-  border: 1px solid var(--sr-color-border-default);
-  border-radius: var(--sr-radius-card);
-  overflow: hidden;
-  background: var(--sr-color-surface-subtle);
-  min-width: 0;
-}
-
-.videoCard img,
-.emptyThumbnail {
-  display: block;
-  width: 100%;
-  aspect-ratio: 9 / 12;
-  object-fit: cover;
-  background: #15131b;
-}
-
-.emptyThumbnail {
-  display: grid;
-  place-items: center;
-  color: #fff;
-}
-
-.emptyThumbnail svg {
-  width: 45px;
-  height: 45px;
-}
-
-.videoCard div:last-child {
-  padding: var(--sr-layout-card-padding);
-}
-
-.videoCard strong {
-  font-size: 14px;
-}
-
-.videoCard p {
-  font-size: 13px;
-  line-height: 1.45;
-  color: var(--sr-color-text-tertiary);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  margin: 8px 0;
-}
-
-.videoCard small {
-  color: var(--sr-color-text-tertiary);
-}
-
-.continue {
-  display: block;
-  margin: 24px auto 0;
-}
-
-.motionStage {
+/* TikTok motion stage (padding on stage, chrome on frame) */
+.page[data-finder-platform="tiktok"] .motionStage {
   padding: 0 20px 72px;
 }
 
-.motionFrame {
+.page[data-finder-platform="tiktok"] .motionFrame {
   width: min(1160px, 100%);
   margin: auto;
   overflow: hidden;
@@ -221,6 +162,13 @@
 
 @media (max-width: 980px) {
   .shell {
+    width: min(
+      var(--sr-layout-container-max-width),
+      calc(100% - 2 * var(--sr-layout-page-gutter-tablet))
+    );
+  }
+
+  .page[data-finder-platform="instagram"] .motionStage {
     width: min(
       var(--sr-layout-container-max-width),
       calc(100% - 2 * var(--sr-layout-page-gutter-tablet))
@@ -239,6 +187,12 @@
     font-weight: var(--sr-type-marketing-body-medium-weight);
     letter-spacing: var(--sr-type-marketing-body-medium-tracking);
   }
+
+  .page[data-finder-platform="instagram"] .motionStage {
+    width: calc(100% - 2 * var(--sr-layout-page-gutter-mobile));
+    padding: 12px;
+    border-radius: 20px;
+  }
 }
 
 @media (max-width: 620px) {
@@ -255,24 +209,7 @@
 }
 
 @media (max-width: 720px) {
-  .results {
-    padding: var(--sr-layout-card-padding);
-  }
-
-  .resultsHeader {
-    display: block;
-  }
-
-  .resultsHeader label {
-    display: block;
-    margin-top: 14px;
-  }
-
-  .videoGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .motionStage {
+  .page[data-finder-platform="tiktok"] .motionStage {
     padding: 0 12px 45px;
   }
 }
