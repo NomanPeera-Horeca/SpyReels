@@ -17,6 +17,10 @@ import {
   isViralPostsLive,
 } from "./featureFlag";
 import {
+  capturePostHogEvent,
+  posthogDistinctIdForUser,
+} from "../analytics/posthogServer";
+import {
   saveViralCandidateCanonical,
   unsaveViralCandidateCanonical,
 } from "./canonicalSaved";
@@ -51,6 +55,34 @@ function parseCandidateId(id: string): number {
     throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid post id" });
   }
   return n;
+}
+
+async function syncCanonicalLibraryBestEffort(args: {
+  action: "save" | "unsave";
+  userId: number;
+  candidateId: number;
+  run: () => Promise<void>;
+}): Promise<void> {
+  try {
+    await args.run();
+  } catch (err) {
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    console.error("[viralPosts] canonical_library_sync_failed", {
+      action: args.action,
+      userId: args.userId,
+      candidateId: args.candidateId,
+      error: errorMessage,
+    });
+    void capturePostHogEvent({
+      distinctId: posthogDistinctIdForUser(args.userId),
+      event: "viral_posts_canonical_library_sync_failed",
+      properties: {
+        action: args.action,
+        candidateId: args.candidateId,
+        error_message: errorMessage.slice(0, 320),
+      },
+    });
+  }
 }
 
 /**
@@ -303,10 +335,15 @@ export const viralPostsRouter = router({
       if (!candidate) {
         throw new TRPCError({ code: "NOT_FOUND", message: "Post not found" });
       }
-      await Promise.all([
-        repo.saveCandidate(ctx.user.id, candidateId),
-        saveViralCandidateCanonical(ctx.user.id, candidateId),
-      ]);
+      // Viral Posts bookmark is the product contract. Library sync into
+      // saved_reels is best-effort so schema/sync failures never block starring.
+      await repo.saveCandidate(ctx.user.id, candidateId);
+      await syncCanonicalLibraryBestEffort({
+        action: "save",
+        userId: ctx.user.id,
+        candidateId,
+        run: () => saveViralCandidateCanonical(ctx.user.id, candidateId),
+      });
       return { ok: true as const, postId: input.postId, saved: true };
     }),
 
@@ -314,10 +351,13 @@ export const viralPostsRouter = router({
     .input(z.object({ postId: z.string().min(1) }))
     .mutation(async ({ ctx, input }) => {
       const candidateId = parseCandidateId(input.postId);
-      await Promise.all([
-        repo.unsaveCandidate(ctx.user.id, candidateId),
-        unsaveViralCandidateCanonical(ctx.user.id, candidateId),
-      ]);
+      await repo.unsaveCandidate(ctx.user.id, candidateId);
+      await syncCanonicalLibraryBestEffort({
+        action: "unsave",
+        userId: ctx.user.id,
+        candidateId,
+        run: () => unsaveViralCandidateCanonical(ctx.user.id, candidateId),
+      });
       return { ok: true as const, postId: input.postId, saved: false };
     }),
 
