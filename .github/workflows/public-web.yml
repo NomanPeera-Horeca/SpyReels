@@ -388,29 +388,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Download Next build
-        uses: actions/download-artifact@v4
-        with:
-          name: public-web-next-build-${{ github.run_id }}
-          path: /tmp/next-build
-
-      - name: Restore Next build
-        working-directory: .
-        run: |
-          set -euo pipefail
-          if [[ -d /tmp/next-build/public-web/.next ]]; then
-            rm -rf public-web/.next
-            mv /tmp/next-build/public-web/.next public-web/.next
-          elif [[ -f /tmp/next-build/BUILD_ID || -d /tmp/next-build/server ]]; then
-            rm -rf public-web/.next
-            mkdir -p public-web/.next
-            cp -a /tmp/next-build/. public-web/.next/
-          else
-            echo "Unexpected Next build artifact layout:"
-            find /tmp/next-build -maxdepth 3 -type d | head -n 50
-            exit 1
-          fi
-          test -d public-web/.next
+      - name: Build
+        run: pnpm build
 
       - name: Start server
         env:
@@ -513,29 +492,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Download Next build
-        uses: actions/download-artifact@v4
-        with:
-          name: public-web-next-build-${{ github.run_id }}
-          path: /tmp/next-build
-
-      - name: Restore Next build
-        working-directory: .
-        run: |
-          set -euo pipefail
-          if [[ -d /tmp/next-build/public-web/.next ]]; then
-            rm -rf public-web/.next
-            mv /tmp/next-build/public-web/.next public-web/.next
-          elif [[ -f /tmp/next-build/BUILD_ID || -d /tmp/next-build/server ]]; then
-            rm -rf public-web/.next
-            mkdir -p public-web/.next
-            cp -a /tmp/next-build/. public-web/.next/
-          else
-            echo "Unexpected Next build artifact layout:"
-            find /tmp/next-build -maxdepth 3 -type d | head -n 50
-            exit 1
-          fi
-          test -d public-web/.next
+      - name: Build
+        run: pnpm build
 
       - name: Start server
         env:
