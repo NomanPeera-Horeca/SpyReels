@@ -6,7 +6,13 @@ Visitor `publicDemo` (PR B) must be a DB read only. This job is the only place t
 
 ## Migration
 
-Apply `drizzle/0100_featured_demo_catalog.sql` via Railway MySQL console (Bug #63). Do not `drizzle-kit push`.
+Apply `drizzle/0100_featured_demo_catalog.sql` via Railway MySQL console (Bug #63), or Railway CLI `railway connect MySQL` with that file only. Do not `drizzle-kit push`.
+
+### Production apply log (for "all migrations applied" checks)
+
+| Migration | Environment | Applied at (UTC) | Applied by | Method | Notes |
+|---|---|---|---|---|---|
+| `drizzle/0100_featured_demo_catalog.sql` | SpyReels production MySQL (`respectful-rejoicing` / service `MySQL`) | 2026-10-10 ~20:50 UTC | Cursor agent (Noman-approved) via Railway CLI | `railway connect MySQL --no-ssh < 0100_featured_demo_catalog.sql` once | Additive only: created `featured_demo_accounts` + `featured_demo_items` + indexes. Verified with `SHOW TABLES LIKE 'featured_demo_%'` and `SHOW CREATE TABLE`. |
 
 ## Cron (same model as viral-posts pool refresh)
 
