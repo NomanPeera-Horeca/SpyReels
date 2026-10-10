@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "wouter";
+import { Loader2 } from "lucide-react";
 import { useCanonical } from "@/hooks/useCanonical";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { AuthDialog } from "@/components/AuthDialog";
@@ -8,6 +9,7 @@ import { PublicFooter } from "@/components/PublicFooter";
 import { PublicBreadcrumb } from "@/components/PublicBreadcrumb";
 import { RelatedToolsGrid } from "@/components/RelatedToolsGrid";
 import { getFinderRelatedTools } from "@/components/relatedToolThumbs";
+import { ReelGridThumbnail } from "@/components/ReelGridThumbnail";
 import { YouTubeMark } from "@/components/PlatformHandleMarks";
 import { Button } from "@/components/ui/button";
 import {
@@ -21,6 +23,8 @@ import {
   authHeadlineSeeViralReels,
   authHeadlineSpyHandle,
 } from "@/lib/authHeadlines";
+import { formatNumber } from "@/lib/formatNumber";
+import { trpc } from "@/lib/trpc";
 import {
   applyStandardPageMeta,
   cleanupSchemaScripts,
@@ -29,6 +33,10 @@ import {
 } from "@/lib/publicSeo";
 import { stashResearchHandleForAfterAuth } from "@/lib/researchPendingHandle";
 import { cn } from "@/lib/utils";
+import {
+  PUBLIC_YOUTUBE_DEMO_HANDLES,
+  isPublicYouTubeDemoHandle,
+} from "@shared/publicYouTubeDemoAccounts";
 
 const PAGE_PATH = "/free-tools/youtube-shorts-viral-finder";
 const PAGE_TITLE = "YouTube Shorts Finder - Viral Shorts by Channel | SpyReels";
@@ -116,199 +124,6 @@ const COMPARE_ROWS = [
 
 type SortMode = "outlier" | "views" | "engagement";
 
-type DemoVideo = {
-  id: string;
-  viewsLabel: string;
-  viewCount: number;
-  engagementRate: number;
-  hook: string;
-  outlierLabel: string;
-  outlier: number;
-};
-
-type DemoAccount = {
-  handle: string;
-  meta: string;
-  videos: DemoVideo[];
-};
-
-const DEMO_ACCOUNTS: Record<string, DemoAccount> = {
-  mrbeast: {
-    handle: "mrbeast",
-    meta: "52 Shorts · median 8.2M views",
-    videos: [
-      {
-        id: "mb1",
-        viewsLabel: "98.7M views",
-        viewCount: 98_700_000,
-        engagementRate: 4.8,
-        hook: "I spent 50 hours buried alive",
-        outlierLabel: "5.6x median",
-        outlier: 5.6,
-      },
-      {
-        id: "mb2",
-        viewsLabel: "62.1M views",
-        viewCount: 62_100_000,
-        engagementRate: 3.9,
-        hook: "Last to leave the circle wins",
-        outlierLabel: "3.8x median",
-        outlier: 3.8,
-      },
-      {
-        id: "mb3",
-        viewsLabel: "41.4M views",
-        viewCount: 41_400_000,
-        engagementRate: 3.2,
-        hook: "I built 100 wells in Africa",
-        outlierLabel: "2.9x median",
-        outlier: 2.9,
-      },
-      {
-        id: "mb4",
-        viewsLabel: "29.6M views",
-        viewCount: 29_600_000,
-        engagementRate: 2.7,
-        hook: "Giving a fan a private island",
-        outlierLabel: "2.2x median",
-        outlier: 2.2,
-      },
-    ],
-  },
-  mkbhd: {
-    handle: "mkbhd",
-    meta: "40 Shorts · median 1.1M views",
-    videos: [
-      {
-        id: "mk1",
-        viewsLabel: "7.9M views",
-        viewCount: 7_900_000,
-        engagementRate: 6.1,
-        hook: "This phone change nobody talks about",
-        outlierLabel: "7.2x median",
-        outlier: 7.2,
-      },
-      {
-        id: "mk2",
-        viewsLabel: "4.9M views",
-        viewCount: 4_900_000,
-        engagementRate: 5.2,
-        hook: "I was wrong about this camera",
-        outlierLabel: "4.5x median",
-        outlier: 4.5,
-      },
-      {
-        id: "mk3",
-        viewsLabel: "3.4M views",
-        viewCount: 3_400_000,
-        engagementRate: 4.4,
-        hook: "The charging myth that wastes money",
-        outlierLabel: "3.1x median",
-        outlier: 3.1,
-      },
-      {
-        id: "mk4",
-        viewsLabel: "2.6M views",
-        viewCount: 2_600_000,
-        engagementRate: 3.8,
-        hook: "Stop buying this accessory",
-        outlierLabel: "2.4x median",
-        outlier: 2.4,
-      },
-    ],
-  },
-  aliabdaal: {
-    handle: "aliabdaal",
-    meta: "38 Shorts · median 420K views",
-    videos: [
-      {
-        id: "aa1",
-        viewsLabel: "3.8M views",
-        viewCount: 3_800_000,
-        engagementRate: 7.4,
-        hook: "The productivity system I actually use",
-        outlierLabel: "9.1x median",
-        outlier: 9.1,
-      },
-      {
-        id: "aa2",
-        viewsLabel: "2.2M views",
-        viewCount: 2_200_000,
-        engagementRate: 5.9,
-        hook: "Stop optimizing your morning routine",
-        outlierLabel: "5.2x median",
-        outlier: 5.2,
-      },
-      {
-        id: "aa3",
-        viewsLabel: "1.5M views",
-        viewCount: 1_500_000,
-        engagementRate: 4.8,
-        hook: "How I batch a week of content in 1 day",
-        outlierLabel: "3.6x median",
-        outlier: 3.6,
-      },
-      {
-        id: "aa4",
-        viewsLabel: "1.0M views",
-        viewCount: 1_000_000,
-        engagementRate: 4.1,
-        hook: "The note-taking method that stuck",
-        outlierLabel: "2.5x median",
-        outlier: 2.5,
-      },
-    ],
-  },
-  souravjoshivlogs: {
-    handle: "souravjoshivlogs",
-    meta: "60 Shorts · median 2.4M views",
-    videos: [
-      {
-        id: "sj1",
-        viewsLabel: "15.4M views",
-        viewCount: 15_400_000,
-        engagementRate: 5.5,
-        hook: "Family vlog moment that broke the chart",
-        outlierLabel: "6.4x median",
-        outlier: 6.4,
-      },
-      {
-        id: "sj2",
-        viewsLabel: "9.8M views",
-        viewCount: 9_800_000,
-        engagementRate: 4.6,
-        hook: "This daily habit changed our routine",
-        outlierLabel: "4.1x median",
-        outlier: 4.1,
-      },
-      {
-        id: "sj3",
-        viewsLabel: "7.2M views",
-        viewCount: 7_200_000,
-        engagementRate: 3.9,
-        hook: "Behind the scenes nobody expected",
-        outlierLabel: "3.0x median",
-        outlier: 3.0,
-      },
-      {
-        id: "sj4",
-        viewsLabel: "5.5M views",
-        viewCount: 5_500_000,
-        engagementRate: 3.3,
-        hook: "One tip that grew the channel",
-        outlierLabel: "2.3x median",
-        outlier: 2.3,
-      },
-    ],
-  },
-};
-
-const DEMO_HANDLES = Object.keys(DEMO_ACCOUNTS) as (keyof typeof DEMO_ACCOUNTS)[];
-
-function isDemoHandle(handle: string): boolean {
-  return handle in DEMO_ACCOUNTS;
-}
-
 function parseYouTubeHandle(raw: string): string {
   const trimmed = raw.trim();
   const fromAt = trimmed.match(/youtube\.com\/@([^/?#\s]+)/i);
@@ -322,18 +137,28 @@ function isValidYouTubeHandle(handle: string): boolean {
   return /^[a-z0-9._-]{2,30}$/i.test(handle);
 }
 
+function outlierMultiple(viewCount: number, median: number): number | null {
+  if (!median || median <= 0 || !viewCount) return null;
+  return viewCount / median;
+}
+
+function formatOutlier(multiple: number | null): string | null {
+  if (multiple == null || !Number.isFinite(multiple) || multiple < 1) return null;
+  if (multiple >= 10) return `${Math.round(multiple)}x median`;
+  return `${multiple.toFixed(1).replace(/\.0$/, "")}x median`;
+}
+
+function hookPreview(caption: string): string {
+  const cleaned = caption.replace(/\s+/g, " ").trim();
+  if (!cleaned) return "Open this Short to study the hook";
+  return cleaned.length > 90 ? `${cleaned.slice(0, 87)}...` : cleaned;
+}
+
 function toneClass(tone: "yes" | "partial" | "no"): string {
   if (tone === "yes") return "font-semibold text-emerald-400";
   if (tone === "partial") return "font-medium text-orange-400";
   return "text-muted-foreground";
 }
-
-const THUMB_GRADIENTS = [
-  "from-[#2a1848] via-[#0b1220] to-[#1a0f14]",
-  "from-[#0f3b2e] via-[#0b1220] to-[#12203a]",
-  "from-[#16345a] via-[#0b1220] to-[#3a1a12]",
-  "from-[#3a1a12] via-[#0b1220] to-[#1f1638]",
-];
 
 export default function YouTubeShortsViralFinder() {
   useCanonical(PAGE_PATH);
@@ -341,7 +166,9 @@ export default function YouTubeShortsViralFinder() {
   const isSignedIn = Boolean(user);
 
   const [handleInput, setHandleInput] = useState("");
-  const [activeHandle, setActiveHandle] = useState<string>(DEMO_HANDLES[0]);
+  const [activeHandle, setActiveHandle] = useState<string>(
+    PUBLIC_YOUTUBE_DEMO_HANDLES[0]
+  );
   const [sortMode, setSortMode] = useState<SortMode>("outlier");
   const [authOpen, setAuthOpen] = useState(false);
   const [authHeadline, setAuthHeadline] = useState("");
@@ -353,19 +180,29 @@ export default function YouTubeShortsViralFinder() {
   const [heroBarVisible, setHeroBarVisible] = useState(true);
   const [footerCtaVisible, setFooterCtaVisible] = useState(false);
 
-  const demo = DEMO_ACCOUNTS[activeHandle] ?? DEMO_ACCOUNTS.mrbeast;
+  const demo = trpc.youtubeScrape.publicDemo.useQuery(
+    { handle: activeHandle },
+    { staleTime: 300_000, retry: 1 }
+  );
 
   const sortedVideos = useMemo(() => {
-    const copy = [...demo.videos];
+    const videos = demo.data?.videos ?? [];
+    const median = demo.data?.medianViewCount ?? 0;
+    const copy = [...videos];
     if (sortMode === "views") {
       copy.sort((a, b) => b.viewCount - a.viewCount);
     } else if (sortMode === "engagement") {
       copy.sort((a, b) => b.engagementRate - a.engagementRate);
     } else {
-      copy.sort((a, b) => b.outlier - a.outlier || b.viewCount - a.viewCount);
+      copy.sort((a, b) => {
+        const ao = outlierMultiple(a.viewCount, median) ?? 0;
+        const bo = outlierMultiple(b.viewCount, median) ?? 0;
+        if (bo !== ao) return bo - ao;
+        return b.viewCount - a.viewCount;
+      });
     }
     return copy;
-  }, [demo, sortMode]);
+  }, [demo.data, sortMode]);
 
   function openAuth(opts: { headline?: string; returnTo?: string } = {}) {
     if (authLoading) return;
@@ -391,7 +228,7 @@ export default function YouTubeShortsViralFinder() {
     if (!parsed) return;
     setHandleInput(parsed);
     if (!isValidYouTubeHandle(parsed)) return;
-    if (isDemoHandle(parsed)) {
+    if (isPublicYouTubeDemoHandle(parsed)) {
       setActiveHandle(parsed);
       resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
@@ -405,7 +242,7 @@ export default function YouTubeShortsViralFinder() {
 
   function requireSeeViralSignIn() {
     openAuth({
-      headline: authHeadlineSeeViralReels(`@${demo.handle}`),
+      headline: authHeadlineSeeViralReels(`@${demo.data?.handle || activeHandle}`),
       returnTo: RESEARCH_RETURN,
     });
   }
@@ -582,7 +419,7 @@ export default function YouTubeShortsViralFinder() {
         </div>
         <p className="mt-4 text-sm leading-relaxed text-muted-foreground">
           or try{" "}
-          {DEMO_HANDLES.map((handle, i) => (
+          {PUBLIC_YOUTUBE_DEMO_HANDLES.map((handle, i) => (
             <span key={handle}>
               {i > 0 ? " · " : null}
               <button
@@ -608,14 +445,18 @@ export default function YouTubeShortsViralFinder() {
         <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
           <span>Results preview</span>
           <span className="rounded-full border border-border px-2.5 py-1 normal-case tracking-normal">
-            demo data
+            live catalog
           </span>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 px-4 py-4">
           <div>
-            <div className="font-semibold">@{demo.handle}</div>
-            <div className="text-xs text-muted-foreground">{demo.meta}</div>
+            <div className="font-semibold">@{demo.data?.handle || activeHandle}</div>
+            <div className="text-xs text-muted-foreground">
+              {demo.isLoading
+                ? "Loading Shorts…"
+                : `${demo.data?.totalVideoCount ?? 0} Shorts · median ${formatNumber(demo.data?.medianViewCount ?? 0)} views`}
+            </div>
           </div>
           <div className="ml-auto flex flex-wrap gap-2">
             {(
@@ -642,30 +483,44 @@ export default function YouTubeShortsViralFinder() {
           </div>
         </div>
 
+        {demo.isLoading ? (
+          <div className="flex items-center justify-center gap-2 px-4 py-16 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading results…
+          </div>
+        ) : (
         <div className="grid grid-cols-2 gap-3 px-4 pb-4 sm:grid-cols-3 lg:grid-cols-4">
-          {sortedVideos.map((video, index) => (
+          {sortedVideos.map((video) => {
+            const multiple = formatOutlier(
+              outlierMultiple(video.viewCount, demo.data?.medianViewCount ?? 0)
+            );
+            return (
             <article
               key={video.id}
               className="flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-background/60"
             >
-              <div
-                className={cn(
-                  "relative aspect-[9/14] overflow-hidden bg-gradient-to-br",
-                  THUMB_GRADIENTS[index % THUMB_GRADIENTS.length]
-                )}
-              >
+              <div className="relative aspect-[9/14] overflow-hidden bg-muted">
+                <ReelGridThumbnail
+                  className="h-full w-full"
+                  thumbnailUrl={video.thumbnailUrl}
+                  fallbackLabel="No thumbnail"
+                />
+                {multiple ? (
                 <span className="absolute left-2 top-2 rounded-full bg-black/75 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
-                  {video.outlierLabel}
+                  {multiple}
                 </span>
+                ) : null}
                 <span className="absolute bottom-2 left-2 text-sm font-bold text-white drop-shadow">
-                  {video.viewsLabel}
+                  {formatNumber(video.viewCount)} views
                 </span>
               </div>
               <div className="flex flex-1 flex-col gap-2 p-3">
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
                   Hook · 0-3s
                 </p>
-                <p className="line-clamp-3 text-sm font-semibold leading-snug">{video.hook}</p>
+                <p className="line-clamp-3 text-sm font-semibold leading-snug">
+                  {hookPreview(video.caption)}
+                </p>
                 <div className="mt-auto flex items-center justify-between gap-2 border-t border-border pt-2">
                   <span className="text-[11px] text-muted-foreground">
                     {video.engagementRate.toFixed(1)}% eng.
@@ -680,8 +535,10 @@ export default function YouTubeShortsViralFinder() {
                 </div>
               </div>
             </article>
-          ))}
+            );
+          })}
         </div>
+        )}
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border px-4 py-4 text-sm text-muted-foreground">
           <span>

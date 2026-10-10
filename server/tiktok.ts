@@ -186,6 +186,26 @@ function firstUrlFromList(value: unknown): string {
   return "";
 }
 
+function looksLikeHeicUrl(url: string): boolean {
+  return /\.heic(\?|$)/i.test(url) || /[?&]format=heic\b/i.test(url);
+}
+
+/** Prefer JPEG/webp cover variants; skip HEIC when a better URL exists. */
+function firstPreferredImageUrlFromList(value: unknown): string {
+  if (!Array.isArray(value)) return "";
+  let heicFallback = "";
+  for (const entry of value) {
+    if (typeof entry !== "string" || !entry.trim()) continue;
+    const url = entry.trim();
+    if (looksLikeHeicUrl(url)) {
+      if (!heicFallback) heicFallback = url;
+      continue;
+    }
+    return url;
+  }
+  return heicFallback;
+}
+
 /**
  * ScrapeCreators often leaves top-level play_addr.url_list empty while
  * bit_rate[].play_addr still has playable CDN links. Prefer no-watermark.
@@ -220,9 +240,9 @@ export function extractTikTokPlayUrl(video: any): string {
 function extractTikTokCoverUrl(video: any): string {
   if (!video || typeof video !== "object") return "";
   return (
-    firstUrlFromList(video.cover?.url_list) ||
-    firstUrlFromList(video.origin_cover?.url_list) ||
-    firstUrlFromList(video.dynamic_cover?.url_list) ||
+    firstPreferredImageUrlFromList(video.cover?.url_list) ||
+    firstPreferredImageUrlFromList(video.origin_cover?.url_list) ||
+    firstPreferredImageUrlFromList(video.dynamic_cover?.url_list) ||
     ""
   );
 }

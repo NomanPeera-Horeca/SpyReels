@@ -6,7 +6,10 @@ Visitor `publicDemo` (PR B) must be a DB read only. This job is the only place t
 
 ## Migration
 
-Apply `drizzle/0100_featured_demo_catalog.sql` via Railway MySQL console (Bug #63), or Railway CLI `railway connect MySQL` with that file only. Do not `drizzle-kit push`.
+Apply via Railway MySQL console (Bug #63), or Railway CLI `railway connect MySQL` with that file only. Do not `drizzle-kit push`.
+
+1. `drizzle/0100_featured_demo_catalog.sql` — create `featured_demo_accounts` / `featured_demo_items`
+2. `drizzle/0101_featured_demo_bigint_counts.sql` — widen engagement counters to `BIGINT` (views can exceed signed INT max)
 
 ### Production apply log (for "all migrations applied" checks)
 
@@ -35,10 +38,12 @@ Confirm each allow-listed handle has rows + R2 `thumbnailUrl` values under `feat
 
 | Platform | Handles |
 |---|---|
-| TikTok | `charlidamelio`, `khaby.lame`, `zachking`, `mrbeast` |
-| YouTube | `mrbeast`, `mkbhd`, `aliabdaal`, `souravjoshivlogs` |
+| TikTok | `charlidamelio`, `khaby.lame`, `mrbeast` |
+| YouTube | `mrbeast`, `mkbhd`, `aliabdaal` |
 
-Cap: **8** items per handle. Thumbs: ~480px wide, webp (jpeg fallback), stored during the job only.
+Inactive (takedown, keep rows): TikTok `zachking`, YouTube `souravjoshivlogs` (`isActive=0`).
+
+Cap: **8** items per handle. Thumbs: JPEG/webp source preferred (skip HEIC when possible), ~480px webp on R2 under `featured-demo-thumbs/`. Mirror failure must **not** store CDN URLs; keep last-good R2 for that item or skip it. A handle refresh counts as success only when every stored item has an R2 thumb. `durationSec` is integer seconds (round in the job).
 
 ## Takedown (`isActive`)
 
@@ -70,6 +75,6 @@ PR A only adds schema + job. No visitor path change. Rollback = stop the cron an
 
 ## Follow-ups
 
-- **PR B:** flip TikTok + YouTube `publicDemo` to DB read; short timeout; latency logging / p95 alert.
+- **PR B:** flip TikTok + YouTube `publicDemo` to DB read; short timeout; latency logging / p95 alert (this branch).
 - **PR C:** Figma Result Card Loading skeleton (Comfortable + Compact).
 - **T11:** migrate Instagram featured demo onto this catalog.

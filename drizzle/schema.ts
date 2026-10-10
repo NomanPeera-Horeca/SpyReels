@@ -2619,12 +2619,15 @@ export const featuredDemoItems = mysqlTable(
       .references(() => featuredDemoAccounts.id, { onDelete: "cascade" }),
     externalId: varchar("externalId", { length: 128 }).notNull(),
     caption: text("caption"),
-    viewCount: int("viewCount").default(0).notNull(),
-    likeCount: int("likeCount").default(0).notNull(),
-    commentCount: int("commentCount").default(0).notNull(),
-    shareCount: int("shareCount").default(0).notNull(),
+    viewCount: bigint("viewCount", { mode: "number" }).default(0).notNull(),
+    likeCount: bigint("likeCount", { mode: "number" }).default(0).notNull(),
+    commentCount: bigint("commentCount", { mode: "number" })
+      .default(0)
+      .notNull(),
+    shareCount: bigint("shareCount", { mode: "number" }).default(0).notNull(),
     engagementRate: decimal("engagementRate", { precision: 8, scale: 2 }),
     thumbnailUrl: text("thumbnailUrl"),
+    /** Integer seconds only; round at write time in the refresh job. */
     durationSec: int("durationSec"),
     postedAt: timestamp("postedAt"),
     videoPageUrl: text("videoPageUrl"),

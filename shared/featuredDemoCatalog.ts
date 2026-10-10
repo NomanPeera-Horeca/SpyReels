@@ -29,8 +29,8 @@ export const FEATURED_DEMO_ITEM_LIMIT = 8;
  * First entry is the default when no (or an unrecognized) handle is requested.
  */
 export const FEATURED_DEMO_HANDLES = {
-  tiktok: ["charlidamelio", "khaby.lame", "zachking", "mrbeast"],
-  youtube: ["mrbeast", "mkbhd", "aliabdaal", "souravjoshivlogs"],
+  tiktok: ["charlidamelio", "khaby.lame", "mrbeast"],
+  youtube: ["mrbeast", "mkbhd", "aliabdaal"],
 } as const satisfies Record<FeaturedDemoRefreshPlatform, readonly string[]>;
 
 /** Alert when an active allow-listed handle has no successful refresh this long. */
