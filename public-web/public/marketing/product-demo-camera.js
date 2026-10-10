@@ -1,5 +1,6 @@
 (function () {
-  var MOBILE_MQ = "(max-width: 640px)";
+  var WIDTH_MQ = "(max-width: 640px)";
+  var TOUCH_MQ = "(hover: none), (pointer: coarse)";
   var REDUCED_MQ = "(prefers-reduced-motion: reduce)";
   var MAX_LOOPS = 2;
   var HOLD_MS = 2500;
@@ -8,16 +9,22 @@
   var TAP_PRESS_MS = 220;
   var TAP_RIPPLE_MS = 420;
   var TAP_LEAD_MS = TAP_APPEAR_MS + TAP_PRESS_MS + TAP_RIPPLE_MS + 120;
+  var SUCCESS_HOLD_MS = 3200;
 
+  /**
+   * Focus rects in finished DESKTOP scene coords (1160×725), 7:6 aspect.
+   * scale = 350/w fills the stage; all ≥1.6× vs fit-entire-scene (0.302).
+   */
   var FOCUS = {
-    search: { x: 286.4, y: 90.5, w: 587.3, h: 503.4 },
-    results: { x: 93.1, y: 95.8, w: 569.0, h: 487.7 },
-    winner: { x: 35, y: 120, w: 420, h: 360 },
-    remakeA: { x: 100, y: 140, w: 420, h: 360 },
-    remakeB: { x: 470, y: 120, w: 560, h: 480 },
-    scriptA: { x: 120, y: 80, w: 560, h: 480 },
-    scriptB: { x: 620, y: 340, w: 420, h: 360 },
-    success: { x: 330, y: 150, w: 500, h: 428.6 },
+    search: { x: 294.0, y: 96.4, w: 573.0, h: 491.1 },
+    results: { x: 45.3, y: 114.0, w: 583.3, h: 500.0 },
+    winner: { x: 20.0, y: 160.0, w: 420.0, h: 360.0 },
+    remakeA: { x: 80.0, y: 140.0, w: 420.0, h: 360.0 },
+    /* Wider so "yours." + Remake button stay inside the 350×300 stage (≥1.6×) */
+    remakeB: { x: 430.0, y: 145.0, w: 680.0, h: 582.9 },
+    scriptA: { x: 150.0, y: 100.0, w: 700.0, h: 600.0 },
+    scriptB: { x: 640.0, y: 380.0, w: 396.0, h: 339.4 },
+    success: { x: 320.4, y: 160.0, w: 519.2, h: 445.0 },
   };
 
   var STEPS = [
@@ -31,8 +38,22 @@
     { focus: "success", scene: "success" },
   ];
 
-  function isMobile() {
-    return window.matchMedia(MOBILE_MQ).matches;
+  function isTouch() {
+    if (typeof navigator !== "undefined" && navigator.maxTouchPoints > 0) return true;
+    try {
+      return window.matchMedia(TOUCH_MQ).matches;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function isNarrow() {
+    return window.matchMedia(WIDTH_MQ).matches;
+  }
+
+  /** Camera stage active: phone-width OR touch (covers Samsung Chrome widths). */
+  function useCamera() {
+    return isNarrow() || isTouch();
   }
 
   function prefersReduced() {
@@ -182,6 +203,18 @@
     stage.setAttribute("data-product-demo-stopped", "true");
   }
 
+  function applyMode(stage) {
+    var cameraOn = useCamera();
+    var touch = isTouch();
+    stage.classList.toggle("is-camera-active", cameraOn);
+    stage.classList.toggle("is-touch", touch);
+    if (touch) stage.setAttribute("data-product-demo-touch", "");
+    else stage.removeAttribute("data-product-demo-touch");
+    if (cameraOn) stage.setAttribute("data-product-demo-driver", "mobile");
+    else stage.removeAttribute("data-product-demo-driver");
+    return cameraOn;
+  }
+
   function initStage(stage) {
     if (stage.getAttribute("data-product-demo-booted")) return function () {};
     stage.setAttribute("data-product-demo-booted", "1");
@@ -209,7 +242,7 @@
 
     async function runLoop(id) {
       function isAlive() {
-        return id === runId && !stopped && isMobile() && !prefersReduced();
+        return id === runId && !stopped && useCamera() && !prefersReduced();
       }
 
       disableCssTimeline();
@@ -228,7 +261,8 @@
           camera.style.transform = cameraCss(step.focus);
         }
 
-        var holdBeforeTap = step.tap ? Math.max(500, HOLD_MS - TAP_LEAD_MS) : HOLD_MS;
+        var holdMs = step.focus === "success" ? SUCCESS_HOLD_MS : HOLD_MS;
+        var holdBeforeTap = step.tap ? Math.max(500, holdMs - TAP_LEAD_MS) : holdMs;
         await waitWhile(holdBeforeTap, shouldPause, isAlive);
         if (!isAlive()) return;
 
@@ -258,9 +292,13 @@
       runLoop(id);
     }
 
-    function startMobile() {
-      if (!isMobile()) return;
-      stage.setAttribute("data-product-demo-driver", "mobile");
+    function startCamera() {
+      if (!applyMode(stage)) {
+        stopDriver();
+        camera.style.transition = "";
+        camera.style.transform = "";
+        return;
+      }
       if (prefersReduced()) {
         stopped = true;
         disableCssTimeline();
@@ -290,24 +328,28 @@
     io.observe(stage);
 
     stage.addEventListener("click", function () {
-      if (!isMobile() || prefersReduced() || stopped) return;
+      if (!useCamera() || prefersReduced() || stopped) return;
       userPaused = !userPaused;
       if (userPaused) stage.setAttribute("data-product-demo-paused", "true");
       else stage.removeAttribute("data-product-demo-paused");
     });
 
-    var mobileMq = window.matchMedia(MOBILE_MQ);
+    var widthMq = window.matchMedia(WIDTH_MQ);
+    var touchMq = window.matchMedia(TOUCH_MQ);
     var reducedMq = window.matchMedia(REDUCED_MQ);
     function onEnvChange() {
       stopDriver();
-      if (isMobile()) startMobile();
+      startCamera();
     }
-    if (mobileMq.addEventListener) mobileMq.addEventListener("change", onEnvChange);
-    else mobileMq.addListener(onEnvChange);
-    if (reducedMq.addEventListener) reducedMq.addEventListener("change", onEnvChange);
-    else reducedMq.addListener(onEnvChange);
+    function listen(mq) {
+      if (mq.addEventListener) mq.addEventListener("change", onEnvChange);
+      else if (mq.addListener) mq.addListener(onEnvChange);
+    }
+    listen(widthMq);
+    listen(touchMq);
+    listen(reducedMq);
 
-    if (isMobile()) startMobile();
+    startCamera();
 
     return function () {
       stopDriver();

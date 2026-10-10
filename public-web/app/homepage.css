@@ -57,115 +57,153 @@
     @keyframes scene-success{0%,85.455%{opacity:0}87.03%,98.424%{opacity:1}100%{opacity:0}}@keyframes success-pop{0%,85.818%{opacity:0;scale:.55}89.697%{opacity:1;scale:1.1}92.364%,100%{opacity:1;scale:1}}@keyframes success-message{0%,87.515%{opacity:0;transform:translateY(18px)}90.545%{opacity:1}91.152%,100%{opacity:1;transform:none}}@keyframes calendar-in{0%,89.212%{opacity:0;transform:translateY(18px)}92.242%{opacity:1}92.848%,100%{opacity:1;transform:none}}@keyframes final-in{0%,91.152%{opacity:0;transform:translateY(18px)}94.182%{opacity:1}94.788%,100%{opacity:1;transform:none}}
     @media(max-width:980px){.motion-shell{max-width:760px}.hero-grid{align-items:start}}
     @media(max-width:640px){.motion-shell{border-radius:var(--sr-radius-panel)}}
-    @media(prefers-reduced-motion:reduce){.motion-scene{animation:none!important;opacity:0}.success-scene{opacity:1}.success-mark,.success-message,.calendar-chip,.final-line{animation:none!important;opacity:1;transform:none}.pointer{display:none}.product-demo-camera-scene{animation:none!important;transform:translate(-231px,-105px) scale(0.7)!important}.tap-indicator{opacity:0!important}}
+    @media(prefers-reduced-motion:reduce){.motion-scene{animation:none!important;opacity:0}.success-scene{opacity:1}.success-mark,.success-message,.calendar-chip,.final-line{animation:none!important;opacity:1;transform:none}.pointer{display:none}.product-demo-camera-stage.is-camera-active .product-demo-camera-scene{animation:none!important;transform:translate(-215.99px,-107.86px) scale(0.6741)!important}.tap-indicator{opacity:0!important}}
 
-    /* Product Demo mobile camera: desktop scene inside fixed 350×300 stage (JS-driven) */
+    /* Product Demo mobile camera: finished DESKTOP layout → pure CSS transform (no reflow) */
     .product-demo-camera-stage{display:block;width:100%}
     .product-demo-camera-scene{display:block;width:100%}
     .tap-indicator{display:none}
-    @media(max-width:640px){
-      .product-demo .product-stage .glow{display:none}
-      .product-demo-camera-stage{
-        width:min(350px,100%);
-        height:300px;
-        margin-inline:auto;
-        overflow:hidden;
-        position:relative;
-        border-radius:var(--sr-radius-panel);
-        background:var(--sr-neutral-950);
-        border:1px solid var(--sr-neutral-700);
-        box-shadow:var(--sr-elevation-modal);
-        contain:strict;
-        cursor:pointer;
-        -webkit-tap-highlight-color:transparent;
-      }
-      .product-demo-camera-scene{
-        width:1160px;
-        height:725px;
-        transform-origin:0 0;
-        will-change:transform;
-        /* transform + transition driven by ProductDemoCameraController */
-      }
-      .product-demo-camera-stage .motion-shell{
-        width:1160px;
-        max-width:none;
-        height:725px;
-        aspect-ratio:auto;
-        border:0;
-        border-radius:0;
-        box-shadow:none;
-        background:var(--sr-neutral-950);
-      }
-      .product-demo-camera-stage .pointer{display:none}
-      .product-demo-camera-stage .motion-btn{
-        transition:transform 180ms ease, filter 180ms ease, background-color 180ms ease;
-      }
-      .product-demo-camera-stage .motion-btn.is-pressed{
-        transform:scale(0.97);
-        filter:brightness(0.82);
-        background:var(--sr-color-action-primary-pressed);
-      }
-      .product-demo-camera-stage .winner-grid .motion-reel:first-child{
-        border-color:transparent;
-        box-shadow:none;
-        transition:border-color 320ms ease-out, box-shadow 320ms ease-out, transform 320ms ease-out;
-      }
-      .product-demo-camera-stage .winner-grid .motion-reel:first-child.is-selected{
-        border-color:var(--sr-color-action-primary);
-        box-shadow:0 0 0 2px color-mix(in srgb, var(--sr-color-action-primary) 45%, transparent);
-        transform:scale(1.02);
-      }
-      .tap-indicator{
-        display:block;
-        position:absolute;
-        right:0;
-        top:50%;
-        width:1.5em;
-        height:1.5em;
-        margin:0;
-        border-radius:var(--sr-radius-full);
-        background:var(--sr-color-marketing-accent);
-        transform:translate(55%,-50%) scale(0.55);
-        opacity:0;
-        pointer-events:none;
-        z-index:12;
-        transition:opacity 300ms ease, transform 220ms ease;
-      }
-      .tap-indicator .tap-ripple{
-        position:absolute;
-        inset:0;
-        border-radius:inherit;
-        border:2px solid var(--sr-color-marketing-accent);
-        opacity:0;
-        transform:scale(1);
-        pointer-events:none;
-      }
-      .tap-indicator.tap-appear{
-        opacity:1;
-        transform:translate(55%,-50%) scale(1);
-      }
-      .tap-indicator.tap-appear.tap-press{
-        transform:translate(55%,-50%) scale(0.72);
-        filter:brightness(0.9);
-      }
-      .tap-indicator.tap-ripple-run .tap-ripple{
-        animation:tap-ripple-expand 420ms ease-out forwards;
-      }
-      .tap-indicator-card{
-        right:10%;
-        top:40%;
-      }
-      .tap-indicator-card.tap-appear,
-      .tap-indicator-card.tap-appear.tap-press{
-        transform:translate(50%,-50%) scale(1);
-      }
-      .tap-indicator-card.tap-appear.tap-press{
-        transform:translate(50%,-50%) scale(0.72);
-      }
+    /* Active via JS class (≤640 OR touch) so Samsung/Android is not stuck on reflowed mobile layout */
+    .product-demo-camera-stage.is-camera-active{
+      width:min(350px,100%);
+      height:300px;
+      margin-inline:auto;
+      overflow:hidden;
+      position:relative;
+      border-radius:var(--sr-radius-panel);
+      background:var(--sr-neutral-950);
+      border:0;
+      box-shadow:none;
+      contain:paint;
+      cursor:pointer;
+      -webkit-tap-highlight-color:transparent;
+    }
+    .product-demo-camera-stage.is-camera-active .product-demo-camera-scene{
+      width:1160px;
+      height:725px;
+      transform-origin:0 0;
+      will-change:transform;
+    }
+    .product-demo-camera-stage.is-camera-active .motion-shell{
+      width:1160px !important;
+      max-width:none !important;
+      height:725px !important;
+      aspect-ratio:auto !important;
+      border:0 !important;
+      border-radius:0 !important;
+      box-shadow:none !important;
+      background:var(--sr-neutral-950);
+      container-type:normal !important;
+    }
+    .product-demo-camera-stage.is-camera-active .motion-scene{
+      font-size:12px !important;
+      line-height:1.2 !important;
+    }
+    .product-demo-camera-stage.is-camera-active .creator-name{
+      line-height:1.15 !important;
+    }
+    .product-demo-camera-stage.is-camera-active .creator-meta{
+      line-height:1.2 !important;
+    }
+    .product-demo-camera-stage.is-camera-active .motion-title{
+      font-size:3.6em !important;
+      white-space:nowrap;
+      letter-spacing:-.045em !important;
+      line-height:1.05 !important;
+    }
+    .product-demo-camera-stage.is-camera-active .motion-sub{font-size:1.5em !important}
+    .product-demo-camera-stage.is-camera-active .creator-name,
+    .product-demo-camera-stage.is-camera-active .creator-meta{white-space:nowrap}
+    .product-demo-camera-stage.is-camera-active .remake-copy h2{
+      font-size:2.85em !important;
+      letter-spacing:-.04em !important;
+      line-height:1.1 !important;
+      max-width:18em;
+    }
+    .product-demo-camera-stage.is-camera-active .motion-reel small{display:block !important}
+    .product-demo-camera-stage.is-camera-active .calendar-chip{
+      left:39% !important;
+      right:39% !important;
+      white-space:nowrap;
+    }
+    .product-demo .product-stage:has(.is-camera-active) .glow{display:none}
+    .product-demo-camera-stage.is-camera-active .motion-window{
+      inset:0 !important;
+      border:0 !important;
+      border-radius:0 !important;
+      background:var(--sr-neutral-950) !important;
+    }
+    .product-demo-camera-stage.is-touch .pointer,
+    .product-demo-camera-stage[data-product-demo-touch] .pointer{display:none !important}
+    .product-demo-camera-stage.is-camera-active .motion-btn{
+      transition:transform 180ms ease, filter 180ms ease, background-color 180ms ease;
+    }
+    .product-demo-camera-stage.is-camera-active .motion-btn.is-pressed{
+      transform:scale(0.97);
+      filter:brightness(0.82);
+      background:var(--sr-color-action-primary-pressed);
+    }
+    .product-demo-camera-stage.is-camera-active .winner-grid .motion-reel:first-child{
+      border-color:transparent;
+      box-shadow:none;
+      transition:border-color 320ms ease-out, box-shadow 320ms ease-out, transform 320ms ease-out;
+    }
+    .product-demo-camera-stage.is-camera-active .winner-grid .motion-reel:first-child.is-selected{
+      border-color:var(--sr-color-action-primary);
+      box-shadow:0 0 0 2px color-mix(in srgb, var(--sr-color-action-primary) 45%, transparent);
+      transform:scale(1.02);
+    }
+    .product-demo-camera-stage.is-touch .tap-indicator,
+    .product-demo-camera-stage[data-product-demo-touch] .tap-indicator{
+      display:block;
+      position:absolute;
+      right:0;
+      top:50%;
+      width:1.5em;
+      height:1.5em;
+      margin:0;
+      border-radius:var(--sr-radius-full);
+      background:var(--sr-color-marketing-accent);
+      transform:translate(55%,-50%) scale(0.55);
+      opacity:0;
+      pointer-events:none;
+      z-index:12;
+      transition:opacity 300ms ease, transform 220ms ease;
+    }
+    .product-demo-camera-stage.is-touch .tap-indicator .tap-ripple,
+    .product-demo-camera-stage[data-product-demo-touch] .tap-indicator .tap-ripple{
+      position:absolute;inset:0;border-radius:inherit;border:2px solid var(--sr-color-marketing-accent);
+      opacity:0;transform:scale(1);pointer-events:none;
+    }
+    .product-demo-camera-stage.is-touch .tap-indicator.tap-appear,
+    .product-demo-camera-stage[data-product-demo-touch] .tap-indicator.tap-appear{
+      opacity:1;transform:translate(55%,-50%) scale(1);
+    }
+    .product-demo-camera-stage.is-touch .tap-indicator.tap-appear.tap-press,
+    .product-demo-camera-stage[data-product-demo-touch] .tap-indicator.tap-appear.tap-press{
+      transform:translate(55%,-50%) scale(0.72);filter:brightness(0.9);
+    }
+    .product-demo-camera-stage.is-touch .tap-indicator.tap-ripple-run .tap-ripple,
+    .product-demo-camera-stage[data-product-demo-touch] .tap-indicator.tap-ripple-run .tap-ripple{
+      animation:tap-ripple-expand 420ms ease-out forwards;
+    }
+    .product-demo-camera-stage.is-touch .tap-indicator-card,
+    .product-demo-camera-stage[data-product-demo-touch] .tap-indicator-card{right:10%;top:40%}
+    .product-demo-camera-stage.is-touch .tap-indicator-card.tap-appear,
+    .product-demo-camera-stage[data-product-demo-touch] .tap-indicator-card.tap-appear{
+      transform:translate(50%,-50%) scale(1);
+    }
+    .product-demo-camera-stage.is-touch .tap-indicator-card.tap-appear.tap-press,
+    .product-demo-camera-stage[data-product-demo-touch] .tap-indicator-card.tap-appear.tap-press{
+      transform:translate(50%,-50%) scale(0.72);
     }
     @keyframes tap-ripple-expand{
       0%{opacity:.85;transform:scale(1)}
       100%{opacity:0;transform:scale(2.6)}
+    }
+    .page[data-finder-platform] .motionStage:has(.is-camera-active),
+    .page[data-finder-platform] .motionFrame:has(.is-camera-active){
+      padding:0 !important;background:transparent !important;border-radius:0 !important;
     }
 
     /* Marketing / Hero — Product-led v1.1 */
