@@ -4,12 +4,50 @@ import type { MouseEvent } from "react";
 import { MarketingCard } from "../../../components/MarketingCard";
 import { MarketingSection } from "../../../components/MarketingSection";
 import { MarketingSectionHeader } from "../../../components/MarketingSectionHeader";
-import { MarketingIconCheck, MarketingToolIcon } from "../../../components/MarketingIcons";
+import {
+  MarketingIconArrowRight,
+  MarketingIconCheck,
+  MarketingToolIcon,
+} from "../../../components/MarketingIcons";
+import { wrapHyphenatedCompounds } from "../../../components/marketingNoBreak";
 import {
   BROLL_LANDING_NICHES,
   BROLL_LANDING_SAMPLE_SCRIPT,
 } from "../../../lib/brollLandingCopy";
+import toolGridStyles from "../../../components/MarketingToolGrid.module.css";
 import styles from "./BrollGenerator.module.css";
+
+/** Same four tools as the client RelatedToolsGrid on this page. */
+const BROLL_RELATED_TOOLS = [
+  {
+    id: "finder",
+    title: "Instagram Viral Reel Finder",
+    href: "/features/viral-reel-finder",
+    icon: "finder" as const,
+    description: "Spot the Reels worth studying.",
+  },
+  {
+    id: "tiktok",
+    title: "TikTok Viral Video Finder",
+    href: "/free-tools/tiktok-viral-video-finder",
+    icon: "finder" as const,
+    description: "Find more ideas on TikTok.",
+  },
+  {
+    id: "youtube",
+    title: "YouTube Shorts Viral Finder",
+    href: "/free-tools/youtube-shorts-viral-finder",
+    icon: "finder" as const,
+    description: "Find more ideas on YouTube Shorts.",
+  },
+  {
+    id: "script",
+    title: "AI Script Generator",
+    href: "/features/ai-personal-brand-coach",
+    icon: "script" as const,
+    description: "Turn a strong idea into a script in your voice.",
+  },
+] as const;
 
 const SAMPLE_CLIPS = [
   {
@@ -146,6 +184,7 @@ export function BrollSocialProof() {
 
   return (
     <MarketingSection
+      pair="start"
       className={styles.proofBand}
       aria-label="Product highlights"
     >
@@ -153,7 +192,7 @@ export function BrollSocialProof() {
         {items.map((text) => (
           <p key={text} className={`sr-text-marketing-body-small ${styles.proofItem}`}>
             <MarketingIconCheck className={styles.proofIcon} aria-hidden="true" />
-            {text}
+            {wrapHyphenatedCompounds(text)}
           </p>
         ))}
       </div>
@@ -167,11 +206,13 @@ export function BrollInputModes() {
       <div className={styles.inputModesGrid}>
         <MarketingCard as="article">
           <p className={`sr-text-marketing-eyebrow ${styles.cardEyebrowBrand}`}>From a Script</p>
-          <h3 className="sr-text-marketing-title-medium">Start With a Script</h3>
+          <h3 className="sr-text-marketing-title-medium">
+            {wrapHyphenatedCompounds("Start With a Script")}
+          </h3>
           <p className="sr-text-marketing-body-medium">
-            Paste text you&apos;ve already written, a voiceover, a podcast excerpt,
-            a video outline, and get matched B-roll before you ever pick up a
-            camera.
+            {wrapHyphenatedCompounds(
+              "Paste text you've already written, a voiceover, a podcast excerpt, a video outline, and get matched B-roll before you ever pick up a camera."
+            )}
           </p>
           <a href="#demo" className={`sr-text-core-button-large ${styles.cardLink}`}>
             See script mode →
@@ -179,11 +220,13 @@ export function BrollInputModes() {
         </MarketingCard>
         <MarketingCard as="article">
           <p className={`sr-text-marketing-eyebrow ${styles.cardEyebrowIndigo}`}>From a Video</p>
-          <h3 className="sr-text-marketing-title-medium">Start With Footage</h3>
+          <h3 className="sr-text-marketing-title-medium">
+            {wrapHyphenatedCompounds("Start With Footage")}
+          </h3>
           <p className="sr-text-marketing-body-medium">
-            Upload a video you&apos;ve already filmed. SpyReels transcribes it
-            automatically and drops matching B-roll into the right spots on
-            your existing timeline.
+            {wrapHyphenatedCompounds(
+              "Upload a video you've already filmed. SpyReels transcribes it automatically and drops matching B-roll into the right spots on your existing timeline."
+            )}
           </p>
           <a
             href="#demo"
@@ -214,8 +257,12 @@ export function BrollWhenToUse() {
               <span className={styles.emojiIcon} aria-hidden="true">
                 {card.icon}
               </span>
-              <h3 className="sr-text-marketing-title-medium">{card.title}</h3>
-              <p className="sr-text-marketing-body-medium">{card.body}</p>
+              <h3 className="sr-text-marketing-title-medium">
+                {wrapHyphenatedCompounds(card.title)}
+              </h3>
+              <p className="sr-text-marketing-body-medium">
+                {wrapHyphenatedCompounds(card.body)}
+              </p>
             </MarketingCard>
           </li>
         ))}
@@ -242,7 +289,7 @@ export function BrollSampleGallery() {
           Sample script
         </figcaption>
         <blockquote className={`sr-text-marketing-body-medium ${styles.sampleScriptQuote}`}>
-          &quot;{BROLL_LANDING_SAMPLE_SCRIPT}&quot;
+          &quot;{wrapHyphenatedCompounds(BROLL_LANDING_SAMPLE_SCRIPT)}&quot;
         </blockquote>
       </figure>
       <ul className={styles.clipGrid}>
@@ -262,8 +309,8 @@ export function BrollSampleGallery() {
                   preload="metadata"
                 />
               </div>
-              <figcaption className={`sr-text-marketing-body-small ${styles.clipCaption}`}>
-                {clip.caption}
+              <figcaption className={`sr-text-marketing-body-medium ${styles.clipCaption}`}>
+                {wrapHyphenatedCompounds(clip.caption)}
               </figcaption>
             </figure>
           </li>
@@ -311,7 +358,9 @@ export function BrollUseCaseGrid() {
               onClick={scrollToDemoAndHighlight}
               className={styles.nicheCard}
             >
-              <span className="sr-text-marketing-title-medium">{item.label}</span>
+              <span className="sr-text-marketing-title-medium">
+                {wrapHyphenatedCompounds(item.label)}
+              </span>
               <span className={`sr-text-marketing-button ${styles.nicheExplore}`}>
                 Explore →
               </span>
@@ -342,12 +391,18 @@ export function BrollMoreFeatures() {
                   <span className={styles.moreIcon} aria-hidden="true">
                     <MarketingToolIcon name={feature.icon} />
                   </span>
-                  <h3 className="sr-text-marketing-title-medium">{feature.title}</h3>
+                  <h3 className="sr-text-marketing-title-medium">
+                    {wrapHyphenatedCompounds(feature.title)}
+                  </h3>
                 </div>
               ) : (
-                <h3 className="sr-text-marketing-title-medium">{feature.title}</h3>
+                <h3 className="sr-text-marketing-title-medium">
+                  {wrapHyphenatedCompounds(feature.title)}
+                </h3>
               )}
-              <p className="sr-text-marketing-body-medium">{feature.body}</p>
+              <p className="sr-text-marketing-body-medium">
+                {wrapHyphenatedCompounds(feature.body)}
+              </p>
               <a href={feature.href} className={`sr-text-marketing-button ${styles.moreLink}`}>
                 {feature.linkLabel} →
               </a>
@@ -356,12 +411,59 @@ export function BrollMoreFeatures() {
         ))}
       </ul>
       <p className={`sr-text-marketing-body-medium ${styles.moreClosing}`}>
-        Most people come to SpyReels for one feature and end up using three or
-        four without meaning to, because the research, scripting, and planning
-        all pull from the same data instead of starting over each time. Start
-        with b-roll if that&apos;s what brought you here, and pull in the rest
-        whenever your workflow needs it.
+        {wrapHyphenatedCompounds(
+          "Most people come to SpyReels for one feature and end up using three or four without meaning to, because the research, scripting, and planning all pull from the same data instead of starting over each time. Start with b-roll if that's what brought you here, and pull in the rest whenever your workflow needs it."
+        )}
       </p>
+    </MarketingSection>
+  );
+}
+
+/** Tool Grid cards only (no Beyond the workspace). Same tools as the old page. */
+export function BrollRelatedTools() {
+  return (
+    <MarketingSection
+      pair="end"
+      aria-labelledby="broll-related-tools-title"
+      data-marketing-tool-grid=""
+    >
+      <div className={`shell ${toolGridStyles.root}`}>
+        <MarketingSectionHeader
+          title="Related tools"
+          subtitle="Cross-platform research and the tools that turn winners into videos."
+          headingLevel="h2"
+          titleId="broll-related-tools-title"
+          size="large"
+          align="start"
+        />
+        <div className={toolGridStyles.tools}>
+          {BROLL_RELATED_TOOLS.map((tool) => (
+            <a
+              className={toolGridStyles.tool}
+              id={`tool-${tool.id}`}
+              href={tool.href}
+              key={tool.id}
+            >
+              <span className={toolGridStyles.iconTile} aria-hidden="true">
+                <MarketingToolIcon name={tool.icon} />
+              </span>
+              <span className={toolGridStyles.copy}>
+                <strong className={`${toolGridStyles.title} sr-text-product-card-title`}>
+                  {wrapHyphenatedCompounds(tool.title)}
+                </strong>
+                <small
+                  className={`${toolGridStyles.description} sr-text-marketing-body-small`}
+                >
+                  {wrapHyphenatedCompounds(tool.description)}
+                </small>
+              </span>
+              <span className={toolGridStyles.arrow} aria-hidden="true">
+                <MarketingIconArrowRight />
+              </span>
+            </a>
+          ))}
+        </div>
+      </div>
     </MarketingSection>
   );
 }

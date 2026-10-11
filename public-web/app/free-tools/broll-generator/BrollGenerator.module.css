@@ -151,8 +151,9 @@
 }
 
 .sampleScript {
-  margin-top: var(--sr-layout-stack-md);
-  max-width: var(--sr-layout-content-reading-width);
+  margin: var(--sr-layout-stack-md) 0 0;
+  width: 100%;
+  max-width: var(--sr-layout-container-max-width);
   padding: var(--sr-layout-stack-md);
   border: var(--sr-border-width-default) solid var(--sr-color-border-default);
   border-radius: var(--sr-radius-card);
@@ -169,10 +170,11 @@
 }
 
 .clipGrid {
-  margin: var(--sr-layout-stack-lg) auto 0;
-  max-width: 56rem;
+  margin: var(--sr-layout-stack-lg) 0 0;
+  width: 100%;
+  max-width: var(--sr-layout-container-max-width);
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: 1fr;
   gap: var(--sr-layout-stack-md);
   list-style: none;
   padding: 0;
@@ -184,14 +186,29 @@
   }
 }
 
-@media (min-width: 1024px) {
+/* 5 across only when each caption column stays readable (≥ ~200px). */
+@media (min-width: 1200px) {
   .clipGrid {
     grid-template-columns: repeat(5, 1fr);
+    gap: var(--sr-layout-content-gap);
   }
+}
+
+.clipGrid > li {
+  min-width: 0;
+}
+
+.clipGrid figure {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  margin: 0;
+  min-width: 0;
 }
 
 .clipFrame {
   position: relative;
+  width: 100%;
   aspect-ratio: 9 / 16;
   overflow: hidden;
   border-radius: var(--sr-radius-card);
@@ -206,7 +223,9 @@
 
 .clipCaption {
   margin-top: var(--sr-layout-inline-gap);
+  width: 100%;
   color: var(--sr-color-text-tertiary);
+  text-wrap: pretty;
 }
 
 .nicheGrid {

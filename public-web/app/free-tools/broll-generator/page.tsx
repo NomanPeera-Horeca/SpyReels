@@ -6,7 +6,6 @@ import { HomepageAuthGate } from "../../../components/HomepageAuthGate";
 import {
   MarketingFaq,
   MarketingFinalCta,
-  MarketingWorkspace,
 } from "../../../components/MarketingPageSections";
 import { MarketingProcessSteps } from "../../../components/MarketingProcessSteps";
 import { buildFaqPageJsonLd, jsonLdScript } from "../../../components/marketingFaqJsonLd";
@@ -20,6 +19,7 @@ import { BrollGeneratorClient } from "./BrollGeneratorClient";
 import {
   BrollInputModes,
   BrollMoreFeatures,
+  BrollRelatedTools,
   BrollSampleGallery,
   BrollSocialProof,
   BrollUseCaseGrid,
@@ -139,6 +139,7 @@ export default function BrollGeneratorPage() {
 
         <MarketingProcessSteps
           presentation="numbered"
+          pair="start"
           title="How the B-Roll Generator Works"
           steps={BROLL_HOW_IT_WORKS_STEPS.map((step, index) => ({
             number: String(index + 1),
@@ -153,11 +154,7 @@ export default function BrollGeneratorPage() {
         <BrollUseCaseGrid />
         <BrollMoreFeatures />
 
-        <MarketingWorkspace
-          title="Cross-platform research and the tools that turn winners into videos."
-          toolsPage="homepage"
-          hiddenToolIds={["broll"]}
-        />
+        <BrollRelatedTools />
 
         <MarketingFaq
           title="Frequently Asked Questions"

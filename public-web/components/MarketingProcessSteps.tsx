@@ -1,6 +1,6 @@
 import type { ComponentType, ReactNode, SVGProps } from "react";
 import { Fragment } from "react";
-import { MarketingSection } from "./MarketingSection";
+import { MarketingSection, type MarketingSectionPair } from "./MarketingSection";
 import { MarketingSectionHeader } from "./MarketingSectionHeader";
 import {
   MarketingIconArrowRight,
@@ -8,6 +8,7 @@ import {
   MarketingIconProcessRemake,
   MarketingIconProcessResearch,
 } from "./MarketingIcons";
+import { wrapHyphenatedCompounds } from "./marketingNoBreak";
 import styles from "./MarketingProcessSteps.module.css";
 
 export type MarketingProcessStep = {
@@ -32,6 +33,8 @@ export type MarketingProcessStepsProps = {
   steps: readonly MarketingProcessStep[];
   id?: string;
   className?: string;
+  /** Pair with the adjacent section (Decision 31). */
+  pair?: MarketingSectionPair;
   /** Numbered default eyebrow. Ignored for icon presentation. */
   eyebrow?: ReactNode;
 };
@@ -51,6 +54,7 @@ export function MarketingProcessSteps({
   steps,
   id = presentation === "numbered" ? "how-it-works" : "tools",
   className,
+  pair,
   eyebrow = "How it works",
 }: MarketingProcessStepsProps) {
   const titleId = `${id}-title`;
@@ -71,6 +75,7 @@ export function MarketingProcessSteps({
     <MarketingSection
       id={id}
       className={cx(styles.section, className)}
+      pair={pair}
       aria-labelledby={titleId}
       data-marketing-process-steps={presentation}
     >
@@ -118,7 +123,9 @@ export function MarketingProcessSteps({
                     ) : (
                       <span className={cx("sr-text-marketing-label", styles.number)}>{step.number}</span>
                     )}
-                    <h3 className={cx("sr-text-marketing-heading-4", styles.cardTitle)}>{step.title}</h3>
+                    <h3 className={cx("sr-text-marketing-heading-4", styles.cardTitle)}>
+                      {wrapHyphenatedCompounds(step.title)}
+                    </h3>
                   </div>
                   <p className={cx("sr-text-marketing-body-medium", styles.cardBody)}>{step.body}</p>
                 </article>

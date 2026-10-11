@@ -20,6 +20,7 @@ import faqStyles from "./MarketingFaq.module.css";
 import finalCtaStyles from "./MarketingFinalCta.module.css";
 import platformStripStyles from "./MarketingPlatformStrip.module.css";
 import type { MarketingFaqItem } from "./marketingFaqJsonLd";
+import { wrapHyphenatedCompounds } from "./marketingNoBreak";
 
 export { MarketingResponsibleResearch } from "./MarketingResponsibleResearch";
 export { MarketingCreatorStories } from "./MarketingCreatorStories";
@@ -251,7 +252,9 @@ export function MarketingFaq({
           {items.map((item, index) => (
             <details key={item.q} className={faqStyles.item} open={index === 0}>
               <summary className={faqStyles.summary}>
-                <span className={cx("sr-text-marketing-title-medium", faqStyles.question)}>{item.q}</span>
+                <span className={cx("sr-text-marketing-title-medium", faqStyles.question)}>
+                  {wrapHyphenatedCompounds(item.q)}
+                </span>
                 <span className={faqStyles.icon} aria-hidden="true">
                   <MarketingIconPlus className={faqStyles.iconPlus} />
                   <MarketingIconMinus className={faqStyles.iconMinus} />

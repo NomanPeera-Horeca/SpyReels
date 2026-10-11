@@ -6,6 +6,7 @@ import { MarketingBreadcrumb } from "../../../components/MarketingBreadcrumb";
 import { MarketingDialog } from "../../../components/MarketingDialog";
 import { MarketingIconCheck } from "../../../components/MarketingIcons";
 import { MarketingSection } from "../../../components/MarketingSection";
+import { wrapHyphenatedCompounds } from "../../../components/marketingNoBreak";
 import { PrimaryButton } from "../../../components/PrimaryButton";
 import { SecondaryButton } from "../../../components/SecondaryButton";
 import { openHomepageAuth } from "../../../lib/openHomepageAuth";
@@ -149,14 +150,12 @@ export function BrollGeneratorClient() {
               ]}
             />
             <h1 className={`sr-text-marketing-display ${styles.heroTitle}`}>
-              Free AI B-Roll Generator
+              {wrapHyphenatedCompounds("Free AI B-Roll Generator")}
             </h1>
             <p className={`sr-text-marketing-body-large ${styles.heroLead}`}>
-              Paste your script, or upload footage you&apos;ve already shot.
-              SpyReels matches every beat to real footage automatically and
-              turns it into a fully B-rolled video. Fine-tune any clip you
-              don&apos;t like, and more, in the best free AI B-roll generator
-              online.
+              {wrapHyphenatedCompounds(
+                "Paste your script, or upload footage you've already shot. SpyReels matches every beat to real footage automatically and turns it into a fully B-rolled video. Fine-tune any clip you don't like, and more, in the best free AI B-roll generator online."
+              )}
             </p>
             <div className={styles.heroActions}>
               <PrimaryButton href="#demo" size="large">
