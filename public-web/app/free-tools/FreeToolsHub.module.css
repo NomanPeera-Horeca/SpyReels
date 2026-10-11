@@ -1,0 +1,289 @@
+/**
+ * /free-tools hub page-local layout. Tokens and type roles only.
+ */
+
+.page {
+  min-height: 100vh;
+  background: var(--sr-color-surface-page);
+  color: var(--sr-color-text-primary);
+}
+
+.hero {
+  margin: 0 auto;
+  max-width: 48rem;
+  padding: var(--sr-layout-section-gap) var(--sr-layout-page-gutter-mobile) var(--sr-layout-content-gap);
+  text-align: center;
+}
+
+@media (min-width: 768px) {
+  .hero {
+    padding-left: var(--sr-layout-page-gutter-tablet);
+    padding-right: var(--sr-layout-page-gutter-tablet);
+  }
+}
+
+@media (min-width: 1024px) {
+  .hero {
+    padding-left: var(--sr-layout-page-gutter-desktop);
+    padding-right: var(--sr-layout-page-gutter-desktop);
+  }
+}
+
+.breadcrumb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sr-layout-inline-gap);
+  margin: 0 0 var(--sr-layout-content-gap);
+  padding: 0;
+  list-style: none;
+  color: var(--sr-color-text-secondary);
+}
+
+.breadcrumb a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.breadcrumb a:hover {
+  color: var(--sr-color-text-primary);
+}
+
+.breadcrumbCurrent {
+  color: var(--sr-color-text-primary);
+}
+
+.breadcrumbSep {
+  color: var(--sr-color-text-tertiary);
+}
+
+.heroLead {
+  margin: var(--sr-layout-content-gap) auto 0;
+  max-width: 36rem;
+  color: var(--sr-color-text-secondary);
+}
+
+.trust {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sr-layout-inline-gap);
+  margin-top: var(--sr-layout-content-gap);
+  color: var(--sr-color-text-secondary);
+}
+
+.trustStars {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--sr-color-status-warning-border);
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sr-layout-inline-gap);
+  padding: 0 var(--sr-layout-page-gutter-mobile) var(--sr-layout-section-gap);
+}
+
+@media (min-width: 768px) {
+  .filters {
+    padding-left: var(--sr-layout-page-gutter-tablet);
+    padding-right: var(--sr-layout-page-gutter-tablet);
+  }
+}
+
+@media (min-width: 1024px) {
+  .filters {
+    padding-left: var(--sr-layout-page-gutter-desktop);
+    padding-right: var(--sr-layout-page-gutter-desktop);
+  }
+}
+
+.filterTab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: var(--sr-border-width-default) solid var(--sr-color-border-default);
+  border-radius: var(--sr-radius-full);
+  background: var(--sr-color-surface-default);
+  color: var(--sr-color-text-secondary);
+  cursor: pointer;
+}
+
+.filterTab:hover {
+  color: var(--sr-color-text-primary);
+}
+
+.filterTab[aria-selected="true"] {
+  border-color: var(--sr-color-action-primary);
+  background: var(--sr-color-brand-surface-subtle);
+  color: var(--sr-color-text-primary);
+}
+
+.toolsSection {
+  margin: 0 auto;
+  max-width: var(--sr-layout-container-max-width);
+  padding: 0 var(--sr-layout-page-gutter-mobile) var(--sr-layout-section-gap);
+}
+
+@media (min-width: 768px) {
+  .toolsSection {
+    padding-left: var(--sr-layout-page-gutter-tablet);
+    padding-right: var(--sr-layout-page-gutter-tablet);
+  }
+}
+
+@media (min-width: 1024px) {
+  .toolsSection {
+    padding-left: var(--sr-layout-page-gutter-desktop);
+    padding-right: var(--sr-layout-page-gutter-desktop);
+  }
+}
+
+.toolsHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sr-layout-inline-gap);
+  margin-bottom: var(--sr-layout-content-gap);
+}
+
+.toolsAside {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+}
+
+.toolsGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sr-layout-content-gap);
+}
+
+@media (min-width: 640px) {
+  .toolsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .toolsGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.toolCard {
+  display: block;
+  color: inherit;
+  text-decoration: none;
+  transition: transform 0.15s ease;
+}
+
+.toolCard:hover {
+  transform: translateY(-2px);
+}
+
+.toolCard:hover .toolTitle {
+  color: var(--sr-color-text-brand);
+}
+
+.toolMedia {
+  aspect-ratio: 16 / 11;
+  overflow: hidden;
+  border: var(--sr-border-width-default) solid var(--sr-color-border-default);
+  border-radius: var(--sr-radius-card);
+  background: var(--sr-color-surface-default);
+}
+
+.toolMedia img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.toolTitle {
+  margin: var(--sr-layout-content-gap) 0 0;
+  color: var(--sr-color-text-primary);
+}
+
+.toolDescription {
+  margin: var(--sr-layout-inline-gap) 0 0;
+  color: var(--sr-color-text-secondary);
+}
+
+/* Client filter: hide non-matching cards; all cards remain in HTML. */
+.toolsGrid[data-active-filter]:not([data-active-filter="all"])
+  .toolCard:not([data-visible="true"]) {
+  display: none;
+}
+
+.bannerSection {
+  margin: 0 auto var(--sr-layout-section-gap);
+  max-width: var(--sr-layout-container-max-width);
+  padding: 0 var(--sr-layout-page-gutter-mobile);
+}
+
+@media (min-width: 768px) {
+  .bannerSection {
+    padding-left: var(--sr-layout-page-gutter-tablet);
+    padding-right: var(--sr-layout-page-gutter-tablet);
+  }
+}
+
+@media (min-width: 1024px) {
+  .bannerSection {
+    padding-left: var(--sr-layout-page-gutter-desktop);
+    padding-right: var(--sr-layout-page-gutter-desktop);
+  }
+}
+
+.bannerButton {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  padding: 0;
+  border: var(--sr-border-width-default) solid var(--sr-color-border-default);
+  border-radius: var(--sr-radius-modal);
+  background: var(--sr-neutral-950);
+  cursor: pointer;
+  text-align: left;
+  transition: transform 0.15s ease;
+}
+
+.bannerButton:hover {
+  transform: translateY(-2px);
+}
+
+.bannerButton img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.faqCta {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--sr-layout-content-gap);
+  padding: 0 var(--sr-layout-page-gutter-mobile) var(--sr-layout-section-gap);
+}
+
+@media (min-width: 768px) {
+  .faqCta {
+    padding-left: var(--sr-layout-page-gutter-tablet);
+    padding-right: var(--sr-layout-page-gutter-tablet);
+  }
+}
+
+@media (min-width: 1024px) {
+  .faqCta {
+    padding-left: var(--sr-layout-page-gutter-desktop);
+    padding-right: var(--sr-layout-page-gutter-desktop);
+  }
+}
