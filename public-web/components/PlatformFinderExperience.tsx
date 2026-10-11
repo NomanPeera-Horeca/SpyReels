@@ -2,6 +2,7 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { InstagramMark, TikTokMark, YouTubeMark } from "../../shared/ui/PlatformMarks";
+import { openHomepageAuth } from "../lib/openHomepageAuth";
 import { trackPublicWeb } from "../lib/trackPublicWeb";
 import { PrimaryButton } from "./PrimaryButton";
 import { FinderSearch } from "./FinderSearch";
@@ -256,10 +257,7 @@ export function PlatformFinderExperience({
       auth: "signup",
       ...platformProp,
     });
-    const url = new URL(pagePath, window.location.origin);
-    url.searchParams.set("auth", "signup");
-    url.searchParams.set("returnTo", returnTo);
-    window.location.assign(url.toString());
+    openHomepageAuth({ mode: "signup", returnTo });
   }
 
   function chooseDemo(handle: string) {

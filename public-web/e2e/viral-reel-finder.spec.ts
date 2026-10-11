@@ -136,11 +136,26 @@ test("Remake preserves the selected creator through signup", async ({ page }, te
   await page.getByTestId("reel-card").first().getByRole("button", { name: "Remake →", exact: true }).click();
 
   await expect(page).toHaveURL(/\/features\/viral-reel-finder\?auth=signup/);
-  await expect(page.getByRole("dialog", { name: "Join SpyReels" })).toBeVisible();
+  await expect(
+    page.getByRole("dialog", {
+      name: "Create your free account to remake @garyvee's best Reel",
+    })
+  ).toBeVisible();
+  // Soft open: demo results stay mounted behind the dialog.
+  await expect(page.getByTestId("reel-card").first()).toBeVisible();
 
   const target = new URL(page.url());
   expect(target.searchParams.get("auth")).toBe("signup");
   expect(target.searchParams.get("returnTo")).toBe("/research?creator=garyvee&start=1");
+
+  await page.getByRole("button", { name: "Close" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const afterDismiss = new URL(page.url());
+  expect(afterDismiss.searchParams.get("auth")).toBeNull();
+  expect(afterDismiss.searchParams.get("returnTo")).toBe(
+    "/research?creator=garyvee&start=1"
+  );
+  await expect(page.getByTestId("reel-card").first()).toBeVisible();
 });
 
 test("research CTA hands a confirmed Instagram account to the real app", async ({ page }, testInfo) => {
@@ -178,7 +193,11 @@ test("research CTA hands a confirmed Instagram account to the real app", async (
   await researchButton.click();
 
   await expect(page).toHaveURL(/\/features\/viral-reel-finder\?auth=signup/);
-  await expect(page.getByRole("dialog", { name: "Join SpyReels" })).toBeVisible();
+  await expect(
+    page.getByRole("dialog", {
+      name: "Create your free account to remake @noman_peera's best Reel",
+    })
+  ).toBeVisible();
 
   const target = new URL(page.url());
   expect(target.searchParams.get("auth")).toBe("signup");

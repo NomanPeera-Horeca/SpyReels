@@ -107,7 +107,20 @@
   cursor: pointer;
 }
 
+.googlePrimary {
+  height: 56px;
+  border-width: 2px;
+  border-color: var(--sr-color-border-default);
+  background: var(--sr-color-surface-default);
+  font-size: 16px;
+  font-weight: 700;
+}
+
 .google:hover {
+  background: var(--sr-color-surface-subtle);
+}
+
+.googlePrimary:hover {
   background: var(--sr-color-surface-subtle);
 }
 
