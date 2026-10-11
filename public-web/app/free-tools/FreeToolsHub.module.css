@@ -13,40 +13,16 @@
   display: flex;
   flex-direction: column;
   align-items: center;
+  gap: var(--sr-layout-stack-md);
   text-align: center;
 }
 
-.breadcrumb {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: var(--sr-layout-inline-gap);
-  margin: 0 0 var(--sr-layout-content-gap);
-  padding: 0;
-  list-style: none;
-  color: var(--sr-color-text-secondary);
-}
-
-.breadcrumb a {
-  color: inherit;
-  text-decoration: none;
-}
-
-.breadcrumb a:hover {
-  color: var(--sr-color-text-primary);
-}
-
-.breadcrumbCurrent {
-  color: var(--sr-color-text-primary);
-}
-
-.breadcrumbSep {
-  color: var(--sr-color-text-tertiary);
+.hero h1 {
+  margin: 0;
 }
 
 .heroLead {
-  margin: var(--sr-layout-content-gap) auto 0;
+  margin: 0;
   max-width: var(--sr-layout-content-reading-width);
   color: var(--sr-color-text-secondary);
 }
@@ -56,7 +32,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--sr-layout-inline-gap);
-  margin-top: var(--sr-layout-content-gap);
+  margin: 0;
   color: var(--sr-color-text-secondary);
 }
 
@@ -67,49 +43,8 @@
   color: var(--sr-color-status-warning-foreground);
 }
 
-/* Kept page-local, matches Figma Tabs (core, node 34:4). */
 .filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: var(--sr-layout-inline-gap);
   margin-bottom: var(--sr-layout-content-gap);
-}
-
-.filterTab {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  /* space/2 top/bottom, space/3 left/right */
-  padding: var(--sr-layout-inline-gap) var(--sr-layout-control-gap);
-  border: none;
-  border-bottom: var(--sr-border-width-strong) solid transparent;
-  border-radius: 0;
-  background: transparent;
-  color: var(--sr-color-text-secondary);
-  cursor: pointer;
-}
-
-.filterTab:hover:not(:disabled) {
-  background: var(--sr-color-surface-hover);
-}
-
-.filterTab[aria-selected="true"] {
-  color: var(--sr-color-brand-primary);
-  border-bottom-color: var(--sr-color-brand-primary);
-}
-
-.filterTab:disabled,
-.filterTab[aria-disabled="true"] {
-  color: var(--sr-color-text-disabled);
-  cursor: not-allowed;
-  background: transparent;
-}
-
-.filterTab:focus-visible {
-  outline: none;
-  box-shadow: var(--sr-elevation-focus-primary-action);
 }
 
 .toolsHeader {

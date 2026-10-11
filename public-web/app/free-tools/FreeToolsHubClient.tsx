@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { MarketingTabRow } from "../../components/MarketingTabRow";
 import { PrimaryButton } from "../../components/PrimaryButton";
 import { openHomepageAuth } from "../../lib/openHomepageAuth";
 import {
@@ -14,10 +15,6 @@ function openSignup() {
   openHomepageAuth({ mode: "signup", returnTo: "/research" });
 }
 
-/**
- * Kept page-local, matches Figma Tabs (core, node 34:4).
- * No shared public-web Tabs component yet.
- */
 export function FreeToolsFilterTabs() {
   const [filter, setFilter] = useState<ToolCategory>("all");
 
@@ -33,20 +30,13 @@ export function FreeToolsFilterTabs() {
   }, [filter]);
 
   return (
-    <div className={styles.filters} role="tablist" aria-label="Tool categories">
-      {FILTERS.map(({ id, label }) => (
-        <button
-          key={id}
-          type="button"
-          role="tab"
-          aria-selected={filter === id}
-          className={`${styles.filterTab} sr-text-product-label`}
-          onClick={() => setFilter(id)}
-        >
-          {label}
-        </button>
-      ))}
-    </div>
+    <MarketingTabRow
+      className={styles.filters}
+      tabs={FILTERS}
+      active={filter}
+      onChange={setFilter}
+      aria-label="Tool categories"
+    />
   );
 }
 

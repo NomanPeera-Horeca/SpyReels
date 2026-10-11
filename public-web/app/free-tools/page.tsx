@@ -3,6 +3,7 @@ import {
   MarketingHeader,
 } from "../../components/MarketingChrome";
 import { HomepageAuthGate } from "../../components/HomepageAuthGate";
+import { MarketingBreadcrumb } from "../../components/MarketingBreadcrumb";
 import { MarketingHeroEyebrow } from "../../components/MarketingHeroEyebrow";
 import { MarketingIconStar } from "../../components/MarketingIcons";
 import { MarketingFaq } from "../../components/MarketingPageSections";
@@ -48,21 +49,12 @@ export default function FreeToolsHubPage() {
 
       <main>
         <MarketingSection pair="end" className={`shell ${styles.hero}`}>
-          <nav aria-label="Breadcrumb">
-            <ol className={`${styles.breadcrumb} sr-text-marketing-body-small`}>
-              <li>
-                <a href="/">Home</a>
-              </li>
-              <li className={styles.breadcrumbSep} aria-hidden="true">
-                /
-              </li>
-              <li className={styles.breadcrumbCurrent} aria-current="page">
-                Free Tools
-              </li>
-            </ol>
-          </nav>
+          <MarketingBreadcrumb
+            align="center"
+            items={[{ label: "Home", href: "/" }, { label: "Free Tools" }]}
+          />
 
-          <MarketingHeroEyebrow>Free tools for Reels, TikTok and Shorts</MarketingHeroEyebrow>
+          <MarketingHeroEyebrow>Free tools for creators</MarketingHeroEyebrow>
 
           <h1 className="sr-text-marketing-display">SpyReels Free Tools</h1>
 

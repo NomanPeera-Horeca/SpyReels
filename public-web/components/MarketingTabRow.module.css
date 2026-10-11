@@ -1,0 +1,48 @@
+/**
+ * Marketing / Tab Row (Figma 983:2460) + core Tabs (34:4).
+ * Centered · flex-wrap · no horizontal scroll.
+ */
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  row-gap: var(--sr-layout-inline-gap);
+  column-gap: var(--sr-layout-inline-gap);
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Figma space/2 top/bottom, space/3 left/right → layout tokens */
+  padding: var(--sr-layout-inline-gap) var(--sr-layout-control-gap);
+  border: none;
+  border-bottom: var(--sr-border-width-strong) solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--sr-color-text-secondary);
+  cursor: pointer;
+}
+
+.tab:hover:not(:disabled) {
+  background: var(--sr-color-surface-hover);
+}
+
+.tab[aria-selected="true"] {
+  color: var(--sr-color-brand-primary);
+  border-bottom-color: var(--sr-color-brand-primary);
+}
+
+.tab:disabled,
+.tab[aria-disabled="true"] {
+  color: var(--sr-color-text-disabled);
+  cursor: not-allowed;
+  background: transparent;
+}
+
+.tab:focus-visible {
+  outline: none;
+  box-shadow: var(--sr-elevation-focus-primary-action);
+}
