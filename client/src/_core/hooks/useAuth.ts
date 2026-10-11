@@ -2,6 +2,7 @@ import { getLoginUrl } from "@/const";
 import { identifyClarityUser } from "@/lib/clarity";
 import { identifyLogRocketUser } from "@/lib/logrocket";
 import { redirectSignedOutToMarketing } from "@/lib/marketingOrigin";
+import { maybeCaptureSignupCompleted } from "@/lib/trackSignupCompleted";
 import { trpc } from "@/lib/trpc";
 import { TRPCClientError } from "@trpc/client";
 import posthog from "posthog-js";
@@ -65,6 +66,7 @@ export function useAuth(options?: UseAuthOptions) {
         email: user.email ?? undefined,
         name: user.name ?? undefined,
       });
+      maybeCaptureSignupCompleted(user);
     }
     if (import.meta.env.VITE_PUBLIC_CLARITY_PROJECT_ID) {
       identifyClarityUser(String(user.id), user.name ?? user.email ?? null);
@@ -75,7 +77,13 @@ export function useAuth(options?: UseAuthOptions) {
         email: user.email,
       });
     }
-  }, [meQuery.data?.id, meQuery.data?.email, meQuery.data?.name]);
+  }, [
+    meQuery.data?.id,
+    meQuery.data?.email,
+    meQuery.data?.name,
+    meQuery.data?.loginMethod,
+    meQuery.data?.createdAt,
+  ]);
 
   const state = useMemo(() => {
     localStorage.setItem(

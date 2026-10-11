@@ -237,9 +237,14 @@ export function PlatformFinderExperience({
 
   function handoff(handle: string, source: "form" | "selected_reel") {
     const returnTo = search.buildReturnTo(handle);
-    const platformProp =
-      platform === "instagram" ? {} : { platform: platform as "tiktok" | "youtube" };
+    const platformProp = { platform };
     trackPublicWeb("viral_finder_research_cta_clicked", {
+      handle,
+      source,
+      ...platformProp,
+    });
+    trackPublicWeb("cta_clicked", {
+      placement: "search",
       handle,
       source,
       ...platformProp,

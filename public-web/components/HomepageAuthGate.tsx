@@ -1,8 +1,12 @@
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { HomepageAuthDialog } from "./HomepageAuthDialog";
+import {
+  trackPublicWeb,
+  type AuthDialogDismissReason,
+} from "../lib/trackPublicWeb";
 
 function HomepageAuthGateInner() {
   const searchParams = useSearchParams();
@@ -18,12 +22,24 @@ function HomepageAuthGateInner() {
 
   const [open, setOpen] = useState(Boolean(auth));
   const [mode, setMode] = useState<"login" | "signup">(auth ?? "signup");
+  const openedForAuthRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!auth) return;
     setMode(auth);
     setOpen(true);
   }, [auth]);
+
+  useEffect(() => {
+    if (!open || !auth) return;
+    const key = `${auth}:${returnTo}`;
+    if (openedForAuthRef.current === key) return;
+    openedForAuthRef.current = key;
+    trackPublicWeb("auth_dialog_opened", {
+      mode: auth,
+      return_to: returnTo,
+    });
+  }, [auth, open, returnTo]);
 
   function clearAuthQuery() {
     const next = new URLSearchParams(searchParams.toString());
@@ -33,14 +49,28 @@ function HomepageAuthGateInner() {
     router.replace(query ? `${pathname}?${query}` : pathname || "/", { scroll: false });
   }
 
+  function dismiss(reason: AuthDialogDismissReason) {
+    trackPublicWeb("auth_dialog_dismissed", {
+      mode,
+      return_to: returnTo,
+      dismiss_reason: reason,
+    });
+    openedForAuthRef.current = null;
+    setOpen(false);
+    clearAuthQuery();
+  }
+
   return (
     <HomepageAuthDialog
       open={open}
       defaultMode={mode}
       returnTo={returnTo}
-      onOpenChange={(nextOpen) => {
-        setOpen(nextOpen);
-        if (!nextOpen) clearAuthQuery();
+      onOpenChange={(nextOpen, meta) => {
+        if (!nextOpen) {
+          dismiss(meta?.reason ?? "x");
+          return;
+        }
+        setOpen(true);
       }}
     />
   );

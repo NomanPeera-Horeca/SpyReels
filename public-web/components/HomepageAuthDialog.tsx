@@ -94,6 +94,10 @@ function signupAttributionBody() {
   };
 }
 
+export type AuthDialogCloseMeta = {
+  reason: "x" | "backdrop" | "esc";
+};
+
 export function HomepageAuthDialog({
   open,
   onOpenChange,
@@ -101,7 +105,7 @@ export function HomepageAuthDialog({
   returnTo = "/research",
 }: {
   open: boolean;
-  onOpenChange: (open: boolean) => void;
+  onOpenChange: (open: boolean, meta?: AuthDialogCloseMeta) => void;
   defaultMode?: Exclude<AuthMode, "forgot">;
   returnTo?: string;
 }) {
@@ -122,7 +126,7 @@ export function HomepageAuthDialog({
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onOpenChange(false);
+      if (event.key === "Escape") onOpenChange(false, { reason: "esc" });
     };
     window.addEventListener("keydown", onKey);
     const previous = document.body.style.overflow;
@@ -220,7 +224,9 @@ export function HomepageAuthDialog({
       className={styles.overlay}
       role="presentation"
       onClick={(event) => {
-        if (event.target === event.currentTarget) onOpenChange(false);
+        if (event.target === event.currentTarget) {
+          onOpenChange(false, { reason: "backdrop" });
+        }
       }}
     >
       <div
@@ -233,7 +239,7 @@ export function HomepageAuthDialog({
           type="button"
           className={styles.close}
           aria-label="Close"
-          onClick={() => onOpenChange(false)}
+          onClick={() => onOpenChange(false, { reason: "x" })}
         >
           ×
         </button>
