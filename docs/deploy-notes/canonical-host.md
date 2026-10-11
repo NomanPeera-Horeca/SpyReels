@@ -61,7 +61,8 @@ After DNS + Render custom domain + Google OAuth URI are ready:
 
 ## Express behavior (split on)
 
-- Apex product paths (`/research`, `/studio`, `/api` except `/api/auth` + `/api/oauth`, etc.) → **302** to `https://app.spyreels.ai` + path/query
+- Apex product paths (`/research`, `/studio`, `/api` except `/api/auth` + `/api/oauth` + public marketing tRPC, etc.) → **302** to `https://app.spyreels.ai` + path/query
+- Apex keeps same-origin public tRPC for Finder profile preview and blog (`blog.published`, `blog.bySlug`) so the marketing SPA is not broken by a cross-origin redirect
 - Apex `/?auth=login|signup` stays on marketing (Next homepage modal)
 - `app.spyreels.ai` never serves Next marketing HTML
 - `app.spyreels.ai/` → `/research` if signed in, else `https://spyreels.ai/`
@@ -73,6 +74,8 @@ After DNS + Render custom domain + Google OAuth URI are ready:
 1. `dig app.spyreels.ai` resolves
 2. `https://spyreels.ai/` still Next homepage
 3. `https://spyreels.ai/research` → 302 → `https://app.spyreels.ai/research`
-4. `https://spyreels.ai/?auth=signup` stays on apex and opens the Next auth modal
-5. After login, user lands on `app.spyreels.ai/research`
-6. Session cookie is set for `.spyreels.ai`
+4. `https://spyreels.ai/api/trpc/blog.published` stays on apex (no 302) and returns posts
+5. `https://spyreels.ai/blog` lists published posts in the browser
+6. `https://spyreels.ai/?auth=signup` stays on apex and opens the Next auth modal
+7. After login, user lands on `app.spyreels.ai/research`
+8. Session cookie is set for `.spyreels.ai`
