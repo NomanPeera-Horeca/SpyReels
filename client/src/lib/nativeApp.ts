@@ -16,12 +16,21 @@ export function isPwaStandalone(): boolean {
   return mq.matches || iosStandalone;
 }
 
-/** API/auth origin for bundled native builds. Empty string means same-origin relative URLs. */
+/**
+ * API/auth origin for request URL building.
+ * Empty string means same-origin relative URLs.
+ *
+ * Web/PWA must stay relative so marketing pages on spyreels.ai hit apex
+ * public APIs (blog, finder preview). VITE_APP_ORIGIN is only for native
+ * Capacitor shells; applying it to the web build forces app.spyreels.ai
+ * fetches that fail CORS from the apex host.
+ */
 export function getAppOrigin(): string {
+  if (!isNativeApp()) return "";
+
   const fromEnv = import.meta.env.VITE_APP_ORIGIN?.trim();
   if (fromEnv) return fromEnv.replace(/\/$/, "");
-  if (isNativeApp()) return appOrigin();
-  return "";
+  return appOrigin();
 }
 
 export function resolveAppUrl(path: string): string {

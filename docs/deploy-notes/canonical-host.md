@@ -38,7 +38,9 @@ After DNS + Render custom domain + Google OAuth URI are ready:
 - `SPYREELS_SITE_URL=https://spyreels.ai`
 - `SPYREELS_APP_ORIGIN=https://app.spyreels.ai`
 - `OAUTH_SERVER_URL=https://app.spyreels.ai`
-- Prefer `VITE_APP_ORIGIN=https://app.spyreels.ai` for native/Capacitor builds
+- Set `VITE_APP_ORIGIN=https://app.spyreels.ai` only for native/Capacitor builds.
+  Do not set it on the SpyReels web Render service build: the web client ignores it
+  and uses same-origin `/api` so apex marketing pages (blog, etc.) keep working.
 
 **spyreels-public-web**
 
