@@ -27,6 +27,7 @@ import {
   Zap,
   Grid3X3,
   List,
+  FileText,
 } from "lucide-react";
 import { mergeRemakeability } from "@/lib/remakeability";
 import { useUsageGate } from "@/hooks/useUsageGate";
@@ -709,9 +710,26 @@ export default function SavedReels() {
         </div>
       )}
 
-      {savedQuery.isLoading && <WorkspaceReelGridSkeleton count={8} />}
+      {savedQuery.isError ? (
+        <div className="text-center py-16 text-muted-foreground">
+          <FileText className="w-12 h-12 mx-auto mb-4 opacity-30" />
+          <p className="text-lg font-medium">Something went wrong</p>
+          <p className="text-sm mt-1 max-w-md mx-auto">
+            Something went wrong loading your library.
+          </p>
+          <Button
+            className="mt-4"
+            variant="outline"
+            onClick={() => void savedQuery.refetch()}
+          >
+            Try again
+          </Button>
+        </div>
+      ) : null}
 
-      {!savedQuery.isLoading && savedReels.length === 0 && (
+      {!savedQuery.isError && savedQuery.isLoading && <WorkspaceReelGridSkeleton count={8} />}
+
+      {!savedQuery.isError && !savedQuery.isLoading && savedReels.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <Bookmark className="mb-4 h-12 w-12 text-muted-foreground/30" />
           <h2 className="mb-2 text-lg font-medium text-foreground">No saved reels yet</h2>
@@ -721,7 +739,7 @@ export default function SavedReels() {
         </div>
       )}
 
-      {savedReels.length > 0 &&
+      {!savedQuery.isError && savedReels.length > 0 &&
         Object.entries(groupedByHandle).map(([groupKey, items]) => {
           const handle = groupKey.split(":").slice(1).join(":");
           const headerHref =

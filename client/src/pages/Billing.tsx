@@ -19,13 +19,11 @@ function UsageMeter({
   label,
   used,
   limit,
-  color = "bg-purple-500",
 }: {
   icon: React.ElementType;
   label: string;
   used: number;
   limit: number;
-  color?: string;
 }) {
   const isUnlimited = limit >= 999999;
   const percentage = isUnlimited ? 0 : Math.min((used / limit) * 100, 100);
@@ -46,7 +44,7 @@ function UsageMeter({
       {!isUnlimited && (
         <Progress
           value={percentage}
-          className={`h-1.5 ${isAtLimit ? "[&>div]:bg-red-500" : isNearLimit ? "[&>div]:bg-amber-500" : `[&>div]:${color}`}`}
+          className={`h-1.5 ${isAtLimit ? "[&>div]:bg-destructive" : ""}`}
         />
       )}
       {isUnlimited && (
@@ -102,49 +100,42 @@ export default function Billing() {
           label: "Transcriptions",
           used: rawUsage.usage.transcribeCount ?? 0,
           limit: rawUsage.limits.transcriptionsPerMonth ?? 3,
-          color: "bg-blue-500",
         },
         {
           icon: Wand2,
           label: "AI Re-Creations",
           used: rawUsage.usage.recreateCount ?? 0,
           limit: rawUsage.limits.recreatesPerMonth ?? 0,
-          color: "bg-purple-500",
         },
         {
           icon: Clapperboard,
           label: "B-Roll Generations",
           used: rawUsage.usage.brollGenerationCount ?? 0,
           limit: rawUsage.limits.brollGenerationsPerMonth ?? 0,
-          color: "bg-cyan-500",
         },
         {
           icon: FileText,
           label: "Account research",
           used: rawUsage.usage.scrapeCount ?? 0,
           limit: rawUsage.limits.scrapesPerMonth ?? 2,
-          color: "bg-amber-500",
         },
         {
           icon: Bookmark,
           label: "Saved Scripts",
           used: rawUsage.usage.exportCount ?? 0,
           limit: rawUsage.limits.savedScripts ?? 5,
-          color: "bg-emerald-500",
         },
         {
           icon: Tag,
           label: "Rewrites",
           used: rawUsage.usage.rewriteCount ?? 0,
           limit: rawUsage.limits.rewritesPerScript ?? 0,
-          color: "bg-pink-500",
         },
         {
           icon: Search,
           label: "Keyword Searches Today",
           used: rawUsage.usage.searchCount ?? 0,
           limit: rawUsage.limits.searchesPerDay ?? 3,
-          color: "bg-cyan-500",
         },
       ]
     : null;
@@ -266,7 +257,6 @@ export default function Billing() {
                     label={meter.label}
                     used={meter.used}
                     limit={meter.limit}
-                    color={meter.color}
                   />
                 ))}
               </div>

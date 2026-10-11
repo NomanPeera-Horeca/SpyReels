@@ -50,7 +50,6 @@ const PRIVATE_PATH_PREFIXES = [
   "/carousel-library",
   "/carousel-studio",
   "/broll-library",
-  "/video-broll-upload-test",
   "/my-virality-report",
   "/viral-posts",
   "/more",

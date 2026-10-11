@@ -174,10 +174,12 @@ vi.mock("./_core/voiceTranscription", () => ({ transcribeAudio: vi.fn() }));
 type AuthenticatedUser = NonNullable<TrpcContext["user"]>;
 
 function createOwnerContext(): TrpcContext {
+  const adminEmail = "owner@example.com";
+  process.env.ADMIN_EMAIL = adminEmail;
   const user: AuthenticatedUser = {
     id: 1,
     openId: process.env.OWNER_OPEN_ID || "owner-open-id",
-    email: "owner@example.com",
+    email: adminEmail,
     name: "Owner",
     loginMethod: "manus",
     role: "admin",

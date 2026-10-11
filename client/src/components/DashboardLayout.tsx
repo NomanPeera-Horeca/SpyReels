@@ -529,7 +529,7 @@ function DashboardLayoutContent({
                   ))}
                 </Fragment>
               ))}
-              {user?.email === import.meta.env.VITE_ADMIN_EMAIL ? (
+              {isAdminPanelClient(user) ? (
                 <>
                   <div className="px-3 pt-4 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider group-data-[collapsible=icon]:hidden">
                     Admin

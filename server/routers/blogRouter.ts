@@ -1,8 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, publicProcedure, protectedProcedure } from "../_core/trpc";
+import { router, publicProcedure, adminPanelProcedure } from "../_core/trpc";
 import { getPublishedIndexableBlogPosts, getBlogPostBySlug, getAllBlogPosts, getBlogPostById, createBlogPost, updateBlogPost, deleteBlogPost } from "../db";
-import { not } from "drizzle-orm";
 
 export const blogRouter = router({
     // Public: list published posts
@@ -20,27 +19,21 @@ export const blogRouter = router({
       }),
 
     // Admin: list all posts (drafts + published)
-    all: protectedProcedure.query(async ({ ctx }) => {
-      if (ctx.user.role !== "admin" && ctx.user.openId !== process.env.OWNER_OPEN_ID) {
-        throw new TRPCError({ code: "FORBIDDEN" });
-      }
+    all: adminPanelProcedure.query(async () => {
       return getAllBlogPosts();
     }),
 
     // Admin: get post by id for editing
-    byId: protectedProcedure
+    byId: adminPanelProcedure
       .input(z.object({ id: z.number() }))
-      .query(async ({ ctx, input }) => {
-        if (ctx.user.role !== "admin" && ctx.user.openId !== process.env.OWNER_OPEN_ID) {
-          throw new TRPCError({ code: "FORBIDDEN" });
-        }
+      .query(async ({ input }) => {
         const post = await getBlogPostById(input.id);
         if (!post) throw new TRPCError({ code: "NOT_FOUND" });
         return post;
       }),
 
     // Admin: create post
-    create: protectedProcedure
+    create: adminPanelProcedure
       .input(z.object({
         title: z.string().min(1).max(512),
         slug: z.string().min(1).max(512),
@@ -53,9 +46,6 @@ export const blogRouter = router({
         status: z.enum(["draft", "published"]).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        if (ctx.user.role !== "admin" && ctx.user.openId !== process.env.OWNER_OPEN_ID) {
-          throw new TRPCError({ code: "FORBIDDEN" });
-        }
         const id = await createBlogPost({
           ...input,
           authorId: ctx.user.id,
@@ -65,7 +55,7 @@ export const blogRouter = router({
       }),
 
     // Admin: update post
-    update: protectedProcedure
+    update: adminPanelProcedure
       .input(z.object({
         id: z.number(),
         title: z.string().min(1).max(512).optional(),
@@ -78,10 +68,7 @@ export const blogRouter = router({
         metaDescription: z.string().optional(),
         status: z.enum(["draft", "published"]).optional(),
       }))
-      .mutation(async ({ ctx, input }) => {
-        if (ctx.user.role !== "admin" && ctx.user.openId !== process.env.OWNER_OPEN_ID) {
-          throw new TRPCError({ code: "FORBIDDEN" });
-        }
+      .mutation(async ({ input }) => {
         const { id, ...data } = input;
         if (data.status === "published") {
           const existing = await getBlogPostById(id);
@@ -94,12 +81,9 @@ export const blogRouter = router({
       }),
 
     // Admin: delete post
-    delete: protectedProcedure
+    delete: adminPanelProcedure
       .input(z.object({ id: z.number() }))
-      .mutation(async ({ ctx, input }) => {
-        if (ctx.user.role !== "admin" && ctx.user.openId !== process.env.OWNER_OPEN_ID) {
-          throw new TRPCError({ code: "FORBIDDEN" });
-        }
+      .mutation(async ({ input }) => {
         await deleteBlogPost(input.id);
         return { success: true };
       }),
