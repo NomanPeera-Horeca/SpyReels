@@ -1,6 +1,7 @@
 /**
- * Marketing / Section shell (Figma Decision 31, Spacing Rule A).
- * Shared by MarketingSection and HTML segments (homepage hero / workflow).
+ * Marketing / Section shell (Figma Page 03 responsive rules + Decision 31 pairs).
+ * Standard sections: 64 top + 64 bottom at every width (128 between sections).
+ * Paired sections keep one semantic paired-gap (Hero + Product Demo unchanged).
  */
 
 [data-marketing-section] {
@@ -17,18 +18,4 @@
 
 [data-marketing-section][data-marketing-section-pair="start"] {
   padding-top: 0;
-}
-
-@media (max-width: 640px) {
-  [data-marketing-section] {
-    padding-block: var(--sr-layout-section-compact-gap);
-  }
-
-  [data-marketing-section][data-marketing-section-pair="end"] {
-    padding-bottom: var(--sr-layout-section-paired-gap);
-  }
-
-  [data-marketing-section][data-marketing-section-pair="start"] {
-    padding-top: 0;
-  }
 }

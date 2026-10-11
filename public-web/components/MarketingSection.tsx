@@ -12,8 +12,7 @@ type MarketingSectionProps<T extends ElementType = "section"> = {
 
 /**
  * Shared marketing section shell.
- * padding-block = section-gap (96) desktop / compact-gap (64) ≤640
- * (see app/marketing-section.css).
+ * padding-block = section-gap (64) at every width (see app/marketing-section.css).
  * Paired sections: end keeps paired-gap bottom; start has padding-top 0.
  */
 export function MarketingSection<T extends ElementType = "section">({

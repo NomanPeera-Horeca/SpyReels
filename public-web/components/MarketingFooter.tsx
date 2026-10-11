@@ -8,9 +8,9 @@ const FOOTER_COLUMNS = [
     title: marketingSharedCopy.footer.categories[0],
     links: [
       ["/features/viral-reel-finder", "Viral Reel Finder"],
-      ["/?auth=signup&returnTo=%2Fdiscover-creators", "Find Creators"],
       ["/free-tools/ai-script-generator", "AI Viral Script Generator"],
       ["/free-tools/viral-hooks", "Viral Hook Generator"],
+      ["/free-tools/broll-generator", "B-roll Generator"],
       ["/pricing", "Pricing"],
     ],
   },

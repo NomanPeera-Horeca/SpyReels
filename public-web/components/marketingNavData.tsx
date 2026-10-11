@@ -3,7 +3,6 @@ import { marketingSharedCopy } from "../lib/marketingSharedCopy";
 import {
   MarketingIconBroll,
   MarketingIconCarousel,
-  MarketingIconCreators,
   MarketingIconFinder,
   MarketingIconHooks,
   MarketingIconScript,
@@ -59,13 +58,6 @@ export const PRODUCT_SECTIONS: MegaSection[] = [
   {
     label: marketingSharedCopy.headerGroupLabels[1],
     items: [
-      {
-        href: "/?auth=signup&returnTo=%2Fdiscover-creators",
-        title: "Find Creators",
-        description: "Discover creators in your niche",
-        icon: <MarketingIconCreators />,
-        iconClass: "icon-creators",
-      },
       {
         href: "/free-tools/viral-hooks",
         title: "Viral Hook Generator",

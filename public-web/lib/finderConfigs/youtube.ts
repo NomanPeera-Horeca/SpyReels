@@ -177,7 +177,7 @@ export const youtubeFinderConfig: FinderConfig = {
   },
   workspace: {
     toolsPage: "youtube",
-    title: "Find a strong Short. Make it yours.",
+    title: "Find a proven Short. Make it yours.",
   },
   faq: {
     title: "Questions about finding viral Shorts.",

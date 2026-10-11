@@ -3,9 +3,9 @@ import type { MarketingToolIconId } from "./MarketingIcons";
 /**
  * Shared Marketing / Tool Grid registry.
  * Pages pass title + toolsPage + hiddenToolIds. toolsPage selects order + live descriptions.
+ * Find Creators removed (Figma Tool Grid locked responsive pass).
  */
 export type MarketingToolId =
-  | "creators"
   | "finder"
   | "script"
   | "hooks"
@@ -34,18 +34,6 @@ type CatalogEntry = {
 };
 
 const CATALOG: Record<MarketingToolId, CatalogEntry> = {
-  creators: {
-    id: "creators",
-    title: "Find Creators",
-    href: "/?auth=signup&returnTo=%2Fdiscover-creators",
-    icon: "creators",
-    descriptions: {
-      homepage: "Discover creators in your niche.",
-      instagram: "Explore more creators in your niche.",
-      tiktok: "Explore more creators in your niche",
-      youtube: "Explore more creators in your niche.",
-    },
-  },
   finder: {
     id: "finder",
     title: "Viral Reel Finder",
@@ -63,7 +51,7 @@ const CATALOG: Record<MarketingToolId, CatalogEntry> = {
     href: "/free-tools/ai-script-generator",
     icon: "script",
     descriptions: {
-      homepage: "Turn an idea into a viral script.",
+      homepage: "Turn a strong idea into a script in your voice.",
       instagram: "Turn a strong Reel idea into a script in your voice.",
       tiktok: "Turn a strong TikTok idea into a script in your voice",
       youtube: "Turn a strong Shorts idea into a script in your voice.",
@@ -75,7 +63,7 @@ const CATALOG: Record<MarketingToolId, CatalogEntry> = {
     href: "/free-tools/viral-hooks",
     icon: "hooks",
     descriptions: {
-      homepage: "Find a stronger opening.",
+      homepage: "Give your opening a sharper hook.",
       instagram: "Give your opening a sharper hook.",
       tiktok: "Give the opening a stronger reason to watch",
       youtube: "Give the opening a stronger reason to watch.",
@@ -87,7 +75,7 @@ const CATALOG: Record<MarketingToolId, CatalogEntry> = {
     href: "/free-tools/broll-generator",
     icon: "broll",
     descriptions: {
-      homepage: "Plan what viewers will see.",
+      homepage: "Plan the shots that support your script.",
       instagram: "Plan the shots that support your script.",
       tiktok: "Plan the shots that support your script",
       youtube: "Plan the shots that support your script.",
@@ -99,7 +87,7 @@ const CATALOG: Record<MarketingToolId, CatalogEntry> = {
     href: "/?auth=signup&returnTo=%2Fcarousels",
     icon: "carousel",
     descriptions: {
-      homepage: "Make your idea swipeable.",
+      homepage: "Turn the same idea into a swipeable post.",
       instagram: "Turn the same idea into a swipeable post.",
       tiktok: "Turn the idea into a swipeable post",
       youtube: "Turn the idea into a swipeable post.",
@@ -111,6 +99,7 @@ const CATALOG: Record<MarketingToolId, CatalogEntry> = {
     href: "/free-tools/tiktok-viral-video-finder",
     icon: "finder",
     descriptions: {
+      homepage: "Find more ideas on TikTok.",
       instagram: "Find more ideas on TikTok.",
       youtube: "Find more ideas on TikTok.",
     },
@@ -127,12 +116,12 @@ const CATALOG: Record<MarketingToolId, CatalogEntry> = {
   },
 };
 
-/** Page tool order — matches live lists today. */
+/** Page tool order — 6 tools each (Figma Tool Grid locked). */
 export const MARKETING_TOOL_ORDER: Record<MarketingToolsPage, readonly MarketingToolId[]> = {
-  homepage: ["creators", "finder", "script", "hooks", "broll", "carousel"],
-  instagram: ["script", "hooks", "broll", "creators", "carousel", "tiktok", "youtube"],
-  tiktok: ["script", "hooks", "broll", "finder", "creators", "carousel", "youtube"],
-  youtube: ["script", "hooks", "broll", "finder", "creators", "carousel", "tiktok"],
+  homepage: ["script", "hooks", "broll", "carousel", "finder", "tiktok"],
+  instagram: ["script", "hooks", "broll", "carousel", "tiktok", "youtube"],
+  tiktok: ["script", "hooks", "broll", "finder", "carousel", "youtube"],
+  youtube: ["script", "hooks", "broll", "finder", "carousel", "tiktok"],
 };
 
 export function resolveMarketingTools(

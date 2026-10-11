@@ -161,7 +161,7 @@ export const instagramFinderConfig: FinderConfig = {
   },
   workspace: {
     toolsPage: "instagram",
-    title: "Find a Reel. Make the next one yours.",
+    title: "Find a proven Reel. Make it yours.",
   },
   faq: {
     title: "Questions about finding viral Reels.",

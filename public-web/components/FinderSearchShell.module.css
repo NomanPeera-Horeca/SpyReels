@@ -2,7 +2,7 @@
  * Shared Finder / Search Input Shell (Figma Marketing / Finder Search v1.1).
  * Desktop: mark + flexible input + Primary Large at right.
  * ≤720px: mark + input on row one; full-width Primary Large on row two.
- * Instagram mobile: mark opacity 0, keeps 24px slot so text inset stays 36px (24 + 12 gap).
+ * Instagram mobile: platform mark stays visible (locked responsive pass).
  */
 
 .shell {
@@ -104,11 +104,6 @@
   .shell {
     flex-wrap: wrap;
     align-items: stretch;
-  }
-
-  .shell[data-platform="instagram"] .mark {
-    opacity: 0;
-    pointer-events: none;
   }
 
   .input {

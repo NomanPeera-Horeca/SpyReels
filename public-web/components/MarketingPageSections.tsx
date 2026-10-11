@@ -134,6 +134,8 @@ export function MarketingWorkspace({
         title={title}
         headingLevel={titleHeadingLevel}
         titleId={titleId}
+        size="large"
+        align="start"
       />
 
       <div className={styles.tools}>
@@ -164,6 +166,8 @@ export function MarketingWorkspace({
         title="Your ideas travel with you."
         subtitle="Save inspiration wherever you find it and bring SpyReels research into your writing flow."
         headingLevel={extensionsHeadingLevel}
+        size="large"
+        align="start"
       />
       <div className={styles.integrations}>
         <div className={styles.integration} id="telegram-extension">
@@ -240,6 +244,8 @@ export function MarketingFaq({
             title={title}
             subtitle={description}
             headingLevel="h2"
+            size="large"
+            align="start"
           />
         </div>
         <div className={faqStyles.list}>

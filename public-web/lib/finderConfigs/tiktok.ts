@@ -153,7 +153,7 @@ export const tiktokFinderConfig: FinderConfig = {
   },
   workspace: {
     toolsPage: "tiktok",
-    title: "Find a strong TikTok. Make it yours.",
+    title: "Find a proven TikTok. Make it yours.",
   },
   faq: {
     title: "Questions about finding viral TikToks.",

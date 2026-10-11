@@ -66,7 +66,7 @@ export function MarketingProcessSteps({
           subtitle={subtitle}
           headingLevel="h2"
           titleId={titleId}
-          size={isIcon ? "large" : "default"}
+          size="large"
           align={isIcon ? "center" : "start"}
           showHighlight={isIcon}
         />
