@@ -24,7 +24,12 @@ export type MarketingProcessStepsProps = {
   presentation: MarketingProcessStepsPresentation;
   title: ReactNode;
   subtitle?: ReactNode;
-  steps: readonly [MarketingProcessStep, MarketingProcessStep, MarketingProcessStep];
+  /**
+   * numbered: 2 to 6 steps. icon: exactly 3 (Research / Remake / Film).
+   * Layout for 2 to 3 numbered steps keeps the existing .steps grid (0-pixel
+   * with current 3-step pages). 4 to 6 use .stepsMany (up to 4 per row).
+   */
+  steps: readonly MarketingProcessStep[];
   id?: string;
   className?: string;
   /** Numbered default eyebrow. Ignored for icon presentation. */
@@ -50,6 +55,17 @@ export function MarketingProcessSteps({
 }: MarketingProcessStepsProps) {
   const titleId = `${id}-title`;
   const isIcon = presentation === "icon";
+  const stepCount = steps.length;
+  const useManyGrid = !isIcon && stepCount >= 4;
+
+  if (process.env.NODE_ENV !== "production") {
+    if (isIcon && stepCount !== 3) {
+      throw new Error("MarketingProcessSteps icon presentation expects exactly 3 steps");
+    }
+    if (!isIcon && (stepCount < 2 || stepCount > 6)) {
+      throw new Error("MarketingProcessSteps numbered presentation expects 2 to 6 steps");
+    }
+  }
 
   return (
     <MarketingSection
@@ -72,7 +88,11 @@ export function MarketingProcessSteps({
         />
 
         <div
-          className={cx(styles.steps, isIcon && styles.stepsIcon)}
+          className={cx(
+            styles.steps,
+            isIcon && styles.stepsIcon,
+            useManyGrid && styles.stepsMany
+          )}
           aria-label={isIcon ? "Research, Remake, Film" : undefined}
         >
           {steps.map((step, index) => {

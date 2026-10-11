@@ -1,0 +1,21 @@
+/**
+ * Card / Static (Figma node 52:31). Tokens only.
+ */
+
+.root {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sr-layout-stack-sm);
+  min-width: 0;
+  padding: var(--sr-layout-card-padding);
+  border: var(--sr-border-width-default) solid var(--sr-color-border-default);
+  border-radius: var(--sr-radius-card);
+  background: var(--sr-color-surface-default);
+  box-shadow: var(--sr-elevation-surface-default);
+}
+
+.raised {
+  box-shadow: var(--sr-elevation-surface-raised);
+}
