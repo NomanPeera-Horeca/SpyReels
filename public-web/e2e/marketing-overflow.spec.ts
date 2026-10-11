@@ -32,6 +32,8 @@ async function measureOverflow(page: Page, viewportWidth: number): Promise<Overf
       // Intentional horizontal rails (contained).
       if (el.closest('[class*="CreatorStories"], [data-marketing-creator-stories]')) continue;
       if (el.closest(".rail, [data-overflow-ok]")) continue;
+      // Product Demo scenes are oversized then clipped by .motion-shell overflow.
+      if (el.closest(".motion-shell")) continue;
 
       const style = getComputedStyle(el);
       if (style.display === "none" || style.visibility === "hidden") continue;
