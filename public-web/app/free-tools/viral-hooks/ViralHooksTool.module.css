@@ -1,0 +1,315 @@
+.toolCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-layout-content-gap);
+  padding: var(--sr-layout-panel-padding);
+}
+
+.toolTitle {
+  margin: 0;
+  color: var(--sr-color-text-brand);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-layout-stack-md);
+}
+
+.selectGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sr-layout-control-gap);
+}
+
+@media (min-width: 640px) {
+  .selectGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.toneBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-layout-stack-sm);
+}
+
+.toneLabel {
+  margin: 0;
+  color: var(--sr-color-text-primary);
+}
+
+.error {
+  margin: 0;
+  color: var(--sr-color-status-error-foreground);
+}
+
+.statusRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sr-layout-inline-gap);
+  padding: var(--sr-layout-stack-sm) var(--sr-layout-card-padding);
+  border: var(--sr-border-width-default) solid var(--sr-color-brand-primary);
+  border-radius: var(--sr-radius-card);
+  background: var(--sr-color-brand-surface-subtle);
+  color: var(--sr-color-text-primary);
+}
+
+.resultsHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sr-layout-control-gap);
+}
+
+.resultsTitle {
+  margin: 0;
+  color: var(--sr-color-text-primary);
+}
+
+.resultsStack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-layout-stack-md);
+}
+
+.unlockCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-layout-stack-sm);
+  padding: var(--sr-layout-card-padding);
+  background: var(--sr-color-brand-surface-subtle);
+}
+
+.unlockTitle {
+  margin: 0;
+  color: var(--sr-color-text-primary);
+}
+
+.unlockBody {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+}
+
+.teaserList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-layout-inline-gap);
+}
+
+.teaserRow {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--sr-layout-control-gap);
+  padding: var(--sr-layout-stack-sm) var(--sr-layout-card-padding);
+  border: var(--sr-border-width-default) solid var(--sr-color-border-default);
+  border-radius: var(--sr-radius-card);
+  background: var(--sr-color-surface-default);
+}
+
+.teaserIndex {
+  margin: 0;
+  color: var(--sr-color-text-brand);
+}
+
+.teaserText {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+}
+
+.teaserPattern {
+  color: var(--sr-color-text-primary);
+}
+
+.unlockForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-layout-stack-sm);
+}
+
+.unlockNote {
+  margin: 0;
+  text-align: center;
+  color: var(--sr-color-text-secondary);
+}
+
+.successBanner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-layout-inline-gap);
+  padding: var(--sr-layout-card-padding);
+  border: var(--sr-border-width-default) solid var(--sr-color-status-success-border);
+  border-radius: var(--sr-radius-card);
+  background: var(--sr-color-status-success-background);
+}
+
+.successTitle {
+  margin: 0;
+  color: var(--sr-color-status-success-foreground);
+}
+
+.successBody {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+}
+
+.expandCta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-layout-stack-sm);
+  padding: var(--sr-layout-card-padding);
+  background: var(--sr-color-brand-surface-subtle);
+}
+
+.expandTitle {
+  margin: 0;
+  color: var(--sr-color-text-primary);
+}
+
+.expandBody {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+}
+
+.actionsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sr-layout-control-gap);
+}
+
+/* Hook result card */
+.hookCard {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+@media (min-width: 640px) {
+  .hookCard {
+    grid-template-columns: 1fr minmax(120px, 140px);
+  }
+}
+
+.hookBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-layout-stack-sm);
+  padding: var(--sr-layout-card-padding);
+}
+
+.hookLabel {
+  margin: 0;
+  color: var(--sr-color-text-brand);
+}
+
+.fieldCaption {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.hookSpoken {
+  margin: 0;
+  color: var(--sr-color-text-primary);
+}
+
+.onScreenBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-layout-inline-gap);
+  padding: var(--sr-layout-stack-sm) var(--sr-layout-card-padding);
+  border: var(--sr-border-width-default) dashed var(--sr-color-border-default);
+  border-radius: var(--sr-radius-card);
+  background: var(--sr-color-surface-page);
+}
+
+.onScreenText {
+  margin: 0;
+  color: var(--sr-color-text-primary);
+}
+
+.patternLine {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+}
+
+.copyRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sr-layout-inline-gap);
+}
+
+.previewPane {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sr-layout-inline-gap);
+  padding: var(--sr-layout-stack-sm);
+  border-top: var(--sr-border-width-default) solid var(--sr-color-border-default);
+  background: var(--sr-color-surface-raised);
+}
+
+@media (min-width: 640px) {
+  .previewPane {
+    border-top: none;
+    border-left: var(--sr-border-width-default) solid var(--sr-color-border-default);
+  }
+}
+
+.phone {
+  position: relative;
+  width: 100%;
+  max-width: 110px;
+  aspect-ratio: 9 / 16;
+  overflow: hidden;
+  border-radius: var(--sr-radius-card);
+  background: var(--sr-neutral-950);
+}
+
+.phoneText {
+  position: absolute;
+  top: 18%;
+  left: 8%;
+  right: 8%;
+  margin: 0;
+  padding: var(--sr-layout-inline-gap);
+  border-radius: var(--sr-radius-control);
+  background: color-mix(in srgb, var(--sr-neutral-950) 55%, transparent);
+  color: var(--sr-color-text-inverse);
+  text-align: center;
+  word-break: break-word;
+}
+
+.traitGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--sr-layout-card-gap);
+}
+
+@media (min-width: 640px) {
+  .traitGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.traitCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-layout-inline-gap);
+  padding: var(--sr-layout-card-padding);
+}
+
+.traitTitle {
+  margin: 0;
+  color: var(--sr-color-text-primary);
+}
+
+.traitBody {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+}

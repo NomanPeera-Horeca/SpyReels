@@ -10,16 +10,24 @@ import {
   MarketingFinalCta,
   MarketingWorkspace,
 } from "../../../components/MarketingPageSections";
+import { MarketingProcessSteps } from "../../../components/MarketingProcessSteps";
 import { MarketingSection } from "../../../components/MarketingSection";
 import { MarketingSectionHeader } from "../../../components/MarketingSectionHeader";
 import { wrapHyphenatedCompounds } from "../../../components/marketingNoBreak";
 import { buildFaqPageJsonLd, jsonLdScript } from "../../../components/marketingFaqJsonLd";
+import { VIRAL_HOOKS_HOW_IT_WORKS_STEPS } from "../../../lib/viralHooksCopy";
 import {
   buildViralHooksBreadcrumbJsonLd,
   buildViralHooksSoftwareJsonLd,
   VIRAL_HOOKS_FAQ_ITEMS,
   viralHooksMetadata,
 } from "../../../lib/viralHooksPage";
+import {
+  ViralHooksBeforeAfterSection,
+  ViralHooksOneClickSection,
+  ViralHooksTraitSection,
+} from "./ViralHooksStaticSections";
+import { ViralHooksToolClient } from "./ViralHooksToolClient";
 import styles from "./ViralHooks.module.css";
 import "../../homepage.css";
 
@@ -62,7 +70,9 @@ export default function ViralHooksPage() {
 
           <MarketingHeroEyebrow showDot>Free tool · Viral hooks</MarketingHeroEyebrow>
 
-          <h1 className="sr-text-marketing-display">Viral Hook Generator</h1>
+          <h1 className="sr-text-marketing-display">
+            {wrapHyphenatedCompounds("Viral Hook Generator")}
+          </h1>
 
           <p className={`${styles.heroLead} sr-text-marketing-body-large`}>
             {wrapHyphenatedCompounds(
@@ -77,38 +87,20 @@ export default function ViralHooksPage() {
           </p>
         </MarketingSection>
 
-        {/*
-          TODO(agent1 + tool client): #tool island
-          FieldTextarea (topic), FieldSelect (format/style; components ready), MarketingTabRow (tone),
-          PrimaryButton (Generate 10 hooks), MarketingBadge, StaticCard (results/teasers),
-          FieldInput (email unlock; component ready), SecondaryButton/Dialog if needed,
-          Turn into script -> openHomepageAuth + handoff to app OnboardingAhaView.
-        */}
-        <MarketingSection id="tool" pair="start" className="shell" aria-label="Viral Hook Generator tool">
-          {null}
-        </MarketingSection>
+        <ViralHooksToolClient />
 
-        {/* TODO(page-only): HookOneClickDemo restyled with tokens under this header */}
-        <MarketingSection className="shell">
-          <MarketingSectionHeader
-            title="Generate a viral hook in one click"
-            subtitle="Watch it: one tap drops scroll-stopping on-screen text on your Reel."
-            headingLevel="h2"
-            size="large"
-            align="center"
-          />
-        </MarketingSection>
+        <ViralHooksOneClickSection />
 
-        {/* TODO: MarketingProcessSteps (4 steps) after agent 1 Process Steps settle */}
-        <MarketingSection className="shell">
-          <MarketingSectionHeader
-            title="How to generate viral hooks with SpyReels"
-            subtitle="Four clear steps from blank idea to a scroll-stopping open you can film today."
-            headingLevel="h2"
-            size="large"
-            align="start"
-          />
-        </MarketingSection>
+        <MarketingProcessSteps
+          presentation="numbered"
+          title="How to generate viral hooks with SpyReels"
+          subtitle="Four clear steps from blank idea to a scroll-stopping open you can film today."
+          steps={VIRAL_HOOKS_HOW_IT_WORKS_STEPS.map((step) => ({
+            number: step.number,
+            title: step.title,
+            body: step.body,
+          }))}
+        />
 
         <MarketingSection className="shell">
           <MarketingSectionHeader
@@ -124,19 +116,12 @@ export default function ViralHooksPage() {
           </p>
         </MarketingSection>
 
-        {/* TODO(StaticCard): trait cards under this header */}
-        <MarketingSection className="shell">
-          <MarketingSectionHeader
-            eyebrow="Hooks"
-            title="What makes a great viral hook?"
-            subtitle="Short-form winners share the same four traits."
-            headingLevel="h2"
-            size="large"
-            align="start"
-          />
-        </MarketingSection>
+        <ViralHooksTraitSection />
 
-        {/* TODO(Article Table): 10 viral hook patterns (Pattern | Example) */}
+        {/*
+          TODO(blog-agent MarketingArticleTable): 10 viral hook patterns table
+          Pattern | Example. Hidden until Article Table merges. Do not invent a second table.
+        */}
         <MarketingSection className="shell">
           <MarketingSectionHeader
             title="10 viral hook patterns"
@@ -147,7 +132,10 @@ export default function ViralHooksPage() {
           />
         </MarketingSection>
 
-        {/* TODO(Article Table): Viral hook generator vs ChatGPT vs Copy.ai */}
+        {/*
+          TODO(blog-agent MarketingArticleTable): comparison table
+          Viral hook generator vs ChatGPT vs Copy.ai.
+        */}
         <MarketingSection className="shell">
           <MarketingSectionHeader
             title="Viral hook generator vs ChatGPT vs Copy.ai"
@@ -164,14 +152,14 @@ export default function ViralHooksPage() {
           hiddenToolIds={["hooks"]}
         />
 
+        <ViralHooksBeforeAfterSection />
+
         <MarketingFinalCta
           title="You've got the hook. Now make the Reel."
           body="This free tool wrote the first three seconds. SpyReels expands it into a ready-to-film script, then helps you spy competitor Reels and remake winners in your voice. Viral Hook Generator gives you the words. SpyReels gives you the script."
           buttonLabel="Try SpyReels free →"
           href="#tool"
         />
-
-        {/* TODO(page-only): HookBeforeAfterSlider inside/near Final CTA */}
 
         <MarketingFaq
           title="Frequently asked questions"
