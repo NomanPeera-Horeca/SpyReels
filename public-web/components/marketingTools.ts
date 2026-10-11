@@ -2,7 +2,7 @@ import type { MarketingToolIconId } from "./MarketingIcons";
 
 /**
  * Shared Marketing / Tool Grid registry.
- * Pages pass title + toolsPage + hiddenToolIds. toolsPage selects order + live descriptions.
+ * One description per tool everywhere (Script Generator may swap the platform word).
  * Find Creators removed (Figma Tool Grid locked responsive pass).
  */
 export type MarketingToolId =
@@ -29,8 +29,8 @@ type CatalogEntry = {
   title: string;
   href: string;
   icon: MarketingToolIconId;
-  /** Live copy per page that shows this tool (exact strings from today). */
-  descriptions: Partial<Record<MarketingToolsPage, string>>;
+  /** Canonical description (always ends with a period). */
+  description: string;
 };
 
 const CATALOG: Record<MarketingToolId, CatalogEntry> = {
@@ -39,89 +39,69 @@ const CATALOG: Record<MarketingToolId, CatalogEntry> = {
     title: "Viral Reel Finder",
     href: "/features/viral-reel-finder",
     icon: "finder",
-    descriptions: {
-      homepage: "Spot the Reels worth studying.",
-      tiktok: "Research what works on Instagram Reels",
-      youtube: "Research what works on Instagram Reels.",
-    },
+    description: "Spot the Reels worth studying.",
   },
   script: {
     id: "script",
     title: "AI Viral Script Generator",
     href: "/free-tools/ai-script-generator",
     icon: "script",
-    descriptions: {
-      homepage: "Turn a strong idea into a script in your voice.",
-      instagram: "Turn a strong Reel idea into a script in your voice.",
-      tiktok: "Turn a strong TikTok idea into a script in your voice",
-      youtube: "Turn a strong Shorts idea into a script in your voice.",
-    },
+    description: "Turn a strong idea into a script in your voice.",
   },
   hooks: {
     id: "hooks",
     title: "Viral Hook Generator",
     href: "/free-tools/viral-hooks",
     icon: "hooks",
-    descriptions: {
-      homepage: "Give your opening a sharper hook.",
-      instagram: "Give your opening a sharper hook.",
-      tiktok: "Give the opening a stronger reason to watch",
-      youtube: "Give the opening a stronger reason to watch.",
-    },
+    description: "Give your opening a sharper hook.",
   },
   broll: {
     id: "broll",
     title: "B-roll Generator",
     href: "/free-tools/broll-generator",
     icon: "broll",
-    descriptions: {
-      homepage: "Plan the shots that support your script.",
-      instagram: "Plan the shots that support your script.",
-      tiktok: "Plan the shots that support your script",
-      youtube: "Plan the shots that support your script.",
-    },
+    description: "Plan the shots that support your script.",
   },
   carousel: {
     id: "carousel",
     title: "Carousel Generator",
     href: "/?auth=signup&returnTo=%2Fcarousels",
     icon: "carousel",
-    descriptions: {
-      homepage: "Turn the same idea into a swipeable post.",
-      instagram: "Turn the same idea into a swipeable post.",
-      tiktok: "Turn the idea into a swipeable post",
-      youtube: "Turn the idea into a swipeable post.",
-    },
+    description: "Turn the same idea into a swipeable post.",
   },
   tiktok: {
     id: "tiktok",
     title: "TikTok Viral Video Finder",
     href: "/free-tools/tiktok-viral-video-finder",
     icon: "finder",
-    descriptions: {
-      homepage: "Find more ideas on TikTok.",
-      instagram: "Find more ideas on TikTok.",
-      youtube: "Find more ideas on TikTok.",
-    },
+    description: "Find more ideas on TikTok.",
   },
   youtube: {
     id: "youtube",
     title: "YouTube Shorts Viral Finder",
     href: "/free-tools/youtube-shorts-viral-finder",
     icon: "finder",
-    descriptions: {
-      instagram: "Find more ideas on YouTube Shorts.",
-      tiktok: "Find more ideas on YouTube Shorts.",
-    },
+    description: "Find more ideas on YouTube Shorts.",
   },
 };
 
-/** Page tool order — 6 tools each (Figma Tool Grid locked). */
+/** Script Generator: only the platform word changes by page. */
+const SCRIPT_DESCRIPTION: Record<MarketingToolsPage, string> = {
+  homepage: "Turn a strong idea into a script in your voice.",
+  instagram: "Turn a strong Reel idea into a script in your voice.",
+  tiktok: "Turn a strong TikTok idea into a script in your voice.",
+  youtube: "Turn a strong Shorts idea into a script in your voice.",
+};
+
+/**
+ * Same order on every page: Script, Hooks, B-roll, Carousel, then the two other finders.
+ * Current-page finder is omitted (the two other finders fill slots 5–6).
+ */
 export const MARKETING_TOOL_ORDER: Record<MarketingToolsPage, readonly MarketingToolId[]> = {
   homepage: ["script", "hooks", "broll", "carousel", "finder", "tiktok"],
   instagram: ["script", "hooks", "broll", "carousel", "tiktok", "youtube"],
-  tiktok: ["script", "hooks", "broll", "finder", "carousel", "youtube"],
-  youtube: ["script", "hooks", "broll", "finder", "carousel", "tiktok"],
+  tiktok: ["script", "hooks", "broll", "carousel", "finder", "youtube"],
+  youtube: ["script", "hooks", "broll", "carousel", "finder", "tiktok"],
 };
 
 export function resolveMarketingTools(
@@ -133,10 +113,7 @@ export function resolveMarketingTools(
     .filter((id) => !hidden.has(id))
     .map((id) => {
       const entry = CATALOG[id];
-      const description = entry.descriptions[toolsPage];
-      if (!description) {
-        throw new Error(`Missing description for tool "${id}" on page "${toolsPage}"`);
-      }
+      const description = id === "script" ? SCRIPT_DESCRIPTION[toolsPage] : entry.description;
       return {
         id: entry.id,
         title: entry.title,
