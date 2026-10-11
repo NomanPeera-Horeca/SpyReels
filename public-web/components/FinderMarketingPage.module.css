@@ -130,39 +130,23 @@
 }
 
 
-/* Instagram motion stage (width on stage, padding on stage) */
-.page[data-finder-platform="instagram"] .motionStage {
+/*
+ * Product Demo: one frame only (motion-shell). Stage is a width shell —
+ * no nested chrome, padding, or second radius (avoids white corner artifacts).
+ */
+.motionStage {
   width: min(
     var(--sr-layout-container-max-width),
     calc(100% - 2 * var(--sr-layout-page-gutter-desktop))
   );
   margin: 0 auto;
-  padding: clamp(28px, 6vw, 76px);
-  border-radius: 30px;
-  background: #08080d;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
-.page[data-finder-platform="instagram"] .motionFrame {
-  max-width: 1000px;
-  margin: auto;
-}
-
-.page[data-finder-platform="instagram"] .motionFrame :global(.motion-shell) {
+.motionStage :global(.motion-shell) {
   transform: none;
-}
-
-/* TikTok motion stage (padding on stage, chrome on frame) */
-.page[data-finder-platform="tiktok"] .motionStage {
-  padding: 0 20px;
-}
-
-.page[data-finder-platform="tiktok"] .motionFrame {
-  width: min(1160px, 100%);
-  margin: auto;
-  overflow: hidden;
-  border-radius: 28px;
-  background: #08080e;
-  padding: clamp(24px, 5vw, 68px);
+  max-width: none;
 }
 
 @media (max-width: 1180px) {
@@ -175,7 +159,7 @@
     max-width: 100%;
   }
 
-  .page[data-finder-platform="instagram"] .motionStage {
+  .motionStage {
     width: min(
       var(--sr-layout-container-max-width),
       calc(100% - 2 * var(--sr-layout-page-gutter-tablet))
@@ -191,10 +175,8 @@
     letter-spacing: var(--sr-type-marketing-body-medium-tracking);
   }
 
-  .page[data-finder-platform="instagram"] .motionStage {
+  .motionStage {
     width: calc(100% - 2 * var(--sr-layout-page-gutter-mobile));
-    padding: 12px;
-    border-radius: 20px;
   }
 }
 
@@ -208,11 +190,5 @@
 
   .howItWorksAnchor {
     scroll-margin-top: calc(max(12px, env(safe-area-inset-top, 0px)) + 60px + 24px);
-  }
-}
-
-@media (max-width: 720px) {
-  .page[data-finder-platform="tiktok"] .motionStage {
-    padding: 0 12px;
   }
 }

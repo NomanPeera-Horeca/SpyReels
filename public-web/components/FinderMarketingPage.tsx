@@ -73,9 +73,7 @@ export function FinderMarketingPage({ config }: { config: FinderConfig }) {
           data-marketing-product-demo=""
         >
           <div className={styles.motionStage}>
-            <div className={styles.motionFrame}>
-              <MarketingFinderMotion />
-            </div>
+            <MarketingFinderMotion />
           </div>
         </MarketingSection>
 
