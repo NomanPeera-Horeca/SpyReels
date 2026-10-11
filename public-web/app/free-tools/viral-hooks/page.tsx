@@ -8,7 +8,6 @@ import { MarketingHeroEyebrow } from "../../../components/MarketingHeroEyebrow";
 import {
   MarketingFaq,
   MarketingFinalCta,
-  MarketingWorkspace,
 } from "../../../components/MarketingPageSections";
 import { MarketingProcessSteps } from "../../../components/MarketingProcessSteps";
 import { MarketingSection } from "../../../components/MarketingSection";
@@ -25,6 +24,7 @@ import {
 import {
   ViralHooksBeforeAfterSection,
   ViralHooksOneClickSection,
+  ViralHooksRelatedTools,
   ViralHooksTraitSection,
 } from "./ViralHooksStaticSections";
 import { ViralHooksToolClient } from "./ViralHooksToolClient";
@@ -119,38 +119,12 @@ export default function ViralHooksPage() {
         <ViralHooksTraitSection />
 
         {/*
-          TODO(blog-agent MarketingArticleTable): 10 viral hook patterns table
-          Pattern | Example. Hidden until Article Table merges. Do not invent a second table.
+          TODO(blog-agent MarketingArticleTable): 10 viral hook patterns
+          and comparison vs ChatGPT vs Copy.ai. Hidden until Article Table merges.
+          Do not show empty headings; do not invent a second table.
         */}
-        <MarketingSection className="shell">
-          <MarketingSectionHeader
-            title="10 viral hook patterns"
-            subtitle="Steal the structure. Swap in your niche."
-            headingLevel="h2"
-            size="large"
-            align="start"
-          />
-        </MarketingSection>
 
-        {/*
-          TODO(blog-agent MarketingArticleTable): comparison table
-          Viral hook generator vs ChatGPT vs Copy.ai.
-        */}
-        <MarketingSection className="shell">
-          <MarketingSectionHeader
-            title="Viral hook generator vs ChatGPT vs Copy.ai"
-            subtitle="ChatGPT and Copy.ai write generic openings. SpyReels is trained on millions of viral videos and hooks, so the output is built for short-form that already works."
-            headingLevel="h2"
-            size="large"
-            align="start"
-          />
-        </MarketingSection>
-
-        <MarketingWorkspace
-          toolsPage="instagram"
-          title="Other free creator tools"
-          hiddenToolIds={["hooks"]}
-        />
+        <ViralHooksRelatedTools />
 
         <ViralHooksBeforeAfterSection />
 
