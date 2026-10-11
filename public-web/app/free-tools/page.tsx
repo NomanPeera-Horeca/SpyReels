@@ -5,7 +5,6 @@ import {
 import { HomepageAuthGate } from "../../components/HomepageAuthGate";
 import { MarketingBreadcrumb } from "../../components/MarketingBreadcrumb";
 import { MarketingHeroEyebrow } from "../../components/MarketingHeroEyebrow";
-import { MarketingIconStar } from "../../components/MarketingIcons";
 import { MarketingFaq } from "../../components/MarketingPageSections";
 import { MarketingSection } from "../../components/MarketingSection";
 import { MarketingSectionHeader } from "../../components/MarketingSectionHeader";
@@ -61,17 +60,6 @@ export default function FreeToolsHubPage() {
           <p className={`${styles.heroLead} sr-text-marketing-body-large`}>
             SpyReels Free Tools is a hub of free creator tools to find viral videos by username,
             generate hooks, match B-roll, and write scripts. Browse the tools below and start free.
-          </p>
-
-          <p className={`${styles.trust} sr-text-marketing-body-small`}>
-            <span className={styles.trustStars} aria-hidden="true">
-              <MarketingIconStar />
-              <MarketingIconStar />
-              <MarketingIconStar />
-              <MarketingIconStar />
-              <MarketingIconStar />
-            </span>
-            Trusted by 12,000+ creators
           </p>
         </MarketingSection>
 

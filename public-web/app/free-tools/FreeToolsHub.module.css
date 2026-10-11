@@ -27,22 +27,6 @@
   color: var(--sr-color-text-secondary);
 }
 
-.trust {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--sr-layout-inline-gap);
-  margin: 0;
-  color: var(--sr-color-text-secondary);
-}
-
-.trustStars {
-  display: inline-flex;
-  align-items: center;
-  gap: calc(var(--sr-layout-inline-gap) / 2);
-  color: var(--sr-color-status-warning-foreground);
-}
-
 .filters {
   margin-bottom: var(--sr-layout-content-gap);
 }

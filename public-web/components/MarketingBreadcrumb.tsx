@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import styles from "./MarketingBreadcrumb.module.css";
 
 export type MarketingBreadcrumbItem = {
@@ -39,7 +40,7 @@ export function MarketingBreadcrumb({
         {items.map((item, index) => {
           const isLast = index === items.length - 1;
           return (
-            <span key={`${item.label}-${index}`} className={styles.contents}>
+            <Fragment key={`${item.label}-${index}`}>
               {index > 0 ? (
                 <li className={styles.sep} aria-hidden="true">
                   /
@@ -56,7 +57,7 @@ export function MarketingBreadcrumb({
                   </a>
                 )}
               </li>
-            </span>
+            </Fragment>
           );
         })}
       </ol>
