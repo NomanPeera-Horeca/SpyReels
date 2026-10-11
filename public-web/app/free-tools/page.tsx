@@ -8,6 +8,7 @@ import { MarketingHeroEyebrow } from "../../components/MarketingHeroEyebrow";
 import { MarketingFaq } from "../../components/MarketingPageSections";
 import { MarketingSection } from "../../components/MarketingSection";
 import { MarketingSectionHeader } from "../../components/MarketingSectionHeader";
+import { wrapHyphenatedCompounds } from "../../components/marketingNoBreak";
 import { buildFaqPageJsonLd, jsonLdScript } from "../../components/marketingFaqJsonLd";
 import {
   buildFreeToolsBreadcrumbJsonLd,
@@ -58,8 +59,9 @@ export default function FreeToolsHubPage() {
           <h1 className="sr-text-marketing-display">SpyReels Free Tools</h1>
 
           <p className={`${styles.heroLead} sr-text-marketing-body-large`}>
-            SpyReels Free Tools is a hub of free creator tools to find viral videos by username,
-            generate hooks, match B-roll, and write scripts. Browse the tools below and start free.
+            {wrapHyphenatedCompounds(
+              "SpyReels Free Tools is a hub of free creator tools to find viral videos by username, generate hooks, match B-roll, and write scripts. Browse the tools below and start free."
+            )}
           </p>
         </MarketingSection>
 
