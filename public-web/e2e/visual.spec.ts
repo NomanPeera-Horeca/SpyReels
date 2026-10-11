@@ -264,7 +264,16 @@ test.describe("public-web visual baselines", () => {
 
         const creatorStories = marketingCreatorStories(page);
         await expect(creatorStories).toHaveCount(1);
-        await expect(creatorStories.locator("#stories-rail > article")).toHaveCount(6);
+        // Original cards + seamless-loop duplicates (aria-hidden).
+        await expect(creatorStories.locator("#stories-rail > article")).toHaveCount(12);
+        await expect(
+          creatorStories.locator('#stories-rail > article:not([aria-hidden="true"])'),
+        ).toHaveCount(6);
+        const storiesRail = creatorStories.locator("#stories-rail");
+        await storiesRail.dispatchEvent("mouseenter");
+        await storiesRail.evaluate((el) => {
+          el.scrollLeft = 0;
+        });
         await screenshotWithoutStickyHeader(page, creatorStories, async () => {
           await expect(creatorStories).toHaveScreenshot(
             "homepage-creator-stories.png",

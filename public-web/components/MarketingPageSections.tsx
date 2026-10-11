@@ -216,7 +216,6 @@ export function MarketingWorkspace({
       </MarketingSection>
       <MarketingSection
         pair="start"
-        className={styles.beyondSection}
         aria-label={extensionsAriaLabel}
         data-marketing-beyond=""
       >

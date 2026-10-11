@@ -25,10 +25,16 @@
 }
 
 .viewport {
+  /*
+   * Fade width = rail side inset. Keep narrow enough that three 340px cards
+   * (+ gaps) fit fully inside the unfaded area at the 1200px rail width.
+   */
+  --stories-edge-fade: clamp(28px, 3.5vw, 56px);
   position: relative;
   width: min(1200px, 100%);
   overflow: hidden;
-  border-radius: var(--sr-radius-modal);
+  border-radius: 0;
+  background: transparent;
 }
 
 .rail {
@@ -37,8 +43,10 @@
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
-  padding: var(--sr-layout-content-gap) var(--sr-layout-control-gap) var(--sr-layout-stack-md);
+  /* Side padding matches fade width so card text never sits under the gradient. */
+  padding: var(--sr-layout-content-gap) var(--stories-edge-fade) var(--sr-layout-stack-md);
   outline: none;
+  background: transparent;
 }
 
 .rail::-webkit-scrollbar {
@@ -138,17 +146,19 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  width: clamp(42px, 9vw, 116px);
+  width: var(--stories-edge-fade);
   z-index: 2;
   pointer-events: none;
 }
 
+/* Match section surface so edges dissolve into the page (no lighter box). */
 .fadeLeft {
   left: 0;
   background: linear-gradient(
     90deg,
-    var(--sr-neutral-25) 2%,
-    color-mix(in srgb, var(--sr-neutral-25) 0%, transparent)
+    var(--sr-color-surface-page) 0%,
+    var(--sr-color-surface-page) 18%,
+    color-mix(in srgb, var(--sr-color-surface-page) 0%, transparent)
   );
 }
 
@@ -156,8 +166,9 @@
   right: 0;
   background: linear-gradient(
     270deg,
-    var(--sr-neutral-25) 2%,
-    color-mix(in srgb, var(--sr-neutral-25) 0%, transparent)
+    var(--sr-color-surface-page) 0%,
+    var(--sr-color-surface-page) 18%,
+    color-mix(in srgb, var(--sr-color-surface-page) 0%, transparent)
   );
 }
 
@@ -182,23 +193,15 @@
   }
 
   .viewport {
+    --stories-edge-fade: var(--sr-layout-page-gutter-mobile);
     width: calc(100% + 2 * var(--sr-layout-page-gutter-mobile));
     margin-inline: calc(-1 * var(--sr-layout-page-gutter-mobile));
     border-radius: 0;
-  }
-
-  .rail {
-    padding-inline: var(--sr-layout-page-gutter-mobile);
   }
 
   .card {
     flex-basis: 328px;
     width: 328px;
     min-height: 330px;
-  }
-
-  .fadeLeft,
-  .fadeRight {
-    width: 34px;
   }
 }

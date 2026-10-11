@@ -15,11 +15,6 @@
   box-sizing: border-box;
 }
 
-/* Tool Grid → Beyond: single paired-gap from prior section; divider on this edge. */
-.beyondSection {
-  border-top: var(--sr-border-width-default) solid var(--sr-color-border-default);
-}
-
 .tools {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 22.5rem), 1fr));
