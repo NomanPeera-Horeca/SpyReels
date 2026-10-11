@@ -39,6 +39,7 @@ import {
   Youtube,
   Bookmark,
   BookmarkCheck,
+  FileText,
 } from "lucide-react";
 import { mergeRemakeability, type ReelClassificationLike } from "@/lib/remakeability";
 import { useUsageGate } from "@/hooks/useUsageGate";
@@ -1089,9 +1090,26 @@ export default function CollectedReels() {
         </Button>
       </div>
 
-      {collectedQuery.isLoading && <WorkspaceReelGridSkeleton count={8} />}
+      {collectedQuery.isError ? (
+        <div className="text-center py-16 text-muted-foreground">
+          <FileText className="w-12 h-12 mx-auto mb-4 opacity-30" />
+          <p className="text-lg font-medium">Something went wrong</p>
+          <p className="text-sm mt-1 max-w-md mx-auto">
+            Something went wrong loading your library.
+          </p>
+          <Button
+            className="mt-4"
+            variant="outline"
+            onClick={() => void collectedQuery.refetch()}
+          >
+            Try again
+          </Button>
+        </div>
+      ) : null}
 
-      {!collectedQuery.isLoading && collectedRows.length === 0 && (
+      {!collectedQuery.isError && collectedQuery.isLoading && <WorkspaceReelGridSkeleton count={8} />}
+
+      {!collectedQuery.isError && !collectedQuery.isLoading && collectedRows.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 text-center">
           <Inbox className="mb-4 h-12 w-12 text-muted-foreground/30" />
           <h2 className="mb-2 text-lg font-medium text-foreground">No collected reels yet</h2>
@@ -1101,7 +1119,7 @@ export default function CollectedReels() {
         </div>
       )}
 
-      {!collectedQuery.isLoading && dateFilter !== "all" && (
+      {!collectedQuery.isError && !collectedQuery.isLoading && dateFilter !== "all" && (
         <p className="mb-3 text-xs text-muted-foreground">
           Showing {sortedReels.length} of {collectedRows.length} reels
         </p>
