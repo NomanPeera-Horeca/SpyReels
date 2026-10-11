@@ -67,6 +67,7 @@
   color: var(--sr-color-status-warning-foreground);
 }
 
+/* Kept page-local, matches Figma Tabs (core, node 34:4). */
 .filters {
   display: flex;
   flex-wrap: wrap;
@@ -79,30 +80,35 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  /* --sr-size-icon-tile is 40px; keep 44px for touch target */
-  width: 44px;
-  height: 44px;
-  border: var(--sr-border-width-default) solid var(--sr-color-border-default);
-  border-radius: var(--sr-radius-full);
-  background: var(--sr-color-surface-default);
+  /* space/2 top/bottom, space/3 left/right */
+  padding: var(--sr-layout-inline-gap) var(--sr-layout-control-gap);
+  border: none;
+  border-bottom: var(--sr-border-width-strong) solid transparent;
+  border-radius: 0;
+  background: transparent;
   color: var(--sr-color-text-secondary);
   cursor: pointer;
 }
 
-.filterTab svg {
-  width: var(--sr-size-icon);
-  height: var(--sr-size-icon);
-  display: block;
-}
-
-.filterTab:hover {
-  color: var(--sr-color-text-primary);
+.filterTab:hover:not(:disabled) {
+  background: var(--sr-color-surface-hover);
 }
 
 .filterTab[aria-selected="true"] {
-  border-color: var(--sr-color-action-primary);
-  background: var(--sr-color-brand-surface-subtle);
-  color: var(--sr-color-text-primary);
+  color: var(--sr-color-brand-primary);
+  border-bottom-color: var(--sr-color-brand-primary);
+}
+
+.filterTab:disabled,
+.filterTab[aria-disabled="true"] {
+  color: var(--sr-color-text-disabled);
+  cursor: not-allowed;
+  background: transparent;
+}
+
+.filterTab:focus-visible {
+  outline: none;
+  box-shadow: var(--sr-elevation-focus-primary-action);
 }
 
 .toolsHeader {
