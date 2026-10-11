@@ -116,6 +116,28 @@ export function appAbsoluteUrl(
 }
 
 /**
+ * Public tRPC procedures the marketing host may serve same-origin.
+ * Browser calls from spyreels.ai must not 302 to app (CORS breaks the SPA).
+ * Only allow when every procedure in a tRPC batch path is in this set.
+ */
+const APEX_PUBLIC_TRPC_PROCEDURES = new Set([
+  "featured.publicProfilePreview",
+  "tiktokScrape.publicProfilePreview",
+  "blog.published",
+  "blog.bySlug",
+]);
+
+export function isApexPublicTrpcPath(pathname: string): boolean {
+  const normalized = normalizePublicPathname(pathname);
+  if (!normalized.startsWith("/api/trpc/")) return false;
+  const proceduresPart = normalized.slice("/api/trpc/".length);
+  if (!proceduresPart) return false;
+  return proceduresPart
+    .split(",")
+    .every((procedure) => APEX_PUBLIC_TRPC_PROCEDURES.has(procedure));
+}
+
+/**
  * Paths that must run on the product host when the split is enabled.
  * Includes private app routes and /api (except auth endpoints used by the
  * marketing homepage modal on apex).
@@ -133,12 +155,8 @@ export function shouldRedirectApexPathToApp(
     return false;
   }
 
-  // Public Finder profile confirmation is served by the existing rate-limited
-  // tRPC procedure on this host, avoiding a cross-origin browser redirect.
-  if (
-    normalized === "/api/trpc/featured.publicProfilePreview" ||
-    normalized === "/api/trpc/tiktokScrape.publicProfilePreview"
-  ) {
+  // Public marketing tRPC (Finder preview + blog) stays on apex.
+  if (isApexPublicTrpcPath(normalized)) {
     return false;
   }
 

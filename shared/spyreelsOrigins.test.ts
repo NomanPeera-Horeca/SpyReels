@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   appAbsoluteUrl,
   appOrigin,
+  isApexPublicTrpcPath,
   isAppHostSplitEnabled,
   isSpyReelsAppHost,
   isSpyReelsApexHost,
@@ -53,6 +54,16 @@ describe("spyreelsOrigins", () => {
     expect(
       shouldRedirectApexPathToApp("/api/trpc/tiktokScrape.publicProfilePreview")
     ).toBe(false);
+    expect(shouldRedirectApexPathToApp("/api/trpc/blog.published")).toBe(false);
+    expect(shouldRedirectApexPathToApp("/api/trpc/blog.bySlug")).toBe(false);
+    expect(
+      shouldRedirectApexPathToApp("/api/trpc/blog.bySlug,blog.published")
+    ).toBe(false);
+    // Mixed public + private batch must still move to the app host.
+    expect(
+      shouldRedirectApexPathToApp("/api/trpc/blog.published,blog.all")
+    ).toBe(true);
+    expect(shouldRedirectApexPathToApp("/api/trpc/blog.all")).toBe(true);
     expect(shouldRedirectApexPathToApp("/api/auth/login")).toBe(false);
     expect(shouldRedirectApexPathToApp("/api/oauth/callback")).toBe(false);
     expect(shouldRedirectApexPathToApp("/", "?auth=signup&returnTo=%2Fresearch")).toBe(
@@ -62,6 +73,17 @@ describe("spyreelsOrigins", () => {
     expect(shouldRedirectApexPathToApp("/pricing")).toBe(false);
     expect(shouldRedirectApexPathToApp("/blog")).toBe(false);
     expect(shouldRedirectApexPathToApp("/features/viral-reel-finder")).toBe(false);
+  });
+
+  it("classifies apex-public tRPC paths including batches", () => {
+    expect(isApexPublicTrpcPath("/api/trpc/blog.published")).toBe(true);
+    expect(isApexPublicTrpcPath("/api/trpc/blog.bySlug,blog.published")).toBe(
+      true
+    );
+    expect(isApexPublicTrpcPath("/api/trpc/blog.published,blog.all")).toBe(
+      false
+    );
+    expect(isApexPublicTrpcPath("/api/trpc")).toBe(false);
   });
 
   it("redirects marketing paths from app host to apex", () => {
