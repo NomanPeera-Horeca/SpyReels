@@ -1,6 +1,7 @@
 /**
  * Marketing / Tool Grid (Figma Page 09).
- * Fluid auto-fit columns; 1 column ≤640. Tokens only.
+ * Desktop/tablet: fluid auto-fit columns.
+ * ≤640: locked compact 80px rows (icon + title/description + arrow).
  */
 
 .root {
@@ -193,21 +194,44 @@
   white-space: nowrap;
 }
 
-/* Compact ≤640px: one column */
+/*
+ * Compact ≤640px (Figma Tool Grid locked): full-width 80px rows,
+ * 12px gap, icon left + title/description + trailing arrow.
+ * Desktop / tablet unchanged.
+ */
 @media (max-width: 640px) {
   .tools {
     grid-template-columns: minmax(0, 1fr);
+    gap: var(--sr-layout-control-gap);
   }
 
   .tool {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: var(--sr-layout-stack-sm);
+    flex-direction: row;
+    align-items: center;
+    gap: var(--sr-layout-control-gap);
+    height: 80px;
+    min-height: 80px;
+    max-height: 80px;
+    padding: 0 var(--sr-layout-card-padding);
   }
 
-  .description,
+  .copy {
+    gap: 2px;
+    justify-content: center;
+  }
+
+  .title,
+  .description {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .arrow {
-    display: none;
+    display: inline-flex;
+    margin-left: auto;
+    flex-shrink: 0;
   }
 
   .integrations {

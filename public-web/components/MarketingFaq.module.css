@@ -4,7 +4,7 @@
  */
 
 .section {
-  background: var(--sr-color-surface-default);
+  background: var(--sr-color-surface-page);
 }
 
 .grid {
