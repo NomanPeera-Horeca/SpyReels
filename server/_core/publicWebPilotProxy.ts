@@ -26,6 +26,8 @@ export const YOUTUBE_SHORTS_FINDER_DEMO_PATH =
 /** Hub only. Child free-tool URLs stay on the Vite SPA until migrated. */
 export const FREE_TOOLS_HUB_PATH = "/free-tools";
 export const FREE_TOOLS_BROLL_GENERATOR_PATH = "/free-tools/broll-generator";
+/** Exact path only (no child segments). */
+export const VIRAL_HOOKS_PATH = "/free-tools/viral-hooks";
 /** Published blog articles only. `/blog` list and `/blog/new|edit` stay on the Vite app. */
 const BLOG_ARTICLE_PATH = /^\/blog\/[^/]+\/?$/;
 const NEXT_ASSET_PREFIX = "/_next/";
@@ -88,6 +90,7 @@ export function isPublicWebPilotRequest(
     path === YOUTUBE_SHORTS_FINDER_DEMO_PATH ||
     path === FREE_TOOLS_HUB_PATH ||
     path === FREE_TOOLS_BROLL_GENERATOR_PATH ||
+    path === VIRAL_HOOKS_PATH ||
     (BLOG_ARTICLE_PATH.test(path) &&
       path !== "/blog/new" &&
       !path.startsWith("/blog/edit/")) ||
