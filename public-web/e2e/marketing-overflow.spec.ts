@@ -7,6 +7,7 @@ const PAGES = [
   { name: "viral-reel-finder", path: "/features/viral-reel-finder" },
   { name: "tiktok-viral-video-finder", path: "/free-tools/tiktok-viral-video-finder" },
   { name: "youtube-shorts-viral-finder", path: "/free-tools/youtube-shorts-viral-finder" },
+  { name: "free-tools", path: "/free-tools" },
 ] as const;
 
 type OverflowHit = {

@@ -1,0 +1,40 @@
+/**
+ * Marketing / Breadcrumb (Figma 981:2438, APPROVED v1).
+ * Body Small · wraps · never truncates · never hidden.
+ */
+
+.list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: var(--sr-layout-inline-gap);
+  column-gap: var(--sr-layout-inline-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.alignCenter {
+  justify-content: center;
+}
+
+.alignStart {
+  justify-content: flex-start;
+}
+
+.link {
+  color: var(--sr-color-text-secondary);
+  text-decoration: none;
+}
+
+.link:hover {
+  color: var(--sr-color-text-primary);
+}
+
+.sep {
+  color: var(--sr-color-text-tertiary);
+}
+
+.current {
+  color: var(--sr-color-text-primary);
+}

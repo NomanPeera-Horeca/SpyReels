@@ -8,6 +8,7 @@ export const SPA_NAVIGATE_FALLBACK_DENYLIST: RegExp[] = [
   /^\/ai\/oauth\//,
   /^\/_next\//,
   /^\/features\/viral-reel-finder(?:\/.*)?$/,
+  /^\/free-tools\/?$/,
 ];
 
 export function shouldUseSpaNavigateFallback(pathname: string): boolean {

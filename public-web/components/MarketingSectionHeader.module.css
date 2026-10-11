@@ -59,13 +59,10 @@
   letter-spacing: var(--sr-type-marketing-heading-1-tracking);
 }
 
-/* Highlight phrase inside Large titles when showHighlight is on (Process Steps). */
-.showHighlight .heading span:not(.noBreak) {
+/* Highlight phrase inside Large titles when showHighlight is on (Process Steps).
+ * Exclude shared marketingNoBreak wraps (CSS-module class contains "noBreak"). */
+.showHighlight .heading span:not([class*="noBreak"]) {
   color: var(--sr-color-marketing-accent);
-}
-
-.noBreak {
-  white-space: nowrap;
 }
 
 .root .subtitle {

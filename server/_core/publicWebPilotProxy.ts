@@ -23,6 +23,8 @@ export const TIKTOK_VIRAL_FINDER_DEMO_PATH = "/free-tools/tiktok-viral-video-fin
 export const YOUTUBE_SHORTS_FINDER_PATH = "/free-tools/youtube-shorts-viral-finder";
 export const YOUTUBE_SHORTS_FINDER_DEMO_PATH =
   "/free-tools/youtube-shorts-viral-finder/demo";
+/** Hub only. Child free-tool URLs stay on the Vite SPA until migrated. */
+export const FREE_TOOLS_HUB_PATH = "/free-tools";
 const NEXT_ASSET_PREFIX = "/_next/";
 const HOMEPAGE_ASSET_PREFIX = "/marketing/";
 
@@ -81,6 +83,7 @@ export function isPublicWebPilotRequest(
     path === TIKTOK_VIRAL_FINDER_DEMO_PATH ||
     path === YOUTUBE_SHORTS_FINDER_PATH ||
     path === YOUTUBE_SHORTS_FINDER_DEMO_PATH ||
+    path === FREE_TOOLS_HUB_PATH ||
     pathname.startsWith(NEXT_ASSET_PREFIX) ||
     (config.homepageEnabled === true && pathname.startsWith(HOMEPAGE_ASSET_PREFIX))
   );
