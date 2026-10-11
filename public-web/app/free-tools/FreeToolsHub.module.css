@@ -74,6 +74,7 @@
   align-items: center;
   justify-content: center;
   gap: var(--sr-layout-inline-gap);
+  margin-bottom: var(--sr-layout-content-gap);
 }
 
 .filterTab {

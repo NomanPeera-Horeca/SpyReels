@@ -83,15 +83,8 @@ export default function FreeToolsHubPage() {
           </p>
         </MarketingSection>
 
-        <MarketingSection
-          pair="start"
-          className="shell"
-          aria-label="Tool categories"
-        >
+        <MarketingSection id="tools" pair="start" className="shell">
           <FreeToolsFilterTabs />
-        </MarketingSection>
-
-        <MarketingSection id="tools" className="shell">
           <div className={styles.toolsHeader}>
             <MarketingSectionHeader title="Popular tools" headingLevel="h2" size="large" align="start" />
             <p className={`${styles.toolsAside} sr-text-marketing-body-small`}>
@@ -140,7 +133,7 @@ export default function FreeToolsHubPage() {
           items={FREE_TOOLS_FAQ_ITEMS}
         />
 
-        <MarketingSection className={`shell ${styles.faqCta}`}>
+        <MarketingSection pair="start" className={`shell ${styles.faqCta}`}>
           <FreeToolsFaqStartFree />
         </MarketingSection>
       </main>
