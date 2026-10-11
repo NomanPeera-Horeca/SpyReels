@@ -45,6 +45,11 @@
   list-style: none;
 }
 
+/* 4 to 6 numbered steps only. Leaves .steps (2 to 3) unchanged for pixel parity. */
+.stepsMany {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .stepsIcon {
   grid-template-columns:
     minmax(0, 1fr)
@@ -163,6 +168,13 @@
   }
 }
 
+/* Tablet: 4 to 6 steps → two per row (Figma Process Steps). */
+@media (max-width: 1024px) {
+  .stepsMany {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 980px) {
   .stepsIcon {
     grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
@@ -184,7 +196,8 @@
   }
 
   .steps,
-  .stepsIcon {
+  .stepsIcon,
+  .stepsMany {
     grid-template-columns: 1fr;
     gap: var(--sr-layout-card-gap);
   }

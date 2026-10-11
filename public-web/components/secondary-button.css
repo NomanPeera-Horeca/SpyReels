@@ -1,0 +1,68 @@
+/**
+ * Shared Secondary Button (Figma Button / Secondary, node 32:70).
+ * Same size recipe as PrimaryButton. Tokens only.
+ */
+
+.sr-secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sr-layout-inline-gap);
+  box-sizing: border-box;
+  border: var(--sr-border-width-default) solid var(--sr-color-border-default);
+  border-radius: var(--sr-radius-control);
+  background: var(--sr-color-surface-default);
+  color: var(--sr-color-text-primary);
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.sr-secondary-button-medium {
+  height: 44px;
+  min-height: 44px;
+  padding: 0 16px;
+  font-size: var(--sr-type-marketing-button-size);
+  line-height: var(--sr-type-marketing-button-line);
+  font-weight: var(--sr-type-marketing-button-weight);
+  letter-spacing: var(--sr-type-marketing-button-tracking);
+}
+
+.sr-secondary-button-large {
+  height: 52px;
+  min-height: 52px;
+  padding: 0 var(--sr-layout-button-large-padding-x);
+  font-size: var(--sr-type-core-button-large-size);
+  line-height: var(--sr-type-core-button-large-line);
+  font-weight: var(--sr-type-core-button-large-weight);
+  letter-spacing: var(--sr-type-core-button-large-tracking);
+}
+
+.sr-secondary-button-icon {
+  width: var(--sr-size-icon);
+  height: var(--sr-size-icon);
+  flex: 0 0 var(--sr-size-icon);
+  display: block;
+  color: currentColor;
+}
+
+.sr-secondary-button:hover:not(:disabled) {
+  background: var(--sr-color-surface-hover);
+}
+
+.sr-secondary-button:active:not(:disabled) {
+  background: var(--sr-color-surface-hover);
+}
+
+.sr-secondary-button:focus-visible {
+  outline: none;
+  box-shadow: var(--sr-elevation-focus-neutral-action);
+}
+
+.sr-secondary-button:disabled {
+  background: var(--sr-color-surface-default);
+  color: var(--sr-color-text-disabled);
+  cursor: not-allowed;
+  box-shadow: none;
+}

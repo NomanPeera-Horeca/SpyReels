@@ -25,6 +25,9 @@ export const YOUTUBE_SHORTS_FINDER_DEMO_PATH =
   "/free-tools/youtube-shorts-viral-finder/demo";
 /** Hub only. Child free-tool URLs stay on the Vite SPA until migrated. */
 export const FREE_TOOLS_HUB_PATH = "/free-tools";
+export const FREE_TOOLS_BROLL_GENERATOR_PATH = "/free-tools/broll-generator";
+/** Published blog articles only. `/blog` list and `/blog/new|edit` stay on the Vite app. */
+const BLOG_ARTICLE_PATH = /^\/blog\/[^/]+\/?$/;
 const NEXT_ASSET_PREFIX = "/_next/";
 const HOMEPAGE_ASSET_PREFIX = "/marketing/";
 
@@ -84,6 +87,10 @@ export function isPublicWebPilotRequest(
     path === YOUTUBE_SHORTS_FINDER_PATH ||
     path === YOUTUBE_SHORTS_FINDER_DEMO_PATH ||
     path === FREE_TOOLS_HUB_PATH ||
+    path === FREE_TOOLS_BROLL_GENERATOR_PATH ||
+    (BLOG_ARTICLE_PATH.test(path) &&
+      path !== "/blog/new" &&
+      !path.startsWith("/blog/edit/")) ||
     pathname.startsWith(NEXT_ASSET_PREFIX) ||
     (config.homepageEnabled === true && pathname.startsWith(HOMEPAGE_ASSET_PREFIX))
   );

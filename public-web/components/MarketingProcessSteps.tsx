@@ -1,6 +1,6 @@
 import type { ComponentType, ReactNode, SVGProps } from "react";
 import { Fragment } from "react";
-import { MarketingSection } from "./MarketingSection";
+import { MarketingSection, type MarketingSectionPair } from "./MarketingSection";
 import { MarketingSectionHeader } from "./MarketingSectionHeader";
 import {
   MarketingIconArrowRight,
@@ -8,6 +8,7 @@ import {
   MarketingIconProcessRemake,
   MarketingIconProcessResearch,
 } from "./MarketingIcons";
+import { wrapHyphenatedCompounds } from "./marketingNoBreak";
 import styles from "./MarketingProcessSteps.module.css";
 
 export type MarketingProcessStep = {
@@ -24,9 +25,16 @@ export type MarketingProcessStepsProps = {
   presentation: MarketingProcessStepsPresentation;
   title: ReactNode;
   subtitle?: ReactNode;
-  steps: readonly [MarketingProcessStep, MarketingProcessStep, MarketingProcessStep];
+  /**
+   * numbered: 2 to 6 steps. icon: exactly 3 (Research / Remake / Film).
+   * Layout for 2 to 3 numbered steps keeps the existing .steps grid (0-pixel
+   * with current 3-step pages). 4 to 6 use .stepsMany (up to 4 per row).
+   */
+  steps: readonly MarketingProcessStep[];
   id?: string;
   className?: string;
+  /** Pair with the adjacent section (Decision 31). */
+  pair?: MarketingSectionPair;
   /** Numbered default eyebrow. Ignored for icon presentation. */
   eyebrow?: ReactNode;
 };
@@ -46,15 +54,28 @@ export function MarketingProcessSteps({
   steps,
   id = presentation === "numbered" ? "how-it-works" : "tools",
   className,
+  pair,
   eyebrow = "How it works",
 }: MarketingProcessStepsProps) {
   const titleId = `${id}-title`;
   const isIcon = presentation === "icon";
+  const stepCount = steps.length;
+  const useManyGrid = !isIcon && stepCount >= 4;
+
+  if (process.env.NODE_ENV !== "production") {
+    if (isIcon && stepCount !== 3) {
+      throw new Error("MarketingProcessSteps icon presentation expects exactly 3 steps");
+    }
+    if (!isIcon && (stepCount < 2 || stepCount > 6)) {
+      throw new Error("MarketingProcessSteps numbered presentation expects 2 to 6 steps");
+    }
+  }
 
   return (
     <MarketingSection
       id={id}
       className={cx(styles.section, className)}
+      pair={pair}
       aria-labelledby={titleId}
       data-marketing-process-steps={presentation}
     >
@@ -72,7 +93,11 @@ export function MarketingProcessSteps({
         />
 
         <div
-          className={cx(styles.steps, isIcon && styles.stepsIcon)}
+          className={cx(
+            styles.steps,
+            isIcon && styles.stepsIcon,
+            useManyGrid && styles.stepsMany
+          )}
           aria-label={isIcon ? "Research, Remake, Film" : undefined}
         >
           {steps.map((step, index) => {
@@ -98,7 +123,9 @@ export function MarketingProcessSteps({
                     ) : (
                       <span className={cx("sr-text-marketing-label", styles.number)}>{step.number}</span>
                     )}
-                    <h3 className={cx("sr-text-marketing-heading-4", styles.cardTitle)}>{step.title}</h3>
+                    <h3 className={cx("sr-text-marketing-heading-4", styles.cardTitle)}>
+                      {wrapHyphenatedCompounds(step.title)}
+                    </h3>
                   </div>
                   <p className={cx("sr-text-marketing-body-medium", styles.cardBody)}>{step.body}</p>
                 </article>

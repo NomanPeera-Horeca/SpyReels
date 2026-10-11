@@ -1,0 +1,47 @@
+/**
+ * Badge (Figma node 34:5). Tokens only.
+ */
+
+.root {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sr-layout-inline-gap);
+  box-sizing: border-box;
+  padding: var(--sr-layout-inline-gap) var(--sr-layout-stack-sm);
+  border-radius: var(--sr-radius-full);
+  white-space: nowrap;
+}
+
+.label {
+  margin: 0;
+}
+
+.neutral {
+  background: var(--sr-color-surface-hover);
+  color: var(--sr-color-text-secondary);
+}
+
+.brand {
+  background: var(--sr-color-brand-surface-selected);
+  color: var(--sr-color-brand-primary);
+}
+
+.success {
+  background: var(--sr-color-status-success-background);
+  color: var(--sr-color-status-success-foreground);
+}
+
+.warning {
+  background: var(--sr-color-status-warning-background);
+  color: var(--sr-color-status-warning-foreground);
+}
+
+.error {
+  background: var(--sr-color-status-error-background);
+  color: var(--sr-color-status-error-foreground);
+}
+
+.info {
+  background: var(--sr-color-status-info-background);
+  color: var(--sr-color-status-info-foreground);
+}

@@ -29,6 +29,11 @@ describe("SPA navigate fallback denylist", () => {
     expect(shouldUseSpaNavigateFallback("/free-tools/tiktok-viral-video-finder")).toBe(true);
   });
 
+  it("denies the migrated B-roll generator route", () => {
+    expect(shouldUseSpaNavigateFallback("/free-tools/broll-generator")).toBe(false);
+    expect(shouldUseSpaNavigateFallback("/free-tools/broll-generator/")).toBe(false);
+  });
+
   it("still lets the existing SPA own product and unknown app routes", () => {
     expect(shouldUseSpaNavigateFallback("/research")).toBe(true);
     expect(shouldUseSpaNavigateFallback("/studio")).toBe(true);

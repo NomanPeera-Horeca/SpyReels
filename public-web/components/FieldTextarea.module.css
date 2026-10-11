@@ -1,0 +1,88 @@
+/**
+ * Field / Textarea (Figma node 1106:4775).
+ * Sibling of Field / Input. Tokens only.
+ */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sr-layout-inline-gap);
+  width: 100%;
+  min-width: 0;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.label {
+  margin: 0;
+  color: var(--sr-color-text-primary);
+}
+
+.control {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: var(--sr-layout-stack-sm) 16px;
+  border: var(--sr-border-width-default) solid var(--sr-color-border-control);
+  border-radius: var(--sr-radius-input);
+  background: var(--sr-color-surface-default);
+  color: var(--sr-color-text-secondary);
+  font: inherit;
+  resize: vertical;
+  overflow-x: hidden;
+  overflow-y: auto;
+  min-height: calc(
+    3 * var(--sr-type-product-body-medium-line) + 2 * var(--sr-layout-stack-sm)
+  );
+}
+
+.control::placeholder {
+  color: var(--sr-color-text-tertiary);
+}
+
+.control:focus {
+  outline: none;
+  border-width: var(--sr-border-width-strong);
+  border-color: var(--sr-color-brand-primary);
+  box-shadow: var(--sr-elevation-focus-neutral-action);
+  color: var(--sr-color-text-primary);
+}
+
+.control[aria-invalid="true"] {
+  border-color: var(--sr-color-status-error-border);
+  box-shadow: none;
+}
+
+.control:disabled {
+  background: var(--sr-color-action-disabled-background);
+  border-color: var(--sr-color-border-default);
+  color: var(--sr-color-text-disabled);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.helper {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+}
+
+.helperError {
+  color: var(--sr-color-status-error-foreground);
+}
+
+.helperDisabled,
+.labelDisabled {
+  color: var(--sr-color-text-disabled);
+}
