@@ -1,7 +1,9 @@
 "use client";
 
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { InstagramMark, TikTokMark, YouTubeMark } from "../../shared/ui/PlatformMarks";
+import { stashAuthReturnTo } from "../lib/authHandoffStorage";
 import { trackPublicWeb } from "../lib/trackPublicWeb";
 import { PrimaryButton } from "./PrimaryButton";
 import { FinderSearch } from "./FinderSearch";
@@ -91,6 +93,7 @@ export function PlatformFinderExperience({
   platform: FinderPlatform;
   styles: StyleMap;
 }) {
+  const router = useRouter();
   const config = CONFIG_BY_PLATFORM[platform];
   const { search, pagePath, experienceId, resultsId } = config;
   const demoHandleSet = useMemo(() => new Set(search.demoHandles), [search.demoHandles]);
@@ -256,10 +259,12 @@ export function PlatformFinderExperience({
       auth: "signup",
       ...platformProp,
     });
+    stashAuthReturnTo(returnTo);
     const url = new URL(pagePath, window.location.origin);
     url.searchParams.set("auth", "signup");
     url.searchParams.set("returnTo", returnTo);
-    window.location.assign(url.toString());
+    // Soft navigation keeps demo results mounted behind the dialog.
+    router.push(`${url.pathname}${url.search}`, { scroll: false });
   }
 
   function chooseDemo(handle: string) {

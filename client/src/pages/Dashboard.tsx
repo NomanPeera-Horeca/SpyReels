@@ -90,6 +90,7 @@ import { buildRemakeIntentMedia } from "@/lib/remakeIntent";
 import { ONBOARDING_NICHES_BY_SLUG } from "@/data/onboardingNiches";
 import { V13ReelClassificationBadges } from "@/components/V13ReelClassificationBadges";
 import { resolveFromParamFallback } from "@shared/appNavigation";
+import { DEFER_ONBOARDING_FOR_RESEARCH_KEY } from "@shared/researchIntent";
 import { useAppBack } from "@/hooks/useAppBack";
 import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
 import {
@@ -314,6 +315,48 @@ const DASHBOARD_SNAPSHOT_STALE_MS = 3_600_000;
 const DASHBOARD_SIDEBAR_STALE_MS = 300_000;
 const RECREATE_BATCH_STALE_MS = 300_000;
 const RECREATE_BATCH_POLL_MS = 5_000;
+
+/** Research-first signup: after the first creator result is visible, run onboarding. */
+function DeferredOnboardingAfterFirstResults({
+  ready,
+  onboardingDone,
+}: {
+  ready: boolean;
+  onboardingDone: boolean;
+}) {
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    let deferred = false;
+    try {
+      deferred = sessionStorage.getItem(DEFER_ONBOARDING_FOR_RESEARCH_KEY) === "1";
+    } catch {
+      return;
+    }
+    if (!deferred || !ready) return;
+
+    if (onboardingDone) {
+      try {
+        sessionStorage.removeItem(DEFER_ONBOARDING_FOR_RESEARCH_KEY);
+      } catch {
+        /* ignore */
+      }
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      try {
+        sessionStorage.removeItem(DEFER_ONBOARDING_FOR_RESEARCH_KEY);
+      } catch {
+        /* ignore */
+      }
+      setLocation("/onboarding");
+    }, 2800);
+    return () => window.clearTimeout(timer);
+  }, [ready, onboardingDone, setLocation]);
+
+  return null;
+}
 
 export default function Dashboard() {
   const posthog = usePostHog();
@@ -1369,7 +1412,18 @@ export default function Dashboard() {
     gcTime: 5 * 60_000,
   });
   const collectedListQuery = trpc.collected.list.useQuery(undefined, { enabled: showOverview });
-  const onboardingStateQuery = trpc.onboarding.getState.useQuery(undefined, { enabled: showOverview });
+  const deferOnboardingForResearch =
+    typeof window !== "undefined" &&
+    (() => {
+      try {
+        return sessionStorage.getItem(DEFER_ONBOARDING_FOR_RESEARCH_KEY) === "1";
+      } catch {
+        return false;
+      }
+    })();
+  const onboardingStateQuery = trpc.onboarding.getState.useQuery(undefined, {
+    enabled: showOverview || deferOnboardingForResearch,
+  });
 
   const dashboardHeroNicheLabels = useMemo(() => {
     if (!showOverview) return [];
@@ -1963,9 +2017,21 @@ export default function Dashboard() {
       ? reelsData.length - reelsInSpyWindow
       : 0;
 
+  const firstResearchResultsReady =
+    canDisplayJobReels &&
+    sortedReels.length > 0 &&
+    (job?.status === "completed" || isFeaturedView);
+
   return (
     <div className="max-w-[1700px] mx-auto px-2 sm:px-0">
       {RemakeDialogs}
+      <DeferredOnboardingAfterFirstResults
+        ready={firstResearchResultsReady}
+        onboardingDone={Boolean(
+          onboardingStateQuery.data?.onboardingCompletedAt ||
+            onboardingStateQuery.data?.onboardingSkippedAt
+        )}
+      />
       <FirstResultsCelebration
         handle={displayScrapeHandle || job?.handle}
         enabled={

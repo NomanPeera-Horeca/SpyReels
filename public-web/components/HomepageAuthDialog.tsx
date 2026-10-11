@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import {
+  signupHeadlineForCreator,
+  type ResearchIntentPlatform,
+} from "../../shared/researchIntent";
 import { resolvePublicAppOrigin } from "../lib/appOrigin";
 import styles from "./HomepageAuthDialog.module.css";
 
@@ -103,11 +107,15 @@ export function HomepageAuthDialog({
   onOpenChange,
   defaultMode = "signup",
   returnTo = "/research",
+  creatorHandle = null,
+  creatorPlatform = null,
 }: {
   open: boolean;
   onOpenChange: (open: boolean, meta?: AuthDialogCloseMeta) => void;
   defaultMode?: Exclude<AuthMode, "forgot">;
   returnTo?: string;
+  creatorHandle?: string | null;
+  creatorPlatform?: ResearchIntentPlatform | null;
 }) {
   const [authMode, setAuthMode] = useState<AuthMode>(defaultMode);
   const [authEmail, setAuthEmail] = useState("");
@@ -146,14 +154,16 @@ export function HomepageAuthDialog({
   const title = isForgot
     ? "Reset your password"
     : isSignup
-      ? "Join SpyReels"
+      ? signupHeadlineForCreator(creatorHandle, creatorPlatform)
       : "Welcome back";
   const subtitle = isForgot
     ? "Enter your email and we will send a reset link."
     : isSignup
-      ? "Spy trending creators, preview viral videos, and remake scripts in your voice - all in one place."
+      ? creatorHandle
+        ? "Continue with Google for the fastest path, or use email. You will land on that creator right after."
+        : "Spy trending creators, preview viral videos, and remake scripts in your voice - all in one place."
       : "Log in to keep spying viral videos and remaking scripts in your voice.";
-  const eyebrow = isForgot ? "Password reset" : isSignup ? "Create your account" : "Welcome back";
+  const eyebrow = isForgot ? "Password reset" : isSignup ? "Create your free account" : "Welcome back";
   const submitLabel = authLoading
     ? "Please wait..."
     : isForgot
@@ -255,7 +265,7 @@ export function HomepageAuthDialog({
             <>
               <button
                 type="button"
-                className={styles.google}
+                className={`${styles.google} ${styles.googlePrimary}`}
                 onClick={() => {
                   window.location.href = googleAuthUrl(returnTo);
                 }}
@@ -264,14 +274,14 @@ export function HomepageAuthDialog({
                 Continue with Google
               </button>
               <div className={styles.divider} aria-hidden="true">
-                <span>OR</span>
+                <span>OR EMAIL</span>
               </div>
             </>
           ) : null}
 
           {isSignup ? (
             <label className={styles.label}>
-              <span>Name</span>
+              <span>Name (optional)</span>
               <input
                 className={styles.input}
                 type="text"

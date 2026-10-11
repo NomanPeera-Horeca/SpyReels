@@ -4,7 +4,10 @@ import { FEATURE_LAUNCH_DATE_ISO } from "@/data/onboardingNiches";
 import { trpc } from "@/lib/trpc";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
-import { parseResearchIntent } from "@shared/researchIntent";
+import {
+  DEFER_ONBOARDING_FOR_RESEARCH_KEY,
+  parseResearchIntent,
+} from "@shared/researchIntent";
 import { stashResearchHandleForAfterAuth } from "@/lib/researchPendingHandle";
 
 const FEATURE_LAUNCH_DATE = new Date(FEATURE_LAUNCH_DATE_ISO);
@@ -14,6 +17,22 @@ function toDate(value: unknown): Date | null {
   if (value instanceof Date) return value;
   const parsed = new Date(String(value));
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function isOnboardingDeferredForResearch(): boolean {
+  try {
+    return sessionStorage.getItem(DEFER_ONBOARDING_FOR_RESEARCH_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markOnboardingDeferredForResearch(): void {
+  try {
+    sessionStorage.setItem(DEFER_ONBOARDING_FOR_RESEARCH_KEY, "1");
+  } catch {
+    /* ignore */
+  }
 }
 
 function GateTimeoutFallback() {
@@ -46,9 +65,6 @@ export default function OnboardingGate({
   const isPostLaunchUser =
     Boolean(user) && Boolean(createdAt) && createdAt!.getTime() > FEATURE_LAUNCH_DATE.getTime();
 
-  // Gate runs on (almost) every authed app navigation: keep results fresh
-  // (staleTime: 0) so we never show /onboarding off a pre-completion cache.
-  // refetchOnWindowFocus: self-heal if another tab or rare drift updated state.
   const onboardingStateQuery = trpc.onboarding.getState.useQuery(undefined, {
     enabled: Boolean(user) && isPostLaunchUser,
     staleTime: 0,
@@ -103,8 +119,18 @@ export default function OnboardingGate({
   useEffect(() => {
     if (!shouldRedirectToOnboarding) return;
     if (location === "/onboarding") return;
+
     const intent = parseResearchIntent(window.location.search);
-    if (intent) stashResearchHandleForAfterAuth(intent.handle, intent.autostart, intent.platform);
+    if (intent) {
+      stashResearchHandleForAfterAuth(intent.handle, intent.autostart, intent.platform);
+      markOnboardingDeferredForResearch();
+      return;
+    }
+
+    if (isOnboardingDeferredForResearch()) {
+      return;
+    }
+
     setLocation("/onboarding", { replace: true });
   }, [location, setLocation, shouldRedirectToOnboarding]);
 
@@ -114,7 +140,16 @@ export default function OnboardingGate({
   if (isPostLaunchUser && onboardingStateQuery.isLoading) {
     return showTimeoutFallback ? <GateTimeoutFallback /> : null;
   }
-  if (shouldRedirectToOnboarding && location !== "/onboarding") return null;
+  if (
+    shouldRedirectToOnboarding &&
+    location !== "/onboarding" &&
+    !isOnboardingDeferredForResearch() &&
+    !parseResearchIntent(
+      typeof window !== "undefined" ? window.location.search : ""
+    )
+  ) {
+    return null;
+  }
 
   return <>{children}</>;
 }

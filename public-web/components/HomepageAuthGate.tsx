@@ -4,9 +4,28 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { HomepageAuthDialog } from "./HomepageAuthDialog";
 import {
+  creatorContextFromReturnTo,
+  readStashedAuthReturnTo,
+  stashAuthReturnTo,
+} from "../lib/authHandoffStorage";
+import {
   trackPublicWeb,
   type AuthDialogDismissReason,
 } from "../lib/trackPublicWeb";
+
+function resolveReturnTo(urlReturnTo: string | null): string {
+  const stashed = readStashedAuthReturnTo();
+  const urlHasCreator = Boolean(creatorContextFromReturnTo(urlReturnTo).handle);
+  const stashHasCreator = Boolean(creatorContextFromReturnTo(stashed).handle);
+
+  if (urlHasCreator && urlReturnTo) return urlReturnTo;
+  if (stashHasCreator && stashed) return stashed;
+  if (urlReturnTo && urlReturnTo.startsWith("/") && !urlReturnTo.startsWith("//")) {
+    return urlReturnTo;
+  }
+  if (stashed) return stashed;
+  return "/research";
+}
 
 function HomepageAuthGateInner() {
   const searchParams = useSearchParams();
@@ -15,10 +34,8 @@ function HomepageAuthGateInner() {
   const authRaw = searchParams.get("auth");
   const auth = authRaw === "login" || authRaw === "signup" ? authRaw : null;
   const returnToRaw = searchParams.get("returnTo");
-  const returnTo =
-    returnToRaw && returnToRaw.startsWith("/") && !returnToRaw.startsWith("//")
-      ? returnToRaw
-      : "/research";
+  const returnTo = resolveReturnTo(returnToRaw);
+  const creator = creatorContextFromReturnTo(returnTo);
 
   const [open, setOpen] = useState(Boolean(auth));
   const [mode, setMode] = useState<"login" | "signup">(auth ?? "signup");
@@ -28,7 +45,8 @@ function HomepageAuthGateInner() {
     if (!auth) return;
     setMode(auth);
     setOpen(true);
-  }, [auth]);
+    if (returnTo && returnTo !== "/research") stashAuthReturnTo(returnTo);
+  }, [auth, returnTo]);
 
   useEffect(() => {
     if (!open || !auth) return;
@@ -38,13 +56,18 @@ function HomepageAuthGateInner() {
     trackPublicWeb("auth_dialog_opened", {
       mode: auth,
       return_to: returnTo,
+      creator_handle: creator.handle,
+      platform: creator.platform,
     });
-  }, [auth, open, returnTo]);
+  }, [auth, open, returnTo, creator.handle, creator.platform]);
 
-  function clearAuthQuery() {
+  function clearAuthParamKeepReturnTo() {
     const next = new URLSearchParams(searchParams.toString());
     next.delete("auth");
-    next.delete("returnTo");
+    if (returnTo && returnTo.startsWith("/") && !returnTo.startsWith("//")) {
+      next.set("returnTo", returnTo);
+      stashAuthReturnTo(returnTo);
+    }
     const query = next.toString();
     router.replace(query ? `${pathname}?${query}` : pathname || "/", { scroll: false });
   }
@@ -54,10 +77,12 @@ function HomepageAuthGateInner() {
       mode,
       return_to: returnTo,
       dismiss_reason: reason,
+      creator_handle: creator.handle,
+      platform: creator.platform,
     });
     openedForAuthRef.current = null;
     setOpen(false);
-    clearAuthQuery();
+    clearAuthParamKeepReturnTo();
   }
 
   return (
@@ -65,6 +90,8 @@ function HomepageAuthGateInner() {
       open={open}
       defaultMode={mode}
       returnTo={returnTo}
+      creatorHandle={creator.handle}
+      creatorPlatform={creator.platform}
       onOpenChange={(nextOpen, meta) => {
         if (!nextOpen) {
           dismiss(meta?.reason ?? "x");
