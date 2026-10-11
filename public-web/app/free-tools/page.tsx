@@ -6,6 +6,7 @@ import { HomepageAuthGate } from "../../components/HomepageAuthGate";
 import { MarketingHeroEyebrow } from "../../components/MarketingHeroEyebrow";
 import { MarketingIconStar } from "../../components/MarketingIcons";
 import { MarketingFaq } from "../../components/MarketingPageSections";
+import { MarketingSection } from "../../components/MarketingSection";
 import { MarketingSectionHeader } from "../../components/MarketingSectionHeader";
 import { buildFaqPageJsonLd, jsonLdScript } from "../../components/marketingFaqJsonLd";
 import {
@@ -46,7 +47,7 @@ export default function FreeToolsHubPage() {
       <MarketingHeader />
 
       <main>
-        <section className={styles.hero}>
+        <MarketingSection pair="end" className={`shell ${styles.hero}`}>
           <nav aria-label="Breadcrumb">
             <ol className={`${styles.breadcrumb} sr-text-marketing-body-small`}>
               <li>
@@ -80,11 +81,17 @@ export default function FreeToolsHubPage() {
             </span>
             Trusted by 12,000+ creators
           </p>
-        </section>
+        </MarketingSection>
 
-        <FreeToolsFilterTabs />
+        <MarketingSection
+          pair="start"
+          className="shell"
+          aria-label="Tool categories"
+        >
+          <FreeToolsFilterTabs />
+        </MarketingSection>
 
-        <section id="tools" className={styles.toolsSection}>
+        <MarketingSection id="tools" className="shell">
           <div className={styles.toolsHeader}>
             <MarketingSectionHeader title="Popular tools" headingLevel="h2" size="large" align="start" />
             <p className={`${styles.toolsAside} sr-text-marketing-body-small`}>
@@ -121,9 +128,11 @@ export default function FreeToolsHubPage() {
               </a>
             ))}
           </div>
-        </section>
+        </MarketingSection>
 
-        <FreeToolsGoViralBanner />
+        <MarketingSection className="shell" aria-label="Go viral CTA">
+          <FreeToolsGoViralBanner />
+        </MarketingSection>
 
         <MarketingFaq
           title="Frequently asked questions"
@@ -131,7 +140,9 @@ export default function FreeToolsHubPage() {
           items={FREE_TOOLS_FAQ_ITEMS}
         />
 
-        <FreeToolsFaqStartFree />
+        <MarketingSection className={`shell ${styles.faqCta}`}>
+          <FreeToolsFaqStartFree />
+        </MarketingSection>
       </main>
 
       <MarketingFooter />
