@@ -10,6 +10,7 @@ const FAQ_PAGES = [
     name: "youtube-shorts-viral-finder",
     path: "/free-tools/youtube-shorts-viral-finder",
   },
+  { name: "free-tools", path: "/free-tools" },
 ] as const;
 
 function decodeHtmlEntities(value: string): string {

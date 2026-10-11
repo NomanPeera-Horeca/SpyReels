@@ -1,0 +1,136 @@
+{
+  "path": "/free-tools",
+  "status": 200,
+  "title": "Free Instagram Reels Tools | SpyReels",
+  "description": "Free SpyReels tools for creators: viral finders, hooks, B-roll, AI scripts, and transcript generators for Instagram, TikTok, and YouTube. Start free.",
+  "canonical": "https://spyreels.ai/free-tools",
+  "robots": "index, follow",
+  "googlebot": null,
+  "verification": {
+    "google": "TfvQaX_pN1iSSkXBwgrUoK45mvnWKJTozdMdeZsgibs"
+  },
+  "openGraph": {
+    "description": "Free SpyReels tools for creators: viral finders, hooks, B-roll, AI scripts, and transcript generators for Instagram, TikTok, and YouTube. Start free.",
+    "image": "https://spyreels.ai/brand/og-default.jpg",
+    "title": "Free Instagram Reels Tools | SpyReels",
+    "type": "website",
+    "url": "https://spyreels.ai/free-tools"
+  },
+  "twitter": {
+    "card": "summary_large_image",
+    "description": "Free SpyReels tools for creators: viral finders, hooks, B-roll, AI scripts, and transcript generators for Instagram, TikTok, and YouTube. Start free.",
+    "image": "https://spyreels.ai/brand/og-default.jpg",
+    "title": "Free Instagram Reels Tools | SpyReels"
+  },
+  "h1": "SpyReels Free Tools",
+  "hreflang": [],
+  "jsonLd": [
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "item": "https://spyreels.ai/",
+          "name": "Home",
+          "position": 1
+        },
+        {
+          "@type": "ListItem",
+          "item": "https://spyreels.ai/free-tools",
+          "name": "Free Tools",
+          "position": 2
+        }
+      ]
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "SpyReels Free Tools includes a viral hook generator, AI B-roll generator, TikTok viral video finder, YouTube Shorts viral finder, Instagram viral Reel finder, and an AI script generator. Start free and move from research to a remake in one place."
+          },
+          "name": "What free tools does SpyReels offer?"
+        },
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Most tools let you preview free without a paid plan. Some flows ask you to sign up to unlock the full result or save your work. You can start free."
+          },
+          "name": "Do I need a SpyReels account to try these tools?"
+        },
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. The hub covers Instagram Reels, TikTok, and YouTube Shorts. Formats that win on one platform often travel, so you can research once and adapt the remake."
+          },
+          "name": "Are these tools only for Instagram?"
+        },
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "A username finder spies one public creator at a time and ranks their videos by views, engagement, and outlier score versus that account's own median. That is different from keyword libraries that browse millions of clips by topic."
+          },
+          "name": "What is a viral finder by username?"
+        },
+        {
+          "@type": "Question",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Find what already works on peer accounts, remake the structure in your voice, and post consistently. SpyReels connects research, hooks, B-roll, and scripts so you spend less time scrolling and more time filming."
+          },
+          "name": "How do I go viral without guessing?"
+        }
+      ]
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      "itemListElement": [
+        {
+          "@type": "ListItem",
+          "name": "Viral Hook Generator",
+          "position": 1,
+          "url": "https://spyreels.ai/free-tools/viral-hooks"
+        },
+        {
+          "@type": "ListItem",
+          "name": "AI B-Roll Generator",
+          "position": 2,
+          "url": "https://spyreels.ai/free-tools/broll-generator"
+        },
+        {
+          "@type": "ListItem",
+          "name": "TikTok Viral Video Finder",
+          "position": 3,
+          "url": "https://spyreels.ai/free-tools/tiktok-viral-video-finder"
+        },
+        {
+          "@type": "ListItem",
+          "name": "YouTube Shorts Viral Finder",
+          "position": 4,
+          "url": "https://spyreels.ai/free-tools/youtube-shorts-viral-finder"
+        },
+        {
+          "@type": "ListItem",
+          "name": "Instagram Viral Reel Finder",
+          "position": 5,
+          "url": "https://spyreels.ai/features/viral-reel-finder"
+        },
+        {
+          "@type": "ListItem",
+          "name": "AI Script Generator",
+          "position": 6,
+          "url": "https://spyreels.ai/features/ai-personal-brand-coach"
+        }
+      ],
+      "name": "SpyReels Free Tools"
+    }
+  ]
+}

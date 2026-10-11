@@ -30,6 +30,11 @@ type PageDef = {
   sectionHeaders: readonly { slug: string; eyebrow: string }[];
   /** Primary Large close-ups on this page (hero / finder-search / final-cta). */
   primaryButtons: readonly string[];
+  /** Finder/homepage shared sections. Hub pages omit these. */
+  hasToolGrid?: boolean;
+  hasFinalCta?: boolean;
+  hasProcessSteps?: boolean;
+  hasPlatformStrip?: boolean;
 };
 
 const PAGES: readonly PageDef[] = [
@@ -75,6 +80,16 @@ const PAGES: readonly PageDef[] = [
       { slug: "faq", eyebrow: "Frequently asked questions" },
     ],
     primaryButtons: ["finder-search", "final-cta"],
+  },
+  {
+    name: "free-tools",
+    path: "/free-tools",
+    sectionHeaders: [{ slug: "faq", eyebrow: "Frequently asked questions" }],
+    primaryButtons: ["faq-start-free"],
+    hasToolGrid: false,
+    hasFinalCta: false,
+    hasProcessSteps: false,
+    hasPlatformStrip: false,
   },
 ] as const;
 
@@ -197,17 +212,19 @@ test.describe("public-web visual baselines", () => {
         });
       }
 
-      const toolGrid = marketingToolGrid(page);
-      await expect(toolGrid.locator('[id^="tool-"]').first()).toBeVisible();
-      await expect
-        .poll(async () => toolGrid.locator('[id^="tool-"]').count())
-        .toBeGreaterThanOrEqual(4);
-      await screenshotWithoutStickyHeader(page, toolGrid, async () => {
-        await expect(toolGrid).toHaveScreenshot(
-          `${pageDef.name}-tool-grid.png`,
-          visualSectionScreenshotOptions
-        );
-      });
+      if (pageDef.hasToolGrid !== false) {
+        const toolGrid = marketingToolGrid(page);
+        await expect(toolGrid.locator('[id^="tool-"]').first()).toBeVisible();
+        await expect
+          .poll(async () => toolGrid.locator('[id^="tool-"]').count())
+          .toBeGreaterThanOrEqual(4);
+        await screenshotWithoutStickyHeader(page, toolGrid, async () => {
+          await expect(toolGrid).toHaveScreenshot(
+            `${pageDef.name}-tool-grid.png`,
+            visualSectionScreenshotOptions
+          );
+        });
+      }
 
       const faq = marketingFaq(page);
       await expect(faq).toHaveCount(1);
@@ -221,35 +238,41 @@ test.describe("public-web visual baselines", () => {
         );
       });
 
-      const finalCta = marketingFinalCta(page);
-      await expect(finalCta).toHaveCount(1);
-      await expect(finalCta.getByRole("heading", { level: 2 })).toBeVisible();
-      await expect(finalCta.locator("a.sr-primary-button")).toBeVisible();
-      await screenshotWithoutStickyHeader(page, finalCta, async () => {
-        await expect(finalCta).toHaveScreenshot(
-          `${pageDef.name}-final-cta.png`,
-          visualSectionScreenshotOptions
-        );
-      });
+      if (pageDef.hasFinalCta !== false) {
+        const finalCta = marketingFinalCta(page);
+        await expect(finalCta).toHaveCount(1);
+        await expect(finalCta.getByRole("heading", { level: 2 })).toBeVisible();
+        await expect(finalCta.locator("a.sr-primary-button")).toBeVisible();
+        await screenshotWithoutStickyHeader(page, finalCta, async () => {
+          await expect(finalCta).toHaveScreenshot(
+            `${pageDef.name}-final-cta.png`,
+            visualSectionScreenshotOptions
+          );
+        });
+      }
 
-      const processSteps = marketingProcessSteps(page);
-      await expect(processSteps).toHaveCount(1);
-      await expect(processSteps.locator("article")).toHaveCount(3);
-      await screenshotWithoutStickyHeader(page, processSteps, async () => {
-        await expect(processSteps).toHaveScreenshot(
-          `${pageDef.name}-process-steps.png`,
-          visualSectionScreenshotOptions
-        );
-      });
+      if (pageDef.hasProcessSteps !== false) {
+        const processSteps = marketingProcessSteps(page);
+        await expect(processSteps).toHaveCount(1);
+        await expect(processSteps.locator("article")).toHaveCount(3);
+        await screenshotWithoutStickyHeader(page, processSteps, async () => {
+          await expect(processSteps).toHaveScreenshot(
+            `${pageDef.name}-process-steps.png`,
+            visualSectionScreenshotOptions
+          );
+        });
+      }
 
-      const platformStrip = marketingPlatformStrip(page);
-      await expect(platformStrip).toHaveCount(1);
-      await screenshotWithoutStickyHeader(page, platformStrip, async () => {
-        await expect(platformStrip).toHaveScreenshot(
-          `${pageDef.name}-platform-strip.png`,
-          visualSectionScreenshotOptions
-        );
-      });
+      if (pageDef.hasPlatformStrip !== false) {
+        const platformStrip = marketingPlatformStrip(page);
+        await expect(platformStrip).toHaveCount(1);
+        await screenshotWithoutStickyHeader(page, platformStrip, async () => {
+          await expect(platformStrip).toHaveScreenshot(
+            `${pageDef.name}-platform-strip.png`,
+            visualSectionScreenshotOptions
+          );
+        });
+      }
 
       if (pageDef.name === "homepage") {
         const responsibleResearch = marketingResponsibleResearch(page);

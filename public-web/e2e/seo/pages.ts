@@ -33,9 +33,13 @@ export const SEO_NEXT_PAGES: readonly SeoPageDef[] = [
     path: "/free-tools/youtube-shorts-viral-finder",
     kind: "next",
   },
+  { id: "free-tools", path: "/free-tools", kind: "next" },
 ] as const;
 
-export const SEO_MIGRATION_TARGET_PAGES: readonly SeoPageDef[] = [] as const;
+/** Frozen live Vite captures kept for migration audits (not re-fetched in CI). */
+export const SEO_MIGRATION_TARGET_PAGES: readonly SeoPageDef[] = [
+  { id: "free-tools", path: "/free-tools", kind: "migration-target" },
+] as const;
 
 export const SEO_ALL_PAGES: readonly SeoPageDef[] = [
   ...SEO_NEXT_PAGES,
