@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useLocation } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
+import { isAdminPanelClient } from "@/admin/isAdminClient";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -132,7 +133,7 @@ export default function BlogEditor() {
     }
   };
 
-  const isOwner = user?.openId === import.meta.env.VITE_OWNER_OPEN_ID || user?.role === "admin";
+  const isOwner = isAdminPanelClient(user);
 
   if (!user) {
     return (
