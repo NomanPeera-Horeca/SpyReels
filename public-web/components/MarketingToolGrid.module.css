@@ -1,7 +1,7 @@
 /**
  * Marketing / Tool Grid (Figma Page 09).
  * Desktop/tablet: fluid auto-fit columns.
- * ≤640: locked compact 80px rows (icon + title/description + arrow).
+ * ≤640: locked compact rows (min 80px; title/description wrap to 2 lines).
  */
 
 .root {
@@ -195,9 +195,9 @@
 }
 
 /*
- * Compact ≤640px (Figma Tool Grid locked): full-width 80px rows,
- * 12px gap, icon left + title/description + trailing arrow.
- * Desktop / tablet unchanged.
+ * Compact ≤640px (Figma Tool Grid locked): full-width rows,
+ * min 80px (grows with wrap), 12px gap, icon left + title/description
+ * (up to 2 lines each) + trailing arrow. Desktop / tablet unchanged.
  */
 @media (max-width: 640px) {
   .tools {
@@ -209,10 +209,10 @@
     flex-direction: row;
     align-items: center;
     gap: var(--sr-layout-control-gap);
-    height: 80px;
+    height: auto;
     min-height: 80px;
-    max-height: 80px;
-    padding: 0 var(--sr-layout-card-padding);
+    max-height: none;
+    padding: var(--sr-layout-control-gap) var(--sr-layout-card-padding);
   }
 
   .copy {
@@ -222,10 +222,16 @@
 
   .title,
   .description {
-    display: block;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
     overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: normal;
+    text-overflow: clip;
+    overflow-wrap: break-word;
+    word-break: normal;
+    hyphens: none;
   }
 
   .arrow {
