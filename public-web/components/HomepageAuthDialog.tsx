@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { resolvePublicAppOrigin } from "../lib/appOrigin";
 import {
   signupHeadlineForCreator,
-  type ResearchIntentPlatform,
-} from "../../shared/researchIntent";
-import { resolvePublicAppOrigin } from "../lib/appOrigin";
+  type SignupCreatorPlatform,
+} from "../lib/signupCreatorContext";
 import styles from "./HomepageAuthDialog.module.css";
 
 type AuthMode = "login" | "signup" | "forgot";
@@ -115,7 +115,7 @@ export function HomepageAuthDialog({
   defaultMode?: Exclude<AuthMode, "forgot">;
   returnTo?: string;
   creatorHandle?: string | null;
-  creatorPlatform?: ResearchIntentPlatform | null;
+  creatorPlatform?: SignupCreatorPlatform | null;
 }) {
   const [authMode, setAuthMode] = useState<AuthMode>(defaultMode);
   const [authEmail, setAuthEmail] = useState("");

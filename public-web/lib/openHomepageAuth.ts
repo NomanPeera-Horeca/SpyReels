@@ -1,4 +1,4 @@
-import { stashAuthReturnTo } from "./authHandoffStorage";
+import { stashAuthReturnTo } from "./signupCreatorContext";
 
 export type HomepageAuthOpenDetail = {
   mode: "login" | "signup";

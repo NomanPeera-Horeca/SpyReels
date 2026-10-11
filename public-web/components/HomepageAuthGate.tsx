@@ -7,7 +7,7 @@ import {
   creatorContextFromReturnTo,
   readStashedAuthReturnTo,
   stashAuthReturnTo,
-} from "../lib/authHandoffStorage";
+} from "../lib/signupCreatorContext";
 import { subscribeHomepageAuthOpen } from "../lib/openHomepageAuth";
 import {
   trackPublicWeb,
