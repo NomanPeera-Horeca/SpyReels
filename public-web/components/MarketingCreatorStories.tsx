@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect, useRef } from "react";
 import { MarketingSection } from "./MarketingSection";
 import { MarketingSectionHeader } from "./MarketingSectionHeader";
 import { MarketingIconStar } from "./MarketingIcons";
@@ -55,6 +58,10 @@ const STORIES: readonly CreatorStory[] = [
   },
 ];
 
+/** Continuous rail speed restored from pre-React homepage.js glideStories. */
+const STORIES_SCROLL_PX_PER_MS = 0.052;
+const STORIES_TOUCH_RESUME_MS = 3500;
+
 function cx(...parts: Array<string | false | undefined>) {
   return parts.filter(Boolean).join(" ");
 }
@@ -69,12 +76,129 @@ function RatingStars() {
   );
 }
 
+function StoryCard({ story, duplicate }: { story: CreatorStory; duplicate?: boolean }) {
+  return (
+    <article
+      className={styles.card}
+      aria-hidden={duplicate ? true : undefined}
+      {...(duplicate ? { inert: true } : {})}
+    >
+      <RatingStars />
+      <blockquote className={cx("sr-text-marketing-body-large", styles.quote)}>
+        {story.quote}
+      </blockquote>
+      <div className={styles.spacer} aria-hidden="true" />
+      <div className={styles.person}>
+        <span className={styles.avatar} aria-hidden="true">
+          <img src={story.avatarSrc} alt="" loading="lazy" width={44} height={44} />
+        </span>
+        <div className={styles.identity}>
+          <strong className={cx("sr-text-marketing-label", styles.name)}>{story.name}</strong>
+          <small className={cx("sr-text-marketing-caption", styles.meta)}>{story.meta}</small>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 /**
  * Marketing / Creator Stories (Figma Page 09).
- * Large/Center header (no highlight); six-card keyboard-accessible rail.
+ * Large/Center header; auto-scrolling rail (seamless loop) with hover/touch pause.
  */
 export function MarketingCreatorStories() {
   const titleId = "stories-title";
+  const railRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const storiesRail = railRef.current;
+    if (!storiesRail) return;
+
+    const storyCount = STORIES.length;
+    const storyMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    let storiesPaused = false;
+    let storiesVisible = true;
+    let storiesResumeAt = 0;
+    let storiesLastTime = 0;
+    let rafId = 0;
+
+    const storiesLoopWidth = () => {
+      const first = storiesRail.children[0] as HTMLElement | undefined;
+      const loopStart = storiesRail.children[storyCount] as HTMLElement | undefined;
+      if (!first || !loopStart) return 0;
+      return loopStart.offsetLeft - first.offsetLeft;
+    };
+
+    const normalizeStories = () => {
+      const width = storiesLoopWidth();
+      if (width && storiesRail.scrollLeft >= width) {
+        storiesRail.scrollLeft -= width;
+      }
+    };
+
+    const glideStories = (now: number) => {
+      if (!storiesLastTime) storiesLastTime = now;
+      const elapsed = Math.min(now - storiesLastTime, 100);
+      storiesLastTime = now;
+      if (
+        !storyMotion.matches &&
+        storiesVisible &&
+        !storiesPaused &&
+        now > storiesResumeAt
+      ) {
+        storiesRail.scrollLeft += elapsed * STORIES_SCROLL_PX_PER_MS;
+        normalizeStories();
+      }
+      rafId = requestAnimationFrame(glideStories);
+    };
+
+    const onMouseEnter = () => {
+      storiesPaused = true;
+    };
+    const onMouseLeave = () => {
+      storiesPaused = false;
+      storiesResumeAt = 0;
+    };
+    const onFocusIn = () => {
+      storiesPaused = true;
+    };
+    const onFocusOut = (event: FocusEvent) => {
+      if (!storiesRail.contains(event.relatedTarget as Node | null)) {
+        storiesPaused = false;
+        storiesResumeAt = 0;
+      }
+    };
+    const pauseAfterTouch = () => {
+      storiesResumeAt = performance.now() + STORIES_TOUCH_RESUME_MS;
+    };
+
+    storiesRail.addEventListener("mouseenter", onMouseEnter);
+    storiesRail.addEventListener("mouseleave", onMouseLeave);
+    storiesRail.addEventListener("focusin", onFocusIn);
+    storiesRail.addEventListener("focusout", onFocusOut);
+    storiesRail.addEventListener("pointerdown", pauseAfterTouch);
+    storiesRail.addEventListener("touchstart", pauseAfterTouch, { passive: true });
+
+    const visibilityObserver = new IntersectionObserver(
+      (entries) => {
+        storiesVisible = Boolean(entries[0]?.isIntersecting);
+      },
+      { threshold: 0 },
+    );
+    visibilityObserver.observe(storiesRail);
+
+    rafId = requestAnimationFrame(glideStories);
+
+    return () => {
+      cancelAnimationFrame(rafId);
+      visibilityObserver.disconnect();
+      storiesRail.removeEventListener("mouseenter", onMouseEnter);
+      storiesRail.removeEventListener("mouseleave", onMouseLeave);
+      storiesRail.removeEventListener("focusin", onFocusIn);
+      storiesRail.removeEventListener("focusout", onFocusOut);
+      storiesRail.removeEventListener("pointerdown", pauseAfterTouch);
+      storiesRail.removeEventListener("touchstart", pauseAfterTouch);
+    };
+  }, []);
 
   return (
     <MarketingSection
@@ -96,6 +220,7 @@ export function MarketingCreatorStories() {
 
         <div className={styles.viewport}>
           <div
+            ref={railRef}
             className={styles.rail}
             id="stories-rail"
             role="region"
@@ -103,22 +228,10 @@ export function MarketingCreatorStories() {
             tabIndex={0}
           >
             {STORIES.map((story) => (
-              <article key={story.name} className={styles.card}>
-                <RatingStars />
-                <blockquote className={cx("sr-text-marketing-body-large", styles.quote)}>
-                  {story.quote}
-                </blockquote>
-                <div className={styles.spacer} aria-hidden="true" />
-                <div className={styles.person}>
-                  <span className={styles.avatar} aria-hidden="true">
-                    <img src={story.avatarSrc} alt="" loading="lazy" width={44} height={44} />
-                  </span>
-                  <div className={styles.identity}>
-                    <strong className={cx("sr-text-marketing-label", styles.name)}>{story.name}</strong>
-                    <small className={cx("sr-text-marketing-caption", styles.meta)}>{story.meta}</small>
-                  </div>
-                </div>
-              </article>
+              <StoryCard key={story.name} story={story} />
+            ))}
+            {STORIES.map((story) => (
+              <StoryCard key={`dup-${story.name}`} story={story} duplicate />
             ))}
           </div>
           <div className={styles.fadeLeft} aria-hidden="true" />
