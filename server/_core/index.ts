@@ -5,6 +5,7 @@ import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { csrfOriginGuard } from "./csrf";
+import { firstPartyApiCors } from "./firstPartyCors";
 import {
   registerPostHogExpressErrors,
   registerServerErrorMonitoring,
@@ -79,6 +80,9 @@ async function startServer() {
       .status(readiness.ok ? 200 : 503)
       .json(readiness);
   });
+
+  // First-party CORS before host redirects so apex→app API preflights succeed.
+  app.use(firstPartyApiCors);
 
   // Canonical hosts:
   // - www → apex marketing

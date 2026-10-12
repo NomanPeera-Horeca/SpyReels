@@ -1,4 +1,5 @@
 import { buildFaqPageJsonLd } from "../../components/marketingFaqJsonLd";
+import { trpcQuery } from "../trpcBrowser";
 import type { FinderConfig, FinderDemoItem, FinderProfileLookupResult } from "./types";
 
 const canonical = "https://spyreels.ai/free-tools/tiktok-viral-video-finder";
@@ -46,26 +47,17 @@ async function fetchProfile(
   handle: string,
   signal: AbortSignal
 ): Promise<FinderProfileLookupResult> {
-  const input = encodeURIComponent(JSON.stringify({ json: { handle } }));
-  const response = await fetch(`/api/trpc/tiktokScrape.publicProfilePreview?input=${input}`, {
-    signal,
-    headers: { accept: "application/json" },
-  });
-  if (!response.headers.get("content-type")?.includes("application/json")) {
+  let body: ProfilePayload;
+  try {
+    body = await trpcQuery<ProfilePayload>(
+      "tiktokScrape.publicProfilePreview",
+      { handle },
+      { signal }
+    );
+  } catch {
     throw new Error("TikTok lookup is temporarily unavailable. Please try again.");
   }
-  const envelope = (await response.json()) as {
-    result?: { data?: { json?: ProfilePayload } };
-    error?: { message?: string };
-  };
-  const body = envelope.result?.data?.json;
-  if (!body) {
-    throw new Error(
-      envelope.error?.message ||
-        "TikTok lookup is temporarily unavailable. Please try again."
-    );
-  }
-  if (!response.ok || body.found !== true) {
+  if (body.found !== true) {
     throw new Error(
       "error" in body && body.error
         ? body.error

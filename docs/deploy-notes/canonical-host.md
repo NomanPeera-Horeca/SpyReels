@@ -38,9 +38,10 @@ After DNS + Render custom domain + Google OAuth URI are ready:
 - `SPYREELS_SITE_URL=https://spyreels.ai`
 - `SPYREELS_APP_ORIGIN=https://app.spyreels.ai`
 - `OAUTH_SERVER_URL=https://app.spyreels.ai`
-- Set `VITE_APP_ORIGIN=https://app.spyreels.ai` only for native/Capacitor builds.
-  Do not set it on the SpyReels web Render service build: the web client ignores it
-  and uses same-origin `/api` so apex marketing pages (blog, etc.) keep working.
+- Optional: `VITE_APP_ORIGIN=https://app.spyreels.ai` (native builds and non-prod
+  preview hosts). Production apex marketing auto-targets `app.spyreels.ai` when
+  the page host is `spyreels.ai`. Express serves first-party credentialed CORS
+  so those cross-origin API calls succeed.
 
 **spyreels-public-web**
 
@@ -48,6 +49,7 @@ After DNS + Render custom domain + Google OAuth URI are ready:
 - `NEXT_PUBLIC_SPYREELS_APP_ORIGIN=https://app.spyreels.ai`
 - `SPYREELS_APP_ORIGIN=https://app.spyreels.ai`
 - Rebuild after changing `NEXT_PUBLIC_*`
+- Browser tRPC (`lib/trpcBrowser.ts`) calls the product API origin when split is on
 
 **Google Cloud OAuth**
 
@@ -63,9 +65,11 @@ After DNS + Render custom domain + Google OAuth URI are ready:
 
 ## Express behavior (split on)
 
-- Apex product paths (`/research`, `/studio`, `/api` except `/api/auth` + `/api/oauth` + public marketing tRPC, etc.) → **302** to `https://app.spyreels.ai` + path/query
-- Apex keeps same-origin public tRPC for Finder profile preview and blog (`blog.published`, `blog.bySlug`) so the marketing SPA is not broken by a cross-origin redirect
-- Apex `/?auth=login|signup` stays on marketing (Next homepage modal)
+- Apex product paths (`/research`, `/studio`, `/api` except `/api/auth` + `/api/oauth` + allowlisted public tRPC + webhooks, etc.) → **302** to `https://app.spyreels.ai` + path/query
+- Marketing browsers call **`https://app.spyreels.ai/api/trpc/...`** directly (Vite + public-web). Express answers first-party CORS (`Origin: https://spyreels.ai`, `Access-Control-Allow-Credentials: true`)
+- Session cookie `Domain=.spyreels.ai` + `SameSite=Lax` is same-site across apex/app, so credentialed API calls work once CORS is present
+- Apex still allowlists a few public tRPC procedures (blog + finder preview) for any relative leftover callers
+- Apex `/?auth=login|signup` stays on marketing (Next homepage modal); email `/api/auth/*` stays same-origin on apex
 - `app.spyreels.ai` never serves Next marketing HTML
 - `app.spyreels.ai/` → `/research` if signed in, else `https://spyreels.ai/`
 - `app.spyreels.ai/pricing` (and other marketing paths) → apex
@@ -76,8 +80,8 @@ After DNS + Render custom domain + Google OAuth URI are ready:
 1. `dig app.spyreels.ai` resolves
 2. `https://spyreels.ai/` still Next homepage
 3. `https://spyreels.ai/research` → 302 → `https://app.spyreels.ai/research`
-4. `https://spyreels.ai/api/trpc/blog.published` stays on apex (no 302) and returns posts
-5. `https://spyreels.ai/blog` lists published posts in the browser
+4. From `https://spyreels.ai/free-tools/viral-hooks`, Network shows tRPC to `https://app.spyreels.ai/api/trpc/...` with status 200 (not Failed to fetch)
+5. `https://spyreels.ai/blog` lists posts; hooks / broll / pricing tool actions work
 6. `https://spyreels.ai/?auth=signup` stays on apex and opens the Next auth modal
 7. After login, user lands on `app.spyreels.ai/research`
 8. Session cookie is set for `.spyreels.ai`

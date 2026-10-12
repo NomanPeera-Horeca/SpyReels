@@ -1,5 +1,5 @@
 import { Capacitor } from "@capacitor/core";
-import { appOrigin } from "@shared/spyreelsOrigins";
+import { appOrigin, SPYREELS_APP_ORIGIN_DEFAULT } from "@shared/spyreelsOrigins";
 
 /** True when running inside a Capacitor iOS/Android shell. */
 export function isNativeApp(): boolean {
@@ -20,17 +20,30 @@ export function isPwaStandalone(): boolean {
  * API/auth origin for request URL building.
  * Empty string means same-origin relative URLs.
  *
- * Web/PWA must stay relative so marketing pages on spyreels.ai hit apex
- * public APIs (blog, finder preview). VITE_APP_ORIGIN is only for native
- * Capacitor shells; applying it to the web build forces app.spyreels.ai
- * fetches that fail CORS from the apex host.
+ * Host split (mature): marketing on spyreels.ai calls https://app.spyreels.ai
+ * with credentialed CORS. Product pages already on app stay relative.
+ * Native shells always use an absolute product origin.
  */
 export function getAppOrigin(): string {
-  if (!isNativeApp()) return "";
+  const fromEnv = import.meta.env.VITE_APP_ORIGIN?.trim().replace(/\/$/, "") || "";
 
-  const fromEnv = import.meta.env.VITE_APP_ORIGIN?.trim();
-  if (fromEnv) return fromEnv.replace(/\/$/, "");
-  return appOrigin();
+  if (isNativeApp()) {
+    return fromEnv || appOrigin();
+  }
+
+  if (typeof window === "undefined") return "";
+
+  const here = window.location.origin.replace(/\/$/, "");
+  if (fromEnv) {
+    return fromEnv === here ? "" : fromEnv;
+  }
+
+  const host = window.location.hostname.replace(/^www\./, "").toLowerCase();
+  if (host === "spyreels.ai") {
+    return SPYREELS_APP_ORIGIN_DEFAULT;
+  }
+
+  return "";
 }
 
 export function resolveAppUrl(path: string): string {
