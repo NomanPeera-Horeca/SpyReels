@@ -18,10 +18,8 @@ import { BROLL_CANONICAL, brollMetadata } from "../../../lib/brollPageSeo";
 import { BrollGeneratorClient } from "./BrollGeneratorClient";
 import {
   BrollInputModes,
-  BrollMoreFeatures,
   BrollRelatedTools,
   BrollSampleGallery,
-  BrollSocialProof,
   BrollUseCaseGrid,
   BrollWhenToUse,
 } from "./BrollStaticSections";
@@ -135,8 +133,6 @@ export default function BrollGeneratorPage() {
       <main>
         <BrollGeneratorClient />
 
-        <BrollSocialProof />
-
         <MarketingProcessSteps
           presentation="numbered"
           pair="start"
@@ -152,7 +148,6 @@ export default function BrollGeneratorPage() {
         <BrollWhenToUse />
         <BrollSampleGallery />
         <BrollUseCaseGrid />
-        <BrollMoreFeatures />
 
         <BrollRelatedTools />
 
