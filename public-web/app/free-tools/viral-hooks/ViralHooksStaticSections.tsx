@@ -1,3 +1,4 @@
+import { articleTableComponents } from "../../../components/MarketingArticleTable";
 import { MarketingCard } from "../../../components/MarketingCard";
 import {
   MarketingIconArrowRight,
@@ -7,11 +8,23 @@ import { MarketingSection } from "../../../components/MarketingSection";
 import { MarketingSectionHeader } from "../../../components/MarketingSectionHeader";
 import { wrapHyphenatedCompounds } from "../../../components/marketingNoBreak";
 import toolGridStyles from "../../../components/MarketingToolGrid.module.css";
-import { VIRAL_HOOKS_TRAIT_CARDS } from "../../../lib/viralHooksCopy";
+import {
+  VIRAL_HOOKS_COMPARISON_ROWS,
+  VIRAL_HOOKS_PATTERNS,
+  VIRAL_HOOKS_TRAIT_CARDS,
+} from "../../../lib/viralHooksCopy";
 import { ViralHooksBeforeAfterSlider } from "./ViralHooksBeforeAfterSlider";
 import { ViralHooksOneClickDemo } from "./ViralHooksOneClickDemo";
 import styles from "./ViralHooksTool.module.css";
 import pageStyles from "./ViralHooks.module.css";
+
+const articleTable = articleTableComponents();
+const ArticleTable = articleTable.table;
+const ArticleThead = articleTable.thead;
+const ArticleTbody = articleTable.tbody;
+const ArticleTr = articleTable.tr;
+const ArticleTh = articleTable.th;
+const ArticleTd = articleTable.td;
 
 /** Same three tools and heading as the old SPA RelatedToolsGrid. */
 const VIRAL_HOOKS_RELATED_TOOLS = [
@@ -90,6 +103,74 @@ export function ViralHooksBeforeAfterSection() {
   return (
     <MarketingSection className="shell" aria-label="Before and after hook comparison">
       <ViralHooksBeforeAfterSlider />
+    </MarketingSection>
+  );
+}
+
+export function ViralHooksPatternsSection() {
+  return (
+    <MarketingSection className="shell">
+      <div className={pageStyles.sectionStack}>
+        <MarketingSectionHeader
+          title="10 viral hook patterns"
+          subtitle="Steal the structure. Swap in your niche."
+          headingLevel="h2"
+          size="large"
+          align="start"
+        />
+        <ArticleTable>
+          <ArticleThead>
+            <ArticleTr>
+              <ArticleTh>Pattern</ArticleTh>
+              <ArticleTh>Example</ArticleTh>
+            </ArticleTr>
+          </ArticleThead>
+          <ArticleTbody>
+            {VIRAL_HOOKS_PATTERNS.map(([pattern, example]) => (
+              <ArticleTr key={pattern}>
+                <ArticleTd>{wrapHyphenatedCompounds(pattern)}</ArticleTd>
+                <ArticleTd>{wrapHyphenatedCompounds(example)}</ArticleTd>
+              </ArticleTr>
+            ))}
+          </ArticleTbody>
+        </ArticleTable>
+      </div>
+    </MarketingSection>
+  );
+}
+
+export function ViralHooksComparisonSection() {
+  return (
+    <MarketingSection className="shell">
+      <div className={pageStyles.sectionStack}>
+        <MarketingSectionHeader
+          title="Viral hook generator vs ChatGPT vs Copy.ai"
+          subtitle="ChatGPT and Copy.ai write generic openings. SpyReels is trained on millions of viral videos and hooks, so the output is built for short-form that already works."
+          headingLevel="h2"
+          size="large"
+          align="start"
+        />
+        <ArticleTable>
+          <ArticleThead>
+            <ArticleTr>
+              <ArticleTh>Capability</ArticleTh>
+              <ArticleTh>SpyReels</ArticleTh>
+              <ArticleTh>ChatGPT</ArticleTh>
+              <ArticleTh>Copy.ai</ArticleTh>
+            </ArticleTr>
+          </ArticleThead>
+          <ArticleTbody>
+            {VIRAL_HOOKS_COMPARISON_ROWS.map(([capability, spyreels, chatgpt, copyai]) => (
+              <ArticleTr key={capability}>
+                <ArticleTd>{wrapHyphenatedCompounds(capability)}</ArticleTd>
+                <ArticleTd>{wrapHyphenatedCompounds(spyreels)}</ArticleTd>
+                <ArticleTd>{wrapHyphenatedCompounds(chatgpt)}</ArticleTd>
+                <ArticleTd>{wrapHyphenatedCompounds(copyai)}</ArticleTd>
+              </ArticleTr>
+            ))}
+          </ArticleTbody>
+        </ArticleTable>
+      </div>
     </MarketingSection>
   );
 }

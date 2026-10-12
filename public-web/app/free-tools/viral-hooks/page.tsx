@@ -23,7 +23,9 @@ import {
 } from "../../../lib/viralHooksPage";
 import {
   ViralHooksBeforeAfterSection,
+  ViralHooksComparisonSection,
   ViralHooksOneClickSection,
+  ViralHooksPatternsSection,
   ViralHooksRelatedTools,
   ViralHooksTraitSection,
 } from "./ViralHooksStaticSections";
@@ -118,11 +120,9 @@ export default function ViralHooksPage() {
 
         <ViralHooksTraitSection />
 
-        {/*
-          TODO(blog-agent MarketingArticleTable): 10 viral hook patterns
-          and comparison vs ChatGPT vs Copy.ai. Hidden until Article Table merges.
-          Do not show empty headings; do not invent a second table.
-        */}
+        <ViralHooksPatternsSection />
+
+        <ViralHooksComparisonSection />
 
         <ViralHooksRelatedTools />
 
