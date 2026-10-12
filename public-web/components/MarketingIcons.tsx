@@ -222,6 +222,21 @@ export function MarketingIconToolFinder(props: IconProps) {
   );
 }
 
+/** Icon / Tool Transcript — Figma 966:440 (20×20, 1.8 stroke, round caps, currentColor). */
+export function MarketingIconTranscript(props: IconProps) {
+  return (
+    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true" fill="none" {...props}>
+      <path
+        d="M6 7H14M6 10H11M2 3H18V14H9L5 17V14H2V3Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 /** Icon / Star — Figma Page 05 (16×16, currentColor fill). */
 export function MarketingIconStar(props: IconProps) {
   return (
@@ -275,7 +290,8 @@ export type MarketingToolIconId =
   | "broll"
   | "creators"
   | "carousel"
-  | "finder";
+  | "finder"
+  | "transcript";
 
 const TOOL_ICONS: Record<MarketingToolIconId, (props: IconProps) => ReactNode> = {
   script: MarketingIconScript,
@@ -284,6 +300,7 @@ const TOOL_ICONS: Record<MarketingToolIconId, (props: IconProps) => ReactNode> =
   creators: MarketingIconCreators,
   carousel: MarketingIconCarousel,
   finder: MarketingIconFinder,
+  transcript: MarketingIconTranscript,
 };
 
 export function MarketingToolIcon({

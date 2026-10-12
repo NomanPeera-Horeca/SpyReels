@@ -6,7 +6,6 @@ import { MarketingSection } from "../../../components/MarketingSection";
 import { MarketingSectionHeader } from "../../../components/MarketingSectionHeader";
 import {
   MarketingIconArrowRight,
-  MarketingIconCheck,
   MarketingToolIcon,
 } from "../../../components/MarketingIcons";
 import { wrapHyphenatedCompounds } from "../../../components/marketingNoBreak";
@@ -17,7 +16,6 @@ import {
 import toolGridStyles from "../../../components/MarketingToolGrid.module.css";
 import styles from "./BrollGenerator.module.css";
 
-/** Same four tools as the client RelatedToolsGrid on this page. */
 const BROLL_RELATED_TOOLS = [
   {
     id: "finder",
@@ -46,6 +44,21 @@ const BROLL_RELATED_TOOLS = [
     href: "/features/ai-personal-brand-coach",
     icon: "script" as const,
     description: "Turn a strong idea into a script in your voice.",
+  },
+  {
+    id: "hooks",
+    title: "Viral Hook Generator",
+    href: "/free-tools/viral-hooks",
+    icon: "hooks" as const,
+    description: "Give your opening a sharper hook.",
+  },
+  {
+    id: "transcript",
+    title: "Instagram Transcript Generator",
+    href: "/free-tools/instagram-transcript-generator",
+    icon: "transcript" as const,
+    description:
+      "Paste a Reel URL. Get the full transcript free, then remake it in your voice.",
   },
 ] as const;
 
@@ -115,90 +128,6 @@ const WHEN_CARDS = [
     body: "Mapping out your B-roll before you film gives your story structure from the start, filling gaps and covering weak moments before they happen.",
   },
 ] as const;
-
-const MORE_FEATURES = [
-  {
-    title: "Viral Reel Finder",
-    body: "Point it at any competitor or inspiration account and see their reels ranked by an outlier score against that account's own median performance, not just raw view counts. That means you're seeing what actually overperforms for that specific creator, not just whatever went viral once.",
-    href: "/features/viral-reel-finder",
-    linkLabel: "Explore",
-    icon: "finder" as const,
-  },
-  {
-    title: "AI Script Coach",
-    body: "Paste a reel link or a rough idea and get a full script back written in your own voice, based on the hooks and structure that already work in your niche. It's not a generic AI script, it's shaped around how you actually talk.",
-    href: "/features/ai-personal-brand-coach",
-    linkLabel: "Explore",
-    icon: "script" as const,
-  },
-  {
-    title: "Carousel Generator",
-    body: "Turn a script, idea, or piece of research into a swipeable, styled carousel ready to post, without opening Canva or a design tool. Useful for creators who post carousels alongside Reels to cover both formats from one research session.",
-    href: "/carousel-library",
-    linkLabel: "Open Carousel Library",
-    icon: "carousel" as const,
-  },
-  {
-    title: "Transcription",
-    body: "Every reel you save or research comes with a clean, timestamped transcript automatically. Search across transcripts, pull quotes for a script, or just skip re-watching a video to remember what someone said.",
-    href: "/saved",
-    linkLabel: "View Saved Reels",
-    icon: null,
-  },
-  {
-    title: "30-Day Content Planner",
-    body: "Feed in your best-performing research and get back a ready-to-shoot content calendar for the month. Instead of opening SpyReels each day wondering what to post, you get a plan you can batch-film against.",
-    href: "/features/30-day-content-plan",
-    linkLabel: "Explore",
-    icon: null,
-  },
-  {
-    title: "Production Notes",
-    body: "Alongside every generated script, get shot-by-shot notes and sound suggestions, so you're not guessing what b-roll or audio to pair with each line on filming day.",
-    href: "/scripts",
-    linkLabel: "Open Scripts",
-    icon: "script" as const,
-  },
-  {
-    title: "Hooks, Captions & Hashtags",
-    body: "Pull proven opening hooks and matching hashtag sets built for your niche, ready to paste in at publish time instead of writing captions from a blank box every time.",
-    href: "/free-tools/viral-hooks",
-    linkLabel: "Explore Viral Hooks",
-    icon: "hooks" as const,
-  },
-  {
-    title: "Remake on the Go via Telegram",
-    body: "Send any reel link to SpyReels through Telegram and get a remade script sent right back, no need to open the dashboard or sit at a laptop. Built for creators who spot inspiration mid-scroll and want to act on it immediately.",
-    href: "/settings",
-    linkLabel: "Connect Telegram",
-    icon: null,
-  },
-] as const;
-
-export function BrollSocialProof() {
-  const items = [
-    "Works with scripts or raw footage",
-    "Real footage + AI-generated B-roll",
-    "Preview free, no account needed",
-  ] as const;
-
-  return (
-    <MarketingSection
-      pair="start"
-      className={styles.proofBand}
-      aria-label="Product highlights"
-    >
-      <div className={`shell ${styles.proofGrid}`}>
-        {items.map((text) => (
-          <p key={text} className={`sr-text-marketing-body-small ${styles.proofItem}`}>
-            <MarketingIconCheck className={styles.proofIcon} aria-hidden="true" />
-            {wrapHyphenatedCompounds(text)}
-          </p>
-        ))}
-      </div>
-    </MarketingSection>
-  );
-}
 
 export function BrollInputModes() {
   return (
@@ -372,58 +301,11 @@ export function BrollUseCaseGrid() {
   );
 }
 
-export function BrollMoreFeatures() {
-  return (
-    <MarketingSection pair="start" className="shell">
-      <MarketingSectionHeader
-        title="More Than B-Roll"
-        subtitle="Finding the right clip to match your script is only one part of putting out consistent Reels. Most creators juggle five or six different tools to go from an idea to a published post: one for research, one for scripting, one for captions, one for scheduling. SpyReels was built to close those gaps in one workspace, so b-roll is often just the first thing people try before they find the rest."
-        headingLevel="h2"
-        size="large"
-        align="start"
-      />
-      <ul className={styles.moreGrid}>
-        {MORE_FEATURES.map((feature) => (
-          <li key={feature.title}>
-            <MarketingCard as="article">
-              {feature.icon ? (
-                <div className={styles.moreCardHeader}>
-                  <span className={styles.moreIcon} aria-hidden="true">
-                    <MarketingToolIcon name={feature.icon} />
-                  </span>
-                  <h3 className="sr-text-marketing-title-medium">
-                    {wrapHyphenatedCompounds(feature.title)}
-                  </h3>
-                </div>
-              ) : (
-                <h3 className="sr-text-marketing-title-medium">
-                  {wrapHyphenatedCompounds(feature.title)}
-                </h3>
-              )}
-              <p className="sr-text-marketing-body-medium">
-                {wrapHyphenatedCompounds(feature.body)}
-              </p>
-              <a href={feature.href} className={`sr-text-marketing-button ${styles.moreLink}`}>
-                {feature.linkLabel} →
-              </a>
-            </MarketingCard>
-          </li>
-        ))}
-      </ul>
-      <p className={`sr-text-marketing-body-medium ${styles.moreClosing}`}>
-        {wrapHyphenatedCompounds(
-          "Most people come to SpyReels for one feature and end up using three or four without meaning to, because the research, scripting, and planning all pull from the same data instead of starting over each time. Start with b-roll if that's what brought you here, and pull in the rest whenever your workflow needs it."
-        )}
-      </p>
-    </MarketingSection>
-  );
-}
-
-/** Tool Grid cards only (no Beyond the workspace). Same tools as the old page. */
+/** Tool Grid cards (shared MarketingToolGrid.module.css). Six related tools. */
 export function BrollRelatedTools() {
   return (
     <MarketingSection
-      pair="end"
+      pair="start"
       aria-labelledby="broll-related-tools-title"
       data-marketing-tool-grid=""
     >
