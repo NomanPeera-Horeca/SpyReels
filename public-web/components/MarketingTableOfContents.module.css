@@ -1,0 +1,144 @@
+/**
+ * Marketing / Table of Contents (Figma node 1015:2868, locked v1).
+ * Desktop: sticky 200px list. Tablet/phone: collapsed "In this article" button.
+ */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-layout-control-gap);
+  width: 100%;
+}
+
+.trigger {
+  display: none;
+  width: 100%;
+  box-sizing: border-box;
+  align-items: center;
+  gap: var(--sr-layout-control-gap);
+  padding: var(--sr-layout-control-gap) var(--sr-layout-stack-sm);
+  margin: 0;
+  background: var(--sr-color-surface-default);
+  border: var(--sr-border-width-default) solid var(--sr-color-border-default);
+  border-radius: var(--sr-radius-card);
+  color: var(--sr-color-text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.triggerLabel {
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.triggerSpacer {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.chevron {
+  flex: 0 0 var(--sr-size-icon);
+  width: var(--sr-size-icon);
+  height: var(--sr-size-icon);
+  color: var(--sr-color-text-secondary);
+  transition: transform 0.15s ease;
+}
+
+.trigger[aria-expanded="true"] .chevron {
+  transform: rotate(180deg);
+}
+
+.desktopLabel {
+  margin: 0;
+  color: var(--sr-color-text-tertiary);
+}
+
+.items {
+  display: flex;
+  gap: var(--sr-layout-control-gap);
+  align-items: stretch;
+  width: 100%;
+}
+
+.guide {
+  position: relative;
+  flex: 0 0 2px;
+  width: 2px;
+  background: var(--sr-color-border-subtle, #f2f2f5);
+  border-radius: 1px;
+}
+
+.activeBar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 2px;
+  height: 20px;
+  background: var(--sr-color-brand-primary);
+  border-radius: 1px;
+  transition: transform 0.15s ease;
+  will-change: transform;
+}
+
+.list {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-layout-control-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.link {
+  display: block;
+  color: var(--sr-color-text-secondary);
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.link:hover,
+.link:focus-visible {
+  color: var(--sr-color-text-primary);
+  outline: none;
+}
+
+.linkActive {
+  color: var(--sr-color-text-primary);
+}
+
+/* Below desktop (1280): collapsed control; links stay in SSR HTML. */
+@media (max-width: 1279px) {
+  .desktopLabel {
+    display: none;
+  }
+
+  .trigger {
+    display: flex;
+  }
+
+  .items {
+    display: none;
+  }
+
+  .root[data-expanded="true"] .items {
+    display: flex;
+  }
+}
+
+@media (min-width: 1280px) {
+  .root {
+    width: 200px;
+  }
+
+  .trigger {
+    display: none;
+  }
+
+  .items {
+    display: flex;
+  }
+}

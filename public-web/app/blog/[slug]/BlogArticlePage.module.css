@@ -1,0 +1,162 @@
+/**
+ * Template / Blog Article — Figma node 911:833 (locked v1).
+ * Desktop 1280 frame centered: title/cover in 720 @ x=280 (symmetric gutters);
+ * body grid 720 @ 280 + sticky TOC 200 @ 1040.
+ * Tablet 1024: 720 centered, collapsed TOC above body.
+ * Phone 390: 350 with 20px gutters, collapsed TOC above body.
+ */
+
+.page {
+  min-height: 100vh;
+  background: var(--sr-color-surface-page);
+  color: var(--sr-color-text-primary);
+}
+
+.main {
+  width: 100%;
+  padding-block: var(--sr-layout-section-gap);
+}
+
+/* Centers the 1280 artboard on wide viewports. */
+.frame {
+  width: min(1280px, 100%);
+  margin-inline: auto;
+}
+
+/* Title + meta + cover: centered 720 reading column (no TOC beside it). */
+.articleHeader {
+  width: min(720px, calc(100% - 2 * var(--sr-layout-page-gutter-mobile)));
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-layout-card-gap);
+}
+
+.title {
+  margin: 0;
+  color: var(--sr-color-text-primary);
+  font-size: var(--sr-type-marketing-heading-1-size);
+  line-height: var(--sr-type-marketing-heading-1-line);
+  font-weight: var(--sr-type-marketing-heading-1-weight);
+  letter-spacing: var(--sr-type-marketing-heading-1-tracking);
+}
+
+.meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+}
+
+.metaLine,
+.authorLine {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+}
+
+.cover {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--sr-radius-card);
+  border: var(--sr-border-width-default) solid var(--sr-color-border-default);
+  background: var(--sr-color-surface-subtle, #f8f8fa);
+}
+
+/* Body: TOC above on tablet/phone; right rail on desktop. */
+.bodyLayout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-layout-card-gap);
+  width: min(720px, calc(100% - 2 * var(--sr-layout-page-gutter-mobile)));
+  margin-inline: auto;
+  margin-top: var(--sr-layout-card-gap);
+}
+
+.toc {
+  width: 100%;
+}
+
+.articleColumn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-layout-card-gap);
+  min-width: 0;
+  width: 100%;
+}
+
+/* Tablet: Heading 2 title, 720 centered (152 gutters on 1024). */
+@media (min-width: 641px) and (max-width: 1279px) {
+  .articleHeader,
+  .bodyLayout {
+    width: min(720px, calc(100% - 2 * var(--sr-layout-page-gutter-tablet)));
+  }
+
+  .title {
+    font-size: var(--sr-type-marketing-heading-2-size);
+    line-height: var(--sr-type-marketing-heading-2-line);
+    font-weight: var(--sr-type-marketing-heading-2-weight);
+    letter-spacing: var(--sr-type-marketing-heading-2-tracking);
+  }
+}
+
+/* Phone: Heading 3 title, 20px gutters. */
+@media (max-width: 640px) {
+  .articleHeader,
+  .bodyLayout {
+    width: min(350px, calc(100% - 2 * var(--sr-layout-page-gutter-mobile)));
+    gap: var(--sr-layout-page-gutter-mobile);
+  }
+
+  .articleColumn {
+    gap: var(--sr-layout-page-gutter-mobile);
+  }
+
+  .title {
+    font-size: var(--sr-type-marketing-heading-3-size);
+    line-height: var(--sr-type-marketing-heading-3-line);
+    font-weight: var(--sr-type-marketing-heading-3-weight);
+    letter-spacing: var(--sr-type-marketing-heading-3-tracking);
+  }
+}
+
+/* Desktop 1280+: title centered in frame; TOC in right rail beside body only. */
+@media (min-width: 1280px) {
+  .articleHeader {
+    width: 720px;
+    margin-left: 280px;
+    margin-right: auto;
+  }
+
+  .bodyLayout {
+    display: grid;
+    grid-template-columns: 720px 200px;
+    column-gap: 40px;
+    width: 960px;
+    margin-left: 280px;
+    margin-right: auto;
+    margin-top: var(--sr-layout-card-gap);
+    align-items: start;
+  }
+
+  .toc {
+    grid-column: 2;
+    grid-row: 1;
+    position: sticky;
+    top: calc(var(--sr-layout-marketing-header-height) + var(--sr-layout-content-gap));
+    width: 200px;
+    align-self: start;
+  }
+
+  .articleColumn {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .title {
+    font-size: var(--sr-type-marketing-heading-1-size);
+    line-height: var(--sr-type-marketing-heading-1-line);
+  }
+}

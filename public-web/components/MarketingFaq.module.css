@@ -89,6 +89,7 @@
 .item[open] .icon .iconMinus {
   display: block;
 }
+
 .answer {
   display: flex;
   flex-direction: column;
@@ -130,5 +131,50 @@
   .sticky {
     position: static;
     top: auto;
+  }
+}
+
+/**
+ * Blog article FAQ — Figma Template / Blog Article (911:833).
+ * Stacked + centered in the article reading column on every breakpoint:
+ * desktop/tablet 720, phone 350. Title locks to Figma blog FAQ H1: 40/44 Bold.
+ */
+.sectionArticle {
+  background: var(--sr-color-surface-page);
+  /* Blog FAQ uses Figma marketing-h1 component vars (40/44), not desktop H1 48/56. */
+  --sr-type-marketing-heading-1-size: 40px;
+  --sr-type-marketing-heading-1-line: 44px;
+}
+
+.sectionArticle .grid {
+  grid-template-columns: 1fr;
+  width: min(720px, calc(100% - 2 * var(--sr-layout-page-gutter-desktop)));
+  margin-inline: auto;
+  gap: var(--sr-layout-content-gap);
+}
+
+.sectionArticle .sticky {
+  position: static;
+  top: auto;
+}
+
+/* When question is an H3 (blog article), keep Title Medium sizing. */
+.sectionArticle .question {
+  font-size: var(--sr-type-marketing-title-medium-size);
+  line-height: var(--sr-type-marketing-title-medium-line);
+  font-weight: var(--sr-type-marketing-title-medium-weight);
+  letter-spacing: var(--sr-type-marketing-title-medium-tracking);
+  color: var(--sr-color-text-primary);
+}
+
+@media (min-width: 641px) and (max-width: 1279px) {
+  .sectionArticle .grid {
+    width: min(720px, calc(100% - 2 * var(--sr-layout-page-gutter-tablet)));
+  }
+}
+
+@media (max-width: 640px) {
+  .sectionArticle .grid {
+    width: min(350px, calc(100% - 2 * var(--sr-layout-page-gutter-mobile)));
   }
 }
