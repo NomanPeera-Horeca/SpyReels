@@ -1,0 +1,121 @@
+/**
+ * Blog article prose — Figma Template / Blog Article body column.
+ */
+
+.prose {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-layout-card-gap);
+  width: 100%;
+  min-width: 0;
+  color: var(--sr-color-text-secondary);
+}
+
+/* Figma article H2: Inter Bold 32/40 tracking -0.75 (desktop + tablet). */
+.h2 {
+  margin: 0;
+  scroll-margin-top: calc(var(--sr-layout-marketing-header-height) + var(--sr-layout-content-gap));
+  color: var(--sr-color-text-primary);
+  font-size: var(--sr-type-marketing-heading-3-size);
+  line-height: var(--sr-type-marketing-heading-3-line);
+  font-weight: var(--sr-font-weight-bold);
+  letter-spacing: var(--sr-type-marketing-display-tracking);
+}
+
+.h3 {
+  margin: 0;
+  scroll-margin-top: calc(var(--sr-layout-marketing-header-height) + var(--sr-layout-content-gap));
+  color: var(--sr-color-text-primary);
+  font-size: var(--sr-type-marketing-heading-4-size);
+  line-height: var(--sr-type-marketing-heading-4-line);
+  font-weight: var(--sr-type-marketing-heading-4-weight);
+}
+
+.p {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+}
+
+.ul,
+.ol {
+  margin: 0;
+  padding-left: 1.25em;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-layout-inline-gap);
+}
+
+.li {
+  margin: 0;
+}
+
+.a {
+  color: var(--sr-color-marketing-accent);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.a:hover,
+.a:focus-visible {
+  color: var(--sr-color-brand-primary);
+  outline: none;
+}
+
+.strong {
+  color: var(--sr-color-text-primary);
+  font-weight: var(--sr-font-weight-semibold);
+}
+
+.blockquote {
+  margin: 0;
+  padding: var(--sr-layout-stack-sm) var(--sr-layout-card-padding);
+  border-left: 4px solid var(--sr-color-brand-primary);
+  background: var(--sr-color-brand-surface-subtle);
+  border-radius: 0 var(--sr-radius-card) var(--sr-radius-card) 0;
+  color: var(--sr-color-text-secondary);
+}
+
+.codeInline {
+  padding: 0.1em 0.35em;
+  border-radius: 6px;
+  background: var(--sr-color-brand-surface-subtle);
+  color: var(--sr-color-text-brand);
+  font-size: 0.9em;
+}
+
+.pre {
+  margin: 0;
+  padding: var(--sr-layout-stack-sm);
+  overflow-x: auto;
+  border-radius: var(--sr-radius-card);
+  background: var(--sr-neutral-950, #101014);
+  color: var(--sr-color-text-inverse, #fff);
+}
+
+.img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--sr-radius-card);
+  border: var(--sr-border-width-default) solid var(--sr-color-border-default);
+}
+
+.signature {
+  margin: 0;
+  color: var(--sr-color-text-primary);
+  font-weight: var(--sr-font-weight-semibold);
+}
+
+@media (max-width: 640px) {
+  .prose {
+    gap: var(--sr-layout-page-gutter-mobile);
+  }
+
+  /* Phone: Inter Bold 22/28 tracking -0.25. */
+  .h2 {
+    font-size: var(--sr-type-marketing-heading-4-size);
+    line-height: var(--sr-type-marketing-heading-4-line);
+    font-weight: var(--sr-font-weight-bold);
+    letter-spacing: var(--sr-type-marketing-heading-3-tracking);
+  }
+}

@@ -230,19 +230,42 @@ export function MarketingFaq({
   title,
   description,
   items,
+  eyebrow = "Frequently asked questions",
+  variant = "default",
+  defaultOpen = "first",
+  questionHeading = "none",
 }: {
   title: string;
   description: string;
   items: readonly MarketingFaqItem[];
+  /** Omit or pass empty string to hide the eyebrow (blog article template). */
+  eyebrow?: string;
+  /**
+   * `article` matches Figma Template / Blog Article FAQ: stacked + centered in the
+   * 720 reading column on desktop/tablet (350 on phone). First row open by default.
+   */
+  variant?: "default" | "article";
+  /** Blog article: first row open at load (Figma). `all` opens every row. */
+  defaultOpen?: "first" | "all";
+  /** Blog article: questions are real H3s for the document outline. */
+  questionHeading?: "none" | "h3";
 }) {
+  const QuestionTag = questionHeading === "h3" ? "h3" : "span";
+  const isArticle = variant === "article";
+
   return (
-    <MarketingSection className={faqStyles.section} id="faq" data-marketing-faq="">
-      <div className={cx("shell", faqStyles.grid)}>
+    <MarketingSection
+      className={isArticle ? faqStyles.sectionArticle : faqStyles.section}
+      id="faq"
+      data-marketing-faq=""
+      data-marketing-faq-variant={variant}
+    >
+      <div className={cx(isArticle ? undefined : "shell", faqStyles.grid)}>
         <div className={faqStyles.sticky}>
           <MarketingSectionHeader
-            eyebrow="Frequently asked questions"
+            eyebrow={eyebrow}
             title={title}
-            subtitle={description}
+            subtitle={description || undefined}
             headingLevel="h2"
             size="large"
             align="start"
@@ -250,14 +273,42 @@ export function MarketingFaq({
         </div>
         <div className={faqStyles.list}>
           {items.map((item, index) => (
-            <details key={item.q} className={faqStyles.item} open={index === 0}>
+            <details
+              key={item.q}
+              className={faqStyles.item}
+              open={defaultOpen === "all" ? true : index === 0}
+            >
               <summary className={faqStyles.summary}>
-                <span className={cx("sr-text-marketing-title-medium", faqStyles.question)}>
-                  {wrapHyphenatedCompounds(item.q)}
-                </span>
+                <QuestionTag className={cx("sr-text-marketing-title-medium", faqStyles.question)}>
+                  {isArticle ? item.q : wrapHyphenatedCompounds(item.q)}
+                </QuestionTag>
                 <span className={faqStyles.icon} aria-hidden="true">
-                  <MarketingIconPlus className={faqStyles.iconPlus} />
-                  <MarketingIconMinus className={faqStyles.iconMinus} />
+                  {isArticle ? (
+                    <>
+                      {/* Figma Icon / Plus + Minus assets (blog-faq). */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        className={faqStyles.iconPlus}
+                        src="/marketing/blog-faq/faq-plus.svg"
+                        alt=""
+                        width={20}
+                        height={20}
+                      />
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        className={faqStyles.iconMinus}
+                        src="/marketing/blog-faq/faq-minus.svg"
+                        alt=""
+                        width={20}
+                        height={20}
+                      />
+                    </>
+                  ) : (
+                    <>
+                      <MarketingIconPlus className={faqStyles.iconPlus} />
+                      <MarketingIconMinus className={faqStyles.iconMinus} />
+                    </>
+                  )}
                 </span>
               </summary>
               <div className={faqStyles.answer}>

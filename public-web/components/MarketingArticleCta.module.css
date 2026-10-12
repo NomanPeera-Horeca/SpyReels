@@ -1,0 +1,32 @@
+/**
+ * Marketing / Article CTA (Figma node 1015:2907).
+ */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sr-layout-control-gap);
+  width: 100%;
+  box-sizing: border-box;
+  padding: var(--sr-layout-card-padding);
+  background: var(--sr-color-surface-default);
+  border: var(--sr-border-width-default) solid var(--sr-color-border-default);
+  border-radius: var(--sr-radius-panel);
+}
+
+.title {
+  margin: 0;
+  color: var(--sr-color-text-primary);
+}
+
+.body {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+}
+
+@media (max-width: 640px) {
+  .root {
+    padding: var(--sr-layout-card-padding) var(--sr-layout-page-gutter-mobile);
+  }
+}

@@ -1,0 +1,89 @@
+/**
+ * Marketing / Article Table (Figma node 994:2809).
+ * Desktop: bordered table. Phone: stacked key/value cards.
+ */
+
+.wrap {
+  width: 100%;
+  overflow: hidden;
+  border: var(--sr-border-width-default) solid var(--sr-color-border-default);
+  border-radius: var(--sr-radius-card);
+  background: var(--sr-color-surface-default);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.th,
+.td {
+  padding: var(--sr-layout-stack-sm) var(--sr-layout-card-padding);
+  text-align: left;
+  vertical-align: top;
+  word-break: break-word;
+}
+
+.th {
+  background: var(--sr-color-surface-subtle, #f8f8fa);
+  color: var(--sr-color-text-secondary);
+  font-size: var(--sr-type-marketing-label-size);
+  line-height: var(--sr-type-marketing-label-line);
+  font-weight: var(--sr-type-marketing-label-weight);
+  border-bottom: var(--sr-border-width-default) solid var(--sr-color-border-default);
+}
+
+.td {
+  color: var(--sr-color-text-primary);
+  font-size: var(--sr-type-marketing-body-small-size);
+  line-height: var(--sr-type-marketing-body-small-line);
+  font-weight: var(--sr-type-marketing-body-small-weight);
+  border-bottom: var(--sr-border-width-default) solid var(--sr-color-border-subtle, #f2f2f5);
+}
+
+.tr:last-child .td {
+  border-bottom: none;
+}
+
+.stack {
+  display: none;
+  flex-direction: column;
+  gap: var(--sr-layout-control-gap);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-layout-stack-sm);
+  padding: var(--sr-layout-stack-sm) var(--sr-layout-page-gutter-mobile);
+  background: var(--sr-color-surface-default);
+  border: var(--sr-border-width-default) solid var(--sr-color-border-default);
+  border-radius: var(--sr-radius-card);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.fieldLabel {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+}
+
+.fieldValue {
+  margin: 0;
+  color: var(--sr-color-text-primary);
+}
+
+@media (max-width: 640px) {
+  .wrap {
+    display: none;
+  }
+
+  .stack {
+    display: flex;
+  }
+}

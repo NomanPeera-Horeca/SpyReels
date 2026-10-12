@@ -1,0 +1,97 @@
+/**
+ * Marketing / Callout (Figma Template / Blog, node 1015:2885).
+ * Four types: Key point, Tip, Note, Warning.
+ */
+
+.root {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  overflow: hidden;
+  border-radius: var(--sr-radius-card);
+}
+
+.accent {
+  flex: 0 0 4px;
+  width: 4px;
+}
+
+.content {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  gap: var(--sr-space-3);
+  align-items: flex-start;
+  padding: var(--sr-space-4) var(--sr-space-5);
+}
+
+.copy {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-space-1);
+}
+
+.label {
+  margin: 0;
+  color: inherit;
+}
+
+.title {
+  margin: 0;
+  color: var(--sr-color-text-primary);
+}
+
+.body {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+}
+
+.keyPoint {
+  background: var(--sr-color-brand-surface-subtle);
+}
+
+.keyPoint .accent {
+  background: var(--sr-color-brand-primary);
+}
+
+.keyPoint .label {
+  color: var(--sr-color-text-brand);
+}
+
+.tip {
+  background: var(--sr-color-status-success-background);
+}
+
+.tip .accent {
+  background: var(--sr-color-status-success-border);
+}
+
+.tip .label {
+  color: var(--sr-color-status-success-foreground);
+}
+
+.note {
+  background: var(--sr-color-status-info-background);
+}
+
+.note .accent {
+  background: var(--sr-color-status-info-border);
+}
+
+.note .label {
+  color: var(--sr-color-status-info-foreground);
+}
+
+.warning {
+  background: var(--sr-color-status-warning-background);
+}
+
+.warning .accent {
+  background: var(--sr-color-status-warning-border);
+}
+
+.warning .label {
+  color: var(--sr-color-status-warning-foreground);
+}

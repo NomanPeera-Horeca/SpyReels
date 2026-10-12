@@ -153,6 +153,20 @@
   --sr-layout-stack-sm: 12px; /* layout/stack/sm */
   --sr-layout-stack-md: 24px; /* layout/stack/md */
   --sr-layout-stack-lg: 40px; /* layout/stack/lg */
+  /*
+   * Figma Spacing scale (space/*). Named 4px unit is space/1.
+   * Used where layout/* aliases do not cover the exact step.
+   */
+  --sr-space-0: 0px; /* space/0 */
+  --sr-space-1: 4px; /* space/1 */
+  --sr-space-2: 8px; /* space/2 */
+  --sr-space-3: 12px; /* space/3 */
+  --sr-space-4: 16px; /* space/4 */
+  --sr-space-5: 20px; /* space/5 */
+  --sr-space-6: 24px; /* space/6 */
+  --sr-space-8: 32px; /* space/8 */
+  --sr-space-12: 48px; /* space/12 */
+  --sr-space-16: 64px; /* space/16 */
   --sr-layout-grid-column-gap: 24px; /* layout/grid/column-gap */
   --sr-layout-grid-row-gap: 32px; /* layout/grid/row-gap */
   --sr-layout-container-max-width: 1200px; /* layout/container/max-width */
