@@ -1,0 +1,63 @@
+/**
+ * Select (Figma 34:3).
+ * Native select styled to the Select control shell (height 48, chevron).
+ */
+
+.wrap {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.select {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  height: 48px;
+  margin: 0;
+  padding: var(--sr-layout-stack-sm) 40px var(--sr-layout-stack-sm) 16px;
+  border: var(--sr-border-width-default) solid var(--sr-color-border-control);
+  border-radius: var(--sr-radius-input);
+  background-color: var(--sr-color-surface-default);
+  color: var(--sr-color-text-primary);
+  font: inherit;
+  appearance: none;
+  cursor: pointer;
+}
+
+.select:focus {
+  outline: none;
+  border-width: var(--sr-border-width-strong);
+  border-color: var(--sr-color-brand-primary);
+  box-shadow: var(--sr-elevation-focus-neutral-action);
+}
+
+.select[aria-invalid="true"] {
+  border-color: var(--sr-color-status-error-border);
+  box-shadow: none;
+}
+
+.select:disabled {
+  background-color: var(--sr-color-action-disabled-background);
+  border-color: var(--sr-color-border-default);
+  color: var(--sr-color-text-disabled);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.chevron {
+  position: absolute;
+  top: 50%;
+  right: 16px;
+  width: 20px;
+  height: 20px;
+  transform: translateY(-50%);
+  color: var(--sr-color-text-primary);
+  pointer-events: none;
+}
+
+.wrap:has(.select:disabled) .chevron {
+  color: var(--sr-color-text-disabled);
+}

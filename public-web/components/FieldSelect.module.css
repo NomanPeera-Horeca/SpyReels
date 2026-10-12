@@ -1,0 +1,47 @@
+/**
+ * Field / Select (Figma 53:129).
+ * Label + Select (34:3) + helper/error. Owns vertical field rhythm.
+ */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sr-layout-inline-gap);
+  width: 100%;
+  min-width: 0;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.label {
+  margin: 0;
+  color: var(--sr-color-text-primary);
+}
+
+.labelDisabled {
+  color: var(--sr-color-text-disabled);
+}
+
+.helper {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+}
+
+.helperError {
+  color: var(--sr-color-status-error-foreground);
+}
+
+.helperDisabled {
+  color: var(--sr-color-text-disabled);
+}

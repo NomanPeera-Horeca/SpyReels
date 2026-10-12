@@ -96,11 +96,54 @@ const HOOK_PATTERNS: [string, string][] = [
 
 type Stage = "input" | "preview" | "unlocked" | "script";
 
+function isHookToScriptPending(value: unknown): value is HookToScriptPending {
+  if (!value || typeof value !== "object") return false;
+  const p = value as Record<string, unknown>;
+  return (
+    typeof p.hook === "string" &&
+    typeof p.onScreenText === "string" &&
+    typeof p.reelContent === "string" &&
+    typeof p.hookIndex === "number"
+  );
+}
+
+function decodeHtsQuery(encoded: string): HookToScriptPending | null {
+  try {
+    const b64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+    const binary = atob(padded);
+    const bytes = Uint8Array.from(binary, (c) => c.charCodeAt(0));
+    const json = new TextDecoder().decode(bytes);
+    const parsed: unknown = JSON.parse(json);
+    return isHookToScriptPending(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 function readPendingHook(): HookToScriptPending | null {
   try {
     const raw = sessionStorage.getItem(HOOK_TO_SCRIPT_PENDING_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as HookToScriptPending;
+    if (raw) {
+      const parsed: unknown = JSON.parse(raw);
+      if (isHookToScriptPending(parsed)) return parsed;
+    }
+  } catch {
+    // Ignore storage errors.
+  }
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const encoded = params.get("hts");
+    if (!encoded) return null;
+    const pending = decodeHtsQuery(encoded);
+    if (!pending) return null;
+    sessionStorage.setItem(HOOK_TO_SCRIPT_PENDING_KEY, JSON.stringify(pending));
+    params.delete("hts");
+    const next = `${window.location.pathname}${
+      params.toString() ? `?${params.toString()}` : ""
+    }${window.location.hash}`;
+    window.history.replaceState(window.history.state, "", next);
+    return pending;
   } catch {
     return null;
   }

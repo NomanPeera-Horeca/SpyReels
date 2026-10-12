@@ -718,7 +718,6 @@ export function getStaticPageJsonLdScripts(pathname: string): StaticPageJsonLdSc
               price: "0",
               priceCurrency: "USD",
             },
-            aggregateRating: SPYREELS_AGGREGATE_RATING,
             description:
               "Free AI viral hook generator for Reels, TikTok, and Shorts. Spoken lines plus on-screen text from proven patterns.",
           },

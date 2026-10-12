@@ -22,10 +22,11 @@ describe("SPA navigate fallback denylist", () => {
     expect(shouldUseSpaNavigateFallback("/features/ai-personal-brand-coach")).toBe(true);
   });
 
-  it("denies exact /free-tools hub only (child free-tool URLs stay on SPA)", () => {
+  it("denies exact /free-tools hub and migrated viral-hooks (other children stay on SPA)", () => {
     expect(shouldUseSpaNavigateFallback("/free-tools")).toBe(false);
     expect(shouldUseSpaNavigateFallback("/free-tools/")).toBe(false);
-    expect(shouldUseSpaNavigateFallback("/free-tools/viral-hooks")).toBe(true);
+    expect(shouldUseSpaNavigateFallback("/free-tools/viral-hooks")).toBe(false);
+    expect(shouldUseSpaNavigateFallback("/free-tools/viral-hooks/")).toBe(false);
     expect(shouldUseSpaNavigateFallback("/free-tools/tiktok-viral-video-finder")).toBe(true);
   });
 

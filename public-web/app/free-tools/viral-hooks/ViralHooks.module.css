@@ -1,0 +1,40 @@
+/**
+ * /free-tools/viral-hooks page-local layout. Tokens only.
+ * Hero stack matches the free-tools hub (24px stack-md).
+ */
+
+.page {
+  min-height: 100vh;
+  background: var(--sr-color-surface-page);
+  color: var(--sr-color-text-primary);
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sr-layout-stack-md);
+  text-align: center;
+}
+
+.hero h1 {
+  margin: 0;
+}
+
+.heroLead,
+.heroDirect {
+  margin: 0;
+  max-width: var(--sr-layout-content-reading-width);
+  color: var(--sr-color-text-secondary);
+}
+
+.sectionStack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-layout-content-gap);
+}
+
+.bodySecondary {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+}

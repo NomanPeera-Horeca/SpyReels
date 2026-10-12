@@ -7,6 +7,7 @@ import {
   TIKTOK_VIRAL_FINDER_PATH,
   FREE_TOOLS_BROLL_GENERATOR_PATH,
   FREE_TOOLS_HUB_PATH,
+  VIRAL_HOOKS_PATH,
   VIRAL_REEL_FINDER_DEMO_PATH,
   VIRAL_REEL_FINDER_PILOT_PATH,
   VIRAL_REEL_FINDER_PROFILE_PATH,
@@ -84,6 +85,8 @@ describe("publicWebPilotProxy", () => {
     expect(isPublicWebPilotRequest(`${FREE_TOOLS_BROLL_GENERATOR_PATH}/`, "HEAD", config)).toBe(
       true
     );
+    expect(isPublicWebPilotRequest(VIRAL_HOOKS_PATH, "GET", config)).toBe(true);
+    expect(isPublicWebPilotRequest(`${VIRAL_HOOKS_PATH}/`, "HEAD", config)).toBe(true);
     expect(isPublicWebPilotRequest("/blog/guide-meedro-alternative", "GET", config)).toBe(true);
     expect(isPublicWebPilotRequest("/blog/guide-meedro-alternative/", "HEAD", config)).toBe(true);
     expect(isPublicWebPilotRequest("/_next/static/chunks/app.js", "GET", config)).toBe(true);
@@ -91,7 +94,7 @@ describe("publicWebPilotProxy", () => {
     expect(isPublicWebPilotRequest("/blog", "GET", config)).toBe(false);
     expect(isPublicWebPilotRequest("/blog/new", "GET", config)).toBe(false);
     expect(isPublicWebPilotRequest("/blog/edit/example", "GET", config)).toBe(false);
-    expect(isPublicWebPilotRequest("/free-tools/viral-hooks", "GET", config)).toBe(false);
+    expect(isPublicWebPilotRequest(`${VIRAL_HOOKS_PATH}/extra`, "GET", config)).toBe(false);
     expect(isPublicWebPilotRequest("/", "GET", config)).toBe(false);
     expect(isPublicWebPilotRequest("/pricing", "GET", config)).toBe(false);
     expect(isPublicWebPilotRequest("/research", "GET", config)).toBe(false);

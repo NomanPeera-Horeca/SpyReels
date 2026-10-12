@@ -1,0 +1,89 @@
+/**
+ * Field / Input (Figma 53:107) + Input control.
+ * Tokens only. Sibling API to Field / Textarea.
+ */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sr-layout-inline-gap);
+  width: 100%;
+  min-width: 0;
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.label {
+  margin: 0;
+  color: var(--sr-color-text-primary);
+}
+
+.labelDisabled {
+  color: var(--sr-color-text-disabled);
+}
+
+.control {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--sr-layout-inline-gap);
+  width: 100%;
+  min-width: 0;
+  height: 48px;
+  margin: 0;
+  /* space/3 vertical + space/4 horizontal (same as Field / Textarea) */
+  padding: var(--sr-layout-stack-sm) 16px;
+  border: var(--sr-border-width-default) solid var(--sr-color-border-control);
+  border-radius: var(--sr-radius-input);
+  background: var(--sr-color-surface-default);
+  color: var(--sr-color-text-primary);
+  font: inherit;
+}
+
+.control::placeholder {
+  color: var(--sr-color-text-secondary);
+}
+
+.control:focus {
+  outline: none;
+  border-width: var(--sr-border-width-strong);
+  border-color: var(--sr-color-brand-primary);
+  box-shadow: var(--sr-elevation-focus-neutral-action);
+}
+
+.control[aria-invalid="true"] {
+  border-color: var(--sr-color-status-error-border);
+  box-shadow: none;
+}
+
+.control:disabled {
+  background: var(--sr-color-action-disabled-background);
+  border-color: var(--sr-color-border-default);
+  color: var(--sr-color-text-disabled);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.helper {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+}
+
+.helperError {
+  color: var(--sr-color-status-error-foreground);
+}
+
+.helperDisabled {
+  color: var(--sr-color-text-disabled);
+}
