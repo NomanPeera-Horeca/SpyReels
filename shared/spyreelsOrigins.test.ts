@@ -54,6 +54,9 @@ describe("spyreelsOrigins", () => {
     expect(
       shouldRedirectApexPathToApp("/api/trpc/tiktokScrape.publicProfilePreview")
     ).toBe(false);
+    expect(
+      shouldRedirectApexPathToApp("/api/trpc/youtubeScrape.publicProfilePreview")
+    ).toBe(false);
     expect(shouldRedirectApexPathToApp("/api/trpc/blog.published")).toBe(false);
     expect(shouldRedirectApexPathToApp("/api/trpc/blog.bySlug")).toBe(false);
     expect(

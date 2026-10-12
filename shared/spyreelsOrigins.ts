@@ -116,13 +116,18 @@ export function appAbsoluteUrl(
 }
 
 /**
- * Public tRPC procedures the marketing host may serve same-origin.
- * Browser calls from spyreels.ai must not 302 to app (CORS breaks the SPA).
+ * Legacy relative tRPC allowlist on apex.
+ *
+ * Preferred path (host split): marketing browsers call app.spyreels.ai with
+ * first-party credentialed CORS (see server/_core/firstPartyCors.ts and
+ * client getAppOrigin / public-web trpcBrowser). Keep these procedures on apex
+ * only as a safety net for any remaining same-origin callers.
  * Only allow when every procedure in a tRPC batch path is in this set.
  */
 const APEX_PUBLIC_TRPC_PROCEDURES = new Set([
   "featured.publicProfilePreview",
   "tiktokScrape.publicProfilePreview",
+  "youtubeScrape.publicProfilePreview",
   "blog.published",
   "blog.bySlug",
 ]);
