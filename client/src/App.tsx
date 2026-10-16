@@ -3,10 +3,19 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { UpgradeProvider } from "@/components/UpgradeSidesheet";
 import OnboardingGate from "@/components/OnboardingGate";
-import { Route, Switch, Redirect, useLocation } from "wouter";
+import { Route, Switch, Redirect, useLocation, useSearch } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { isAdminPanelClient } from "@/admin/isAdminClient";
-import { isDiscoveryV1Enabled } from "@/lib/featureFlags";
+import {
+  isDiscoveryV1Enabled,
+  isHomeV2Enabled,
+  isOnboardingV2Enabled,
+} from "@/lib/featureFlags";
+import { hasResearchPendingHandle } from "@/lib/researchPendingHandle";
+import {
+  resolveDesktopRootView,
+  resolveOnboardingVariant,
+} from "@shared/homeV2FeatureFlags";
 import { lazyWithRetry } from "@/lib/lazyWithRetry";
 import ErrorBoundary from "./components/ErrorBoundary";
 import DashboardLayout from "./components/DashboardLayout";
@@ -21,6 +30,10 @@ import { RetellChatWidget } from "@/components/RetellChatWidget";
 const NotFound = lazyWithRetry(() => import("@/pages/NotFound"));
 const OnboardingPage = lazyWithRetry(() => import("@/pages/onboarding"));
 const Home = lazyWithRetry(() => import("./pages/Home"));
+/** Loaded only when HOME_V2_ENABLED (+ ONBOARDING_V2_ENABLED) is on. */
+const HomeV2 = lazyWithRetry(() => import("./pages/HomeV2"));
+/** Loaded only when ONBOARDING_V2_ENABLED is on. */
+const OnboardingV2Page = lazyWithRetry(() => import("./pages/OnboardingV2"));
 const Dashboard = lazyWithRetry(() => import("./pages/Dashboard"));
 const ScrapingProgress = lazyWithRetry(() => import("./pages/ScrapingProgress"));
 const TikTokScrapingProgress = lazyWithRetry(() => import("./pages/TikTokScrapingProgress"));
@@ -138,13 +151,37 @@ function AdminEmailOnly({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * Desktop "/" switch point. Flag off: the research page, exactly as today.
+ * Flag on: Home v2, unless the visit carries research intent (saved-search
+ * link, job deep link, or a handle stashed before sign-in).
+ * "/research" never goes through here.
+ */
+function DesktopRootRoute() {
+  const search = useSearch();
+  const view = resolveDesktopRootView({
+    homeV2Enabled: isHomeV2Enabled,
+    search,
+    hasPendingResearchHandle: isHomeV2Enabled && hasResearchPendingHandle(),
+  });
+  return view === "home-v2" ? <HomeV2 /> : <Home />;
+}
+
+/** "/onboarding" switch point. Flag off: the current onboarding, unchanged. */
+function OnboardingRoute() {
+  const variant = resolveOnboardingVariant({
+    onboardingV2Enabled: isOnboardingV2Enabled,
+  });
+  return variant === "v2" ? <OnboardingV2Page /> : <OnboardingPage />;
+}
+
 function MobileCreateRouter() {
   return (
     <MobileAppLayout>
       <Suspense fallback={<MobileAppLayoutSkeleton />}>
         <MobileCreateRouteGuard>
           <Switch>
-            <Route path="/onboarding" component={OnboardingPage} />
+            <Route path="/onboarding" component={OnboardingRoute} />
             <Route path="/" component={MobileHomeRedirect} />
             <Route path="/research" component={MobileHomeRedirect} />
             <Route path="/dashboard" component={MobileHomeRedirect} />
@@ -171,8 +208,8 @@ function DesktopDashboardRouter() {
     <DashboardLayout>
       <Suspense fallback={<DashboardLayoutSkeleton />}>
         <Switch>
-          <Route path="/onboarding" component={OnboardingPage} />
-          <Route path="/" component={Home} />
+          <Route path="/onboarding" component={OnboardingRoute} />
+          <Route path="/" component={DesktopRootRoute} />
           <Route path="/research" component={Home} />
           <Route path="/interests" component={Interests} />
           <Route path="/scraping" component={ScrapingProgress} />

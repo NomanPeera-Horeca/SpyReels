@@ -8,6 +8,7 @@ import path from "node:path";
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
 import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
 import { parseDiscoveryV1Enabled } from "./shared/discoveryFeatureFlag";
+import { resolveHomeV2Flags } from "./shared/homeV2FeatureFlags";
 import {
   SPA_NAVIGATE_FALLBACK,
   SPA_NAVIGATE_FALLBACK_DENYLIST,
@@ -236,6 +237,13 @@ const discoveryV1EnabledForClient = parseDiscoveryV1Enabled(
   process.env.NODE_ENV
 );
 
+/** New onboarding + Home v2. Off unless explicitly "true" (all environments). */
+const homeV2FlagsForClient = resolveHomeV2Flags({
+  homeV2Raw: process.env.HOME_V2_ENABLED ?? process.env.VITE_HOME_V2_ENABLED,
+  onboardingV2Raw:
+    process.env.ONBOARDING_V2_ENABLED ?? process.env.VITE_ONBOARDING_V2_ENABLED,
+});
+
 /**
  * PostHog sourcemap upload must not fail the production build.
  * Render deploys were blocked when PostHog CLI returned API server_error.
@@ -302,6 +310,8 @@ export default defineConfig(({ mode }) => {
   plugins: buildPlugins,
   define: {
     __DISCOVERY_V1_ENABLED__: discoveryV1EnabledForClient,
+    __HOME_V2_ENABLED__: homeV2FlagsForClient.homeV2Enabled,
+    __ONBOARDING_V2_ENABLED__: homeV2FlagsForClient.onboardingV2Enabled,
   },
   resolve: {
     alias: {

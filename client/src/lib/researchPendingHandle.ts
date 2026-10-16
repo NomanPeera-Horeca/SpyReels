@@ -51,6 +51,15 @@ export function stashResearchHandleForAfterAuth(
   }
 }
 
+/** Read-only check: is a research handle waiting from before sign-in? Does not clear it. */
+export function hasResearchPendingHandle(): boolean {
+  try {
+    return Boolean(sessionStorage.getItem(RESEARCH_PENDING_HANDLE_KEY)?.trim());
+  } catch {
+    return false;
+  }
+}
+
 export function consumeResearchPendingHandle(): {
   handle: string | null;
   autostart: boolean;
