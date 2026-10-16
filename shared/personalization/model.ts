@@ -74,12 +74,19 @@ export type StepStatus = (typeof STEP_STATUSES)[number];
 /** Data rule: analysis window. */
 export const ANALYSIS_WINDOW_MONTHS = 6;
 
+/**
+ * brand_description: what the creator makes content about / what their
+ * business does, in their words. Legacy onboarding stored this in
+ * users.businessDescription ("What do you create content about?") and the plan
+ * coach reads it as brandDescription. It is not a goal.
+ */
 export const PERSONALIZATION_ITEM_KINDS = [
   "goal",
   "audience",
   "pillar",
   "niche",
   "language",
+  "brand_description",
 ] as const;
 export type PersonalizationItemKind =
   (typeof PERSONALIZATION_ITEM_KINDS)[number];
@@ -133,6 +140,7 @@ export type PillarPayload = {
 };
 export type NichePayload = { slug: string; label: string };
 export type LanguagePayload = { code: string; label: string };
+export type BrandDescriptionPayload = { text: string };
 
 export type ItemPayloadByKind = {
   goal: GoalPayload;
@@ -140,6 +148,7 @@ export type ItemPayloadByKind = {
   pillar: PillarPayload;
   niche: NichePayload;
   language: LanguagePayload;
+  brand_description: BrandDescriptionPayload;
 };
 
 /**
@@ -155,6 +164,7 @@ export const INVALIDATES_ON_EDIT: Record<
   niche: ["pillar"],
   pillar: [],
   language: [],
+  brand_description: ["pillar"],
 };
 
 /** Right-panel analysis checklist (steps 3a and 3b). States come from the real job. */
@@ -188,6 +198,9 @@ export type AnalysisRunStatus = (typeof ANALYSIS_RUN_STATUSES)[number];
  * not_posting_yet: the user chose "I don't post yet". The row still owns
  * their goals, audiences and pillars; platform and handle are filled in
  * later when they start posting, and the strategy carries over.
+ * unlinked: strategy saved before any account was linked (legacy users
+ * backfilled from users.* columns). Same shape as not_posting_yet (no
+ * handle); the account is linked later and the strategy carries over.
  */
 export const SOCIAL_PROFILE_STATUSES = [
   "pending_confirmation",
@@ -196,6 +209,7 @@ export const SOCIAL_PROFILE_STATUSES = [
   "private",
   "lookup_failed",
   "not_posting_yet",
+  "unlinked",
 ] as const;
 export type SocialProfileStatus = (typeof SOCIAL_PROFILE_STATUSES)[number];
 
@@ -218,6 +232,7 @@ export const ANALYSIS_AVAILABILITY = [
   "no_public_posts",
   "private_account",
   "not_posting_yet",
+  "account_not_linked",
   "unavailable",
 ] as const;
 export type AnalysisAvailability = (typeof ANALYSIS_AVAILABILITY)[number];
@@ -259,4 +274,31 @@ export type AnalysisRefreshPolicy = {
   userRefreshCooldownMinutes: number;
   backgroundRefreshEnabled: boolean;
   backgroundRefreshIntervalDays: number;
+};
+
+/**
+ * One post as returned by the existing provider integrations, normalized.
+ * Any number the provider did not return is null. Nothing is estimated.
+ */
+export type NormalizedPost = {
+  postId: string;
+  url: string | null;
+  publishedAt: string | null;
+  views: number | null;
+  likes: number | null;
+  comments: number | null;
+  durationSec: number | null;
+  caption: string | null;
+};
+
+/** Stored on profile_analysis_runs.sourceSnapshot after stage 1. */
+export type AnalysisSourceSnapshot = {
+  version: 1;
+  platform: SocialPlatform;
+  handle: string;
+  /** From the provider's profile response, or null. Never estimated. */
+  followerCount: number | null;
+  windowStart: string;
+  windowEnd: string;
+  posts: NormalizedPost[];
 };

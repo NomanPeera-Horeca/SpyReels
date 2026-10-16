@@ -56,7 +56,7 @@ CREATE TABLE IF NOT EXISTS `social_profiles` (
   `followingCount` bigint unsigned NULL,
   `postCount` bigint unsigned NULL,
   `publicFactsFetchedAt` timestamp NULL,
-  `status` enum('pending_confirmation','confirmed','not_found','private','lookup_failed','not_posting_yet') NOT NULL DEFAULT 'pending_confirmation',
+  `status` enum('pending_confirmation','confirmed','not_found','private','lookup_failed','not_posting_yet','unlinked') NOT NULL DEFAULT 'pending_confirmation',
   `authorization` enum('none','authorized','reconnect_required') NOT NULL DEFAULT 'none',
   `createdByUserId` int NULL,
   `confirmedAt` timestamp NULL,
@@ -72,8 +72,8 @@ CREATE TABLE IF NOT EXISTS `social_profiles` (
   CONSTRAINT `fk_social_profiles_workspace` FOREIGN KEY (`workspaceId`) REFERENCES `workspaces` (`id`) ON DELETE RESTRICT,
   CONSTRAINT `fk_social_profiles_created_by` FOREIGN KEY (`createdByUserId`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `chk_social_profiles_identity` CHECK (
-    (`status` = 'not_posting_yet' AND `normalizedHandle` IS NULL)
-    OR (`status` <> 'not_posting_yet' AND `platform` IS NOT NULL AND `normalizedHandle` IS NOT NULL)
+    (`status` IN ('not_posting_yet','unlinked') AND `normalizedHandle` IS NULL)
+    OR (`status` NOT IN ('not_posting_yet','unlinked') AND `platform` IS NOT NULL AND `normalizedHandle` IS NOT NULL)
   )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
@@ -113,6 +113,9 @@ CREATE TABLE IF NOT EXISTS `profile_analysis_runs` (
   `durableJobId` bigint unsigned NULL,
   `status` enum('queued','running','partial','succeeded','failed') NOT NULL DEFAULT 'queued',
   `postsInWindow` int NULL,
+  `sourceSnapshot` json NULL,
+  `sourceFetchedAt` timestamp NULL,
+  `providerCallCount` int NULL,
   `windowStart` timestamp NULL,
   `windowEnd` timestamp NULL,
   `errorCode` varchar(64) NULL,
@@ -131,6 +134,7 @@ CREATE TABLE IF NOT EXISTS `profile_analysis_runs` (
   CONSTRAINT `fk_profile_analysis_runs_profile` FOREIGN KEY (`socialProfileId`, `workspaceId`) REFERENCES `social_profiles` (`id`, `workspaceId`) ON DELETE RESTRICT,
   CONSTRAINT `fk_profile_analysis_runs_requested_by` FOREIGN KEY (`requestedByUserId`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `chk_profile_analysis_runs_posts` CHECK (`postsInWindow` IS NULL OR `postsInWindow` >= 0),
+  CONSTRAINT `chk_profile_analysis_runs_provider_calls` CHECK (`providerCallCount` IS NULL OR `providerCallCount` >= 0),
   CONSTRAINT `chk_profile_analysis_runs_refresh_sequence` CHECK (
     (`requestKind` = 'user_refresh' AND `refreshSequence` IS NOT NULL AND `refreshSequence` >= 1)
     OR (`requestKind` <> 'user_refresh' AND `refreshSequence` IS NULL)
@@ -153,7 +157,7 @@ CREATE TABLE IF NOT EXISTS `personalization_items` (
   `id` varchar(36) NOT NULL,
   `workspaceId` varchar(36) NOT NULL,
   `socialProfileId` varchar(36) NOT NULL,
-  `kind` enum('goal','audience','pillar','niche','language') NOT NULL,
+  `kind` enum('goal','audience','pillar','niche','language','brand_description') NOT NULL,
   `payload` json NOT NULL,
   `source` enum('ai_suggested','user_entered','user_edited') NOT NULL,
   `status` enum('suggested','confirmed','dismissed','superseded') NOT NULL,

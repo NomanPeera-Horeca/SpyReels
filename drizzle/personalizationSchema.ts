@@ -54,6 +54,7 @@ import {
   SOCIAL_PROFILE_AUTHORIZATION,
   SOCIAL_PROFILE_STATUSES,
   STEP_STATUSES,
+  type AnalysisSourceSnapshot,
   type ItemPayloadByKind,
 } from "../shared/personalization/model";
 
@@ -124,7 +125,7 @@ export const socialProfiles = mysqlTable(
     }).onDelete("set null"),
     check(
       "chk_social_profiles_identity",
-      sql`(${t.status} = 'not_posting_yet' AND ${t.normalizedHandle} IS NULL) OR (${t.status} <> 'not_posting_yet' AND ${t.platform} IS NOT NULL AND ${t.normalizedHandle} IS NOT NULL)`
+      sql`(${t.status} IN ('not_posting_yet','unlinked') AND ${t.normalizedHandle} IS NULL) OR (${t.status} NOT IN ('not_posting_yet','unlinked') AND ${t.platform} IS NOT NULL AND ${t.normalizedHandle} IS NOT NULL)`
     ),
   ]
 );
@@ -203,6 +204,14 @@ export const profileAnalysisRuns = mysqlTable(
       .default("queued")
       .notNull(),
     postsInWindow: int("postsInWindow"),
+    /**
+     * Normalized posts fetched in stage 1 (published_content). Lets a retry or
+     * a restarted worker resume later stages WITHOUT paying the provider again.
+     */
+    sourceSnapshot: json("sourceSnapshot").$type<AnalysisSourceSnapshot>(),
+    sourceFetchedAt: timestamp("sourceFetchedAt"),
+    /** Paid provider requests made for this run (cost accounting). */
+    providerCallCount: int("providerCallCount"),
     windowStart: timestamp("windowStart"),
     windowEnd: timestamp("windowEnd"),
     errorCode: varchar("errorCode", { length: 64 }),
@@ -241,6 +250,10 @@ export const profileAnalysisRuns = mysqlTable(
       columns: [t.requestedByUserId],
       foreignColumns: [users.id],
     }).onDelete("set null"),
+    check(
+      "chk_profile_analysis_runs_provider_calls",
+      sql`${t.providerCallCount} IS NULL OR ${t.providerCallCount} >= 0`
+    ),
     check(
       "chk_profile_analysis_runs_posts",
       sql`${t.postsInWindow} IS NULL OR ${t.postsInWindow} >= 0`

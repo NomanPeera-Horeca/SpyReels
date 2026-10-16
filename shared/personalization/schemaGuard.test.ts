@@ -200,6 +200,41 @@ describe("migration gate: drafts cannot reach a database by accident", () => {
     expect(hits).toEqual([]);
   });
 
+  it("the live app (routers, worker, client, core) does not import any personalization module yet", () => {
+    const hits = execSync(
+      'git grep --untracked -l -E "(from|import\\()\\s*[\'\\"][^\'\\"]*personalization/" -- server client/src shared public-web || true',
+      { cwd: root }
+    )
+      .toString()
+      .split("\n")
+      .filter(Boolean)
+      .filter(f => !f.endsWith(".test.ts"))
+      .filter(
+        f =>
+          !f.startsWith("server/personalization/") &&
+          !f.startsWith("shared/personalization/")
+      );
+    expect(hits).toEqual([]);
+  });
+
+  it("profile_analysis is not registered with the durable worker yet", () => {
+    const types = readFileSync(
+      path.join(root, "server/durableJobs/types.ts"),
+      "utf8"
+    );
+    expect(types).not.toContain("profile_analysis");
+  });
+
+  it("both feature flags stay off by default", async () => {
+    const { resolveHomeV2Flags } = await import("../homeV2FeatureFlags");
+    expect(
+      resolveHomeV2Flags({ homeV2Raw: undefined, onboardingV2Raw: undefined })
+    ).toEqual({
+      homeV2Enabled: false,
+      onboardingV2Enabled: false,
+    });
+  });
+
   it("the draft SQL lives outside drizzle/", () => {
     expect(existsSync(draftSqlPath)).toBe(true);
     expect(draftSqlPath.includes(`${path.sep}drizzle${path.sep}`)).toBe(false);

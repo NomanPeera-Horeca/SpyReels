@@ -125,6 +125,7 @@ export function resolveAnalysisAvailability(input: {
   postsInWindow: number | null;
 }): AnalysisAvailability {
   if (input.profileStatus === "not_posting_yet") return "not_posting_yet";
+  if (input.profileStatus === "unlinked") return "account_not_linked";
   if (input.profileStatus === "private") return "private_account";
   if (
     input.profileStatus === "not_found" ||
@@ -302,6 +303,8 @@ export function itemIdentity(
       return `niche:${norm((payload as ItemPayloadByKind["niche"]).slug)}`;
     case "language":
       return `language:${norm((payload as ItemPayloadByKind["language"]).code)}`;
+    case "brand_description":
+      return `brand_description:${norm((payload as ItemPayloadByKind["brand_description"]).text)}`;
   }
 }
 
@@ -340,6 +343,7 @@ const SINGLE_VALUE_KINDS: ReadonlySet<PersonalizationItemKind> = new Set([
   "goal",
   "niche",
   "language",
+  "brand_description",
 ]);
 
 export type AiMergePlan = {
@@ -528,7 +532,7 @@ export function idsToConfirmForStep(
 ): string[] {
   const kinds: PersonalizationItemKind[] =
     step === "goal"
-      ? ["goal", "niche", "language"]
+      ? ["goal", "niche", "language", "brand_description"]
       : step === "audience"
         ? ["audience"]
         : ["pillar"];
