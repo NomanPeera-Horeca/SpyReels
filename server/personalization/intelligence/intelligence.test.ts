@@ -176,6 +176,7 @@ const goalOut = (goal: string, over: Record<string, unknown> = {}) => ({
   confidence: "high",
   evidence_basis: ["bio", "captions"],
   clarifying_question: "",
+  offer_quote: "",
   ...over,
 });
 
@@ -288,6 +289,7 @@ describe("Goal inference", () => {
       evidence_basis: [],
       clarifying_question:
         "Are you sharing recipes for fun or promoting your bakery?",
+      offer_quote: "",
     });
     const r = await inferGoal({ evidence: travel, invoker: llm.invoker });
     expect(r).toMatchObject({

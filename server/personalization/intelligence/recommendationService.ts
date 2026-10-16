@@ -180,6 +180,7 @@ export async function generateRecommendations(
     store: RecommendationStore;
     invoker?: LlmInvoker;
     timeoutMs?: number;
+    onRejected?: (reason: string) => void;
   },
   input: {
     ctx: PersonalizationCtx;
@@ -245,6 +246,7 @@ export async function generateRecommendations(
         evidence,
         invoker: deps.invoker,
         timeoutMs: deps.timeoutMs,
+        onRejected: deps.onRejected,
       });
       if (r.status === "needs_clarification") {
         return {
@@ -272,6 +274,7 @@ export async function generateRecommendations(
         confirmedAudiences: audiences,
         invoker: deps.invoker,
         timeoutMs: deps.timeoutMs,
+        onRejected: deps.onRejected,
       });
       usage = r.usage;
       attempts = r.attempts;
@@ -290,6 +293,7 @@ export async function generateRecommendations(
         confirmedPillars: confirmedOf(items, "pillar"),
         invoker: deps.invoker,
         timeoutMs: deps.timeoutMs,
+        onRejected: deps.onRejected,
       });
       usage = r.usage;
       attempts = r.attempts;

@@ -67,6 +67,8 @@ export async function callStructured<T>(input: {
   invoker?: LlmInvoker;
   timeoutMs?: number;
   maxTokens?: number;
+  /** Optional observer: called for every rejected model answer (evaluation and telemetry). */
+  onRejected?: (reason: string) => void;
 }): Promise<{ value: T; usage: LlmUsage; attempts: number }> {
   const invoker = input.invoker ?? defaultInvoker;
   const usage: LlmUsage = {
@@ -125,6 +127,7 @@ export async function callStructured<T>(input: {
       raw = JSON.parse(contentText(result));
     } catch {
       lastReason = "output was not valid JSON";
+      input.onRejected?.(lastReason);
       repairNote = `\n\nYour previous answer was rejected: ${lastReason}. Return only the JSON object.`;
       continue;
     }
@@ -135,6 +138,7 @@ export async function callStructured<T>(input: {
       return { value: parsed.value, usage, attempts: attempt };
     }
     lastReason = parsed.reason;
+    input.onRejected?.(lastReason);
     repairNote = `\n\nYour previous answer was rejected: ${lastReason}. Fix it and follow every rule.`;
   }
   usage.estimatedUsd = Math.round(usage.estimatedUsd * 1_000_000) / 1_000_000;

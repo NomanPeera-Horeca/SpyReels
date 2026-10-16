@@ -10,6 +10,7 @@ import { z } from "zod";
 import type { SuggestionConfidence } from "@shared/personalization/model";
 import {
   evidenceBlock,
+  offerQuoteIsVerbatim,
   UNTRUSTED_DATA_RULE,
   type CreatorEvidence,
   type EvidenceSource,
@@ -71,6 +72,7 @@ const SCHEMA = {
       },
     },
     clarifying_question: { type: "string" },
+    offer_quote: { type: "string" },
   },
   required: [
     "decision",
@@ -78,6 +80,7 @@ const SCHEMA = {
     "confidence",
     "evidence_basis",
     "clarifying_question",
+    "offer_quote",
   ],
   additionalProperties: false,
 };
@@ -97,6 +100,7 @@ const Shape = z.object({
     ])
   ),
   clarifying_question: z.string(),
+  offer_quote: z.string(),
 });
 
 type Parsed =
@@ -119,7 +123,7 @@ export function buildGoalPrompt(e: CreatorEvidence): {
     "Rules:",
     "- One sentence, at most 18 words, starting with a verb such as Help, Teach, Share, Entertain, Inspire, Show.",
     "- Only use facts present in the evidence. Do not invent products, places, names, numbers or audiences.",
-    "- Mention a business outcome (clients, sales, customers, growing a business) ONLY if the evidence shows the creator sells something.",
+    '- Mention a business outcome (clients, sales, customers, bookings, growing a business) ONLY if the bio, brand description or name shows the creator sells something. Then copy the exact words that show it into offer_quote (for example "Now taking new clients"). Otherwise leave offer_quote empty. Affiliate links ("link in bio", "shop my picks") are not a business.',
     '- If the evidence is too thin or contradictory to know their purpose, choose decision "clarify" and write one short question in the output language. Otherwise leave clarifying_question empty.',
     "- evidence_basis lists only the evidence sources you actually relied on.",
     `- Write in ${e.outputLanguage.label}. The evidence may be in any language.`,
@@ -169,7 +173,11 @@ export function parseGoalOutput(
       ok: false,
       reason: `goal names things not in the evidence (${names.join(", ")})`,
     };
-  if (inventsCommercialObjective(goal, e.commercialSignals)) {
+  // A business goal needs an offer the creator stated: either our fast-path
+  // signal, or the model's quote of the creator's own words, checked verbatim.
+  const offerProven =
+    e.commercialSignals || offerQuoteIsVerbatim(o.offer_quote, e);
+  if (inventsCommercialObjective(goal, offerProven)) {
     return {
       ok: false,
       reason: "goal claims a business objective the evidence does not show",
@@ -193,6 +201,7 @@ export async function inferGoal(input: {
   evidence: CreatorEvidence;
   invoker?: LlmInvoker;
   timeoutMs?: number;
+  onRejected?: (reason: string) => void;
 }): Promise<GoalInference> {
   const e = input.evidence;
   if (e.strength === "none") {
@@ -214,6 +223,7 @@ export async function inferGoal(input: {
     parse: raw => parseGoalOutput(raw, e),
     invoker: input.invoker,
     timeoutMs: input.timeoutMs,
+    onRejected: input.onRejected,
     maxTokens: 400,
   });
   if (value.kind === "clarify") {

@@ -172,6 +172,7 @@ export async function recommendPillars(input: {
   confirmedPillars: PillarPayload[];
   invoker?: LlmInvoker;
   timeoutMs?: number;
+  onRejected?: (reason: string) => void;
 }): Promise<PillarResult> {
   const prompt = buildPillarPrompt(
     input.evidence,
@@ -195,6 +196,7 @@ export async function recommendPillars(input: {
       ),
     invoker: input.invoker,
     timeoutMs: input.timeoutMs,
+    onRejected: input.onRejected,
     maxTokens: 700,
   });
   return {

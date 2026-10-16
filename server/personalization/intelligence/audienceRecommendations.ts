@@ -168,6 +168,7 @@ export async function recommendAudiences(input: {
   confirmedAudiences: AudiencePayload[];
   invoker?: LlmInvoker;
   timeoutMs?: number;
+  onRejected?: (reason: string) => void;
 }): Promise<AudienceResult> {
   const prompt = buildAudiencePrompt(
     input.evidence,
@@ -189,6 +190,7 @@ export async function recommendAudiences(input: {
       ),
     invoker: input.invoker,
     timeoutMs: input.timeoutMs,
+    onRejected: input.onRejected,
     maxTokens: 600,
   });
   return {
