@@ -690,7 +690,7 @@ describe("edits preserve history and invalidate dependent pillars", () => {
         supersedesItemId: "g1",
       },
       nextVersion: 3,
-      invalidatedKinds: ["pillar"],
+      invalidatedKinds: ["audience", "pillar"],
     });
   });
 

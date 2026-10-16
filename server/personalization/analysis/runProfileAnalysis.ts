@@ -25,7 +25,10 @@ import {
   idsToSupersedeOnRegeneration,
   planAiSuggestionMerge,
 } from "@shared/personalization/state";
+import type { ProviderAttemptRecord } from "@shared/personalization/model";
+import type { ScrapeCreatorsMeterReport } from "../../scrapeCreatorsMeter";
 import {
+  PROFILE_ANALYSIS_PROVIDER_ATTEMPTS_PER_RUN,
   PROFILE_ANALYSIS_WINDOW_DAYS,
   ProviderError,
   type AnalysisStore,
@@ -94,11 +97,40 @@ export async function runProfileAnalysis(
   // Stage 1: published content (the only stage that calls the provider).
   let snapshot = run.snapshot;
   if (!snapshot) {
+    // Cost protection: a logical run never spends more than its attempt budget,
+    // whatever mix of durable retries and user "try again" got it here.
+    const used = run.providerAttempts.length;
+    if (used >= PROFILE_ANALYSIS_PROVIDER_ATTEMPTS_PER_RUN) {
+      await store.setStage(
+        runId,
+        "published_content",
+        "failed",
+        "attempt_budget_exhausted"
+      );
+      for (const s of ANALYSIS_STAGES.slice(1))
+        await store.setStage(runId, s, "skipped");
+      return finish("provider_attempt_budget_exhausted", "failed");
+    }
     await store.setStage(runId, "published_content", "running");
     const windowEnd = deps.now();
     const windowStart = new Date(
       windowEnd.getTime() - PROFILE_ANALYSIS_WINDOW_DAYS * 86_400_000
     );
+    const startedAt = deps.now().toISOString();
+    const record = async (
+      outcome: ProviderAttemptRecord["outcome"],
+      meter: ScrapeCreatorsMeterReport | null
+    ) =>
+      store.recordProviderAttempt(runId, {
+        attempt: used + 1,
+        startedAt,
+        finishedAt: deps.now().toISOString(),
+        outcome,
+        requests: meter?.requests ?? 0,
+        blockedByBudget: meter?.blockedByBudget ?? 0,
+        byStatus: meter?.byStatus ?? {},
+        estimatedUsd: meter?.estimatedUsd ?? 0,
+      });
     try {
       providerCalled = true;
       const fetched = await deps.source.fetchPosts({
@@ -108,9 +140,11 @@ export async function runProfileAnalysis(
         windowEnd,
       });
       snapshot = fetched.snapshot;
-      await store.saveSnapshot(runId, snapshot, fetched.providerCalls);
+      await record("ok", fetched.meter);
+      await store.saveSnapshot(runId, snapshot);
     } catch (err) {
       const kind = err instanceof ProviderError ? err.kind : "transient";
+      await record(kind, err instanceof ProviderError ? err.meter : null);
       if (kind === "private" || kind === "not_found") {
         await store.setStage(runId, "published_content", "failed", kind);
         await store.setProfileStatus(
@@ -124,11 +158,23 @@ export async function runProfileAnalysis(
           "failed"
         );
       }
-      if (isLastAttempt) {
+      // A spent request budget is not retried: retrying would spend it again.
+      const attemptsLeft =
+        used + 1 < PROFILE_ANALYSIS_PROVIDER_ATTEMPTS_PER_RUN;
+      if (
+        kind === "request_budget_exhausted" ||
+        isLastAttempt ||
+        !attemptsLeft
+      ) {
         await store.setStage(runId, "published_content", "failed", kind);
         for (const s of ANALYSIS_STAGES.slice(1))
           await store.setStage(runId, s, "skipped");
-        return finish("provider_unavailable", "failed");
+        return finish(
+          kind === "request_budget_exhausted"
+            ? "provider_request_budget_exhausted"
+            : "provider_unavailable",
+          "failed"
+        );
       }
       await store.setStage(runId, "published_content", "waiting", kind);
       throw err; // durable queue retries the same job

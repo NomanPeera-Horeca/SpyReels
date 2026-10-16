@@ -159,7 +159,7 @@ export const INVALIDATES_ON_EDIT: Record<
   PersonalizationItemKind,
   PersonalizationItemKind[]
 > = {
-  goal: ["pillar"],
+  goal: ["audience", "pillar"],
   audience: ["pillar"],
   niche: ["pillar"],
   pillar: [],
@@ -269,11 +269,14 @@ export const ANALYSIS_REFRESH_POLICY = {
   userRefreshCooldownMinutes: 60,
   backgroundRefreshEnabled: false,
   backgroundRefreshIntervalDays: 7,
+  /** Provider attempts per logical run, including user "try again". */
+  providerAttemptsPerRun: 3,
 } as const;
 export type AnalysisRefreshPolicy = {
   userRefreshCooldownMinutes: number;
   backgroundRefreshEnabled: boolean;
   backgroundRefreshIntervalDays: number;
+  providerAttemptsPerRun?: number;
 };
 
 /**
@@ -301,4 +304,50 @@ export type AnalysisSourceSnapshot = {
   windowStart: string;
   windowEnd: string;
   posts: NormalizedPost[];
+};
+
+/**
+ * What each AI recommendation is built from (Goal -> Audience -> Pillars).
+ * A suggestion is stale only when one of ITS inputs changed, so editing an
+ * audience never marks audience suggestions stale, only pillars.
+ */
+export const RECOMMENDATION_INPUTS: Partial<
+  Record<PersonalizationItemKind, PersonalizationItemKind[]>
+> = {
+  audience: ["goal", "brand_description", "niche"],
+  pillar: ["goal", "brand_description", "niche", "audience"],
+};
+
+/** How well the evidence supports an AI suggestion. Shown to users as a label. */
+export const SUGGESTION_CONFIDENCE = ["high", "medium", "low"] as const;
+export type SuggestionConfidence = (typeof SUGGESTION_CONFIDENCE)[number];
+
+/** Stored on AI suggestion rows (personalization_items.generationMeta). */
+export type GenerationMeta = {
+  promptVersion: string;
+  model: string | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  estimatedUsd: number | null;
+  attempts: number;
+  evidenceStrength: "none" | "weak" | "moderate" | "strong";
+  evidenceBasis: string[];
+};
+
+/** One provider attempt of an analysis run (profile_analysis_runs.providerAttempts). */
+export type ProviderAttemptRecord = {
+  attempt: number;
+  startedAt: string;
+  finishedAt: string;
+  outcome:
+    | "ok"
+    | "private"
+    | "not_found"
+    | "rate_limited"
+    | "transient"
+    | "request_budget_exhausted";
+  requests: number;
+  blockedByBudget: number;
+  byStatus: Record<string, number>;
+  estimatedUsd: number;
 };

@@ -3,6 +3,10 @@
  * Uses global fetch with x-api-key (no direct Instagram mobile API calls).
  */
 
+import {
+  meterScrapeCreatorsRequest,
+  meterScrapeCreatorsResponse,
+} from "./scrapeCreatorsMeter";
 import { MIN_SPY_DISPLAY_REELS } from "@shared/spyReelsLimits";
 import { normalizeInstagramHandle } from "@shared/instagramHandle";
 import { parseInstagramReelShortcode } from "./instagramUrl";
@@ -119,6 +123,8 @@ async function scGet(
       logDiscoveryFuseIfNeeded(tracker);
     }
   }
+  const metered = meterScrapeCreatorsRequest();
+  if (metered) return metered;
 
   const url = new URL(`${API_BASE}${path}`);
   for (const [k, v] of Object.entries(query)) {
@@ -137,6 +143,7 @@ async function scGet(
     });
   } catch (e) {
     if (e instanceof Error && e.name === "AbortError") {
+      meterScrapeCreatorsResponse(408);
       return { status: 408, data: { error: "scrapecreators_request_timeout" } };
     }
     throw e;
@@ -155,6 +162,7 @@ async function scGet(
   console.log(
     `[Bug #64 diag] scGet path=${path} status=${res.status} bodyLength=${text.length}${formatScrapeCallContextLogSuffix()}`
   );
+  meterScrapeCreatorsResponse(res.status);
   return { status: res.status, data };
 }
 

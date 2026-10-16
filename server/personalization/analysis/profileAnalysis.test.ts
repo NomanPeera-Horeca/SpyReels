@@ -3,7 +3,14 @@ import type {
   AnalysisSourceSnapshot,
   AnalysisStage,
   AnalysisStageStatus,
+  ProviderAttemptRecord,
 } from "@shared/personalization/model";
+import {
+  SCRAPECREATORS_BUDGET_STATUS,
+  meterScrapeCreatorsRequest,
+  meterScrapeCreatorsResponse,
+  withScrapeCreatorsMeter,
+} from "../../scrapeCreatorsMeter";
 import {
   resolveAnalysisAvailability,
   type AiSuggestion,
@@ -64,6 +71,7 @@ class MemoryStore implements AnalysisStore {
         sameAccountIdentity: true,
         createdAt: r.createdAt,
         completedAt: r.completedAt,
+        providerAttemptsUsed: r.providerAttempts.length,
       }));
   }
   async insertRun(run: Parameters<AnalysisStore["insertRun"]>[0]) {
@@ -87,6 +95,7 @@ class MemoryStore implements AnalysisStore {
       snapshot: null,
       postsInWindow: null,
       providerCallCount: null,
+      providerAttempts: [],
       errorCode: null,
       completedAt: null,
     });
@@ -112,15 +121,15 @@ class MemoryStore implements AnalysisStore {
   ) {
     this.runs.get(id)!.stages[stage] = status;
   }
-  async saveSnapshot(
-    id: string,
-    snapshot: AnalysisSourceSnapshot,
-    calls: number | null
-  ) {
+  async saveSnapshot(id: string, snapshot: AnalysisSourceSnapshot) {
     const r = this.runs.get(id)!;
     r.snapshot = structuredClone(snapshot);
     r.postsInWindow = snapshot.posts.length;
-    r.providerCallCount = calls;
+  }
+  async recordProviderAttempt(id: string, attempt: ProviderAttemptRecord) {
+    const r = this.runs.get(id)!;
+    r.providerAttempts.push(attempt);
+    r.providerCallCount = (r.providerCallCount ?? 0) + attempt.requests;
   }
   async finishRun(
     id: string,
@@ -246,9 +255,16 @@ class FakeProvider implements ProfileDataSource {
           caption: `post ${i}`,
         })),
       },
-      providerCalls: null,
+      meter: {
+        requests: this.requestsPerFetch,
+        blockedByBudget: 0,
+        byStatus: { "200": this.requestsPerFetch },
+        budget: 25,
+        estimatedUsd: this.requestsPerFetch * 0.002,
+      },
     };
   }
+  requestsPerFetch = 6;
 }
 
 function setup(over: Partial<AnalysisProfile> = {}) {
@@ -459,7 +475,7 @@ describe("retries and recovery", () => {
     const t = setup();
     t.provider.failures.push(
       ...Array.from(
-        { length: 3 },
+        { length: 2 },
         () => new ProviderError("rate_limited", "429")
       )
     );
@@ -468,7 +484,7 @@ describe("retries and recovery", () => {
     const run = t.store.runs.get("run-1")!;
     expect(run.status).toBe("failed");
     expect(run.errorCode).toBe("provider_unavailable");
-    expect(t.provider.calls).toBe(3);
+    expect(t.provider.calls).toBe(2);
 
     // User taps again: same run, same key, requeued in place.
     expect(await t.request("initial")).toEqual({
@@ -804,7 +820,7 @@ describe("existing provider adapter (no new provider)", () => {
       scrapeTikTokVideos: async () => ({ followerCount: 0, videos: [] }),
       scrapeYouTubeShorts: async () => ({ subscriberCount: 0, videos: [] }),
     });
-    const { snapshot, providerCalls } = await source.fetchPosts({
+    const { snapshot, meter } = await source.fetchPosts({
       platform: "instagram",
       handle: "x",
       windowStart,
@@ -812,7 +828,7 @@ describe("existing provider adapter (no new provider)", () => {
     });
     expect(snapshot.posts.map(p => p.postId)).toEqual(["in"]);
     expect(snapshot.followerCount).toBe(900);
-    expect(providerCalls).toBeNull(); // unknown, not guessed
+    expect(meter).toMatchObject({ requests: 0, blockedByBudget: 0 }); // fake fetchers made no paid request
   });
 
   it("classifies the existing integrations' error messages", () => {
@@ -836,5 +852,258 @@ describe("existing provider adapter (no new provider)", () => {
       ).kind
     ).toBe("rate_limited");
     expect(classifyProviderError(new Error("HTTP 500")).kind).toBe("transient");
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Task 2: provider cost protection                                    */
+/* ------------------------------------------------------------------ */
+
+/** Stand-in for an integration's scGet: same two meter calls as the real ones. */
+async function fakeScGet(status = 200) {
+  const metered = meterScrapeCreatorsRequest();
+  if (metered) return metered;
+  meterScrapeCreatorsResponse(status);
+  return { status, data: {} };
+}
+
+describe("ScrapeCreators meter", () => {
+  it("is a no-op outside a metered scope (every existing flow)", async () => {
+    expect(meterScrapeCreatorsRequest()).toBeNull();
+    expect((await fakeScGet()).status).toBe(200);
+  });
+
+  it("counts real requests and blocks past the budget without calling the provider", async () => {
+    const r = await withScrapeCreatorsMeter(3, async () => {
+      const statuses: number[] = [];
+      for (let i = 0; i < 5; i++) statuses.push((await fakeScGet()).status);
+      return statuses;
+    });
+    expect("result" in r && r.result).toEqual([
+      200,
+      200,
+      200,
+      SCRAPECREATORS_BUDGET_STATUS,
+      SCRAPECREATORS_BUDGET_STATUS,
+    ]);
+    expect(r.report).toMatchObject({
+      requests: 3,
+      blockedByBudget: 2,
+      byStatus: { "200": 3 },
+      budget: 3,
+      estimatedUsd: 0.006,
+    });
+  });
+
+  it("concurrent jobs never share a meter", async () => {
+    const [a, b] = await Promise.all([
+      withScrapeCreatorsMeter(10, async () => {
+        await fakeScGet();
+        await fakeScGet();
+      }),
+      withScrapeCreatorsMeter(10, async () => {
+        await fakeScGet();
+      }),
+    ]);
+    expect([a.report.requests, b.report.requests]).toEqual([2, 1]);
+  });
+
+  it("reports what a failed fetch cost", async () => {
+    const r = await withScrapeCreatorsMeter(10, async () => {
+      await fakeScGet(500);
+      throw new Error("HTTP 500");
+    });
+    expect("error" in r).toBe(true);
+    expect(r.report).toMatchObject({ requests: 1, byStatus: { "500": 1 } });
+  });
+});
+
+describe("analysis adapter under the meter", () => {
+  const windowEnd = new Date("2026-10-16T00:00:00Z");
+  const windowStart = new Date("2026-04-16T00:00:00Z");
+  const reel = (i: number) => ({
+    shortcode: `r${i}`,
+    caption: "c",
+    viewCount: 10,
+    likeCount: 1,
+    commentCount: 0,
+    reelUrl: "u",
+    duration: 10,
+    postedAt: new Date("2026-09-01"),
+  });
+  const others = {
+    scrapeTikTokVideos: async () => ({ followerCount: 0, videos: [] }),
+    scrapeYouTubeShorts: async () => ({ subscriberCount: 0, videos: [] }),
+  };
+
+  it("records the real number of paid requests (including internal retries) and passes the post cap", async () => {
+    let seenCap = 0;
+    const source = createExistingProviderSource(
+      {
+        ...others,
+        scrapeReels: async (_h, _d, _p, o) => {
+          seenCap = o.maxReels;
+          for (let i = 0; i < 4; i++) await fakeScGet(i === 1 ? 429 : 200); // one internal retry
+          return { followerCount: 10, reels: [reel(1), reel(2)] };
+        },
+      },
+      { requestBudget: 25, maxPosts: 150 }
+    );
+    const { meter, snapshot } = await source.fetchPosts({
+      platform: "instagram",
+      handle: "x",
+      windowStart,
+      windowEnd,
+    });
+    expect(seenCap).toBe(150);
+    expect(snapshot.posts).toHaveLength(2);
+    expect(meter).toMatchObject({
+      requests: 4,
+      blockedByBudget: 0,
+      byStatus: { "200": 3, "429": 1 },
+    });
+  });
+
+  it("stops a runaway integration at the request budget and classifies it as non-retryable", async () => {
+    let attemptsInside = 0;
+    const source = createExistingProviderSource(
+      {
+        ...others,
+        scrapeReels: async () => {
+          for (;;) {
+            attemptsInside++;
+            const r = await fakeScGet(500);
+            if (r.status === SCRAPECREATORS_BUDGET_STATUS)
+              throw new Error("Failed to fetch reels");
+          }
+        },
+      },
+      { requestBudget: 5 }
+    );
+    const err = await source
+      .fetchPosts({
+        platform: "instagram",
+        handle: "x",
+        windowStart,
+        windowEnd,
+      })
+      .catch(e => e);
+    expect(err).toBeInstanceOf(ProviderError);
+    expect(err.kind).toBe("request_budget_exhausted");
+    expect(err.meter).toMatchObject({ requests: 5, blockedByBudget: 1 });
+    expect(attemptsInside).toBe(6);
+  });
+});
+
+describe("attempt budget per logical run", () => {
+  it("records every provider attempt with outcome, requests and estimated cost", async () => {
+    const t = setup();
+    t.provider.failures.push(
+      new ProviderError("transient", "timeout", {
+        requests: 2,
+        blockedByBudget: 0,
+        byStatus: { "408": 2 },
+        budget: 25,
+        estimatedUsd: 0.004,
+      })
+    );
+    await t.request("initial");
+    await t.work();
+    const run = t.store.runs.get("run-1")!;
+    expect(
+      run.providerAttempts.map(a => [a.attempt, a.outcome, a.requests])
+    ).toEqual([
+      [1, "transient", 2],
+      [2, "ok", 6],
+    ]);
+    expect(run.providerCallCount).toBe(8);
+    expect(run.providerAttempts[1].estimatedUsd).toBeCloseTo(0.012);
+  });
+
+  it("never exceeds 3 provider attempts per run, even when the user taps 'try again'", async () => {
+    const t = setup();
+    t.provider.failures.push(
+      ...Array.from(
+        { length: 10 },
+        () => new ProviderError("transient", "timeout")
+      )
+    );
+    await t.request("initial");
+    await t.work();
+    expect(t.provider.calls).toBe(2); // 2 automatic durable attempts
+    expect(t.store.runs.get("run-1")!.status).toBe("failed");
+
+    expect(await t.request("initial")).toEqual({
+      status: "retrying",
+      runId: "run-1",
+    });
+    await t.work();
+    expect(t.provider.calls).toBe(3); // + 1 user "try again"
+    expect(t.store.runs.get("run-1")!.status).toBe("failed");
+
+    // Budget spent: retry is refused before any job or provider call.
+    expect(await t.request("initial")).toEqual({
+      status: "rejected",
+      reason: "attempt_budget_exhausted",
+      retryAfter: undefined,
+    });
+    await t.work();
+    expect(t.provider.calls).toBe(3);
+  });
+
+  it("a request-budget hit is not retried by the durable queue", async () => {
+    const t = setup();
+    t.provider.failures.push(
+      new ProviderError("request_budget_exhausted", "budget", {
+        requests: 25,
+        blockedByBudget: 1,
+        byStatus: { "200": 25 },
+        budget: 25,
+        estimatedUsd: 0.05,
+      })
+    );
+    await t.request("initial");
+    await t.work();
+    const run = t.store.runs.get("run-1")!;
+    expect(run).toMatchObject({
+      status: "failed",
+      errorCode: "provider_request_budget_exhausted",
+    });
+    expect(t.provider.calls).toBe(1);
+  });
+
+  it("a crash after a successful fetch keeps the attempt log and does not refetch", async () => {
+    const t = setup();
+    await t.request("initial");
+    const original = t.store.setStage.bind(t.store);
+    let crashed = false;
+    t.store.setStage = async (id, stage, status) => {
+      if (!crashed && stage === "published_content" && status === "done") {
+        crashed = true;
+        throw new Error("process killed");
+      }
+      return original(id, stage, status);
+    };
+    await t.work();
+    const run = t.store.runs.get("run-1")!;
+    expect(run.status).toBe("succeeded");
+    expect(run.providerAttempts).toHaveLength(1);
+    expect(t.provider.calls).toBe(1);
+  });
+
+  it("the user refresh path still respects the 60-minute cooldown and background stays off", async () => {
+    const t = setup();
+    await t.request("initial");
+    await t.work();
+    t.advance(30);
+    expect(await t.request("user_refresh")).toMatchObject({
+      status: "rejected",
+      reason: "cooldown",
+    });
+    expect(await t.request("background")).toMatchObject({
+      status: "rejected",
+      reason: "background_disabled",
+    });
+    expect(t.provider.calls).toBe(1);
   });
 });

@@ -26,11 +26,32 @@ import type {
   AnalysisStageStatus,
   SocialPlatform,
   SocialProfileStatus,
+  ProviderAttemptRecord,
 } from "@shared/personalization/model";
+import type { ScrapeCreatorsMeterReport } from "../../scrapeCreatorsMeter";
 
 export const PROFILE_ANALYSIS_LEASE_SECONDS = 10 * 60;
-export const PROFILE_ANALYSIS_MAX_ATTEMPTS = 3;
+/**
+ * Durable job attempts per enqueue (existing queue retry counter). Kept below
+ * the per-run provider budget so one user "try again" is always possible
+ * after an outage: 2 automatic + 1 user = 3 provider attempts per run max.
+ */
+export const PROFILE_ANALYSIS_MAX_ATTEMPTS = 2;
 export const PROFILE_ANALYSIS_WINDOW_DAYS = 183;
+
+/**
+ * Cost protection (PROVISIONAL values, see docs/architecture/personalization-phase4.md):
+ * - at most this many provider attempts per logical run, across durable
+ *   retries AND user "try again" (persisted on the run, survives restarts)
+ * - at most this many paid ScrapeCreators requests per attempt, enforced by
+ *   server/scrapeCreatorsMeter.ts inside the integrations (includes their
+ *   own internal retries)
+ * - at most this many posts fetched (existing maxReels / maxVideos option)
+ * Worst case per run: 3 x 25 = 75 requests.
+ */
+export const PROFILE_ANALYSIS_PROVIDER_ATTEMPTS_PER_RUN = 3;
+export const PROFILE_ANALYSIS_REQUEST_BUDGET_PER_ATTEMPT = 25;
+export const PROFILE_ANALYSIS_MAX_POSTS = 150;
 
 export type ProfileAnalysisPayload = {
   runId: string;
@@ -69,6 +90,7 @@ export type AnalysisRun = {
   snapshot: AnalysisSourceSnapshot | null;
   postsInWindow: number | null;
   providerCallCount: number | null;
+  providerAttempts: ProviderAttemptRecord[];
   errorCode: string | null;
   createdAt: Date;
   completedAt: Date | null;
@@ -98,6 +120,7 @@ export interface AnalysisStore {
       | "snapshot"
       | "postsInWindow"
       | "providerCallCount"
+      | "providerAttempts"
       | "errorCode"
       | "completedAt"
     >
@@ -111,10 +134,12 @@ export interface AnalysisStore {
     status: AnalysisStageStatus,
     errorCode?: string | null
   ): Promise<void>;
-  saveSnapshot(
+  /** Saves the stage-1 checkpoint. The request count is kept by recordProviderAttempt. */
+  saveSnapshot(runId: string, snapshot: AnalysisSourceSnapshot): Promise<void>;
+  /** Appends one attempt and adds its requests to providerCallCount. */
+  recordProviderAttempt(
     runId: string,
-    snapshot: AnalysisSourceSnapshot,
-    providerCallCount: number | null
+    attempt: ProviderAttemptRecord
   ): Promise<void>;
   finishRun(
     runId: string,
@@ -144,12 +169,15 @@ export type ProviderErrorKind =
   | "private"
   | "not_found"
   | "rate_limited"
-  | "transient";
+  | "transient"
+  | "request_budget_exhausted";
 
 export class ProviderError extends Error {
   constructor(
     readonly kind: ProviderErrorKind,
-    message: string
+    message: string,
+    /** What the attempt actually cost before it failed. */
+    readonly meter: ScrapeCreatorsMeterReport | null = null
   ) {
     super(message);
   }
@@ -168,7 +196,8 @@ export interface ProfileDataSource {
     windowEnd: Date;
   }): Promise<{
     snapshot: AnalysisSourceSnapshot;
-    providerCalls: number | null;
+    /** Real request count from the meter (null only for sources that cannot meter). */
+    meter: ScrapeCreatorsMeterReport | null;
   }>;
 }
 

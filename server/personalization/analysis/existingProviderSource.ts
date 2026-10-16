@@ -2,34 +2,43 @@
  * ProfileDataSource backed by the EXISTING ScrapeCreators integrations.
  * No new provider, endpoint or scraper.
  *
- *   instagram -> server/instagram.ts  scrapeReels(handle, timeframeDays)
- *   tiktok    -> server/tiktok.ts     scrapeTikTokVideos(handle, _, { sinceDate })
- *   youtube   -> server/youtube.ts    scrapeYouTubeShorts(handle, _, { sinceDate })
+ *   instagram -> server/instagram.ts  scrapeReels(handle, days, _, { maxReels })
+ *   tiktok    -> server/tiktok.ts     scrapeTikTokVideos(handle, _, { sinceDate, maxVideos })
+ *   youtube   -> server/youtube.ts    scrapeYouTubeShorts(handle, _, { sinceDate, maxVideos })
  *
- * These are the same calls a research scrape makes, but called directly: no
- * scrape job, no research-history rows, no research credit consumed.
+ * Called directly: no scrape job, no research-history rows, no research credit.
  *
- * Cost and data caveats (documented, not hidden):
- * - Each function makes several paid requests (profile/channel lookup +
- *   pages). fetchTikTokProfile retries internally up to 5 times. None of them
- *   report a call count, so providerCalls is null ("unknown").
- * - A durable retry after a failure during fetch repeats those calls. After
- *   stage 1 succeeds the snapshot prevents any repeat.
- * - The integrations coerce missing numbers to 0, so a 0 may mean "unknown".
- *   We keep the provider's value; we never fill in or estimate numbers.
- * - Items marked outsideSpyWindow (sample backfill) are excluded.
+ * Cost protection: every fetch runs inside withScrapeCreatorsMeter, which
+ * counts each real paid request (including the integrations' own internal
+ * retries) and blocks requests past PROFILE_ANALYSIS_REQUEST_BUDGET_PER_ATTEMPT.
+ * The existing maxReels / maxVideos option caps pagination.
+ *
+ * Data caveats: the integrations coerce missing numbers to 0, so a 0 may mean
+ * "unknown". We keep the provider's value and never estimate. Items marked
+ * outsideSpyWindow (sample backfill) are excluded.
  */
 import type {
   AnalysisSourceSnapshot,
   NormalizedPost,
   SocialPlatform,
 } from "@shared/personalization/model";
-import { ProviderError, type ProfileDataSource } from "./contract";
+import {
+  withScrapeCreatorsMeter,
+  type ScrapeCreatorsMeterReport,
+} from "../../scrapeCreatorsMeter";
+import {
+  PROFILE_ANALYSIS_MAX_POSTS,
+  PROFILE_ANALYSIS_REQUEST_BUDGET_PER_ATTEMPT,
+  ProviderError,
+  type ProfileDataSource,
+} from "./contract";
 
 type Fetchers = {
   scrapeReels: (
     handle: string,
-    timeframeDays: number
+    timeframeDays: number,
+    onProgress: undefined,
+    options: { maxReels: number }
   ) => Promise<{
     reels: Array<{
       shortcode: string;
@@ -47,7 +56,7 @@ type Fetchers = {
   scrapeTikTokVideos: (
     handle: string,
     onProgress: undefined,
-    options: { sinceDate: Date }
+    options: { sinceDate: Date; maxVideos: number }
   ) => Promise<{
     videos: Array<{
       awemeId: string;
@@ -64,7 +73,7 @@ type Fetchers = {
   scrapeYouTubeShorts: (
     handle: string,
     onProgress: undefined,
-    options: { sinceDate: Date }
+    options: { sinceDate: Date; maxVideos: number }
   ) => Promise<{
     videos: Array<{
       videoId: string;
@@ -88,22 +97,30 @@ const defaultFetchers = async (): Promise<Fetchers> => {
     import("../../youtube"),
   ]);
   return {
-    scrapeReels: (h, d) => ig.scrapeReels(h, d),
+    scrapeReels: (h, d, _p, o) => ig.scrapeReels(h, d, undefined, o),
     scrapeTikTokVideos: (h, _p, o) => tt.scrapeTikTokVideos(h, undefined, o),
     scrapeYouTubeShorts: (h, _p, o) => yt.scrapeYouTubeShorts(h, undefined, o),
   };
 };
 
 /** Maps the existing integrations' error messages to retry decisions. */
-export function classifyProviderError(err: unknown): ProviderError {
+export function classifyProviderError(
+  err: unknown,
+  meter: ScrapeCreatorsMeterReport | null = null
+): ProviderError {
   const message = err instanceof Error ? err.message : String(err);
+  if (meter && meter.blockedByBudget > 0) {
+    return new ProviderError("request_budget_exhausted", message, meter);
+  }
   if (/\bprivate\b/i.test(message))
-    return new ProviderError("private", message);
-  if (/not found|does not exist|no such channel/i.test(message))
-    return new ProviderError("not_found", message);
-  if (/rate limit|\b429\b|temporarily/i.test(message))
-    return new ProviderError("rate_limited", message);
-  return new ProviderError("transient", message);
+    return new ProviderError("private", message, meter);
+  if (/not found|does not exist|no such channel/i.test(message)) {
+    return new ProviderError("not_found", message, meter);
+  }
+  if (/rate limit|\b429\b|temporarily/i.test(message)) {
+    return new ProviderError("rate_limited", message, meter);
+  }
+  return new ProviderError("transient", message, meter);
 }
 
 const num = (v: unknown): number | null =>
@@ -112,8 +129,12 @@ const iso = (d: unknown): string | null =>
   d instanceof Date && !Number.isNaN(d.getTime()) ? d.toISOString() : null;
 
 export function createExistingProviderSource(
-  fetchers?: Fetchers
+  fetchers?: Fetchers,
+  opts: { requestBudget?: number; maxPosts?: number } = {}
 ): ProfileDataSource {
+  const requestBudget =
+    opts.requestBudget ?? PROFILE_ANALYSIS_REQUEST_BUDGET_PER_ATTEMPT;
+  const maxPosts = opts.maxPosts ?? PROFILE_ANALYSIS_MAX_POSTS;
   return {
     async fetchPosts({ platform, handle, windowStart, windowEnd }) {
       const f = fetchers ?? (await defaultFetchers());
@@ -125,49 +146,58 @@ export function createExistingProviderSource(
         d instanceof Date &&
         d.getTime() >= windowStart.getTime() &&
         d.getTime() <= windowEnd.getTime();
-      let posts: NormalizedPost[];
-      let followerCount: number | null;
-      try {
+
+      const metered = await withScrapeCreatorsMeter(requestBudget, async () => {
         if (platform === "instagram") {
-          const r = await f.scrapeReels(handle, days);
-          followerCount = num(r.followerCount);
-          posts = r.reels
-            .filter(x => !x.outsideSpyWindow && inWindow(x.postedAt))
-            .map(x => ({
-              postId: x.shortcode,
-              url: x.reelUrl || null,
-              publishedAt: iso(x.postedAt),
-              views: num(x.viewCount),
-              likes: num(x.likeCount),
-              comments: num(x.commentCount),
-              durationSec: num(x.duration),
-              caption: x.caption || null,
-            }));
-        } else if (platform === "tiktok") {
+          const r = await f.scrapeReels(handle, days, undefined, {
+            maxReels: maxPosts,
+          });
+          return {
+            followerCount: num(r.followerCount),
+            posts: r.reels
+              .filter(x => !x.outsideSpyWindow && inWindow(x.postedAt))
+              .map<NormalizedPost>(x => ({
+                postId: x.shortcode,
+                url: x.reelUrl || null,
+                publishedAt: iso(x.postedAt),
+                views: num(x.viewCount),
+                likes: num(x.likeCount),
+                comments: num(x.commentCount),
+                durationSec: num(x.duration),
+                caption: x.caption || null,
+              })),
+          };
+        }
+        if (platform === "tiktok") {
           const r = await f.scrapeTikTokVideos(handle, undefined, {
             sinceDate: windowStart,
+            maxVideos: maxPosts,
           });
-          followerCount = num(r.followerCount);
-          posts = r.videos
-            .filter(x => inWindow(x.postedAt))
-            .map(x => ({
-              postId: x.awemeId,
-              url: x.videoPageUrl || null,
-              publishedAt: iso(x.postedAt),
-              views: num(x.viewCount),
-              likes: num(x.likeCount),
-              comments: num(x.commentCount),
-              durationSec: num(x.durationSec),
-              caption: x.caption || null,
-            }));
-        } else {
-          const r = await f.scrapeYouTubeShorts(handle, undefined, {
-            sinceDate: windowStart,
-          });
-          followerCount = num(r.subscriberCount);
-          posts = r.videos
+          return {
+            followerCount: num(r.followerCount),
+            posts: r.videos
+              .filter(x => inWindow(x.postedAt))
+              .map<NormalizedPost>(x => ({
+                postId: x.awemeId,
+                url: x.videoPageUrl || null,
+                publishedAt: iso(x.postedAt),
+                views: num(x.viewCount),
+                likes: num(x.likeCount),
+                comments: num(x.commentCount),
+                durationSec: num(x.durationSec),
+                caption: x.caption || null,
+              })),
+          };
+        }
+        const r = await f.scrapeYouTubeShorts(handle, undefined, {
+          sinceDate: windowStart,
+          maxVideos: maxPosts,
+        });
+        return {
+          followerCount: num(r.subscriberCount),
+          posts: r.videos
             .filter(x => !x.outsideSpyWindow && inWindow(x.postedAt))
-            .map(x => ({
+            .map<NormalizedPost>(x => ({
               postId: x.videoId,
               url: x.videoPageUrl || null,
               publishedAt: iso(x.postedAt),
@@ -176,21 +206,22 @@ export function createExistingProviderSource(
               comments: num(x.commentCount),
               durationSec: num(x.durationSec),
               caption: x.title || null,
-            }));
-        }
-      } catch (err) {
-        throw classifyProviderError(err);
-      }
+            })),
+        };
+      });
+
+      if ("error" in metered)
+        throw classifyProviderError(metered.error, metered.report);
       const snapshot: AnalysisSourceSnapshot = {
         version: 1,
         platform: platform as SocialPlatform,
         handle,
-        followerCount,
+        followerCount: metered.result.followerCount,
         windowStart: windowStart.toISOString(),
         windowEnd: windowEnd.toISOString(),
-        posts,
+        posts: metered.result.posts,
       };
-      return { snapshot, providerCalls: null };
+      return { snapshot, meter: metered.report };
     },
   };
 }

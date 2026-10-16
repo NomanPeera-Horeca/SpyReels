@@ -54,6 +54,9 @@ import {
   SOCIAL_PROFILE_AUTHORIZATION,
   SOCIAL_PROFILE_STATUSES,
   STEP_STATUSES,
+  SUGGESTION_CONFIDENCE,
+  type GenerationMeta,
+  type ProviderAttemptRecord,
   type AnalysisSourceSnapshot,
   type ItemPayloadByKind,
 } from "../shared/personalization/model";
@@ -212,6 +215,8 @@ export const profileAnalysisRuns = mysqlTable(
     sourceFetchedAt: timestamp("sourceFetchedAt"),
     /** Paid provider requests made for this run (cost accounting). */
     providerCallCount: int("providerCallCount"),
+    /** One entry per provider attempt: outcome, requests, statuses, estimated cost. */
+    providerAttempts: json("providerAttempts").$type<ProviderAttemptRecord[]>(),
     windowStart: timestamp("windowStart"),
     windowEnd: timestamp("windowEnd"),
     errorCode: varchar("errorCode", { length: 64 }),
@@ -316,6 +321,11 @@ export const personalizationItems = mysqlTable(
     dismissedAtVersion: int("dismissedAtVersion"),
     supersedesItemId: varchar("supersedesItemId", { length: 36 }),
     analysisRunId: varchar("analysisRunId", { length: 36 }),
+    /** AI rows: fingerprint of the confirmed inputs used (upstreamInputsHash). */
+    basedOnInputsHash: varchar("basedOnInputsHash", { length: 64 }),
+    confidence: mysqlEnum("confidence", SUGGESTION_CONFIDENCE),
+    /** AI rows: model, prompt version, tokens, estimated cost, evidence basis. */
+    generationMeta: json("generationMeta").$type<GenerationMeta>(),
     sortOrder: int("sortOrder").default(0).notNull(),
     createdByUserId: int("createdByUserId"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -363,6 +373,10 @@ export const personalizationItems = mysqlTable(
     check(
       "chk_personalization_items_dismissed",
       sql`(${t.status} = 'dismissed') = (${t.dismissedAtVersion} IS NOT NULL)`
+    ),
+    check(
+      "chk_personalization_items_confidence",
+      sql`${t.confidence} IS NULL OR ${t.source} = 'ai_suggested'`
     ),
   ]
 );

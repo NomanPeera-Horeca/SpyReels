@@ -11,6 +11,7 @@ import {
   INVALIDATES_ON_EDIT,
   PERSONALIZATION_STEPS,
   PROFILE_ANALYSIS_JOB_TYPE,
+  RECOMMENDATION_INPUTS,
   type AnalysisAvailability,
   type AnalysisRefreshPolicy,
   type AnalysisRequestKind,
@@ -27,6 +28,7 @@ import {
   type SocialPlatform,
   type SocialProfileStatus,
   type StepStatus,
+  type SuggestionConfidence,
 } from "./model";
 
 /* ------------------------------------------------------------------ */
@@ -265,6 +267,10 @@ export type ItemRecord<
   /** personalizationVersion when the user dismissed it (dismissed rows only). */
   dismissedAtVersion: number | null;
   supersedesItemId: string | null;
+  /** AI rows: fingerprint of the confirmed inputs it was generated from (see upstreamInputsHash). */
+  basedOnInputsHash?: string | null;
+  /** AI rows: how well the evidence supports it. */
+  confidence?: SuggestionConfidence | null;
 };
 
 export type NewItem<
@@ -276,6 +282,8 @@ export type AiSuggestion = {
   payload: ItemPayloadByKind[PersonalizationItemKind];
   evidence: Exclude<ItemEvidence, "user_provided">;
   analysisRunId: string | null;
+  basedOnInputsHash?: string | null;
+  confidence?: SuggestionConfidence | null;
 };
 
 const LIVE: ReadonlySet<ItemStatus> = new Set(["suggested", "confirmed"]);
@@ -421,6 +429,8 @@ export function planAiSuggestionMerge(
       basedOnVersion: currentVersion,
       dismissedAtVersion: null,
       supersedesItemId: null,
+      basedOnInputsHash: s.basedOnInputsHash ?? null,
+      confidence: s.confidence ?? null,
     });
   }
   return plan;
@@ -511,14 +521,62 @@ export function planDismiss(
  */
 export function isStaleSuggestion(
   item: ItemRecord,
-  currentVersion: number
+  currentVersion: number,
+  /** Current upstream fingerprints per kind (from upstreamInputsHash). Precise when given. */
+  currentInputsHash?: Partial<Record<PersonalizationItemKind, string>>
 ): boolean {
   if (item.status !== "suggested" || item.source !== "ai_suggested")
     return false;
+  const current = currentInputsHash?.[item.kind];
+  if (item.basedOnInputsHash && current !== undefined) {
+    return item.basedOnInputsHash !== current;
+  }
   const dependsOnAnswers = Object.values(INVALIDATES_ON_EDIT).some(kinds =>
     kinds.includes(item.kind)
   );
   return dependsOnAnswers && item.basedOnVersion < currentVersion;
+}
+
+/** Small isomorphic 64-bit hash (two FNV-1a 32-bit passes). For change detection, not security. */
+export function stableHash(text: string): string {
+  let a = 0x811c9dc5;
+  let b = 0x01000193 ^ 0x5bd1e995;
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    a = Math.imul(a ^ c, 0x01000193) >>> 0;
+    b = Math.imul(b ^ c, 0x5bd1e995) >>> 0;
+  }
+  return a.toString(16).padStart(8, "0") + b.toString(16).padStart(8, "0");
+}
+
+/**
+ * Fingerprint of the CONFIRMED values a recommendation kind depends on
+ * (RECOMMENDATION_INPUTS). Changes when any of those confirmed values change;
+ * unaffected by edits to unrelated kinds or by AI suggestions.
+ */
+export function upstreamInputsHash(
+  kind: PersonalizationItemKind,
+  items: ItemRecord[]
+): string {
+  const inputs = RECOMMENDATION_INPUTS[kind] ?? [];
+  const parts = items
+    .filter(i => inputs.includes(i.kind) && i.status === "confirmed")
+    .map(i => itemIdentity(i.kind, i.payload))
+    .sort();
+  return stableHash(`${kind}|${parts.join("||")}`);
+}
+
+/** Current upstream fingerprints for every recommendation kind. */
+export function currentInputsHashes(
+  items: ItemRecord[]
+): Partial<Record<PersonalizationItemKind, string>> {
+  const out: Partial<Record<PersonalizationItemKind, string>> = {};
+  for (const kind of Object.keys(
+    RECOMMENDATION_INPUTS
+  ) as PersonalizationItemKind[]) {
+    out[kind] = upstreamInputsHash(kind, items);
+  }
+  return out;
 }
 
 /**
@@ -641,6 +699,8 @@ export type ExistingRunSummary = {
   sameAccountIdentity: boolean;
   createdAt: Date;
   completedAt: Date | null;
+  /** Provider attempts already spent on this run (cost protection). */
+  providerAttemptsUsed?: number;
 };
 
 export type AnalysisRequestDecision =
@@ -660,7 +720,8 @@ export type AnalysisRequestDecision =
         | "usage_limit"
         | "cooldown"
         | "background_disabled"
-        | "fresh_enough";
+        | "fresh_enough"
+        | "attempt_budget_exhausted";
       retryAfter?: Date;
     };
 
@@ -710,8 +771,17 @@ export function decideAnalysisRequest(input: {
     const initial = input.runs
       .filter(r => r.requestKind === "initial" && r.sameAccountIdentity)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
-    if (initial?.status === "failed")
+    if (initial?.status === "failed") {
+      const limit =
+        policy.providerAttemptsPerRun ??
+        ANALYSIS_REFRESH_POLICY.providerAttemptsPerRun;
+      if ((initial.providerAttemptsUsed ?? 0) >= limit) {
+        // Retrying this run would exceed its provider budget. The user can
+        // still ask for a refresh (new run) once the cooldown allows it.
+        return { action: "reject", reason: "attempt_budget_exhausted" };
+      }
       return { action: "retry_failed", runId: initial.id };
+    }
     if (initial) return { action: "reuse_completed", runId: initial.id };
     return {
       action: "create",
@@ -813,4 +883,54 @@ export function deriveRunStatus(
   if (all.every(s => s === "done" || s === "skipped")) return "succeeded";
   if (all.some(s => s === "done")) return "partial";
   return "failed";
+}
+
+/* ------------------------------------------------------------------ */
+/* Recommendation review (Goal -> Audience -> Pillars)                 */
+/* ------------------------------------------------------------------ */
+
+export type RecommendationReview = {
+  /** Unconfirmed AI suggestions built on inputs that have since changed. Hide them. */
+  staleSuggestionIds: string[];
+  /** Confirmed values that came from AI suggestions built on older inputs. Kept, but ask the user to review. */
+  confirmedNeedingReview: Array<{ id: string; kind: PersonalizationItemKind }>;
+  /** Kinds whose suggestions should be regenerated for the current inputs. */
+  kindsToRegenerate: PersonalizationItemKind[];
+};
+
+/**
+ * What changed after an edit. Never changes data: it tells the caller which
+ * suggestions to hide, which confirmed values to ask about, and what to
+ * regenerate. Confirmed values are never replaced automatically.
+ */
+export function recommendationReview(
+  items: ItemRecord[]
+): RecommendationReview {
+  const current = currentInputsHashes(items);
+  const staleSuggestionIds: string[] = [];
+  const confirmedNeedingReview: RecommendationReview["confirmedNeedingReview"] =
+    [];
+  const regenerate = new Set<PersonalizationItemKind>();
+  for (const item of items) {
+    const now = current[item.kind];
+    if (
+      now === undefined ||
+      item.source !== "ai_suggested" ||
+      !item.basedOnInputsHash
+    )
+      continue;
+    if (item.basedOnInputsHash === now) continue;
+    if (item.status === "suggested") {
+      staleSuggestionIds.push(item.id);
+      regenerate.add(item.kind);
+    } else if (item.status === "confirmed") {
+      confirmedNeedingReview.push({ id: item.id, kind: item.kind });
+      regenerate.add(item.kind);
+    }
+  }
+  return {
+    staleSuggestionIds,
+    confirmedNeedingReview,
+    kindsToRegenerate: [...regenerate],
+  };
 }

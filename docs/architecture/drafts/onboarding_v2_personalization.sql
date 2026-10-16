@@ -116,6 +116,7 @@ CREATE TABLE IF NOT EXISTS `profile_analysis_runs` (
   `sourceSnapshot` json NULL,
   `sourceFetchedAt` timestamp NULL,
   `providerCallCount` int NULL,
+  `providerAttempts` json NULL,
   `windowStart` timestamp NULL,
   `windowEnd` timestamp NULL,
   `errorCode` varchar(64) NULL,
@@ -166,6 +167,9 @@ CREATE TABLE IF NOT EXISTS `personalization_items` (
   `dismissedAtVersion` int NULL,
   `supersedesItemId` varchar(36) NULL,
   `analysisRunId` varchar(36) NULL,
+  `basedOnInputsHash` varchar(64) NULL,
+  `confidence` enum('high','medium','low') NULL,
+  `generationMeta` json NULL,
   `sortOrder` int NOT NULL DEFAULT 0,
   `createdByUserId` int NULL,
   `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -185,7 +189,8 @@ CREATE TABLE IF NOT EXISTS `personalization_items` (
     OR JSON_TYPE(JSON_EXTRACT(`payload`, '$.viewSharePercent')) IS NULL
     OR JSON_TYPE(JSON_EXTRACT(`payload`, '$.viewSharePercent')) = 'NULL'
   ),
-  CONSTRAINT `chk_personalization_items_dismissed` CHECK ((`status` = 'dismissed') = (`dismissedAtVersion` IS NOT NULL))
+  CONSTRAINT `chk_personalization_items_dismissed` CHECK ((`status` = 'dismissed') = (`dismissedAtVersion` IS NOT NULL)),
+  CONSTRAINT `chk_personalization_items_confidence` CHECK (`confidence` IS NULL OR `source` = 'ai_suggested')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `personalization_progress` (
