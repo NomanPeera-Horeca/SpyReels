@@ -6,6 +6,10 @@
  * Copy and order follow the approved Figma flow:
  * Platform > Profile confirmation > Primary use case > Attribution >
  * Your Goal > Your Audience > Your Pillars > Home.
+ *
+ * Every user can complete Goal, Audience and Pillars, whatever their post
+ * count (including zero, private accounts and "I don't post yet"). Missing
+ * history changes WHERE suggestions come from, never WHETHER a step is shown.
  */
 
 export const SOCIAL_PLATFORMS = ["instagram", "tiktok", "youtube"] as const;
@@ -46,28 +50,27 @@ export const ONBOARDING_STEPS = [
 ] as const;
 export type OnboardingStep = (typeof ONBOARDING_STEPS)[number];
 
-/** Steps 4a to 4c, the personalization stepper (Goal, Audience, Pillars). */
+/** Steps 4a to 4c, the personalization stepper (Goal, Audience, Pillars). Always all three. */
 export const PERSONALIZATION_STEPS = ["goal", "audience", "pillars"] as const;
 export type PersonalizationStep = (typeof PERSONALIZATION_STEPS)[number];
 
 /**
- * pending: nothing to show yet (analysis not ready)
- * suggested: AI suggestions exist, user has not confirmed
+ * pending: no suggestions yet (user can still type their own and confirm)
+ * suggested: suggestions exist, user has not confirmed
  * confirmed: user tapped the confirm button (Spot on / Nailed it / ...)
  * skipped: user tapped Skip (suggestions are kept, not confirmed)
- * not_applicable: data rule removed the step (fewer than 10 posts)
+ *
+ * There is deliberately no "not applicable" state: no data rule may remove
+ * a step from the flow.
  */
 export const STEP_STATUSES = [
   "pending",
   "suggested",
   "confirmed",
   "skipped",
-  "not_applicable",
 ] as const;
 export type StepStatus = (typeof STEP_STATUSES)[number];
 
-/** Data rule: fewer posts than this in the window skips Audience and Pillars. */
-export const MIN_POSTS_FOR_FULL_PERSONALIZATION = 10;
 /** Data rule: analysis window. */
 export const ANALYSIS_WINDOW_MONTHS = 6;
 
@@ -89,6 +92,22 @@ export const ITEM_SOURCES = [
 export type ItemSource = (typeof ITEM_SOURCES)[number];
 
 /**
+ * What a value is based on. The UI must label these differently.
+ * - performance_backed: measured from the user's own analyzed posts
+ *   (requires an analysis run; the only kind allowed to carry numbers such
+ *   as a pillar's view share)
+ * - profile_inferred: an AI recommendation from profile info (bio, niche)
+ *   and confirmed goals. Never shows performance numbers.
+ * - user_provided: typed or edited by the user.
+ */
+export const ITEM_EVIDENCE = [
+  "performance_backed",
+  "profile_inferred",
+  "user_provided",
+] as const;
+export type ItemEvidence = (typeof ITEM_EVIDENCE)[number];
+
+/**
  * suggested / confirmed / dismissed are live states.
  * superseded = replaced by a newer row (kept for history, never shown).
  */
@@ -103,7 +122,10 @@ export type ItemStatus = (typeof ITEM_STATUSES)[number];
 export type GoalPayload = { text: string };
 /** "You create content for {who} to help them {outcome}" */
 export type AudiencePayload = { who: string; outcome: string };
-/** viewSharePercent is the REAL share of the user's views, or null if unknown. Never invented. */
+/**
+ * viewSharePercent is the REAL share of the user's views, or null.
+ * Only performance_backed pillars may carry a number (also enforced by a DB CHECK).
+ */
 export type PillarPayload = {
   title: string;
   description: string;
@@ -122,7 +144,7 @@ export type ItemPayloadByKind = {
 
 /**
  * Editing these kinds makes AI suggestions built on the old answers stale.
- * Goal and audience feed pillar suggestions.
+ * Goal, audience and niche feed pillar suggestions.
  */
 export const INVALIDATES_ON_EDIT: Record<
   PersonalizationItemKind,
@@ -162,13 +184,18 @@ export const ANALYSIS_RUN_STATUSES = [
 ] as const;
 export type AnalysisRunStatus = (typeof ANALYSIS_RUN_STATUSES)[number];
 
-/** Public lookup result for step 2. Private / not found never get stuck: user can try another handle or skip. */
+/**
+ * not_posting_yet: the user chose "I don't post yet". The row still owns
+ * their goals, audiences and pillars; platform and handle are filled in
+ * later when they start posting, and the strategy carries over.
+ */
 export const SOCIAL_PROFILE_STATUSES = [
   "pending_confirmation",
   "confirmed",
   "not_found",
   "private",
   "lookup_failed",
+  "not_posting_yet",
 ] as const;
 export type SocialProfileStatus = (typeof SOCIAL_PROFILE_STATUSES)[number];
 
@@ -180,6 +207,20 @@ export const SOCIAL_PROFILE_AUTHORIZATION = [
 ] as const;
 export type SocialProfileAuthorization =
   (typeof SOCIAL_PROFILE_AUTHORIZATION)[number];
+
+/**
+ * What history-based analysis can offer right now. Drives the suggestion
+ * source and the UI label, never whether a step is shown.
+ */
+export const ANALYSIS_AVAILABILITY = [
+  "available",
+  "in_progress",
+  "no_public_posts",
+  "private_account",
+  "not_posting_yet",
+  "unavailable",
+] as const;
+export type AnalysisAvailability = (typeof ANALYSIS_AVAILABILITY)[number];
 
 /** Durable job type for the profile analysis (to be registered in server/durableJobs/types.ts). */
 export const PROFILE_ANALYSIS_JOB_TYPE = "profile_analysis";

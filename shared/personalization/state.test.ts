@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
+import type { AnalysisAvailability, SocialProfileStatus } from "./model";
 import {
+  allowedSuggestionEvidence,
+  canCompleteStep,
   deriveReadiness,
   deriveRunStatus,
   idsToConfirmForStep,
@@ -9,12 +12,21 @@ import {
   liveItems,
   parseSocialHandle,
   planAiSuggestionMerge,
+  planDismiss,
   planItemEdit,
   profileAnalysisIdempotencyKey,
+  resolveActiveProfileId,
+  resolveAnalysisAvailability,
   resolveResumeStep,
+  validateSuggestion,
+  type AiSuggestion,
   type ItemRecord,
   type OnboardingProgressInput,
 } from "./state";
+
+/* ------------------------------------------------------------------ */
+/* Handles                                                             */
+/* ------------------------------------------------------------------ */
 
 describe("parseSocialHandle", () => {
   it("accepts plain, @ and mixed-case handles", () => {
@@ -23,9 +35,8 @@ describe("parseSocialHandle", () => {
       platform: "instagram",
       handle: "noman_peera",
     });
-    expect(parseSocialHandle("instagram", "  @noman.peera ")).toEqual({
+    expect(parseSocialHandle("instagram", "  @noman.peera ")).toMatchObject({
       ok: true,
-      platform: "instagram",
       handle: "noman.peera",
     });
     expect(parseSocialHandle("tiktok", "@khaby.lame")).toMatchObject({
@@ -44,13 +55,19 @@ describe("parseSocialHandle", () => {
         "instagram",
         "https://www.instagram.com/noman_peera/?hl=en"
       )
-    ).toMatchObject({ ok: true, handle: "noman_peera" });
+    ).toMatchObject({
+      ok: true,
+      handle: "noman_peera",
+    });
     expect(
       parseSocialHandle("instagram", "instagram.com/noman_peera")
     ).toMatchObject({ ok: true, handle: "noman_peera" });
     expect(
       parseSocialHandle("tiktok", "https://www.tiktok.com/@khaby.lame?lang=en")
-    ).toMatchObject({ ok: true, handle: "khaby.lame" });
+    ).toMatchObject({
+      ok: true,
+      handle: "khaby.lame",
+    });
     expect(
       parseSocialHandle("youtube", "https://youtube.com/@mrbeast/shorts")
     ).toMatchObject({ ok: true, handle: "mrbeast" });
@@ -85,6 +102,223 @@ describe("parseSocialHandle", () => {
   });
 });
 
+/* ------------------------------------------------------------------ */
+/* Task 1: every user gets Goal, Audience and Pillars                  */
+/* ------------------------------------------------------------------ */
+
+type Case = {
+  name: string;
+  profileStatus: SocialProfileStatus;
+  latestRunStatus: "succeeded" | "partial" | "failed" | "running" | null;
+  postsInWindow: number | null;
+  expected: AnalysisAvailability;
+  mayClaimPerformance: boolean;
+};
+
+const CASES: Case[] = [
+  {
+    name: "established creator (450 posts)",
+    profileStatus: "confirmed",
+    latestRunStatus: "succeeded",
+    postsInWindow: 450,
+    expected: "available",
+    mayClaimPerformance: true,
+  },
+  {
+    name: "small creator (1 post)",
+    profileStatus: "confirmed",
+    latestRunStatus: "succeeded",
+    postsInWindow: 1,
+    expected: "available",
+    mayClaimPerformance: true,
+  },
+  {
+    name: "small creator (9 posts)",
+    profileStatus: "confirmed",
+    latestRunStatus: "partial",
+    postsInWindow: 9,
+    expected: "available",
+    mayClaimPerformance: true,
+  },
+  {
+    name: "new account (0 public posts)",
+    profileStatus: "confirmed",
+    latestRunStatus: "succeeded",
+    postsInWindow: 0,
+    expected: "no_public_posts",
+    mayClaimPerformance: false,
+  },
+  {
+    name: "private account",
+    profileStatus: "private",
+    latestRunStatus: null,
+    postsInWindow: null,
+    expected: "private_account",
+    mayClaimPerformance: false,
+  },
+  {
+    name: '"I don\'t post yet"',
+    profileStatus: "not_posting_yet",
+    latestRunStatus: null,
+    postsInWindow: null,
+    expected: "not_posting_yet",
+    mayClaimPerformance: false,
+  },
+  {
+    name: "analysis failed",
+    profileStatus: "confirmed",
+    latestRunStatus: "failed",
+    postsInWindow: null,
+    expected: "unavailable",
+    mayClaimPerformance: false,
+  },
+  {
+    name: "analysis still running",
+    profileStatus: "confirmed",
+    latestRunStatus: "running",
+    postsInWindow: null,
+    expected: "in_progress",
+    mayClaimPerformance: false,
+  },
+];
+
+describe("no post-count threshold: every user completes Goal > Audience > Pillars", () => {
+  it("every profile starts with all three steps pending", () => {
+    expect(initialStepStatuses()).toEqual({
+      goal: "pending",
+      audience: "pending",
+      pillars: "pending",
+    });
+  });
+
+  for (const c of CASES) {
+    describe(c.name, () => {
+      const availability = resolveAnalysisAvailability(c);
+
+      it(`analysis availability is "${c.expected}"`, () => {
+        expect(availability).toBe(c.expected);
+      });
+
+      it("can complete all three steps (never blocked by analysis)", () => {
+        for (const step of ["goal", "audience", "pillars"] as const) {
+          expect(canCompleteStep(step, availability)).toBe(true);
+        }
+      });
+
+      it("resumes through Goal, Audience and Pillars in order, never skipping one", () => {
+        const seen: string[] = [];
+        const stepStatus = initialStepStatuses();
+        const progress: OnboardingProgressInput = {
+          hasConfirmedProfile: true,
+          primaryUseCaseAnswered: true,
+          attributionResolved: true,
+          stepStatus,
+          completedAt: null,
+        };
+        for (let i = 0; i < 4; i++) {
+          const step = resolveResumeStep(progress);
+          seen.push(step);
+          if (step === "done") break;
+          stepStatus[step as "goal" | "audience" | "pillars"] = "confirmed";
+        }
+        expect(seen).toEqual(["goal", "audience", "pillars", "done"]);
+      });
+
+      it("gets AI recommendations for audiences and pillars; numbers only with real history", () => {
+        expect(allowedSuggestionEvidence(availability)).toContain(
+          "profile_inferred"
+        );
+        expect(
+          allowedSuggestionEvidence(availability).includes("performance_backed")
+        ).toBe(c.mayClaimPerformance);
+
+        const recommended: AiSuggestion[] = [
+          {
+            kind: "audience",
+            payload: { who: "Restaurant owners", outcome: "open faster" },
+            evidence: "profile_inferred",
+            analysisRunId: null,
+          },
+          {
+            kind: "pillar",
+            payload: {
+              title: "Kitchen setup tips",
+              description: "How to plan a line",
+              viewSharePercent: null,
+            },
+            evidence: "profile_inferred",
+            analysisRunId: null,
+          },
+        ];
+        const plan = planAiSuggestionMerge([], recommended, 1, availability);
+        expect(plan.insert.map(i => [i.kind, i.evidence])).toEqual([
+          ["audience", "profile_inferred"],
+          ["pillar", "profile_inferred"],
+        ]);
+      });
+
+      it(
+        c.mayClaimPerformance
+          ? "may show a measured view share"
+          : "may NOT show any measured number",
+        () => {
+          const measured: AiSuggestion = {
+            kind: "pillar",
+            payload: { title: "Tours", description: "", viewSharePercent: 42 },
+            evidence: "performance_backed",
+            analysisRunId: "run-1",
+          };
+          expect(validateSuggestion(measured, availability)).toBe(
+            c.mayClaimPerformance
+              ? null
+              : "performance_evidence_without_analysis"
+          );
+        }
+      );
+    });
+  }
+
+  it("an AI-recommended pillar can never carry a view share", () => {
+    expect(
+      validateSuggestion(
+        {
+          kind: "pillar",
+          payload: { title: "T", description: "", viewSharePercent: 30 },
+          evidence: "profile_inferred",
+          analysisRunId: null,
+        },
+        "available"
+      )
+    ).toBe("numbers_without_performance_evidence");
+  });
+
+  it("performance-backed suggestions must name the analysis run", () => {
+    expect(
+      validateSuggestion(
+        {
+          kind: "audience",
+          payload: { who: "a", outcome: "b" },
+          evidence: "performance_backed",
+          analysisRunId: null,
+        },
+        "available"
+      )
+    ).toBe("performance_evidence_without_run");
+  });
+
+  it("the shared model has no post-count threshold or 'not applicable' step state", async () => {
+    const model = await import("./model");
+    expect(Object.keys(model).some(k => /MIN_POSTS/i.test(k))).toBe(false);
+    expect(
+      (model.STEP_STATUSES as readonly string[]).includes("not_applicable")
+    ).toBe(false);
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Resume and readiness                                                */
+/* ------------------------------------------------------------------ */
+
 const base: OnboardingProgressInput = {
   hasConfirmedProfile: true,
   primaryUseCaseAnswered: true,
@@ -93,7 +327,7 @@ const base: OnboardingProgressInput = {
   completedAt: null,
 };
 
-describe("resolveResumeStep", () => {
+describe("resolveResumeStep: interrupted onboarding resumes at the first unfinished step", () => {
   it("follows the approved order", () => {
     expect(resolveResumeStep({ ...base, hasConfirmedProfile: false })).toBe(
       "platform"
@@ -127,20 +361,30 @@ describe("resolveResumeStep", () => {
     ).toBe("pillars");
   });
 
-  it("treats skipped and not_applicable as finished", () => {
+  it("an earlier unfinished step wins over later finished ones", () => {
+    expect(
+      resolveResumeStep({
+        ...base,
+        stepStatus: {
+          goal: "suggested",
+          audience: "confirmed",
+          pillars: "confirmed",
+        },
+      })
+    ).toBe("goal");
+  });
+
+  it("skipped steps count as finished; completed users are done", () => {
     expect(
       resolveResumeStep({
         ...base,
         stepStatus: {
           goal: "skipped",
-          audience: "not_applicable",
-          pillars: "not_applicable",
+          audience: "skipped",
+          pillars: "skipped",
         },
       })
     ).toBe("done");
-  });
-
-  it("completed users are done regardless of step state", () => {
     expect(
       resolveResumeStep({
         ...base,
@@ -148,28 +392,6 @@ describe("resolveResumeStep", () => {
         completedAt: new Date(),
       })
     ).toBe("done");
-  });
-});
-
-describe("initialStepStatuses (fewer than 10 posts rule)", () => {
-  it("thin accounts get Goal only", () => {
-    expect(initialStepStatuses(9)).toEqual({
-      goal: "pending",
-      audience: "not_applicable",
-      pillars: "not_applicable",
-    });
-  });
-  it("10+ posts or unknown keep all three", () => {
-    expect(initialStepStatuses(10)).toEqual({
-      goal: "pending",
-      audience: "pending",
-      pillars: "pending",
-    });
-    expect(initialStepStatuses(null)).toEqual({
-      goal: "pending",
-      audience: "pending",
-      pillars: "pending",
-    });
   });
 });
 
@@ -192,6 +414,21 @@ describe("deriveReadiness: four independent signals", () => {
       personalizationCompleted: true,
       analysisCompleted: false,
       recommendationsReady: false,
+      planAvailable: false,
+    });
+  });
+
+  it("personalization can be complete with no analysis at all (private / not posting yet)", () => {
+    const r = deriveReadiness({
+      stepStatus: done,
+      latestRunStatus: null,
+      hasRecommendations: true,
+      hasPlanCards: false,
+    });
+    expect(r).toEqual({
+      personalizationCompleted: true,
+      analysisCompleted: false,
+      recommendationsReady: true,
       planAvailable: false,
     });
   });
@@ -237,20 +474,35 @@ describe("deriveReadiness: four independent signals", () => {
   });
 });
 
+/* ------------------------------------------------------------------ */
+/* Task 3: preserve confirmed preferences and history                  */
+/* ------------------------------------------------------------------ */
+
 function item(
   partial: Partial<ItemRecord> & Pick<ItemRecord, "id" | "kind" | "payload">
 ): ItemRecord {
   return {
     source: "ai_suggested",
     status: "suggested",
+    evidence: "profile_inferred",
+    analysisRunId: null,
     basedOnVersion: 1,
+    dismissedAtVersion: null,
     supersedesItemId: null,
     ...partial,
   } as ItemRecord;
 }
 
-describe("planAiSuggestionMerge: AI never overwrites the user", () => {
-  it("never suggests over a confirmed single-value item (goal, niche, language)", () => {
+const suggest = (
+  s: Omit<AiSuggestion, "evidence" | "analysisRunId"> & Partial<AiSuggestion>
+): AiSuggestion => ({
+  evidence: "profile_inferred",
+  analysisRunId: null,
+  ...s,
+});
+
+describe("AI suggestions never silently overwrite confirmed values", () => {
+  it("never suggests over a confirmed single value (goal, niche, language)", () => {
     const existing = [
       item({
         id: "g1",
@@ -261,8 +513,9 @@ describe("planAiSuggestionMerge: AI never overwrites the user", () => {
     ];
     const plan = planAiSuggestionMerge(
       existing,
-      [{ kind: "goal", payload: { text: "Grow a brand" } }],
-      1
+      [suggest({ kind: "goal", payload: { text: "Grow a brand" } })],
+      1,
+      "available"
     );
     expect(plan.insert).toEqual([]);
     expect(plan.skipped).toEqual([
@@ -277,105 +530,165 @@ describe("planAiSuggestionMerge: AI never overwrites the user", () => {
         kind: "niche",
         payload: { slug: "food", label: "Food" },
         source: "user_entered",
+        evidence: "user_provided",
       }),
     ];
     expect(
       planAiSuggestionMerge(
         existing,
-        [{ kind: "niche", payload: { slug: "fitness", label: "Fitness" } }],
-        1
+        [
+          suggest({
+            kind: "niche",
+            payload: { slug: "fitness", label: "Fitness" },
+          }),
+        ],
+        1,
+        "available"
       ).insert
     ).toEqual([]);
   });
 
-  it("skips duplicates and anything the user dismissed", () => {
+  it("only inserts: it never returns updates or deletes", () => {
+    const plan = planAiSuggestionMerge(
+      [],
+      [
+        suggest({
+          kind: "language",
+          payload: { code: "en", label: "English" },
+        }),
+      ],
+      1,
+      "available"
+    );
+    expect(Object.keys(plan).sort()).toEqual(["insert", "skipped"]);
+  });
+
+  it("existing confirmed pillars are kept; new suggestions are added beside them", () => {
     const existing = [
-      item({
-        id: "a1",
-        kind: "audience",
-        payload: { who: "Restaurant owners", outcome: "cut costs" },
-        status: "confirmed",
-        source: "user_entered",
-      }),
       item({
         id: "p1",
         kind: "pillar",
         payload: {
           title: "Kitchen tours",
           description: "",
-          viewSharePercent: 40,
+          viewSharePercent: null,
         },
-        status: "dismissed",
+        status: "confirmed",
       }),
     ];
     const plan = planAiSuggestionMerge(
       existing,
       [
-        {
-          kind: "audience",
-          payload: { who: "  restaurant OWNERS ", outcome: "Cut costs" },
-        },
-        {
+        suggest({
           kind: "pillar",
           payload: {
-            title: "kitchen tours",
-            description: "x",
-            viewSharePercent: 40,
+            title: "Kitchen Tours",
+            description: "rewrite",
+            viewSharePercent: null,
           },
-        },
-        {
+        }),
+        suggest({
           kind: "pillar",
           payload: {
             title: "Equipment tips",
-            description: "y",
-            viewSharePercent: 25,
+            description: "",
+            viewSharePercent: null,
           },
-        },
-        {
-          kind: "pillar",
-          payload: {
-            title: "Equipment Tips",
-            description: "dup in same batch",
-            viewSharePercent: 25,
-          },
-        },
+        }),
       ],
-      3
+      2,
+      "no_public_posts"
     );
-    expect(plan.insert).toHaveLength(1);
-    expect(plan.insert[0]).toMatchObject({
-      kind: "pillar",
-      source: "ai_suggested",
-      status: "suggested",
-      basedOnVersion: 3,
-    });
+    expect(plan.skipped).toEqual([{ kind: "pillar", reason: "duplicate" }]);
+    expect(
+      plan.insert.map(i => (i.payload as { title: string }).title)
+    ).toEqual(["Equipment tips"]);
   });
 
-  it("only inserts: it never returns updates or deletes", () => {
+  it("rejects suggestions with invented numbers instead of storing them", () => {
     const plan = planAiSuggestionMerge(
       [],
-      [{ kind: "language", payload: { code: "en", label: "English" } }],
-      1
+      [
+        suggest({
+          kind: "pillar",
+          payload: { title: "Tours", description: "", viewSharePercent: 55 },
+        }),
+      ],
+      1,
+      "no_public_posts"
     );
-    expect(Object.keys(plan).sort()).toEqual(["insert", "skipped"]);
+    expect(plan.insert).toEqual([]);
+    expect(plan.skipped).toEqual([
+      { kind: "pillar", reason: "numbers_without_performance_evidence" },
+    ]);
   });
 });
 
-describe("planItemEdit: edits supersede, never delete", () => {
+describe("dismissed suggestions do not reappear without a legitimate new recommendation", () => {
+  const dismissed = item({
+    id: "p9",
+    kind: "pillar",
+    payload: { title: "Recipes", description: "", viewSharePercent: null },
+    status: "dismissed",
+    basedOnVersion: 1,
+    dismissedAtVersion: 2,
+  });
+  const again = suggest({
+    kind: "pillar",
+    payload: {
+      title: "recipes",
+      description: "re-run",
+      viewSharePercent: null,
+    },
+  });
+
+  it("blocked while the user's answers are unchanged (same or older version)", () => {
+    expect(
+      planAiSuggestionMerge([dismissed], [again], 2, "available").skipped
+    ).toEqual([{ kind: "pillar", reason: "dismissed" }]);
+  });
+
+  it("allowed again once goal or audience changed (version moved on)", () => {
+    expect(
+      planAiSuggestionMerge([dismissed], [again], 3, "available").insert
+    ).toHaveLength(1);
+  });
+
+  it("planDismiss records the version at dismissal; only suggestions can be dismissed", () => {
+    const s = item({
+      id: "s1",
+      kind: "pillar",
+      payload: { title: "x", description: "", viewSharePercent: null },
+    });
+    expect(planDismiss(s, 4)).toEqual({
+      itemId: "s1",
+      status: "dismissed",
+      dismissedAtVersion: 4,
+    });
+    expect(() => planDismiss({ ...s, status: "confirmed" }, 4)).toThrow();
+  });
+});
+
+describe("edits preserve history and invalidate dependent pillars", () => {
   it("editing a goal supersedes the old row, confirms the new one and bumps the version", () => {
     const goal = item({ id: "g1", kind: "goal", payload: { text: "Old" } });
     const plan = planItemEdit(goal, { text: "New" }, 2);
-    expect(plan.supersedeItemId).toBe("g1");
-    expect(plan.insert).toEqual({
-      kind: "goal",
-      payload: { text: "New" },
-      source: "user_edited",
-      status: "confirmed",
-      basedOnVersion: 3,
-      supersedesItemId: "g1",
+    expect(plan).toEqual({
+      supersedeItemId: "g1",
+      insert: {
+        kind: "goal",
+        payload: { text: "New" },
+        source: "user_edited",
+        status: "confirmed",
+        evidence: "user_provided",
+        analysisRunId: null,
+        basedOnVersion: 3,
+        dismissedAtVersion: null,
+        supersedesItemId: "g1",
+      },
+      nextVersion: 3,
+      invalidatedKinds: ["pillar"],
     });
-    expect(plan.nextVersion).toBe(3);
-    expect(plan.invalidatedKinds).toEqual(["pillar"]);
   });
 
   it("editing an audience also invalidates pillar suggestions", () => {
@@ -389,63 +702,142 @@ describe("planItemEdit: edits supersede, never delete", () => {
     ).toEqual(["pillar"]);
   });
 
-  it("editing a pillar or language keeps the version (nothing depends on them)", () => {
+  it("an edit plan touches only items: no analysis run is changed or deleted", () => {
+    const a = item({
+      id: "a1",
+      kind: "audience",
+      payload: { who: "x", outcome: "y" },
+    });
+    expect(
+      Object.keys(planItemEdit(a, { who: "z", outcome: "y" }, 1)).sort()
+    ).toEqual(["insert", "invalidatedKinds", "nextVersion", "supersedeItemId"]);
+  });
+
+  it("editing a measured pillar's title keeps the real view share and its run", () => {
     const p = item({
       id: "p1",
       kind: "pillar",
-      payload: { title: "a", description: "b", viewSharePercent: 30 },
+      payload: { title: "Tours", description: "a", viewSharePercent: 38 },
+      evidence: "performance_backed",
+      analysisRunId: "run-1",
+      status: "confirmed",
+    });
+    const plan = planItemEdit(
+      p,
+      { title: "Kitchen tours", description: "a", viewSharePercent: 38 },
+      4
+    );
+    expect(plan.insert).toMatchObject({
+      evidence: "performance_backed",
+      analysisRunId: "run-1",
+      payload: { viewSharePercent: 38 },
+    });
+    expect(plan.nextVersion).toBe(4);
+  });
+
+  it("a user cannot type a 'measured' view share", () => {
+    const p = item({
+      id: "p1",
+      kind: "pillar",
+      payload: { title: "Tours", description: "", viewSharePercent: null },
+    });
+    const plan = planItemEdit(
+      p,
+      { title: "Tours", description: "", viewSharePercent: 90 },
+      1
+    );
+    expect(plan.insert).toMatchObject({
+      evidence: "user_provided",
+      analysisRunId: null,
+      payload: { viewSharePercent: null },
+    });
+    const m = item({
+      id: "p2",
+      kind: "pillar",
+      payload: { title: "T", description: "", viewSharePercent: 20 },
+      evidence: "performance_backed",
+      analysisRunId: "r",
     });
     expect(
-      planItemEdit(
-        p,
-        { title: "a2", description: "b", viewSharePercent: 30 },
-        4
-      ).nextVersion
-    ).toBe(4);
+      planItemEdit(m, { title: "T", description: "", viewSharePercent: 70 }, 1)
+        .insert
+    ).toMatchObject({
+      evidence: "user_provided",
+      payload: { viewSharePercent: null },
+    });
   });
 
   it("refuses to edit superseded or dismissed rows", () => {
-    const old = item({
-      id: "g0",
-      kind: "goal",
-      payload: { text: "x" },
-      status: "superseded",
-    });
-    expect(() => planItemEdit(old, { text: "y" }, 1)).toThrow();
+    expect(() =>
+      planItemEdit(
+        item({
+          id: "g0",
+          kind: "goal",
+          payload: { text: "x" },
+          status: "superseded",
+        }),
+        { text: "y" },
+        1
+      )
+    ).toThrow();
+    expect(() =>
+      planItemEdit(
+        item({
+          id: "g0",
+          kind: "goal",
+          payload: { text: "x" },
+          status: "dismissed",
+          dismissedAtVersion: 1,
+        }),
+        { text: "y" },
+        1
+      )
+    ).toThrow();
   });
 });
 
 describe("stale suggestions and confirmation", () => {
-  it("AI pillar suggestions built on older answers are stale; confirmed items never are", () => {
-    const stale = item({
-      id: "p1",
-      kind: "pillar",
-      payload: { title: "a", description: "", viewSharePercent: null },
-      basedOnVersion: 1,
-    });
-    const fresh = item({
-      id: "p2",
-      kind: "pillar",
-      payload: { title: "b", description: "", viewSharePercent: null },
-      basedOnVersion: 2,
-    });
-    const confirmed = item({
-      id: "p3",
-      kind: "pillar",
-      payload: { title: "c", description: "", viewSharePercent: null },
-      basedOnVersion: 1,
-      status: "confirmed",
-    });
-    const goalSuggestion = item({
-      id: "g1",
-      kind: "goal",
-      payload: { text: "x" },
-      basedOnVersion: 1,
-    });
+  const stale = item({
+    id: "p1",
+    kind: "pillar",
+    payload: { title: "a", description: "", viewSharePercent: null },
+    basedOnVersion: 1,
+  });
+  const fresh = item({
+    id: "p2",
+    kind: "pillar",
+    payload: { title: "b", description: "", viewSharePercent: null },
+    basedOnVersion: 2,
+  });
+  const confirmed = item({
+    id: "p3",
+    kind: "pillar",
+    payload: { title: "c", description: "", viewSharePercent: null },
+    basedOnVersion: 1,
+    status: "confirmed",
+  });
+
+  it("AI pillar suggestions built on older answers are stale; confirmed pillars never are", () => {
     expect(isStaleSuggestion(stale, 2)).toBe(true);
     expect(isStaleSuggestion(fresh, 2)).toBe(false);
     expect(isStaleSuggestion(confirmed, 2)).toBe(false);
-    expect(isStaleSuggestion(goalSuggestion, 2)).toBe(false);
+    expect(
+      isStaleSuggestion(
+        item({
+          id: "g1",
+          kind: "goal",
+          payload: { text: "x" },
+          basedOnVersion: 1,
+        }),
+        2
+      )
+    ).toBe(false);
+  });
+
+  it("confirming Pillars confirms fresh suggestions only, never stale ones", () => {
+    expect(
+      idsToConfirmForStep("pillars", [stale, fresh, confirmed], 2)
+    ).toEqual(["p2"]);
   });
 
   it("confirm on the Goal screen confirms goal, niche and language suggestions only", () => {
@@ -464,8 +856,8 @@ describe("stale suggestions and confirmation", () => {
       }),
       item({ id: "a1", kind: "audience", payload: { who: "a", outcome: "b" } }),
     ];
-    expect(idsToConfirmForStep("goal", items)).toEqual(["g1", "n1"]);
-    expect(idsToConfirmForStep("audience", items)).toEqual(["a1"]);
+    expect(idsToConfirmForStep("goal", items, 1)).toEqual(["g1", "n1"]);
+    expect(idsToConfirmForStep("audience", items, 1)).toEqual(["a1"]);
   });
 
   it("liveItems hides superseded and dismissed rows", () => {
@@ -487,11 +879,90 @@ describe("stale suggestions and confirmation", () => {
         kind: "pillar",
         payload: { title: "c", description: "", viewSharePercent: null },
         status: "dismissed",
+        dismissedAtVersion: 1,
       }),
     ];
     expect(liveItems(items).map(i => i.id)).toEqual(["2"]);
   });
 });
+
+/* ------------------------------------------------------------------ */
+/* Active profile                                                      */
+/* ------------------------------------------------------------------ */
+
+describe("resolveActiveProfileId: never a stale or foreign profile", () => {
+  const WS = "ws-a";
+  const profiles = [
+    {
+      id: "p-new",
+      workspaceId: WS,
+      deletedAt: null,
+      createdAt: new Date("2026-03-01"),
+    },
+    {
+      id: "p-old",
+      workspaceId: WS,
+      deletedAt: null,
+      createdAt: new Date("2026-01-01"),
+    },
+    {
+      id: "p-gone",
+      workspaceId: WS,
+      deletedAt: new Date(),
+      createdAt: new Date("2025-12-01"),
+    },
+    {
+      id: "p-other",
+      workspaceId: "ws-b",
+      deletedAt: null,
+      createdAt: new Date("2025-01-01"),
+    },
+  ];
+
+  it("honors a valid selection", () => {
+    expect(
+      resolveActiveProfileId({
+        workspaceId: WS,
+        storedSelectionId: "p-new",
+        profiles,
+      })
+    ).toEqual({ profileId: "p-new", selectionWasStale: false });
+  });
+
+  it("a selection pointing at a deleted profile falls back to the oldest live one", () => {
+    expect(
+      resolveActiveProfileId({
+        workspaceId: WS,
+        storedSelectionId: "p-gone",
+        profiles,
+      })
+    ).toEqual({ profileId: "p-old", selectionWasStale: true });
+  });
+
+  it("a selection pointing at another workspace is never returned", () => {
+    expect(
+      resolveActiveProfileId({
+        workspaceId: WS,
+        storedSelectionId: "p-other",
+        profiles,
+      })
+    ).toEqual({ profileId: "p-old", selectionWasStale: true });
+  });
+
+  it("no live profiles gives null", () => {
+    expect(
+      resolveActiveProfileId({
+        workspaceId: "ws-empty",
+        storedSelectionId: null,
+        profiles,
+      })
+    ).toEqual({ profileId: null, selectionWasStale: false });
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Analysis runs                                                       */
+/* ------------------------------------------------------------------ */
 
 describe("analysis runs", () => {
   it("idempotency key is stable and validated", () => {
@@ -502,12 +973,6 @@ describe("analysis runs", () => {
     expect(k).toBe(
       "profile_analysis:3f1b2c3d-0000-4000-8000-000000000001:a1b2c3d4e5f60718"
     );
-    expect(
-      profileAnalysisIdempotencyKey(
-        "3f1b2c3d-0000-4000-8000-000000000001",
-        "a1b2c3d4e5f60718"
-      )
-    ).toBe(k);
     expect(() =>
       profileAnalysisIdempotencyKey("bad id;drop", "a1b2c3d4e5f60718")
     ).toThrow();

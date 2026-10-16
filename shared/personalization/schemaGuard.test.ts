@@ -44,9 +44,11 @@ describe("personalization schema: Drizzle and SQL draft match", () => {
     it(`${cfg.name}: every Drizzle column (and enum value) exists in the SQL draft`, () => {
       const block = sqlBlockFor(cfg.name);
       expect(block, `missing CREATE TABLE for ${cfg.name}`).not.toBe("");
-      const sqlColumns = [...block.matchAll(/^\s+`([A-Za-z]+)`\s/gm)].map(
-        m => m[1]
-      );
+      const sqlColumns = [
+        ...block.matchAll(
+          /^\s+`([A-Za-z]+)`\s+(?:varchar|int|bigint|enum|json|text|timestamp)\b/gm
+        ),
+      ].map(m => m[1]);
       expect(sqlColumns.sort()).toEqual(cfg.columns.map(c => c.name).sort());
       for (const col of cfg.columns) {
         const values = (col as { enumValues?: string[] }).enumValues;
@@ -61,6 +63,44 @@ describe("personalization schema: Drizzle and SQL draft match", () => {
       }
     });
   }
+
+  for (const table of tables) {
+    const cfg = getTableConfig(table);
+    it(`${cfg.name}: foreign keys, CHECKs and unique keys match the SQL draft`, () => {
+      const block = sqlBlockFor(cfg.name);
+      const sqlNames = (re: RegExp) =>
+        [...block.matchAll(re)].map(m => m[1]).sort();
+      const fkFromSql = sqlNames(/CONSTRAINT `(fk_[a-z_]+)` FOREIGN KEY/g);
+      const chkFromSql = sqlNames(/CONSTRAINT `(chk_[a-z_]+)` CHECK/g);
+      const uniqFromSql = sqlNames(/UNIQUE KEY `([a-z_]+)`/g);
+      expect(cfg.foreignKeys.map(fk => fk.getName()).sort()).toEqual(fkFromSql);
+      expect(cfg.checks.map(c => c.name).sort()).toEqual(chkFromSql);
+      const drizzleUnique = [
+        ...cfg.uniqueConstraints.map(u => u.name ?? ""),
+        ...cfg.indexes.filter(i => i.config.unique).map(i => i.config.name),
+      ].sort();
+      expect(drizzleUnique).toEqual(uniqFromSql);
+    });
+  }
+
+  it("every child of social_profiles references (socialProfileId, workspaceId) together", () => {
+    for (const table of tables) {
+      const cfg = getTableConfig(table);
+      for (const fk of cfg.foreignKeys) {
+        const ref = fk.reference();
+        if (getTableConfig(ref.foreignTable).name !== "social_profiles")
+          continue;
+        expect(
+          ref.columns.map(c => c.name),
+          `${cfg.name}.${fk.getName()}`
+        ).toEqual(["socialProfileId", "workspaceId"]);
+        expect(ref.foreignColumns.map(c => c.name)).toEqual([
+          "id",
+          "workspaceId",
+        ]);
+      }
+    }
+  });
 
   it("the SQL draft is additive only (no ALTER, no DROP outside comments)", () => {
     const code = draftSql

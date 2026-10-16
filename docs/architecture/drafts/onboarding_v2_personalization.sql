@@ -1,4 +1,4 @@
--- DRAFT. NOT A MIGRATION. DO NOT APPLY.
+-- DRAFT. NOT A MIGRATION. DO NOT APPLY TO PRODUCTION.
 --
 -- New onboarding + personalization tables. Mirrors drizzle/personalizationSchema.ts.
 -- Becomes drizzle/<NNNN>_onboarding_v2_personalization.sql only after the CEO
@@ -6,17 +6,31 @@
 --
 -- Additive only: CREATE TABLE IF NOT EXISTS, no ALTER on existing tables.
 -- Idempotent: safe to re-run.
--- Apply AFTER backup via the normal production migration process
--- (docs/deploy-notes/manual-migrations.md).
--- Rollback (only while no code reads these tables): drop them in reverse order
--- (see bottom of file).
+-- Requires MySQL 8.0.16+ (CHECK constraints are enforced from 8.0.16).
+-- Collation utf8mb4_0900_ai_ci matches `workspaces` and `workspace_members`
+-- (drizzle/0042). MySQL rejects foreign keys between varchar columns with
+-- different collations, so this must match production. Verify first:
+--   SHOW CREATE TABLE workspaces;  SHOW CREATE TABLE workspace_members;
+--
+-- Isolation is enforced by the database, not only by app code:
+-- * social_profiles has UNIQUE (id, workspaceId). Every child row references
+--   (socialProfileId, workspaceId) together, so a child can never point at a
+--   profile in another workspace, and its workspaceId can never disagree with
+--   its profile's.
+-- * An active-profile selection references workspace_members (workspaceId,
+--   userId), so only a real member of that workspace can hold one, and it is
+--   removed automatically if the member leaves.
+-- * Items reference (analysisRunId, socialProfileId), so an item can only cite
+--   an analysis run of its own profile.
+--
+-- Rollback (only while no deployed code reads these tables): see bottom.
 
 CREATE TABLE IF NOT EXISTS `social_profiles` (
   `id` varchar(36) NOT NULL,
   `workspaceId` varchar(36) NOT NULL,
-  `platform` enum('instagram','tiktok','youtube') NOT NULL,
+  `platform` enum('instagram','tiktok','youtube') NULL,
   `platformAccountId` varchar(128) NULL,
-  `normalizedHandle` varchar(64) NOT NULL,
+  `normalizedHandle` varchar(64) NULL,
   `displayName` varchar(255) NULL,
   `avatarUrl` varchar(1000) NULL,
   `bio` text NULL,
@@ -24,18 +38,24 @@ CREATE TABLE IF NOT EXISTS `social_profiles` (
   `followingCount` bigint unsigned NULL,
   `postCount` bigint unsigned NULL,
   `publicFactsFetchedAt` timestamp NULL,
-  `status` enum('pending_confirmation','confirmed','not_found','private','lookup_failed') NOT NULL DEFAULT 'pending_confirmation',
+  `status` enum('pending_confirmation','confirmed','not_found','private','lookup_failed','not_posting_yet') NOT NULL DEFAULT 'pending_confirmation',
   `authorization` enum('none','authorized','reconnect_required') NOT NULL DEFAULT 'none',
-  `createdByUserId` int NOT NULL,
+  `createdByUserId` int NULL,
   `confirmedAt` timestamp NULL,
   `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deletedAt` timestamp NULL,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `uniq_social_profiles_id_workspace` (`id`, `workspaceId`),
   UNIQUE KEY `uniq_social_profiles_ws_platform_handle` (`workspaceId`, `platform`, `normalizedHandle`),
   KEY `idx_social_profiles_workspace` (`workspaceId`, `deletedAt`),
-  CONSTRAINT `fk_social_profiles_workspace` FOREIGN KEY (`workspaceId`) REFERENCES `workspaces` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  CONSTRAINT `fk_social_profiles_workspace` FOREIGN KEY (`workspaceId`) REFERENCES `workspaces` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_social_profiles_created_by` FOREIGN KEY (`createdByUserId`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `chk_social_profiles_identity` CHECK (
+    (`status` = 'not_posting_yet' AND `normalizedHandle` IS NULL)
+    OR (`status` <> 'not_posting_yet' AND `platform` IS NOT NULL AND `normalizedHandle` IS NOT NULL)
+  )
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `workspace_member_active_profiles` (
   `workspaceId` varchar(36) NOT NULL,
@@ -43,10 +63,10 @@ CREATE TABLE IF NOT EXISTS `workspace_member_active_profiles` (
   `socialProfileId` varchar(36) NOT NULL,
   `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`workspaceId`, `userId`),
-  KEY `idx_member_active_profile_profile` (`socialProfileId`),
-  CONSTRAINT `fk_member_active_profile_workspace` FOREIGN KEY (`workspaceId`) REFERENCES `workspaces` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_member_active_profile_profile` FOREIGN KEY (`socialProfileId`) REFERENCES `social_profiles` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  KEY `idx_member_active_profile_profile` (`socialProfileId`, `workspaceId`),
+  CONSTRAINT `fk_member_active_profile_member` FOREIGN KEY (`workspaceId`, `userId`) REFERENCES `workspace_members` (`workspaceId`, `userId`) ON DELETE CASCADE,
+  CONSTRAINT `fk_member_active_profile_profile` FOREIGN KEY (`socialProfileId`, `workspaceId`) REFERENCES `social_profiles` (`id`, `workspaceId`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `user_onboarding_answers` (
   `userId` int NOT NULL,
@@ -58,8 +78,9 @@ CREATE TABLE IF NOT EXISTS `user_onboarding_answers` (
   `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`userId`),
-  CONSTRAINT `fk_user_onboarding_answers_user` FOREIGN KEY (`userId`) REFERENCES `users` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  CONSTRAINT `fk_user_onboarding_answers_user` FOREIGN KEY (`userId`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `chk_user_onboarding_attribution` CHECK (`attributionSource` IS NULL OR `attributionSkippedAt` IS NULL)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `profile_analysis_runs` (
   `id` varchar(36) NOT NULL,
@@ -73,18 +94,20 @@ CREATE TABLE IF NOT EXISTS `profile_analysis_runs` (
   `windowStart` timestamp NULL,
   `windowEnd` timestamp NULL,
   `errorCode` varchar(64) NULL,
-  `requestedByUserId` int NOT NULL,
+  `requestedByUserId` int NULL,
   `startedAt` timestamp NULL,
   `completedAt` timestamp NULL,
   `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uniq_profile_analysis_runs_idempotency` (`idempotencyKey`),
-  KEY `idx_profile_analysis_runs_profile` (`socialProfileId`, `createdAt`),
+  UNIQUE KEY `uniq_profile_analysis_runs_id_profile` (`id`, `socialProfileId`),
+  KEY `idx_profile_analysis_runs_profile` (`socialProfileId`, `workspaceId`, `createdAt`),
   KEY `idx_profile_analysis_runs_workspace` (`workspaceId`),
-  CONSTRAINT `fk_profile_analysis_runs_workspace` FOREIGN KEY (`workspaceId`) REFERENCES `workspaces` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_profile_analysis_runs_profile` FOREIGN KEY (`socialProfileId`) REFERENCES `social_profiles` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  CONSTRAINT `fk_profile_analysis_runs_profile` FOREIGN KEY (`socialProfileId`, `workspaceId`) REFERENCES `social_profiles` (`id`, `workspaceId`) ON DELETE CASCADE,
+  CONSTRAINT `fk_profile_analysis_runs_requested_by` FOREIGN KEY (`requestedByUserId`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `chk_profile_analysis_runs_posts` CHECK (`postsInWindow` IS NULL OR `postsInWindow` >= 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `profile_analysis_stages` (
   `runId` varchar(36) NOT NULL,
@@ -96,7 +119,7 @@ CREATE TABLE IF NOT EXISTS `profile_analysis_stages` (
   `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`runId`, `stage`),
   CONSTRAINT `fk_profile_analysis_stages_run` FOREIGN KEY (`runId`) REFERENCES `profile_analysis_runs` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `personalization_items` (
   `id` varchar(36) NOT NULL,
@@ -106,7 +129,9 @@ CREATE TABLE IF NOT EXISTS `personalization_items` (
   `payload` json NOT NULL,
   `source` enum('ai_suggested','user_entered','user_edited') NOT NULL,
   `status` enum('suggested','confirmed','dismissed','superseded') NOT NULL,
+  `evidence` enum('performance_backed','profile_inferred','user_provided') NOT NULL,
   `basedOnVersion` int NOT NULL,
+  `dismissedAtVersion` int NULL,
   `supersedesItemId` varchar(36) NULL,
   `analysisRunId` varchar(36) NULL,
   `sortOrder` int NOT NULL DEFAULT 0,
@@ -114,27 +139,39 @@ CREATE TABLE IF NOT EXISTS `personalization_items` (
   `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
-  KEY `idx_personalization_items_profile_kind_status` (`socialProfileId`, `kind`, `status`),
+  KEY `idx_personalization_items_profile_kind_status` (`socialProfileId`, `workspaceId`, `kind`, `status`),
   KEY `idx_personalization_items_workspace` (`workspaceId`),
-  CONSTRAINT `fk_personalization_items_workspace` FOREIGN KEY (`workspaceId`) REFERENCES `workspaces` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_personalization_items_profile` FOREIGN KEY (`socialProfileId`) REFERENCES `social_profiles` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  KEY `idx_personalization_items_run` (`analysisRunId`, `socialProfileId`),
+  KEY `idx_personalization_items_supersedes` (`supersedesItemId`),
+  CONSTRAINT `fk_personalization_items_profile` FOREIGN KEY (`socialProfileId`, `workspaceId`) REFERENCES `social_profiles` (`id`, `workspaceId`) ON DELETE CASCADE,
+  CONSTRAINT `fk_personalization_items_run` FOREIGN KEY (`analysisRunId`, `socialProfileId`) REFERENCES `profile_analysis_runs` (`id`, `socialProfileId`) ON DELETE CASCADE,
+  CONSTRAINT `fk_personalization_items_created_by` FOREIGN KEY (`createdByUserId`) REFERENCES `users` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `chk_personalization_items_performance_run` CHECK (`evidence` <> 'performance_backed' OR `analysisRunId` IS NOT NULL),
+  CONSTRAINT `chk_personalization_items_no_invented_numbers` CHECK (
+    `kind` <> 'pillar'
+    OR `evidence` = 'performance_backed'
+    OR JSON_TYPE(JSON_EXTRACT(`payload`, '$.viewSharePercent')) IS NULL
+    OR JSON_TYPE(JSON_EXTRACT(`payload`, '$.viewSharePercent')) = 'NULL'
+  ),
+  CONSTRAINT `chk_personalization_items_dismissed` CHECK ((`status` = 'dismissed') = (`dismissedAtVersion` IS NOT NULL))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `personalization_progress` (
   `socialProfileId` varchar(36) NOT NULL,
   `workspaceId` varchar(36) NOT NULL,
   `personalizationVersion` int NOT NULL DEFAULT 1,
-  `goalStatus` enum('pending','suggested','confirmed','skipped','not_applicable') NOT NULL DEFAULT 'pending',
-  `audienceStatus` enum('pending','suggested','confirmed','skipped','not_applicable') NOT NULL DEFAULT 'pending',
-  `pillarsStatus` enum('pending','suggested','confirmed','skipped','not_applicable') NOT NULL DEFAULT 'pending',
+  `goalStatus` enum('pending','suggested','confirmed','skipped') NOT NULL DEFAULT 'pending',
+  `audienceStatus` enum('pending','suggested','confirmed','skipped') NOT NULL DEFAULT 'pending',
+  `pillarsStatus` enum('pending','suggested','confirmed','skipped') NOT NULL DEFAULT 'pending',
   `completedAt` timestamp NULL,
   `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`socialProfileId`),
   KEY `idx_personalization_progress_workspace` (`workspaceId`),
-  CONSTRAINT `fk_personalization_progress_workspace` FOREIGN KEY (`workspaceId`) REFERENCES `workspaces` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_personalization_progress_profile` FOREIGN KEY (`socialProfileId`) REFERENCES `social_profiles` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+  KEY `idx_personalization_progress_profile_ws` (`socialProfileId`, `workspaceId`),
+  CONSTRAINT `fk_personalization_progress_profile` FOREIGN KEY (`socialProfileId`, `workspaceId`) REFERENCES `social_profiles` (`id`, `workspaceId`) ON DELETE CASCADE,
+  CONSTRAINT `chk_personalization_progress_version` CHECK (`personalizationVersion` >= 1)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 -- ROLLBACK (manual, only while no deployed code reads these tables):
 -- DROP TABLE IF EXISTS `personalization_progress`;

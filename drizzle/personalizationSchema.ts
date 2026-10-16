@@ -7,17 +7,20 @@
  *   (Guarded by shared/personalization/schemaGuard.test.ts.)
  * - The SQL lives in docs/architecture/drafts/onboarding_v2_personalization.sql
  *   and gets its real number only after the CEO confirms it against production.
+ *   It is tested on real MySQL 8 by shared/personalization/schema.mysql.test.ts.
  *
  * Design: all new tables, no ALTER on users or workspace_members. Those tables
  * are read on every request; adding columns before the migration runs would
  * break every query on them. Rollback = drop these tables.
  *
- * Ownership: workspace owns social profiles; a social profile owns its
- * analysis runs, items and progress. Every table carries workspaceId so every
- * query can filter by workspace (isolation).
+ * Isolation is enforced by the database: social_profiles has UNIQUE
+ * (id, workspaceId) and every child references (socialProfileId, workspaceId)
+ * together, so no row can point at another workspace's profile.
  */
 import {
   bigint,
+  check,
+  foreignKey,
   index,
   int,
   json,
@@ -26,14 +29,18 @@ import {
   primaryKey,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   varchar,
 } from "drizzle-orm/mysql-core";
+import { sql } from "drizzle-orm";
+import { users, workspaceMembers, workspaces } from "./schema";
 import {
   ANALYSIS_RUN_STATUSES,
   ANALYSIS_STAGES,
   ANALYSIS_STAGE_STATUSES,
   ATTRIBUTION_SOURCES,
+  ITEM_EVIDENCE,
   ITEM_SOURCES,
   ITEM_STATUSES,
   PERSONALIZATION_ITEM_KINDS,
@@ -45,16 +52,19 @@ import {
   type ItemPayloadByKind,
 } from "../shared/personalization/model";
 
-/** Instagram, TikTok and YouTube profiles connected to a workspace (public data only). */
+/**
+ * Instagram, TikTok and YouTube profiles of a workspace (public data only),
+ * or an "I don't post yet" placeholder (no platform/handle yet).
+ */
 export const socialProfiles = mysqlTable(
   "social_profiles",
   {
     id: varchar("id", { length: 36 }).primaryKey(),
     workspaceId: varchar("workspaceId", { length: 36 }).notNull(),
-    platform: mysqlEnum("platform", SOCIAL_PLATFORMS).notNull(),
+    platform: mysqlEnum("platform", SOCIAL_PLATFORMS),
     /** Stable platform id when the provider returns one (handles can change). */
     platformAccountId: varchar("platformAccountId", { length: 128 }),
-    normalizedHandle: varchar("normalizedHandle", { length: 64 }).notNull(),
+    normalizedHandle: varchar("normalizedHandle", { length: 64 }),
     displayName: varchar("displayName", { length: 255 }),
     avatarUrl: varchar("avatarUrl", { length: 1000 }),
     bio: text("bio"),
@@ -71,22 +81,36 @@ export const socialProfiles = mysqlTable(
     authorization: mysqlEnum("authorization", SOCIAL_PROFILE_AUTHORIZATION)
       .default("none")
       .notNull(),
-    createdByUserId: int("createdByUserId").notNull(),
+    createdByUserId: int("createdByUserId"),
     confirmedAt: timestamp("confirmedAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-    /** Soft delete. Re-adding the same handle restores this row (unique key below). */
+    /** Soft delete. The server clears active selections in the same transaction. */
     deletedAt: timestamp("deletedAt"),
   },
-  t => ({
-    workspacePlatformHandleUnique: uniqueIndex(
-      "uniq_social_profiles_ws_platform_handle"
-    ).on(t.workspaceId, t.platform, t.normalizedHandle),
-    workspaceIdx: index("idx_social_profiles_workspace").on(
+  t => [
+    unique("uniq_social_profiles_id_workspace").on(t.id, t.workspaceId),
+    uniqueIndex("uniq_social_profiles_ws_platform_handle").on(
       t.workspaceId,
-      t.deletedAt
+      t.platform,
+      t.normalizedHandle
     ),
-  })
+    index("idx_social_profiles_workspace").on(t.workspaceId, t.deletedAt),
+    foreignKey({
+      name: "fk_social_profiles_workspace",
+      columns: [t.workspaceId],
+      foreignColumns: [workspaces.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "fk_social_profiles_created_by",
+      columns: [t.createdByUserId],
+      foreignColumns: [users.id],
+    }).onDelete("set null"),
+    check(
+      "chk_social_profiles_identity",
+      sql`(${t.status} = 'not_posting_yet' AND ${t.normalizedHandle} IS NULL) OR (${t.status} <> 'not_posting_yet' AND ${t.platform} IS NOT NULL AND ${t.normalizedHandle} IS NOT NULL)`
+    ),
+  ]
 );
 
 /** Which profile each member is working on in a workspace. */
@@ -98,27 +122,52 @@ export const workspaceMemberActiveProfiles = mysqlTable(
     socialProfileId: varchar("socialProfileId", { length: 36 }).notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  t => ({
-    pk: primaryKey({ columns: [t.workspaceId, t.userId] }),
-    profileIdx: index("idx_member_active_profile_profile").on(
-      t.socialProfileId
+  t => [
+    primaryKey({ columns: [t.workspaceId, t.userId] }),
+    index("idx_member_active_profile_profile").on(
+      t.socialProfileId,
+      t.workspaceId
     ),
-  })
+    foreignKey({
+      name: "fk_member_active_profile_member",
+      columns: [t.workspaceId, t.userId],
+      foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "fk_member_active_profile_profile",
+      columns: [t.socialProfileId, t.workspaceId],
+      foreignColumns: [socialProfiles.id, socialProfiles.workspaceId],
+    }).onDelete("cascade"),
+  ]
 );
 
 /** Account-level answers (steps 3a and 3b). A skip stays null, never "other". */
-export const userOnboardingAnswers = mysqlTable("user_onboarding_answers", {
-  userId: int("userId").primaryKey(),
-  primaryUseCase: mysqlEnum("primaryUseCase", PRIMARY_USE_CASES),
-  primaryUseCaseAnsweredAt: timestamp("primaryUseCaseAnsweredAt"),
-  attributionSource: mysqlEnum("attributionSource", ATTRIBUTION_SOURCES),
-  attributionAnsweredAt: timestamp("attributionAnsweredAt"),
-  attributionSkippedAt: timestamp("attributionSkippedAt"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+export const userOnboardingAnswers = mysqlTable(
+  "user_onboarding_answers",
+  {
+    userId: int("userId").primaryKey(),
+    primaryUseCase: mysqlEnum("primaryUseCase", PRIMARY_USE_CASES),
+    primaryUseCaseAnsweredAt: timestamp("primaryUseCaseAnsweredAt"),
+    attributionSource: mysqlEnum("attributionSource", ATTRIBUTION_SOURCES),
+    attributionAnsweredAt: timestamp("attributionAnsweredAt"),
+    attributionSkippedAt: timestamp("attributionSkippedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  t => [
+    foreignKey({
+      name: "fk_user_onboarding_answers_user",
+      columns: [t.userId],
+      foreignColumns: [users.id],
+    }).onDelete("cascade"),
+    check(
+      "chk_user_onboarding_attribution",
+      sql`${t.attributionSource} IS NULL OR ${t.attributionSkippedAt} IS NULL`
+    ),
+  ]
+);
 
-/** One row per analysis of a profile. Never deleted (history). Runs on durable_jobs. */
+/** One row per analysis of a profile. Never deleted on its own (history). Runs on durable_jobs. */
 export const profileAnalysisRuns = mysqlTable(
   "profile_analysis_runs",
   {
@@ -136,24 +185,36 @@ export const profileAnalysisRuns = mysqlTable(
     windowStart: timestamp("windowStart"),
     windowEnd: timestamp("windowEnd"),
     errorCode: varchar("errorCode", { length: 64 }),
-    requestedByUserId: int("requestedByUserId").notNull(),
+    requestedByUserId: int("requestedByUserId"),
     startedAt: timestamp("startedAt"),
     completedAt: timestamp("completedAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  t => ({
-    idempotencyUnique: uniqueIndex("uniq_profile_analysis_runs_idempotency").on(
-      t.idempotencyKey
-    ),
-    profileIdx: index("idx_profile_analysis_runs_profile").on(
+  t => [
+    uniqueIndex("uniq_profile_analysis_runs_idempotency").on(t.idempotencyKey),
+    unique("uniq_profile_analysis_runs_id_profile").on(t.id, t.socialProfileId),
+    index("idx_profile_analysis_runs_profile").on(
       t.socialProfileId,
+      t.workspaceId,
       t.createdAt
     ),
-    workspaceIdx: index("idx_profile_analysis_runs_workspace").on(
-      t.workspaceId
+    index("idx_profile_analysis_runs_workspace").on(t.workspaceId),
+    foreignKey({
+      name: "fk_profile_analysis_runs_profile",
+      columns: [t.socialProfileId, t.workspaceId],
+      foreignColumns: [socialProfiles.id, socialProfiles.workspaceId],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "fk_profile_analysis_runs_requested_by",
+      columns: [t.requestedByUserId],
+      foreignColumns: [users.id],
+    }).onDelete("set null"),
+    check(
+      "chk_profile_analysis_runs_posts",
+      sql`${t.postsInWindow} IS NULL OR ${t.postsInWindow} >= 0`
     ),
-  })
+  ]
 );
 
 /** Per-stage status behind the onboarding checklist. */
@@ -170,15 +231,25 @@ export const profileAnalysisStages = mysqlTable(
     completedAt: timestamp("completedAt"),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  t => ({
-    pk: primaryKey({ columns: [t.runId, t.stage] }),
-  })
+  t => [
+    primaryKey({ columns: [t.runId, t.stage] }),
+    foreignKey({
+      name: "fk_profile_analysis_stages_run",
+      columns: [t.runId],
+      foreignColumns: [profileAnalysisRuns.id],
+    }).onDelete("cascade"),
+  ]
 );
 
 /**
  * Goals, audiences, pillars, niche, language. One row per value.
  * Edits never update payload in place: the old row becomes "superseded" and a
  * new row points back to it via supersedesItemId.
+ *
+ * supersedesItemId has no DB foreign key on purpose: MySQL stops cascading a
+ * self-referencing delete after 15 levels, so a long edit history would make a
+ * profile undeletable. Same-profile is enforced by the server (the superseded
+ * item is loaded through the profile's authorization check).
  */
 export const personalizationItems = mysqlTable(
   "personalization_items",
@@ -192,7 +263,9 @@ export const personalizationItems = mysqlTable(
       .notNull(),
     source: mysqlEnum("source", ITEM_SOURCES).notNull(),
     status: mysqlEnum("status", ITEM_STATUSES).notNull(),
+    evidence: mysqlEnum("evidence", ITEM_EVIDENCE).notNull(),
     basedOnVersion: int("basedOnVersion").notNull(),
+    dismissedAtVersion: int("dismissedAtVersion"),
     supersedesItemId: varchar("supersedesItemId", { length: 36 }),
     analysisRunId: varchar("analysisRunId", { length: 36 }),
     sortOrder: int("sortOrder").default(0).notNull(),
@@ -200,14 +273,50 @@ export const personalizationItems = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  t => ({
-    profileKindStatusIdx: index(
-      "idx_personalization_items_profile_kind_status"
-    ).on(t.socialProfileId, t.kind, t.status),
-    workspaceIdx: index("idx_personalization_items_workspace").on(
-      t.workspaceId
+  t => [
+    index("idx_personalization_items_profile_kind_status").on(
+      t.socialProfileId,
+      t.workspaceId,
+      t.kind,
+      t.status
     ),
-  })
+    index("idx_personalization_items_workspace").on(t.workspaceId),
+    index("idx_personalization_items_run").on(
+      t.analysisRunId,
+      t.socialProfileId
+    ),
+    index("idx_personalization_items_supersedes").on(t.supersedesItemId),
+    foreignKey({
+      name: "fk_personalization_items_profile",
+      columns: [t.socialProfileId, t.workspaceId],
+      foreignColumns: [socialProfiles.id, socialProfiles.workspaceId],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "fk_personalization_items_run",
+      columns: [t.analysisRunId, t.socialProfileId],
+      foreignColumns: [
+        profileAnalysisRuns.id,
+        profileAnalysisRuns.socialProfileId,
+      ],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "fk_personalization_items_created_by",
+      columns: [t.createdByUserId],
+      foreignColumns: [users.id],
+    }).onDelete("set null"),
+    check(
+      "chk_personalization_items_performance_run",
+      sql`${t.evidence} <> 'performance_backed' OR ${t.analysisRunId} IS NOT NULL`
+    ),
+    check(
+      "chk_personalization_items_no_invented_numbers",
+      sql`${t.kind} <> 'pillar' OR ${t.evidence} = 'performance_backed' OR JSON_TYPE(JSON_EXTRACT(${t.payload}, '$.viewSharePercent')) IS NULL OR JSON_TYPE(JSON_EXTRACT(${t.payload}, '$.viewSharePercent')) = 'NULL'`
+    ),
+    check(
+      "chk_personalization_items_dismissed",
+      sql`(${t.status} = 'dismissed') = (${t.dismissedAtVersion} IS NOT NULL)`
+    ),
+  ]
 );
 
 /** One row per profile: stepper state, version and completion. Resume step is derived, not stored. */
@@ -230,11 +339,22 @@ export const personalizationProgress = mysqlTable(
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   },
-  t => ({
-    workspaceIdx: index("idx_personalization_progress_workspace").on(
+  t => [
+    index("idx_personalization_progress_workspace").on(t.workspaceId),
+    index("idx_personalization_progress_profile_ws").on(
+      t.socialProfileId,
       t.workspaceId
     ),
-  })
+    foreignKey({
+      name: "fk_personalization_progress_profile",
+      columns: [t.socialProfileId, t.workspaceId],
+      foreignColumns: [socialProfiles.id, socialProfiles.workspaceId],
+    }).onDelete("cascade"),
+    check(
+      "chk_personalization_progress_version",
+      sql`${t.personalizationVersion} >= 1`
+    ),
+  ]
 );
 
 export type SocialProfile = typeof socialProfiles.$inferSelect;

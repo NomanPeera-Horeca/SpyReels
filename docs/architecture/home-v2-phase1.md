@@ -35,39 +35,72 @@ Files:
 - `shared/personalization/state.ts`: pure rules (resume step, four readiness signals, AI merge, edits, staleness, run status, handle parsing).
 - `drizzle/personalizationSchema.ts`: Drizzle tables. Not in `drizzle.config.ts`, not imported by runtime code.
 - `docs/architecture/drafts/onboarding_v2_personalization.sql`: matching SQL, unnumbered.
-- Guards: `shared/personalization/schemaGuard.test.ts` keeps Drizzle and SQL identical and blocks accidental use.
+- Server checks: `server/personalization/authorization.ts`, `server/personalization/analysisJobKey.ts`.
+- Guards: `shared/personalization/schemaGuard.test.ts` keeps Drizzle and SQL identical (columns, enums, FKs, CHECKs, unique keys) and blocks accidental use.
+- Real-database test: `shared/personalization/schema.mysql.test.ts` (runs only with `PERSONALIZATION_SCHEMA_TEST_DB`; skipped in CI).
 
 Design change from the earlier proposal: **no ALTER on `users` or `workspace_members`.** Those tables are read on every request; new columns in Drizzle before the migration runs would break every query on them. Use case, attribution and active profile get their own tables instead. Rollback = drop the new tables.
 
-| Table | Purpose | Key rules |
+### Everyone gets Goal, Audience and Pillars
+
+There is no post-count threshold and no "not applicable" step. Missing history changes where suggestions come from, never whether a step is shown.
+
+| Situation | Analysis availability | Suggestions allowed |
 |---|---|---|
-| `social_profiles` | Instagram, TikTok, YouTube profiles per workspace | unique (workspaceId, platform, normalizedHandle); soft delete; re-adding restores the row; `authorization` default none |
-| `workspace_member_active_profiles` | active profile per member | PK (workspaceId, userId) |
-| `user_onboarding_answers` | steps 3a and 3b | skip = null answer + `attributionSkippedAt`, never "other" |
-| `profile_analysis_runs` | one row per analysis | unique `idempotencyKey` = durable job key `profile_analysis:{profileId}:{inputHash}`; never deleted |
-| `profile_analysis_stages` | checklist stage status | PK (runId, stage); real job status only |
-| `personalization_items` | goal, audience, pillar, niche, language | `source`, `status` (suggested / confirmed / dismissed / superseded), `basedOnVersion`, `supersedesItemId` |
-| `personalization_progress` | stepper state per profile | goal / audience / pillars status incl. `not_applicable`; `personalizationVersion`; `completedAt`. Resume step is derived, not stored |
+| Any account with 1+ analyzed posts | `available` | measured (`performance_backed`) + recommended (`profile_inferred`) |
+| 0 public posts | `no_public_posts` | recommended only |
+| Private account | `private_account` | recommended only |
+| "I don't post yet" | `not_posting_yet` | recommended only |
+| Analysis failed / not found | `unavailable` | recommended only |
+| Analysis running | `in_progress` | recommended only (measured ones arrive later) |
 
-Every table carries `workspaceId` so every query filters by workspace.
+Every item carries `evidence`: `performance_backed`, `profile_inferred` or `user_provided`, so the UI can label measured findings differently from AI recommendations. Numbers are blocked twice: `validateSuggestion` in code, and DB CHECKs (`performance_backed` needs a run; a pillar view share needs `performance_backed`). A user cannot type a "measured" number.
 
-State rules (all in `state.ts`, all tested):
+"I don't post yet" = a `social_profiles` row with status `not_posting_yet` and no handle. Its strategy carries over when the user later adds their handle.
 
-- Four separate signals: personalization completed, analysis completed, recommendations ready, plan available.
-- AI merge only inserts. It never suggests over a confirmed or user-written goal, niche or language, and never re-adds a dismissed item.
-- Editing goal, audience or niche supersedes the old row, writes a confirmed `user_edited` row, bumps `personalizationVersion`, and makes older AI pillar suggestions stale. Nothing is deleted.
-- Fewer than 10 posts: Audience and Pillars start as `not_applicable`.
+### Isolation guarantees
 
-Still to do after the migration number is confirmed: backfill from `users` columns into the personal workspace, `planCoachProfile` read-new-then-fallback, and the `profile_analysis` durable job type.
+| # | Requirement | Database | Server |
+|---|---|---|---|
+| 1 | Profile belongs to exactly one workspace | `workspaceId NOT NULL` + FK to `workspaces` | `assertSocialProfileInWorkspace` |
+| 2 | No selecting another workspace's profile | FK `(socialProfileId, workspaceId)` to `social_profiles (id, workspaceId)`; FK `(workspaceId, userId)` to `workspace_members` | `buildActiveSelection` takes workspace and user from ctx only |
+| 3 | Runs belong to the right profile and workspace | composite FK `(socialProfileId, workspaceId)` | `assertChildOfProfile` |
+| 4 | Items cannot attach to unrelated profiles | composite FK `(socialProfileId, workspaceId)`; FK `(analysisRunId, socialProfileId)` to the run | `assertChildOfProfile` (also for the superseded item) |
+| 5 | Switching workspace exposes nothing | every row pinned by composite FKs | `ctx.workspaceId` is membership-checked in `server/_core/workspaceContext.ts`; `resolveActiveProfileId` ignores foreign ids |
+| 6 | No invalid active selection | hard delete and member removal cascade the selection | soft delete: `planProfileDeactivation` clears selections first; readers ignore stale ones |
+| 7 | Server-side permissions | n/a | NOT_FOUND for other workspaces; removing a profile is owner-only |
+
+Tested on real MySQL 8.0 (`schema.mysql.test.ts`, 21 attack cases). A mutation check (weakening one FK) made the suite fail, so the tests do guard.
+
+### Seven-table review
+
+| Table | Responsibility | Why separate | Could an existing table do it? | Multi-profile |
+|---|---|---|---|---|
+| `social_profiles` | identity + public facts of each account (or "not posting yet") | the owner of everything below; workspace-scoped | `users.instagramHandle` is one handle per user and means "carousel watermark". No. | one row per account |
+| `workspace_member_active_profiles` | which profile each member is working on | per member, per workspace; changes often | `workspace_members` would need ALTER on a hot table. No. | switch without touching profiles |
+| `user_onboarding_answers` | steps 3a + 3b (account level, not per profile) | different owner (user) and lifetime | `users` would need ALTER on the hottest table. No. | answered once per user |
+| `profile_analysis_runs` | one row per analysis: inputs, status, post count | history, idempotency, links measured items to their run | `durable_jobs` is generic queue state and is cleaned up; it has no workspace or profile. No. | runs per profile |
+| `profile_analysis_stages` | per-stage status for the checklist | 4 rows per run; updated independently by the worker | could be a JSON column on runs, but stage updates would race (read-modify-write). Kept separate. | n/a |
+| `personalization_items` | goals, audiences, pillars, niche, language, with history | many rows per profile, versioned, with evidence | `users.selectedNicheSlugs/targetAudience` are single text fields with no history. No. | items per profile |
+| `personalization_progress` | stepper status, version, completion per profile | one row per profile; read on every Home load | could be derived from items, but "skipped" and the version are user actions, not item facts. Kept. | progress per profile |
+
+Conclusion: seven is the minimum that keeps one source of truth per fact without ALTERing hot tables. The only merge candidate is `profile_analysis_stages` into runs (JSON). Not recommended because of concurrent worker updates.
 
 ## 3. Migration gate (BLOCKED)
 
-Checked on 2026-10-16:
+Checked again on 2026-10-16:
 
-- `main` (ce3b64a): latest file `drizzle/0102_saved_reels_canonical_identity.sql`.
+- `main` (ce3b64a): latest file `drizzle/0102_saved_reels_canonical_identity.sql`; duplicate-number check passes.
 - All 166 remote branches and 128 PR heads: none contain `0103` or higher.
-- Note: branch `feature/content-agent-runtime-v1` (PR #28) has `0097_content_agent_runs.sql`, which collides with `main`'s `0097_ai_gateway_oauth.sql`.
-- Production `__drizzle_migrations`: **not verified** (no database access from this environment).
+- Note: PR #28 (`feature/content-agent-runtime-v1`) has `0097_content_agent_runs.sql`, which collides with `main`'s `0097_ai_gateway_oauth.sql`.
+- Production: **not verified** (no database access from this environment).
+
+Exact checks needed before a number is assigned (read-only, run by someone with production access):
+
+1. `SELECT id, hash, created_at FROM __drizzle_migrations ORDER BY created_at DESC LIMIT 15;` plus the applied-migrations log in `docs/deploy-notes/manual-migrations.md`: confirm 0102 is the latest applied and nothing higher exists.
+2. `SELECT VERSION();` must be 8.0.16 or later (CHECK constraints are enforced from 8.0.16).
+3. `SHOW CREATE TABLE workspaces; SHOW CREATE TABLE workspace_members; SHOW CREATE TABLE users;` collation must be `utf8mb4_0900_ai_ci` and `users.id` must be `int` (foreign keys fail otherwise).
+4. `SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('social_profiles','workspace_member_active_profiles','user_onboarding_answers','profile_analysis_runs','profile_analysis_stages','personalization_items','personalization_progress');` must return nothing.
 
 Rule: no migration file is created until the CEO confirms the next number against production.
 

@@ -8,12 +8,13 @@
 import {
   ANALYSIS_STAGES,
   INVALIDATES_ON_EDIT,
-  MIN_POSTS_FOR_FULL_PERSONALIZATION,
   PERSONALIZATION_STEPS,
   PROFILE_ANALYSIS_JOB_TYPE,
+  type AnalysisAvailability,
   type AnalysisRunStatus,
   type AnalysisStage,
   type AnalysisStageStatus,
+  type ItemEvidence,
   type ItemPayloadByKind,
   type ItemSource,
   type ItemStatus,
@@ -21,6 +22,7 @@ import {
   type PersonalizationItemKind,
   type PersonalizationStep,
   type SocialPlatform,
+  type SocialProfileStatus,
   type StepStatus,
 } from "./model";
 
@@ -106,10 +108,69 @@ export function parseSocialHandle(
 }
 
 /* ------------------------------------------------------------------ */
+/* Analysis availability (never gates a step)                          */
+/* ------------------------------------------------------------------ */
+
+/**
+ * What history-based analysis can offer. Post count only decides whether
+ * there is ANY measured data (0 vs 1+). There is no minimum threshold:
+ * a creator with 3 posts gets real numbers for those 3 posts.
+ */
+export function resolveAnalysisAvailability(input: {
+  profileStatus: SocialProfileStatus;
+  latestRunStatus: AnalysisRunStatus | null;
+  postsInWindow: number | null;
+}): AnalysisAvailability {
+  if (input.profileStatus === "not_posting_yet") return "not_posting_yet";
+  if (input.profileStatus === "private") return "private_account";
+  if (
+    input.profileStatus === "not_found" ||
+    input.profileStatus === "lookup_failed"
+  ) {
+    return "unavailable";
+  }
+  if (
+    input.latestRunStatus === "queued" ||
+    input.latestRunStatus === "running"
+  ) {
+    return "in_progress";
+  }
+  if (
+    input.latestRunStatus === "succeeded" ||
+    input.latestRunStatus === "partial"
+  ) {
+    return (input.postsInWindow ?? 0) > 0 ? "available" : "no_public_posts";
+  }
+  if (input.latestRunStatus === "failed") return "unavailable";
+  return "in_progress";
+}
+
+/** Evidence a NEW AI suggestion may claim given what analysis can offer. */
+export function allowedSuggestionEvidence(
+  availability: AnalysisAvailability
+): ItemEvidence[] {
+  return availability === "available"
+    ? ["performance_backed", "profile_inferred"]
+    : ["profile_inferred"];
+}
+
+/**
+ * Steps are never blocked by analysis. A user can always confirm or skip,
+ * and can always type their own value, whatever the post count or account state.
+ */
+export function canCompleteStep(
+  _step: PersonalizationStep,
+  _availability: AnalysisAvailability
+): true {
+  return true;
+}
+
+/* ------------------------------------------------------------------ */
 /* Resume position                                                     */
 /* ------------------------------------------------------------------ */
 
 export type OnboardingProgressInput = {
+  /** Confirmed public profile OR an "I don't post yet" profile. */
   hasConfirmedProfile: boolean;
   primaryUseCaseAnswered: boolean;
   /** Answered OR skipped. Skip is stored as null answer + skippedAt. */
@@ -118,11 +179,7 @@ export type OnboardingProgressInput = {
   completedAt: Date | null;
 };
 
-const STEP_DONE: ReadonlySet<StepStatus> = new Set([
-  "confirmed",
-  "skipped",
-  "not_applicable",
-]);
+const STEP_DONE: ReadonlySet<StepStatus> = new Set(["confirmed", "skipped"]);
 
 /** Where a returning user lands: the first step that is not finished. */
 export function resolveResumeStep(p: OnboardingProgressInput): OnboardingStep {
@@ -136,21 +193,12 @@ export function resolveResumeStep(p: OnboardingProgressInput): OnboardingStep {
   return "done";
 }
 
-/** Data rule: with fewer than 10 posts, only Goal is shown. */
-export function initialStepStatuses(
-  postsInWindow: number | null
-): Record<PersonalizationStep, StepStatus> {
-  const thin =
-    postsInWindow !== null &&
-    postsInWindow < MIN_POSTS_FOR_FULL_PERSONALIZATION;
-  return {
-    goal: "pending",
-    audience: thin ? "not_applicable" : "pending",
-    pillars: thin ? "not_applicable" : "pending",
-  };
+/** Every profile starts with all three stepper steps. No data rule removes one. */
+export function initialStepStatuses(): Record<PersonalizationStep, StepStatus> {
+  return { goal: "pending", audience: "pending", pillars: "pending" };
 }
 
-/** Personalization is complete when every stepper step is confirmed, skipped or not applicable. */
+/** Personalization is complete when every stepper step is confirmed or skipped. */
 export function isPersonalizationComplete(
   stepStatus: Record<PersonalizationStep, StepStatus>
 ): boolean {
@@ -179,7 +227,8 @@ export type ReadinessSignals = {
 
 /**
  * The four signals never imply each other. A user can finish personalization
- * while analysis is still running, and a plan can exist from before.
+ * while analysis is still running (or will never run), and a plan can exist
+ * from before.
  */
 export function deriveReadiness(input: ReadinessInput): ReadinessSignals {
   return {
@@ -204,14 +253,26 @@ export type ItemRecord<
   payload: ItemPayloadByKind[K];
   source: ItemSource;
   status: ItemStatus;
+  evidence: ItemEvidence;
+  /** Analysis run that produced it. Required for performance_backed. */
+  analysisRunId: string | null;
   /** personalizationVersion the item was created under. */
   basedOnVersion: number;
+  /** personalizationVersion when the user dismissed it (dismissed rows only). */
+  dismissedAtVersion: number | null;
   supersedesItemId: string | null;
 };
 
 export type NewItem<
   K extends PersonalizationItemKind = PersonalizationItemKind,
 > = Omit<ItemRecord<K>, "id">;
+
+export type AiSuggestion = {
+  kind: PersonalizationItemKind;
+  payload: ItemPayloadByKind[PersonalizationItemKind];
+  evidence: Exclude<ItemEvidence, "user_provided">;
+  analysisRunId: string | null;
+};
 
 const LIVE: ReadonlySet<ItemStatus> = new Set(["suggested", "confirmed"]);
 
@@ -241,6 +302,36 @@ export function itemIdentity(
   }
 }
 
+export type SuggestionProblem =
+  | "performance_evidence_without_analysis"
+  | "performance_evidence_without_run"
+  | "numbers_without_performance_evidence";
+
+/**
+ * Rejects suggestions that would present invented performance data:
+ * - performance_backed only when analysis is actually available, and with a run id
+ * - a pillar view share only on performance_backed pillars
+ */
+export function validateSuggestion(
+  s: AiSuggestion,
+  availability: AnalysisAvailability
+): SuggestionProblem | null {
+  if (s.evidence === "performance_backed") {
+    if (
+      !allowedSuggestionEvidence(availability).includes("performance_backed")
+    ) {
+      return "performance_evidence_without_analysis";
+    }
+    if (!s.analysisRunId) return "performance_evidence_without_run";
+  }
+  if (s.kind === "pillar" && s.evidence !== "performance_backed") {
+    if ((s.payload as ItemPayloadByKind["pillar"]).viewSharePercent !== null) {
+      return "numbers_without_performance_evidence";
+    }
+  }
+  return null;
+}
+
 /** Kinds where the user has exactly one current value. */
 const SINGLE_VALUE_KINDS: ReadonlySet<PersonalizationItemKind> = new Set([
   "goal",
@@ -250,27 +341,35 @@ const SINGLE_VALUE_KINDS: ReadonlySet<PersonalizationItemKind> = new Set([
 
 export type AiMergePlan = {
   insert: NewItem[];
-  skipped: Array<{ kind: PersonalizationItemKind; reason: string }>;
+  skipped: Array<{
+    kind: PersonalizationItemKind;
+    reason: "user_value_locked" | "duplicate" | "dismissed" | SuggestionProblem;
+  }>;
 };
 
 /**
  * Merge AI suggestions into existing items. Rules:
  * - Never changes or removes an existing row. Inserts only.
- * - Never adds a suggestion the user already has (live) or dismissed.
- * - For single-value kinds, never suggests over a confirmed or user-written value.
+ * - Never suggests over a confirmed or user-written single value (goal, niche, language).
+ * - Never re-adds something already live.
+ * - A dismissed suggestion only comes back as a legitimate NEW recommendation:
+ *   the user's answers changed since the dismissal (personalizationVersion moved on).
+ * - Rejects suggestions with invented performance data (see validateSuggestion).
  */
 export function planAiSuggestionMerge(
   existing: ItemRecord[],
-  suggestions: Array<{
-    kind: PersonalizationItemKind;
-    payload: ItemPayloadByKind[PersonalizationItemKind];
-  }>,
-  currentVersion: number
+  suggestions: AiSuggestion[],
+  currentVersion: number,
+  availability: AnalysisAvailability
 ): AiMergePlan {
-  const seen = new Set<string>();
+  const live = new Set<string>();
+  const dismissedAt = new Map<string, number>();
   for (const item of existing) {
-    if (LIVE.has(item.status) || item.status === "dismissed") {
-      seen.add(itemIdentity(item.kind, item.payload));
+    const key = itemIdentity(item.kind, item.payload);
+    if (LIVE.has(item.status)) live.add(key);
+    if (item.status === "dismissed") {
+      const v = item.dismissedAtVersion ?? item.basedOnVersion;
+      dismissedAt.set(key, Math.max(v, dismissedAt.get(key) ?? 0));
     }
   }
   const lockedSingle = new Set<PersonalizationItemKind>();
@@ -285,22 +384,35 @@ export function planAiSuggestionMerge(
 
   const plan: AiMergePlan = { insert: [], skipped: [] };
   for (const s of suggestions) {
+    const problem = validateSuggestion(s, availability);
+    if (problem) {
+      plan.skipped.push({ kind: s.kind, reason: problem });
+      continue;
+    }
     const key = itemIdentity(s.kind, s.payload);
     if (lockedSingle.has(s.kind)) {
       plan.skipped.push({ kind: s.kind, reason: "user_value_locked" });
       continue;
     }
-    if (seen.has(key)) {
-      plan.skipped.push({ kind: s.kind, reason: "duplicate_or_dismissed" });
+    if (live.has(key)) {
+      plan.skipped.push({ kind: s.kind, reason: "duplicate" });
       continue;
     }
-    seen.add(key);
+    const dismissedVersion = dismissedAt.get(key);
+    if (dismissedVersion !== undefined && currentVersion <= dismissedVersion) {
+      plan.skipped.push({ kind: s.kind, reason: "dismissed" });
+      continue;
+    }
+    live.add(key);
     plan.insert.push({
       kind: s.kind,
       payload: s.payload,
       source: "ai_suggested",
       status: "suggested",
+      evidence: s.evidence,
+      analysisRunId: s.analysisRunId,
       basedOnVersion: currentVersion,
+      dismissedAtVersion: null,
       supersedesItemId: null,
     });
   }
@@ -318,7 +430,10 @@ export type EditPlan = {
 /**
  * User edits an item. The old row is marked superseded (kept for history),
  * a new confirmed row is written, and dependent AI suggestions become stale.
- * Nothing is deleted.
+ * Nothing is deleted, and analysis runs are never touched.
+ *
+ * A pillar edit keeps its measured view share only if the user did not change
+ * the number; a user cannot type a "measured" number.
  */
 export function planItemEdit<K extends PersonalizationItemKind>(
   current: ItemRecord<K>,
@@ -328,21 +443,57 @@ export function planItemEdit<K extends PersonalizationItemKind>(
   if (!LIVE.has(current.status)) {
     throw new Error(`Cannot edit an item with status "${current.status}"`);
   }
+  let payload = newPayload;
+  if (current.kind === "pillar") {
+    const before = current.payload as ItemPayloadByKind["pillar"];
+    const after = newPayload as ItemPayloadByKind["pillar"];
+    const keepMeasured =
+      current.evidence === "performance_backed" &&
+      after.viewSharePercent === before.viewSharePercent;
+    payload = {
+      ...after,
+      viewSharePercent: keepMeasured ? before.viewSharePercent : null,
+    } as ItemPayloadByKind[K];
+  }
   const invalidatedKinds = INVALIDATES_ON_EDIT[current.kind];
   const nextVersion =
     invalidatedKinds.length > 0 ? currentVersion + 1 : currentVersion;
+  const keepsMeasurement =
+    current.kind === "pillar" &&
+    (payload as ItemPayloadByKind["pillar"]).viewSharePercent !== null;
   return {
     supersedeItemId: current.id,
     insert: {
       kind: current.kind,
-      payload: newPayload,
+      payload,
       source: "user_edited",
       status: "confirmed",
+      // An edited pillar that keeps its measured share stays tied to the run that measured it.
+      evidence: keepsMeasurement ? "performance_backed" : "user_provided",
+      analysisRunId: keepsMeasurement ? current.analysisRunId : null,
       basedOnVersion: nextVersion,
+      dismissedAtVersion: null,
       supersedesItemId: current.id,
     },
     nextVersion,
     invalidatedKinds,
+  };
+}
+
+/** User dismisses a suggestion. Recorded with the current version so it does not come back for the same answers. */
+export function planDismiss(
+  current: ItemRecord,
+  currentVersion: number
+): { itemId: string; status: "dismissed"; dismissedAtVersion: number } {
+  if (current.status !== "suggested") {
+    throw new Error(
+      `Only suggestions can be dismissed (got "${current.status}")`
+    );
+  }
+  return {
+    itemId: current.id,
+    status: "dismissed",
+    dismissedAtVersion: currentVersion,
   };
 }
 
@@ -364,13 +515,13 @@ export function isStaleSuggestion(
 }
 
 /**
- * Confirm button on a stepper screen: every live suggestion of that step's
- * kinds becomes confirmed. Returns the ids to update. Already confirmed rows
- * are left alone.
+ * Confirm button on a stepper screen: every live, NON-STALE suggestion of that
+ * step's kinds becomes confirmed. Already confirmed rows are left alone.
  */
 export function idsToConfirmForStep(
   step: PersonalizationStep,
-  items: ItemRecord[]
+  items: ItemRecord[],
+  currentVersion: number
 ): string[] {
   const kinds: PersonalizationItemKind[] =
     step === "goal"
@@ -379,13 +530,79 @@ export function idsToConfirmForStep(
         ? ["audience"]
         : ["pillar"];
   return items
-    .filter(i => kinds.includes(i.kind) && i.status === "suggested")
+    .filter(
+      i =>
+        kinds.includes(i.kind) &&
+        i.status === "suggested" &&
+        !isStaleSuggestion(i, currentVersion)
+    )
     .map(i => i.id);
+}
+
+/* ------------------------------------------------------------------ */
+/* Active profile                                                      */
+/* ------------------------------------------------------------------ */
+
+export type ProfileForSelection = {
+  id: string;
+  workspaceId: string;
+  deletedAt: Date | null;
+  createdAt: Date;
+};
+
+/**
+ * Which profile a member is working on. A stored selection is only honored
+ * if it points to a live profile in THIS workspace. Otherwise fall back to
+ * the oldest live profile in the workspace, or null. A stale or foreign id
+ * is never returned.
+ */
+export function resolveActiveProfileId(input: {
+  workspaceId: string;
+  storedSelectionId: string | null;
+  profiles: ProfileForSelection[];
+}): { profileId: string | null; selectionWasStale: boolean } {
+  const usable = input.profiles
+    .filter(p => p.workspaceId === input.workspaceId && p.deletedAt === null)
+    .sort(
+      (a, b) =>
+        a.createdAt.getTime() - b.createdAt.getTime() ||
+        a.id.localeCompare(b.id)
+    );
+  const stored = input.storedSelectionId
+    ? usable.find(p => p.id === input.storedSelectionId)
+    : undefined;
+  if (stored) return { profileId: stored.id, selectionWasStale: false };
+  return {
+    profileId: usable[0]?.id ?? null,
+    selectionWasStale: input.storedSelectionId !== null,
+  };
 }
 
 /* ------------------------------------------------------------------ */
 /* Analysis runs                                                       */
 /* ------------------------------------------------------------------ */
+
+/**
+ * Canonical analysis input. Same profile + same account + same UTC day = same
+ * fingerprint, so repeated taps, retries and page reloads map to one job.
+ */
+export function analysisInputFingerprint(input: {
+  socialProfileId: string;
+  platform: SocialPlatform;
+  normalizedHandle: string;
+  platformAccountId: string | null;
+  requestedAt: Date;
+}): string {
+  const day = input.requestedAt.toISOString().slice(0, 10);
+  return [
+    "v1",
+    input.socialProfileId,
+    input.platform,
+    input.normalizedHandle,
+    input.platformAccountId ?? "",
+    day,
+  ].join("|");
+}
 
 /** Same profile + same inputs = same durable job. A duplicate enqueue is a no-op. */
 export function profileAnalysisIdempotencyKey(
