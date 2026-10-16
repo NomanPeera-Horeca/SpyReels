@@ -1,6 +1,6 @@
 # Home v2 + New Onboarding: Phase 1 groundwork
 
-Status: Phase 1 only. Flags added, OFF by default. No UI, no schema, no migrations.
+Status: flags added (OFF by default) and the personalization model drafted. No UI, no live schema, no migrations.
 
 ## 1. Feature flags
 
@@ -27,28 +27,38 @@ Status: Phase 1 only. Flags added, OFF by default. No UI, no schema, no migratio
 
 Known follow-up for when the flag is turned on: `pages/Dashboard.tsx:2432` sends "back" to `/`. It should point to `/research` before rollout.
 
-## 2. Personalization data model (PROPOSED, not implemented)
+## 2. Personalization data model (DRAFT, coded, not migrated)
 
-Ownership: user (account answers) > workspace (owns social profiles) > social profile (owns analysis + personalization) > membership (active profile per member).
+Files:
 
-| Table / column | Purpose | Key rules |
+- `shared/personalization/model.ts`: shared values (platforms, use cases, attribution, steps, statuses, stages).
+- `shared/personalization/state.ts`: pure rules (resume step, four readiness signals, AI merge, edits, staleness, run status, handle parsing).
+- `drizzle/personalizationSchema.ts`: Drizzle tables. Not in `drizzle.config.ts`, not imported by runtime code.
+- `docs/architecture/drafts/onboarding_v2_personalization.sql`: matching SQL, unnumbered.
+- Guards: `shared/personalization/schemaGuard.test.ts` keeps Drizzle and SQL identical and blocks accidental use.
+
+Design change from the earlier proposal: **no ALTER on `users` or `workspace_members`.** Those tables are read on every request; new columns in Drizzle before the migration runs would break every query on them. Use case, attribution and active profile get their own tables instead. Rollback = drop the new tables.
+
+| Table | Purpose | Key rules |
 |---|---|---|
-| `social_profiles` | Instagram, TikTok, YouTube profiles per workspace | unique (workspaceId, platform, normalizedHandle); public facts + fetchedAt; `authorization` none / authorized / reconnect_required; soft delete |
-| `workspaceMembers.activeSocialProfileId` | active profile per member | nullable |
-| `users.primaryUseCase`, `users.attributionSource`, `*AnsweredAt` | step 3a and 3b answers | nullable; a skip stays null, never "Other" |
-| `profile_analysis_runs` | one run per analysis | links to `durable_jobs` key `profile_analysis:{profileId}:{inputHash}`; status queued / running / partial / succeeded / failed; never deleted |
-| `profile_analysis_stages` | per-stage status for the checklist | 4 stages, real status only |
-| `personalization_items` | goals, audiences, pillars, niche, language | `source` ai_suggested / user_entered / user_edited; `status` suggested / confirmed / dismissed; `version`, `supersedesId`, `analysisRunId` |
-| `personalization_progress` | one row per profile | per-step status pending / suggested / confirmed / skipped; `resumeStep`; `completedAt`; `personalizationVersion` |
+| `social_profiles` | Instagram, TikTok, YouTube profiles per workspace | unique (workspaceId, platform, normalizedHandle); soft delete; re-adding restores the row; `authorization` default none |
+| `workspace_member_active_profiles` | active profile per member | PK (workspaceId, userId) |
+| `user_onboarding_answers` | steps 3a and 3b | skip = null answer + `attributionSkippedAt`, never "other" |
+| `profile_analysis_runs` | one row per analysis | unique `idempotencyKey` = durable job key `profile_analysis:{profileId}:{inputHash}`; never deleted |
+| `profile_analysis_stages` | checklist stage status | PK (runId, stage); real job status only |
+| `personalization_items` | goal, audience, pillar, niche, language | `source`, `status` (suggested / confirmed / dismissed / superseded), `basedOnVersion`, `supersedesItemId` |
+| `personalization_progress` | stepper state per profile | goal / audience / pillars status incl. `not_applicable`; `personalizationVersion`; `completedAt`. Resume step is derived, not stored |
 
-State rules:
+Every table carries `workspaceId` so every query filters by workspace.
 
-- Four separate signals: personalization completed, analysis completed, recommendations ready, 30-Day Plan available. None implies another.
-- Confirmed items are never overwritten by AI. AI only adds new suggested rows.
-- Editing a goal or audience writes a new row (old row superseded, kept), bumps `personalizationVersion`, and marks pillar suggestions from older versions stale. Analytics and run history are never deleted.
-- Analysis runs on the existing durable job system (`server/durableJobs/`): add job type `profile_analysis`.
-- Backfill: copy each user's `selectedNicheSlugs`, `businessDescription`, `targetAudience` into their personal workspace as `user_entered` + `confirmed`. Do not create a profile from `users.instagramHandle` (it is a carousel watermark today).
-- During the flag period, `server/planCoachProfile.ts` reads new items first and falls back to the `users` columns.
+State rules (all in `state.ts`, all tested):
+
+- Four separate signals: personalization completed, analysis completed, recommendations ready, plan available.
+- AI merge only inserts. It never suggests over a confirmed or user-written goal, niche or language, and never re-adds a dismissed item.
+- Editing goal, audience or niche supersedes the old row, writes a confirmed `user_edited` row, bumps `personalizationVersion`, and makes older AI pillar suggestions stale. Nothing is deleted.
+- Fewer than 10 posts: Audience and Pillars start as `not_applicable`.
+
+Still to do after the migration number is confirmed: backfill from `users` columns into the personal workspace, `planCoachProfile` read-new-then-fallback, and the `profile_analysis` durable job type.
 
 ## 3. Migration gate (BLOCKED)
 

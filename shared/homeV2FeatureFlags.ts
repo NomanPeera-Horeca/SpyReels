@@ -69,7 +69,7 @@ export function resolveDesktopRootView(input: {
   const params = new URLSearchParams(
     input.search.startsWith("?") ? input.search.slice(1) : input.search
   );
-  if (RESEARCH_QUERY_PARAMS.some((key) => params.has(key))) return "research";
+  if (RESEARCH_QUERY_PARAMS.some(key => params.has(key))) return "research";
   return "home-v2";
 }
 
