@@ -42,6 +42,23 @@ import {
   type PlatformError,
 } from "./steps";
 import { AudienceStep, GoalStep, PillarsStep, type AiState, type StepItem } from "./step4";
+import { WhatWorksStep } from "./step3c";
+
+/** Same breakpoint as OnboardingShell: below it there is no right panel. */
+const NO_PANEL_QUERY = "(max-width: 900px)";
+
+function useNoRightPanel(): boolean {
+  const [match, setMatch] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(NO_PANEL_QUERY).matches
+  );
+  useEffect(() => {
+    const mql = window.matchMedia(NO_PANEL_QUERY);
+    const on = () => setMatch(mql.matches);
+    mql.addEventListener("change", on);
+    return () => mql.removeEventListener("change", on);
+  }, []);
+  return match;
+}
 
 type Screen =
   | "platform"
@@ -49,6 +66,7 @@ type Screen =
   | "niche"
   | "use_case"
   | "attribution"
+  | "what_works"
   | PersonalizationStep;
 
 const STEP_ORDER: PersonalizationStep[] = ["goal", "audience", "pillars"];
@@ -70,6 +88,7 @@ function screenFromResume(step: string): Screen | "done" {
   }
 }
 
+/** Redirects once after render (never set state during render). */
 function ProfileLost({ onReset }: { onReset: () => void }) {
   useEffect(() => onReset(), [onReset]);
   return null;
@@ -103,6 +122,7 @@ export default function OnboardingV2Flow() {
   const [niche, setNiche] = useState<string | null>(null);
   const [requested, setRequested] = useState<Partial<Record<PersonalizationStep, number>>>({});
   const completing = useRef(false);
+  const noRightPanel = useNoRightPanel();
 
   const track = useCallback(
     (event: string, props?: Record<string, unknown>) => {
@@ -276,6 +296,10 @@ export default function OnboardingV2Flow() {
       await refresh();
     }, "analysis_retry");
 
+  // Mobile 3c appears only with real best-Reel data; desktop shows insights in the right panel.
+  const showWhatWorks = noRightPanel && Boolean(state?.analysis?.bestPost);
+  const afterAttribution = () => setScreen(showWhatWorks ? "what_works" : "goal");
+
   const goStep4 = (from: PersonalizationStep, action: "confirm" | "skip") =>
     run(async () => {
       await resolveStep.mutateAsync({ step: from, action });
@@ -309,7 +333,7 @@ export default function OnboardingV2Flow() {
     onBack: () => {
       track("back", { step });
       const i = STEP_ORDER.indexOf(step);
-      setScreen(i > 0 ? STEP_ORDER[i - 1] : "attribution");
+      setScreen(i > 0 ? STEP_ORDER[i - 1] : showWhatWorks ? "what_works" : "attribution");
     },
     onSkip: () => void goStep4(step, "skip"),
     onConfirm: () => void goStep4(step, "confirm"),
@@ -439,7 +463,7 @@ export default function OnboardingV2Flow() {
               await saveAttribution.mutateAsync({ value: null });
               track("step_skipped", { step: "attribution" });
               await refresh();
-              setScreen("goal");
+              afterAttribution();
             }, "attribution")
           }
           onContinue={() =>
@@ -448,11 +472,25 @@ export default function OnboardingV2Flow() {
               await saveAttribution.mutateAsync({ value: source });
               track("step_completed", { step: "attribution", value: source });
               await refresh();
-              setScreen("goal");
+              afterAttribution();
             }, "attribution")
           }
         />
       );
+    case "what_works": {
+      const best = state.analysis?.bestPost;
+      if (!best) return <ProfileLost onReset={() => setScreen("goal")} />;
+      return (
+        <WhatWorksStep
+          best={best}
+          onBack={() => setScreen("attribution")}
+          onContinue={() => {
+            track("step_completed", { step: "what_works" });
+            setScreen("goal");
+          }}
+        />
+      );
+    }
     case "goal": {
       const goal = of<GoalPayload>("goal")[0] ?? null;
       return (

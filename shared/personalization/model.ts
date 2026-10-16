@@ -292,6 +292,8 @@ export type NormalizedPost = {
   comments: number | null;
   durationSec: number | null;
   caption: string | null;
+  /** Provider thumbnail (may expire). Optional: older v1 snapshots lack it. */
+  thumbnailUrl?: string | null;
 };
 
 /** Stored on profile_analysis_runs.sourceSnapshot after stage 1. */

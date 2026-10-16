@@ -53,6 +53,14 @@ export const COPY = {
   niche: {
     title: "What do you want to grow in?",
   },
+  whatWorks: {
+    title: "What works for you",
+    subtitle: "We studied your last 6 months of posts.",
+    label: "Your best Reel",
+    views: "views",
+    yourFollowers: "your followers",
+    play: "Play your best Reel",
+  },
   personalization: {
     subtitleFromPosts: "From your posts. Confirm or edit anything.",
     subtitle: "Confirm or edit anything.",

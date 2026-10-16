@@ -51,6 +51,7 @@ import {
 } from "../../../drizzle/personalizationSchema";
 import { users } from "../../../drizzle/schema";
 import type { Db } from "../db/analysisStore";
+import { pickBestPost, type BestPost } from "@shared/personalization/bestPost";
 import { toItemRecord } from "../db/rows";
 
 export type OnboardingCtx = { userId: number; workspaceId: string };
@@ -101,6 +102,8 @@ export type OnboardingStateView = {
     stages: Partial<Record<AnalysisStage, AnalysisStageStatus>>;
     errorCode: string | null;
     postsInWindow: number | null;
+    /** Mobile 3c "Your best Reel". Real snapshot data only; null when not enough posts. */
+    bestPost: BestPost | null;
   } | null;
   steps: Record<PersonalizationStep, StepStatus>;
   version: number;
@@ -203,6 +206,10 @@ export async function loadOnboardingState(db: Db, ctx: OnboardingCtx): Promise<O
         stages,
         errorCode: run.errorCode,
         postsInWindow: run.postsInWindow,
+        bestPost:
+          run.status === "succeeded" || run.status === "partial"
+            ? pickBestPost(run.sourceSnapshot)
+            : null,
       };
     }
   }

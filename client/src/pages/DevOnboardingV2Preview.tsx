@@ -2,7 +2,7 @@
  * DEV ONLY (routed only when import.meta.env.DEV). Renders each onboarding
  * v2 screen with clearly fake fixture data for visual QA against Figma.
  * Usage: /dev/onboarding-v2?screen=platform|profile|use_case|attribution|niche
- *        |goal|audience|pillars
+ *        |what_works|goal|audience|pillars
  *        &platform=instagram|tiktok|youtube &error=not_found &selected=1
  *        &run=running|failed|succeeded   (analysis line on 3a/3b)
  *        &ai=idle|running|failed|clarify &empty=1   (step 4)
@@ -31,6 +31,7 @@ import {
   UseCaseStep,
   type PlatformError,
 } from "@/components/onboarding-v2/steps";
+import { WhatWorksStep } from "@/components/onboarding-v2/step3c";
 import {
   AudienceStep,
   GoalStep,
@@ -175,6 +176,14 @@ export default function DevOnboardingV2Preview() {
           onChange={setSource}
           onBack={noop}
           onSkip={noop}
+          onContinue={noop}
+        />
+      );
+    case "what_works":
+      return (
+        <WhatWorksStep
+          best={{ postId: "x", url: "https://example.com/reel", thumbnailUrl: null, title: "Sample best Reel title for visual QA", views: 242_000, followerMultiple: 24 }}
+          onBack={noop}
           onContinue={noop}
         />
       );
