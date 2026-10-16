@@ -1,0 +1,103 @@
+/**
+ * SpyReels design-system foundation for the app (REUSE + EXTEND).
+ *
+ * REUSE: the locked Figma foundation tokens already shipped for public-web
+ * (Figma Pages 01 to 04). One source of truth, imported, never copied.
+ *
+ * EXTEND: Figma variables that exist in the locked foundation but were not yet
+ * in code. Values are taken from Figma (file RhR9xgyxthgIuL1FtgSKKr) exactly.
+ *
+ * Every name is prefixed --sr-, so nothing here changes the existing app
+ * theme (shadcn tokens in index.css). Only components that opt in use them.
+ */
+@import "../../../public-web/app/color-tokens.css";
+@import "../../../public-web/app/type-tokens.css";
+
+:root {
+  /* Shape primitives (Figma Shape Primitives) */
+  --sr-radius-8: 8px;
+  --sr-radius-10: 10px;
+  --sr-radius-12: 12px;
+  --sr-radius-14: 14px;
+  --sr-radius-16: 16px;
+  --sr-radius-20: 20px;
+  --sr-radius-24: 24px;
+
+  /* Shape semantic (Figma Shape, Marketing mode = default) */
+  --sr-shape-control-radius: var(--sr-radius-10);
+  --sr-shape-input-radius: var(--sr-radius-10);
+  --sr-shape-card-radius: var(--sr-radius-16);
+  --sr-shape-panel-radius: var(--sr-radius-20);
+  --sr-shape-menu-radius: var(--sr-radius-14);
+  --sr-shape-modal-radius: var(--sr-radius-24);
+  --sr-shape-badge-radius: var(--sr-radius-full);
+  --sr-shape-avatar-radius: var(--sr-radius-full);
+  --sr-shape-border-default-width: var(--sr-border-width-default);
+  --sr-shape-border-strong-width: var(--sr-border-width-strong);
+  --sr-shape-border-none-width: var(--sr-border-width-none);
+
+  /* Color variables present in Figma (Light) but not yet in code */
+  --sr-color-badge-neutral-background: var(--sr-neutral-100);
+  --sr-color-badge-neutral-foreground: var(--sr-neutral-600);
+  --sr-color-action-ghost-background: var(--sr-color-surface-default);
+  --sr-color-action-disabled-text: var(--sr-neutral-400);
+  --sr-color-focus-ring: var(--sr-color-focus-border);
+  /* Figma values equal the status foregrounds (#147a57, #b42318). */
+  --sr-color-performance-positive: var(--sr-color-status-success-foreground);
+  --sr-color-performance-neutral: var(--sr-neutral-600);
+  --sr-color-performance-negative: var(--sr-color-status-error-foreground);
+}
+
+/*
+ * Figma "Product" mode for Shape + Spacing/Layout. Figma applies it per
+ * instance (explicit variable mode), so code applies it per component the
+ * same way: only where the approved frame sets Product mode.
+ */
+.sr-mode-product {
+  --sr-shape-control-radius: var(--sr-radius-8);
+  --sr-shape-input-radius: var(--sr-radius-8);
+  --sr-shape-card-radius: var(--sr-radius-12);
+  --sr-shape-panel-radius: var(--sr-radius-14);
+  --sr-shape-menu-radius: var(--sr-radius-12);
+  --sr-shape-modal-radius: var(--sr-radius-16);
+  /* Code components still read the older --sr-radius-* aliases. */
+  --sr-radius-control: var(--sr-radius-8);
+  --sr-radius-input: var(--sr-radius-8);
+  --sr-radius-card: var(--sr-radius-12);
+  --sr-radius-panel: var(--sr-radius-14);
+  --sr-radius-menu: var(--sr-radius-12);
+  --sr-radius-modal: var(--sr-radius-16);
+
+  --sr-layout-page-gutter-desktop: 32px;
+  --sr-layout-page-gutter-tablet: 24px;
+  --sr-layout-page-gutter-mobile: 16px;
+  --sr-layout-section-gap: 48px;
+  --sr-layout-section-compact-gap: 32px;
+  --sr-layout-content-gap: 24px;
+  --sr-layout-card-gap: 16px;
+  --sr-layout-card-padding: 20px;
+  --sr-layout-panel-padding: 24px;
+  --sr-layout-control-gap: 8px;
+  --sr-layout-stack-md: 16px;
+  --sr-layout-stack-lg: 24px;
+  --sr-layout-grid-column-gap: 16px;
+  --sr-layout-grid-row-gap: 24px;
+  --sr-layout-container-max-width: 1280px;
+}
+
+/*
+ * Light-only surface scope. The app runs dark by default; the approved
+ * onboarding is designed in Figma Light mode only. Dark values for --sr-*
+ * do not exist in code yet, so a scope that opts in renders Light.
+ */
+.sr-scope-light {
+  color-scheme: light;
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  color: var(--sr-color-text-primary);
+  background: var(--sr-color-surface-default);
+  -webkit-font-smoothing: antialiased;
+}
+
+.sr-scope-light :where(h1, h2, h3, h4, p) {
+  margin: 0;
+}

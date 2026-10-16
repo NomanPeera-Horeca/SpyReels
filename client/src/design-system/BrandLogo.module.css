@@ -1,0 +1,25 @@
+/* Brand / SpyReels Logo (Figma 133:102): 132x45 slot, mark + wordmark. */
+.root {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sr-space-2);
+  height: 45px;
+  min-width: 132px;
+  color: var(--sr-color-text-primary);
+}
+
+.mark {
+  display: block;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+}
+
+.word {
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  font-size: var(--sr-type-product-card-title-size);
+  line-height: var(--sr-type-product-card-title-line);
+  font-weight: var(--sr-font-weight-bold);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}

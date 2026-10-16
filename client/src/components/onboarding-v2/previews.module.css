@@ -1,0 +1,106 @@
+/* Onboarding v2 right-panel previews (Figma page 15). Tokens only. */
+
+/* Step 1: the 720x900 right panel; cards are Result Card media (180x320). */
+.stack {
+  position: relative;
+  width: 720px;
+  height: 900px;
+  flex: 0 0 auto;
+}
+
+.stackCard {
+  position: absolute;
+  box-sizing: border-box;
+  width: 180px;
+  height: 320px;
+  overflow: hidden;
+  border: var(--sr-shape-border-default-width) solid var(--sr-color-border-default);
+  border-radius: var(--sr-radius-12);
+  background: var(--sr-neutral-100);
+  transform-origin: center;
+}
+
+.tierBadge {
+  position: absolute;
+  top: var(--sr-space-3);
+  left: var(--sr-space-3);
+  padding: var(--sr-space-2) var(--sr-space-3);
+  border-radius: var(--sr-radius-full);
+  background: var(--sr-color-status-success-background);
+  color: var(--sr-color-status-success-foreground);
+  white-space: nowrap;
+}
+
+.play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 44px;
+  height: 44px;
+  border: var(--sr-shape-border-default-width) solid var(--sr-color-border-default);
+  border-radius: var(--sr-radius-full);
+  background: var(--sr-color-surface-default);
+  transform: translate(-50%, -50%);
+}
+
+.phone {
+  margin: 0;
+}
+
+/* Mobile step 2: visitor view inline, cropped above the action bar. */
+.mobileVisitor {
+  width: calc(100% + var(--sr-space-5) * 2);
+  margin: 0 calc(var(--sr-space-5) * -1);
+  height: 420px;
+  overflow: hidden;
+}
+
+/* Steps 3a/3b: identity row at (100,140) and the checklist card below it. */
+.analysis {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-space-8);
+  width: 540px;
+  align-self: flex-start;
+  /* Figma: card at x=72, identity at x=100 of the 720 panel, top 140. */
+  margin: 140px auto 0 72px;
+}
+
+.identity {
+  display: flex;
+  align-items: center;
+  gap: var(--sr-space-4);
+  padding-left: calc(var(--sr-space-6) + var(--sr-space-1));
+}
+
+.avatar {
+  display: block;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  border-radius: var(--sr-radius-full);
+  background: var(--sr-neutral-100);
+  object-fit: cover;
+}
+
+.identityText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.name {
+  color: var(--sr-color-text-primary);
+}
+
+.handle {
+  color: var(--sr-color-text-primary);
+}
+
+.checklistCard {
+  width: 100%;
+}

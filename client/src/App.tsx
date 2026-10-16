@@ -6,11 +6,8 @@ import OnboardingGate from "@/components/OnboardingGate";
 import { Route, Switch, Redirect, useLocation, useSearch } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { isAdminPanelClient } from "@/admin/isAdminClient";
-import {
-  isDiscoveryV1Enabled,
-  isHomeV2Enabled,
-  isOnboardingV2Enabled,
-} from "@/lib/featureFlags";
+import { isDiscoveryV1Enabled } from "@/lib/featureFlags";
+import { useExperienceAccess } from "@/lib/experienceAccess";
 import { hasResearchPendingHandle } from "@/lib/researchPendingHandle";
 import {
   resolveDesktopRootView,
@@ -118,6 +115,8 @@ const ResetPassword = lazyWithRetry(() => import("./pages/ResetPassword"));
 const AcceptInvitation = lazyWithRetry(() => import("./pages/AcceptInvitation"));
 const PublicScriptView = lazyWithRetry(() => import("./pages/PublicScriptView"));
 
+/** Dev-only onboarding v2 screen preview (fixtures). Not routed in production builds. */
+const DevOnboardingV2Preview = lazyWithRetry(() => import("./pages/DevOnboardingV2Preview"));
 /** THROWAWAY: carousel layout preview. Remove with DevCarouselPreview page. */
 const DevCarouselPreview = lazyWithRetry(() => import("./pages/DevCarouselPreview"));
 /** THROWAWAY: remake workspace visual proof. Remove with DevRemakeWorkspacePreview. */
@@ -159,20 +158,34 @@ function AdminEmailOnly({ children }: { children: React.ReactNode }) {
  */
 function DesktopRootRoute() {
   const search = useSearch();
+  const { ready, access } = useExperienceAccess();
+  if (!ready) return null;
+  const homeV2Enabled = access.home === "v2";
   const view = resolveDesktopRootView({
-    homeV2Enabled: isHomeV2Enabled,
+    homeV2Enabled,
     search,
-    hasPendingResearchHandle: isHomeV2Enabled && hasResearchPendingHandle(),
+    hasPendingResearchHandle: homeV2Enabled && hasResearchPendingHandle(),
   });
   return view === "home-v2" ? <HomeV2 /> : <Home />;
 }
 
-/** "/onboarding" switch point. Flag off: the current onboarding, unchanged. */
+/** "/onboarding" inside the app layouts: always the current onboarding. */
 function OnboardingRoute() {
+  return <OnboardingPage />;
+}
+
+/**
+ * Top-level "/onboarding" switch point (server decides, per user).
+ * v2 renders full screen, outside the dashboard chrome, as in Figma.
+ * Everyone else gets the existing layouts and the current onboarding.
+ */
+function OnboardingEntry() {
+  const { ready, access } = useExperienceAccess();
+  if (!ready) return null;
   const variant = resolveOnboardingVariant({
-    onboardingV2Enabled: isOnboardingV2Enabled,
+    onboardingV2Enabled: access.onboarding === "v2",
   });
-  return variant === "v2" ? <OnboardingV2Page /> : <OnboardingPage />;
+  return variant === "v2" ? <OnboardingV2Page /> : <DashboardRouter />;
 }
 
 function MobileCreateRouter() {
@@ -406,6 +419,14 @@ function Router() {
             <AdminEmailOnly>
               <CarouselStudio />
             </AdminEmailOnly>
+          </OnboardingGate>
+        </Route>
+        {import.meta.env.DEV ? (
+          <Route path="/dev/onboarding-v2" component={DevOnboardingV2Preview} />
+        ) : null}
+        <Route path="/onboarding">
+          <OnboardingGate>
+            <OnboardingEntry />
           </OnboardingGate>
         </Route>
         {/* Everything else goes through DashboardLayout (which shows landing page if not auth'd) */}

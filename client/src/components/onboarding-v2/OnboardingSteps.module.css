@@ -1,0 +1,155 @@
+/*
+ * Onboarding v2 step layouts (Figma page 15, "Main flow"). Tokens only.
+ * Spacing follows the desktop frames: title -> subtitle 12, subtitle ->
+ * controls 16 to 20, option rows 8 apart, status line 32 above the title.
+ */
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-space-3);
+}
+
+.title {
+  color: var(--sr-color-text-primary);
+}
+
+.subtitle {
+  color: var(--sr-color-text-secondary);
+}
+
+.statusLine {
+  margin-bottom: var(--sr-space-8);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-space-4);
+  margin-top: var(--sr-space-4);
+}
+
+.platformRow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sr-space-2);
+}
+
+.platformTile {
+  height: 80px;
+  padding: var(--sr-space-3);
+  gap: var(--sr-space-2);
+}
+
+.platformLabel {
+  color: var(--sr-color-text-primary);
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-space-2);
+  margin-top: var(--sr-space-6);
+}
+
+.optionsGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sr-space-3);
+  margin-top: var(--sr-space-6);
+}
+
+.nicheGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sr-space-2);
+  margin-top: var(--sr-space-4);
+}
+
+.nicheTile {
+  align-items: flex-start;
+  height: 52px;
+  padding: var(--sr-space-3) var(--sr-space-3);
+  text-align: left;
+}
+
+.actionsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sr-space-3);
+  width: 100%;
+}
+
+.actionsEnd {
+  display: flex;
+  align-items: center;
+  gap: var(--sr-space-3);
+}
+
+/* Figma: the ghost label lines up with the content edge (x=100). */
+.ghostStart {
+  margin-left: calc(var(--sr-space-3) * -1);
+}
+
+.error {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-space-2);
+}
+
+.errorActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sr-space-2);
+}
+
+.linkButton {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sr-color-text-brand);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.linkButton:focus-visible {
+  outline: 2px solid var(--sr-color-focus-border);
+  outline-offset: 2px;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+}
+
+.mobileOnly {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .mobileOnly {
+    display: flex;
+    justify-content: center;
+    margin-top: var(--sr-space-6);
+  }
+}
+
+@media (max-width: 900px) {
+  .platformTile {
+    height: 80px;
+  }
+
+  .optionsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--sr-space-2);
+  }
+
+  .nicheGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

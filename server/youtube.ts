@@ -154,7 +154,7 @@ export interface YouTubeTranscriptResult {
   segments: Array<{ start: number; end: number; text: string }>;
 }
 
-async function fetchYouTubeChannel(handle: string): Promise<YouTubeChannelInfo> {
+export async function fetchYouTubeChannel(handle: string): Promise<YouTubeChannelInfo> {
   const cleanHandle = cleanYouTubeHandle(handle);
   const maxTries = 5;
 

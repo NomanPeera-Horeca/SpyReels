@@ -1,0 +1,42 @@
+/* Button / Ghost (Figma 32:71). Tokens only. */
+.root {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sr-layout-inline-gap);
+  box-sizing: border-box;
+  border: var(--sr-border-width-none);
+  border-radius: var(--sr-radius-8);
+  background: var(--sr-color-action-ghost-background);
+  color: var(--sr-color-text-primary);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.medium {
+  height: 44px;
+  min-height: 44px;
+  padding: var(--sr-space-3) var(--sr-space-4);
+}
+
+.large {
+  height: 52px;
+  min-height: 52px;
+  padding: var(--sr-space-4) var(--sr-space-5);
+}
+
+.root:hover:not(:disabled),
+.root:active:not(:disabled) {
+  background: var(--sr-color-surface-hover);
+}
+
+.root:focus-visible {
+  outline: none;
+  box-shadow: var(--sr-elevation-focus-neutral-action);
+}
+
+.root:disabled {
+  color: var(--sr-color-text-disabled);
+  cursor: not-allowed;
+}

@@ -6,6 +6,8 @@ export const PILOT_JOB_TYPES = [
   "featured_reel_transcription",
   "creator_radar_refresh",
   "queue_safety_probe",
+  "profile_analysis",
+  "personalization_recommendations",
 ] as const;
 
 export type PilotJobType = (typeof PILOT_JOB_TYPES)[number];

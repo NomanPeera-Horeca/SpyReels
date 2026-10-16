@@ -1,47 +1,13 @@
 import { parseResearchIntent } from "./researchIntent";
 
 /**
- * Feature flags for the new onboarding and Home v2.
+ * Routing helpers for the new onboarding and Home v2.
  *
- * Both flags are OFF unless explicitly set to "true", "1" or "yes".
- * Unlike DISCOVERY_V1_ENABLED, they stay off in development and test too,
- * so nobody sees the new experience by accident.
- *
- * Client values are fixed at build time (see vite.config.ts). Turning a flag
- * off and redeploying is the rollback. No database change is needed.
+ * WHO gets the new experience is decided per user on the server
+ * (shared/onboardingV2Access.ts, ONBOARDING_V2_MODE / HOME_V2_MODE), so it
+ * can be switched or rolled back without a rebuild. These helpers only turn
+ * that per-user answer into a route decision.
  */
-export const HOME_V2_ENV_KEY = "HOME_V2_ENABLED";
-export const ONBOARDING_V2_ENV_KEY = "ONBOARDING_V2_ENABLED";
-
-export function parseDefaultOffFlag(raw: string | undefined | null): boolean {
-  if (raw === undefined || raw === null) return false;
-  const v = raw.trim().toLowerCase();
-  return v === "true" || v === "1" || v === "yes";
-}
-
-export type HomeV2FlagInput = {
-  homeV2Raw: string | undefined | null;
-  onboardingV2Raw: string | undefined | null;
-};
-
-export type HomeV2Flags = {
-  onboardingV2Enabled: boolean;
-  /**
-   * Home v2 needs the new onboarding and personalization states. It only turns
-   * on when BOTH flags are on, so Home can never ship ahead of onboarding.
-   */
-  homeV2Enabled: boolean;
-};
-
-export function resolveHomeV2Flags(input: HomeV2FlagInput): HomeV2Flags {
-  const onboardingV2Enabled = parseDefaultOffFlag(input.onboardingV2Raw);
-  const homeV2Requested = parseDefaultOffFlag(input.homeV2Raw);
-  return {
-    onboardingV2Enabled,
-    homeV2Enabled: homeV2Requested && onboardingV2Enabled,
-  };
-}
-
 /** Query params that only the research page (pages/Home.tsx) understands. */
 const RESEARCH_QUERY_PARAMS = ["creator", "platform", "jobId"] as const;
 

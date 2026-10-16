@@ -2,75 +2,10 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  parseDefaultOffFlag,
   resolveDesktopRootView,
-  resolveHomeV2Flags,
   resolveOnboardingVariant,
 } from "./homeV2FeatureFlags";
 import { researchReturnTo } from "./researchIntent";
-
-describe("parseDefaultOffFlag", () => {
-  it("is off when unset, empty or unknown, in every environment", () => {
-    for (const raw of [
-      undefined,
-      null,
-      "",
-      "  ",
-      "false",
-      "0",
-      "no",
-      "on",
-      "enabled",
-      "TRUEISH",
-    ]) {
-      expect(parseDefaultOffFlag(raw)).toBe(false);
-    }
-  });
-
-  it("is on only for explicit true values", () => {
-    for (const raw of ["true", "TRUE", " 1 ", "yes", "Yes"]) {
-      expect(parseDefaultOffFlag(raw)).toBe(true);
-    }
-  });
-});
-
-describe("resolveHomeV2Flags", () => {
-  it("defaults both flags off", () => {
-    expect(
-      resolveHomeV2Flags({ homeV2Raw: undefined, onboardingV2Raw: undefined })
-    ).toEqual({
-      homeV2Enabled: false,
-      onboardingV2Enabled: false,
-    });
-  });
-
-  it("never enables Home v2 without the new onboarding", () => {
-    expect(
-      resolveHomeV2Flags({ homeV2Raw: "true", onboardingV2Raw: undefined })
-        .homeV2Enabled
-    ).toBe(false);
-    expect(
-      resolveHomeV2Flags({ homeV2Raw: "true", onboardingV2Raw: "false" })
-        .homeV2Enabled
-    ).toBe(false);
-  });
-
-  it("allows the new onboarding on its own", () => {
-    expect(
-      resolveHomeV2Flags({ homeV2Raw: undefined, onboardingV2Raw: "true" })
-    ).toEqual({
-      homeV2Enabled: false,
-      onboardingV2Enabled: true,
-    });
-  });
-
-  it("enables Home v2 only when both are on", () => {
-    expect(
-      resolveHomeV2Flags({ homeV2Raw: "1", onboardingV2Raw: "yes" })
-        .homeV2Enabled
-    ).toBe(true);
-  });
-});
 
 describe("resolveDesktopRootView", () => {
   const off = { homeV2Enabled: false, hasPendingResearchHandle: false };

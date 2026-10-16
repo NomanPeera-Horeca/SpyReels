@@ -188,7 +188,7 @@ describe("migration gate: drafts cannot reach a database by accident", () => {
     ).not.toContain("personalizationSchema");
   });
 
-  it("no runtime code imports the draft schema yet", () => {
+  it("only personalization modules touch the personalization tables", () => {
     const hits = execSync(
       'git grep --untracked -l -E "(from|import\\()\\s*[\'\\"][^\'\\"]*personalizationSchema" -- server client/src shared public-web scripts || true',
       { cwd: root }
@@ -196,43 +196,70 @@ describe("migration gate: drafts cannot reach a database by accident", () => {
       .toString()
       .split("\n")
       .filter(Boolean)
-      .filter(f => !f.endsWith(".test.ts"));
+      .filter(f => !f.endsWith(".test.ts"))
+      .filter(f => !f.startsWith("server/personalization/"));
     expect(hits).toEqual([]);
   });
 
-  it("the live app (routers, worker, client, core) does not import any personalization module yet", () => {
+  it("the live server reaches personalization code only through the gated entry points", () => {
     const hits = execSync(
-      'git grep --untracked -l -E "(from|import\\()\\s*[\'\\"][^\'\\"]*personalization/" -- server client/src shared public-web || true',
+      'git grep --untracked -l -E "(from|import\\()\\s*[\'\\"][^\'\\"]*personalization/" -- server || true',
       { cwd: root }
     )
       .toString()
       .split("\n")
       .filter(Boolean)
       .filter(f => !f.endsWith(".test.ts"))
-      .filter(
-        f =>
-          !f.startsWith("server/personalization/") &&
-          !f.startsWith("shared/personalization/")
-      );
-    expect(hits).toEqual([]);
+      .filter(f => !f.startsWith("server/personalization/"));
+    // onboardingV2Router: every procedure but `experience` checks the rollout switch.
+    // pilotHandlers: registers the two job types; jobs are only enqueued by that router.
+    expect(hits.sort()).toEqual([
+      "server/durableJobs/pilotHandlers.ts",
+      "server/routers/onboardingV2Router.ts",
+    ]);
   });
 
-  it("profile_analysis is not registered with the durable worker yet", () => {
+  it("every onboarding v2 procedure except `experience` is behind the rollout switch", () => {
+    const src = readFileSync(
+      path.join(root, "server/routers/onboardingV2Router.ts"),
+      "utf8"
+    );
+    const procs = [...src.matchAll(/^  (\w+): (\w+)/gm)].map(m => [m[1], m[2]]);
+    expect(procs.length).toBeGreaterThan(5);
+    for (const [name, builder] of procs) {
+      expect([name, builder]).toEqual([
+        name,
+        name === "experience" ? "protectedProcedure" : "v2Procedure",
+      ]);
+    }
+  });
+
+  it("personalization jobs use the existing durable queue, off by default", () => {
     const types = readFileSync(
       path.join(root, "server/durableJobs/types.ts"),
       "utf8"
     );
-    expect(types).not.toContain("profile_analysis");
+    expect(types).toContain('"profile_analysis"');
+    expect(types).toContain('"personalization_recommendations"');
+    const dispatch = readFileSync(
+      path.join(root, "server/durableJobs/dispatch.ts"),
+      "utf8"
+    );
+    expect(dispatch).toContain(
+      'profile_analysis: "DURABLE_QUEUE_PERSONALIZATION_ENABLED"'
+    );
   });
 
-  it("both feature flags stay off by default", async () => {
-    const { resolveHomeV2Flags } = await import("../homeV2FeatureFlags");
+  it("the new experience stays off by default for everyone", async () => {
+    const { readExperienceConfig, resolveExperienceAccess } = await import(
+      "../onboardingV2Access"
+    );
     expect(
-      resolveHomeV2Flags({ homeV2Raw: undefined, onboardingV2Raw: undefined })
-    ).toEqual({
-      homeV2Enabled: false,
-      onboardingV2Enabled: false,
-    });
+      resolveExperienceAccess(
+        { role: "admin", email: "a@b.c", createdAt: new Date() },
+        readExperienceConfig({})
+      )
+    ).toMatchObject({ onboarding: "legacy", home: "research" });
   });
 
   it("the draft SQL lives outside drizzle/", () => {

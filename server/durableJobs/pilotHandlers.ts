@@ -10,6 +10,7 @@ import type { CarouselGenerationEntryPoint } from "@shared/carouselGenerationMet
 import { getDb } from "../db";
 import { registerDurableJobHandler } from "./handlers";
 import type { ClaimedJob } from "./types";
+import { registerPersonalizationJobHandlers } from "../personalization/jobs";
 
 type RemakePayload = {
   scriptId: number;
@@ -227,3 +228,6 @@ registerDurableJobHandler("queue_safety_probe", async (job: ClaimedJob) => {
     throw new Error(`Intentional queue safety probe failure on attempt ${job.attempt}`);
   }
 });
+
+// Onboarding v2: profile analysis and Goal/Audience/Pillars recommendations.
+registerPersonalizationJobHandlers();

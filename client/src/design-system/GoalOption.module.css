@@ -1,0 +1,94 @@
+/* Card / Goal Option (Figma 1258:482). Tokens only. radius/16, padding space/4. */
+.root {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--sr-space-3);
+  width: 100%;
+  min-height: 44px;
+  padding: var(--sr-space-4);
+  border: var(--sr-shape-border-default-width) solid var(--sr-color-border-default);
+  border-radius: var(--sr-radius-16);
+  background: var(--sr-color-surface-default);
+  color: var(--sr-color-text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.root:hover:not(.selected):not(:disabled) {
+  background: var(--sr-color-surface-hover);
+  border-color: var(--sr-color-border-strong);
+}
+
+.root:focus-visible {
+  outline: none;
+  border-color: var(--sr-color-focus-border);
+  box-shadow: var(--sr-elevation-focus-neutral-action);
+}
+
+.selected {
+  background: var(--sr-color-brand-surface-selected);
+  border-color: var(--sr-color-brand-primary);
+}
+
+.root:disabled {
+  background: var(--sr-color-surface-subtle);
+  border-color: var(--sr-color-border-subtle);
+  cursor: not-allowed;
+}
+
+.iconTile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 var(--sr-layout-icon-tile-size);
+  width: var(--sr-layout-icon-tile-size);
+  height: var(--sr-layout-icon-tile-size);
+  border-radius: var(--sr-radius-12);
+  background: var(--sr-color-brand-surface-subtle);
+}
+
+.selected .iconTile {
+  background: var(--sr-color-surface-default);
+}
+
+.text {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--sr-space-1);
+}
+
+.title {
+  color: var(--sr-color-text-primary);
+}
+
+.description {
+  color: var(--sr-color-text-secondary);
+}
+
+.indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  box-sizing: border-box;
+  border: var(--sr-shape-border-strong-width) solid var(--sr-color-border-default);
+  border-radius: var(--sr-radius-full);
+}
+
+.selected .indicator {
+  border: none;
+  background: var(--sr-color-brand-primary);
+}
+
+/* Figma: the 3a mobile frames show no icon tiles. */
+@media (max-width: 900px) {
+  .iconTile {
+    display: none;
+  }
+}
