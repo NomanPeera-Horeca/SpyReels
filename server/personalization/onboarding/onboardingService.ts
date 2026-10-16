@@ -273,6 +273,50 @@ async function setActive(db: Db, ctx: OnboardingCtx, profileId: string) {
     .onDuplicateKeyUpdate({ set: { socialProfileId: profileId } });
 }
 
+export type WorkspaceProfileView = {
+  id: string;
+  platform: SocialPlatform | null;
+  handle: string | null;
+  displayName: string | null;
+  status: SocialProfileStatus;
+  active: boolean;
+};
+
+/** Profiles in the caller's workspace only (Home "Your profiles"). */
+export async function listWorkspaceProfiles(db: Db, ctx: OnboardingCtx): Promise<WorkspaceProfileView[]> {
+  const active = await activeProfileRow(db, ctx);
+  const rows = await db
+    .select()
+    .from(socialProfiles)
+    .where(and(eq(socialProfiles.workspaceId, ctx.workspaceId), isNull(socialProfiles.deletedAt)))
+    .orderBy(socialProfiles.createdAt);
+  return rows.map(r => ({
+    id: r.id,
+    platform: r.platform,
+    handle: r.normalizedHandle,
+    displayName: r.displayName,
+    status: r.status,
+    active: active?.id === r.id,
+  }));
+}
+
+/** Switch the member's active profile. Only a live profile of this workspace. */
+export async function switchActiveProfile(db: Db, ctx: OnboardingCtx, profileId: string): Promise<void> {
+  const [row] = await db
+    .select({ id: socialProfiles.id })
+    .from(socialProfiles)
+    .where(
+      and(
+        eq(socialProfiles.id, profileId),
+        eq(socialProfiles.workspaceId, ctx.workspaceId),
+        isNull(socialProfiles.deletedAt)
+      )
+    )
+    .limit(1);
+  if (!row) notFound();
+  await setActive(db, ctx, profileId);
+}
+
 /**
  * "That's me". Saves the confirmed public profile (public facts only, from
  * the lookup the user just saw) and makes it the member's active profile.

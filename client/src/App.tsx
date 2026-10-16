@@ -117,6 +117,8 @@ const PublicScriptView = lazyWithRetry(() => import("./pages/PublicScriptView"))
 
 /** Dev-only onboarding v2 screen preview (fixtures). Not routed in production builds. */
 const DevOnboardingV2Preview = lazyWithRetry(() => import("./pages/DevOnboardingV2Preview"));
+/** Dev-only Home v2 preview (real page, fixture data link). Not routed in production builds. */
+const DevHomeV2Preview = lazyWithRetry(() => import("./pages/DevHomeV2Preview"));
 /** THROWAWAY: carousel layout preview. Remove with DevCarouselPreview page. */
 const DevCarouselPreview = lazyWithRetry(() => import("./pages/DevCarouselPreview"));
 /** THROWAWAY: remake workspace visual proof. Remove with DevRemakeWorkspacePreview. */
@@ -424,6 +426,7 @@ function Router() {
         {import.meta.env.DEV ? (
           <Route path="/dev/onboarding-v2" component={DevOnboardingV2Preview} />
         ) : null}
+        {import.meta.env.DEV ? <Route path="/dev/home-v2" component={DevHomeV2Preview} /> : null}
         <Route path="/onboarding">
           <OnboardingGate>
             <OnboardingEntry />

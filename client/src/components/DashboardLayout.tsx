@@ -58,7 +58,9 @@ import {
   Images,
   Clapperboard,
   Flame,
+  Home as HomeIcon,
 } from "lucide-react";
+import { useExperienceAccess } from "@/lib/experienceAccess";
 import LandingPage from "@/pages/LandingPage";
 import { redirectSignedOutToMarketing } from "@/lib/marketingOrigin";
 import { CSSProperties, Fragment, useEffect, useRef, useState } from "react";
@@ -142,8 +144,14 @@ type SidebarNavSection = {
  * Carousels, B-Roll Library, and My Virality Report stay admin-only until polished.
  * Gate with the same email check as `/admin` (`VITE_ADMIN_EMAIL`).
  */
-function buildNavSections(showUnpolishedTools: boolean): SidebarNavSection[] {
+function buildNavSections(showUnpolishedTools: boolean, homeV2 = false): SidebarNavSection[] {
+  // Home v2 (server switch): a Home item above Create, as in the Figma Home v2 frames.
+  // Everyone else keeps today's sidebar exactly.
+  const home: SidebarNavSection[] = homeV2
+    ? [{ id: "home", label: "", items: [{ icon: HomeIcon, label: "Home", path: "/" }] }]
+    : [];
   return [
+    ...home,
     {
       id: "create",
       label: "Create",
@@ -217,9 +225,10 @@ function buildNavSections(showUnpolishedTools: boolean): SidebarNavSection[] {
   ];
 }
 
-function isSidebarPathActive(location: string, path: string): boolean {
+function isSidebarPathActive(location: string, path: string, homeV2 = false): boolean {
+  if (path === "/") return location === "/";
   if (path === "/research") {
-    return location === "/research" || location === "/";
+    return location === "/research" || (!homeV2 && location === "/");
   }
   if (path === "/scripts") {
     return location === "/scripts" || location.startsWith("/scripts/");
@@ -373,7 +382,9 @@ function DashboardLayoutContent({
   const sidebarRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
   const { themePreference, setThemePreference, switchable } = useTheme();
-  const navSections = buildNavSections(isAdminPanelClient(user));
+  const { access: experienceAccess } = useExperienceAccess();
+  const homeV2 = experienceAccess.home === "v2";
+  const navSections = buildNavSections(isAdminPanelClient(user), homeV2);
   const flatNavItems = navSections.flatMap((section) => section.items);
 
   const onboardingStateQuery = trpc.onboarding.getState.useQuery(undefined, {
@@ -393,7 +404,7 @@ function DashboardLayoutContent({
       : savedTargetAudience;
 
   const activeMenuItem =
-    flatNavItems.find((item) => isSidebarPathActive(location, item.path)) ??
+    flatNavItems.find((item) => isSidebarPathActive(location, item.path, homeV2)) ??
     adminMenuItems.find((item) => isSidebarPathActive(location, item.path));
 
   useEffect(() => {
@@ -516,14 +527,16 @@ function DashboardLayoutContent({
             <SidebarMenu className="px-2 py-1">
               {navSections.map((section) => (
                 <Fragment key={section.id}>
-                  <div className="px-3 pt-4 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider group-data-[collapsible=icon]:hidden">
-                    {section.label}
-                  </div>
+                  {section.label ? (
+                    <div className="px-3 pt-4 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider group-data-[collapsible=icon]:hidden">
+                      {section.label}
+                    </div>
+                  ) : null}
                   {section.items.map((item) => (
                     <SidebarNavLink
                       key={item.path}
                       item={item}
-                      isActive={isSidebarPathActive(location, item.path)}
+                      isActive={isSidebarPathActive(location, item.path, homeV2)}
                       mockupTooltip={SIDEBAR_NAV_TOOLTIPS[item.path]}
                     />
                   ))}

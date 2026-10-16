@@ -213,8 +213,10 @@ describe("migration gate: drafts cannot reach a database by accident", () => {
       .filter(f => !f.startsWith("server/personalization/"));
     // onboardingV2Router: every procedure but `experience` checks the rollout switch.
     // pilotHandlers: registers the two job types; jobs are only enqueued by that router.
+    // homeV2Router: every procedure checks the Home switch (assertHomeV2Access).
     expect(hits.sort()).toEqual([
       "server/durableJobs/pilotHandlers.ts",
+      "server/routers/homeV2Router.ts",
       "server/routers/onboardingV2Router.ts",
     ]);
   });
@@ -232,6 +234,15 @@ describe("migration gate: drafts cannot reach a database by accident", () => {
         name === "experience" ? "protectedProcedure" : "v2Procedure",
       ]);
     }
+  });
+
+  it("every Home v2 procedure is behind the Home switch", () => {
+    const src = readFileSync(path.join(root, "server/routers/homeV2Router.ts"), "utf8");
+    expect(src).toMatch(/const homeProcedure = protectedProcedure\.use\(async \(\{ ctx, next \}\) => \{\s*await assertHomeV2Access\(ctx\.user\);/);
+    const body = src.slice(src.indexOf("export const homeV2Router = router({"));
+    const procs = [...body.matchAll(/^  (\w+): (\w+)/gm)].map(m => [m[1], m[2]]);
+    expect(procs.length).toBeGreaterThanOrEqual(5);
+    for (const [name, builder] of procs) expect([name, builder]).toEqual([name, "homeProcedure"]);
   });
 
   it("personalization jobs use the existing durable queue, off by default", () => {

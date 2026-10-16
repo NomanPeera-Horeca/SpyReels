@@ -1,0 +1,730 @@
+/*
+ * Home v2 (Figma Home v2 frames A to D, States sheet). Locked --sr tokens only.
+ *
+ * Theme layer: every color below goes through these local names, mapped to
+ * the locked (light) Figma tokens. Figma has no dark values yet; when they
+ * exist, a dark mapping is added here and nothing else changes.
+ */
+.page,
+.theme {
+  --home-surface: var(--sr-color-surface-default);
+  --home-surface-subtle: var(--sr-color-surface-subtle);
+  --home-surface-hover: var(--sr-color-surface-hover);
+  --home-tile: var(--sr-color-surface-icon-tile);
+  --home-border: var(--sr-color-border-default);
+  --home-border-subtle: var(--sr-color-border-subtle);
+  --home-border-control: var(--sr-color-border-control);
+  --home-text: var(--sr-color-text-primary);
+  --home-text-secondary: var(--sr-color-text-secondary);
+  --home-text-tertiary: var(--sr-color-text-tertiary);
+  --home-text-brand: var(--sr-color-text-brand);
+  --home-banner: var(--sr-color-brand-surface-subtle);
+  --home-error: var(--sr-color-status-error-foreground);
+  --home-error-border: var(--sr-color-status-error-border);
+}
+
+.page {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sr-space-8);
+  box-sizing: border-box;
+  min-height: 100%;
+  padding: 40px 40px var(--sr-space-12);
+  background: var(--home-surface);
+  color: var(--home-text);
+}
+
+.main {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: 36px;
+  min-width: 0;
+}
+
+.rail {
+  display: flex;
+  flex: 0 0 360px;
+  flex-direction: column;
+  gap: var(--sr-space-4);
+  width: 360px;
+}
+
+/* Breakpoint on the space next to the app sidebar, not the window:
+   Figma 1280x800 keeps the rail with a 1020px content area. */
+.frame {
+  container-type: inline-size;
+  min-height: 100%;
+}
+
+@container (max-width: 960px) {
+  .page {
+    flex-direction: column;
+    align-items: stretch;
+    padding: var(--sr-space-8) var(--sr-space-6) var(--sr-space-12);
+  }
+
+  .rail {
+    flex: 0 0 auto;
+    width: 100%;
+  }
+}
+
+/* ---------- section headers ---------- */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-space-4);
+}
+
+.agent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-space-4);
+}
+
+.titles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-space-2);
+}
+
+.h1 {
+  margin: 0;
+  color: var(--home-text);
+  font-size: 32px;
+  font-weight: var(--sr-font-weight-bold);
+  line-height: 40px;
+  letter-spacing: -0.25px;
+}
+
+.lead {
+  margin: 0;
+  color: var(--home-text-secondary);
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sr-space-4);
+}
+
+.sectionHeaderEnd {
+  align-items: flex-end;
+}
+
+.sectionTitles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-space-1);
+  min-width: 0;
+}
+
+.h2 {
+  margin: 0;
+  color: var(--home-text);
+}
+
+.muted {
+  margin: 0;
+  color: var(--home-text-secondary);
+}
+
+/* Ghost link button (Figma Button / Ghost, no horizontal padding). */
+.ghost {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sr-space-2);
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--sr-radius-8);
+  background: transparent;
+  color: var(--home-text);
+  font: inherit;
+  font-size: var(--sr-type-product-label-size);
+  font-weight: var(--sr-font-weight-semibold);
+  line-height: var(--sr-type-product-label-line);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.ghost:hover {
+  text-decoration: underline;
+}
+
+.ghost:focus-visible,
+.outline:focus-visible,
+.chip:focus-visible,
+.iconButton:focus-visible {
+  outline: none;
+  box-shadow: var(--sr-elevation-focus-neutral-action);
+}
+
+/* Secondary (outline) button, Figma Button / Secondary. */
+.outline {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sr-space-2);
+  box-sizing: border-box;
+  height: 44px;
+  padding: var(--sr-space-3) var(--sr-space-4);
+  border: var(--sr-shape-border-default-width) solid var(--home-border);
+  border-radius: var(--sr-radius-8);
+  background: var(--home-surface);
+  color: var(--home-text);
+  font: inherit;
+  font-size: var(--sr-type-product-label-size);
+  font-weight: var(--sr-font-weight-semibold);
+  line-height: var(--sr-type-product-label-line);
+  white-space: nowrap;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.outline:hover {
+  background: var(--home-surface-hover);
+}
+
+.outline:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+/* ---------- composer ---------- */
+
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-space-3);
+  box-sizing: border-box;
+  padding: var(--sr-space-4);
+  border: var(--sr-shape-border-default-width) solid var(--home-border-control);
+  border-radius: var(--sr-radius-16);
+  background: var(--home-surface);
+}
+
+.composer:focus-within {
+  box-shadow: var(--sr-elevation-focus-neutral-action);
+}
+
+.composerError {
+  border-color: var(--home-error-border);
+}
+
+.composerInput {
+  box-sizing: border-box;
+  width: 100%;
+  /* Figma: 24px placeholder line + 24px space, then 12px gap to the actions. */
+  min-height: 60px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--home-text);
+  font: inherit;
+  font-size: var(--sr-type-product-body-large-size);
+  line-height: var(--sr-type-product-body-large-line);
+  resize: none;
+  outline: none;
+}
+
+.composerInput::placeholder {
+  color: var(--home-text-tertiary);
+}
+
+.composerActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.errorText {
+  margin: 0;
+  color: var(--home-error);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sr-space-2);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--sr-space-2) 14px var(--sr-space-2) var(--sr-space-3);
+  border: var(--sr-shape-border-default-width) solid var(--home-border);
+  border-radius: var(--sr-radius-full);
+  background: var(--home-surface);
+  color: var(--home-text);
+  font: inherit;
+  font-size: var(--sr-type-product-label-size);
+  font-weight: var(--sr-font-weight-medium);
+  line-height: var(--sr-type-product-label-line);
+  cursor: pointer;
+}
+
+.chip:hover {
+  background: var(--home-surface-hover);
+}
+
+.linkEntry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--home-text-secondary);
+}
+
+.linkAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--home-text);
+  font: inherit;
+  font-size: var(--sr-type-product-label-size);
+  font-weight: var(--sr-font-weight-medium);
+  line-height: var(--sr-type-product-label-line);
+  cursor: pointer;
+}
+
+.linkAction:hover {
+  text-decoration: underline;
+}
+
+/* ---------- banner ---------- */
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: var(--sr-space-4);
+  padding: var(--sr-space-3) var(--sr-space-4);
+  border-radius: var(--sr-radius-12);
+  background: var(--home-banner);
+}
+
+.bannerText {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.iconButton {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: var(--sr-shape-border-default-width) solid var(--home-border);
+  border-radius: var(--sr-radius-full);
+  background: var(--home-surface);
+  cursor: pointer;
+}
+
+.iconButton:hover {
+  background: var(--home-surface-hover);
+}
+
+.iconButtonBare {
+  border-color: transparent;
+  background: transparent;
+}
+
+/* ---------- cards ---------- */
+
+.twoUp {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--sr-space-4);
+}
+
+@container (max-width: 640px) {
+  .twoUp {
+    grid-template-columns: 1fr;
+  }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  border: var(--sr-shape-border-default-width) solid var(--home-border);
+  border-radius: var(--sr-radius-16);
+  background: var(--home-surface);
+}
+
+.idea {
+  gap: var(--sr-space-2);
+  min-height: 167px;
+  padding: var(--sr-space-4);
+}
+
+.ideaSpacer {
+  flex: 1 1 auto;
+  min-height: var(--sr-space-2);
+}
+
+.ideaButton {
+  align-self: flex-start;
+}
+
+.stateCard {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sr-space-4);
+  padding: var(--sr-space-5);
+}
+
+.stateCardStack {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sr-space-2);
+}
+
+.stateCardDashed {
+  border-style: dashed;
+}
+
+.stateText {
+  display: flex;
+  flex: 1 1 240px;
+  flex-direction: column;
+  gap: var(--sr-space-1);
+  min-width: 0;
+}
+
+.stateCardStack .stateText {
+  flex: 0 0 auto;
+}
+
+.stateAction {
+  margin-top: var(--sr-space-2);
+}
+
+/* ---------- Home / Result Card (compact) ---------- */
+
+.result {
+  overflow: hidden;
+  border-radius: var(--sr-radius-12);
+}
+
+.media {
+  position: relative;
+  height: 220px;
+  overflow: hidden;
+  background: var(--home-surface-subtle);
+}
+
+.thumb {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.badgeRowStart {
+  position: absolute;
+  top: var(--sr-space-3);
+  left: var(--sr-space-3);
+}
+
+.badgeRowEnd {
+  position: absolute;
+  top: var(--sr-space-3);
+  right: var(--sr-space-3);
+}
+
+.mediaPlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.mediaExpand {
+  position: absolute;
+  right: var(--sr-space-3);
+  bottom: var(--sr-space-3);
+}
+
+.resultContent {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-space-3);
+  padding: var(--sr-space-5);
+}
+
+.resultTitle {
+  display: -webkit-box;
+  min-height: 40px;
+  margin: 0;
+  overflow: hidden;
+  color: var(--home-text);
+  font-size: var(--sr-type-product-body-large-size);
+  font-weight: var(--sr-font-weight-semibold);
+  line-height: 20px;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.resultActions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.resultActions .outline {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  padding-inline: var(--sr-space-3);
+  text-overflow: ellipsis;
+}
+
+.menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--sr-space-1));
+  z-index: 5;
+  min-width: 180px;
+  padding: var(--sr-space-1);
+  border: var(--sr-shape-border-default-width) solid var(--home-border);
+  border-radius: var(--sr-radius-12);
+  background: var(--home-surface);
+  box-shadow: var(--sr-elevation-menu);
+}
+
+.menuItem {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  padding: var(--sr-space-2) var(--sr-space-3);
+  border: 0;
+  border-radius: var(--sr-radius-8);
+  background: transparent;
+  color: var(--home-text);
+  font: inherit;
+  font-size: var(--sr-type-product-body-small-size);
+  line-height: var(--sr-type-product-body-small-line);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.menuItem:hover {
+  background: var(--home-surface-hover);
+}
+
+/* Badge (Figma Badge: neutral, success, brand, info, warning). */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sr-space-2);
+  padding: var(--sr-space-2) var(--sr-space-3);
+  border-radius: var(--sr-radius-full);
+  font-size: var(--sr-type-product-caption-size);
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.badgeNeutral {
+  background: var(--sr-color-badge-neutral-background);
+  color: var(--sr-color-badge-neutral-foreground);
+}
+
+.badgeHealthy {
+  background: var(--sr-color-status-info-background);
+  color: var(--sr-color-status-info-foreground);
+}
+
+.badgeStrong {
+  background: var(--sr-color-status-success-background);
+  color: var(--sr-color-status-success-foreground);
+}
+
+.badgeViral {
+  background: var(--sr-color-brand-surface-selected);
+  color: var(--sr-color-brand-primary);
+}
+
+.badgeExplosive {
+  background: var(--sr-color-status-warning-background);
+  color: var(--sr-color-status-warning-foreground);
+}
+
+.badgeSuccess {
+  background: var(--sr-color-status-success-background);
+  color: var(--sr-color-status-success-foreground);
+}
+
+/* ---------- creators ---------- */
+
+.creatorsCard {
+  overflow: hidden;
+}
+
+.creatorRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 90px;
+  padding: 14px var(--sr-space-3) 14px var(--sr-space-4);
+  box-sizing: border-box;
+}
+
+.divider {
+  height: 1px;
+  background: var(--home-border-subtle);
+}
+
+.avatar {
+  display: inline-flex;
+  flex: 0 0 40px;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  overflow: hidden;
+  border-radius: var(--sr-radius-full);
+  background: var(--home-tile);
+  color: var(--home-text-brand);
+  font-size: var(--sr-type-product-label-size);
+  font-weight: var(--sr-font-weight-medium);
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.creatorText {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sr-space-1);
+  min-width: 0;
+}
+
+.ellipsis {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.handleLine {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-width: 0;
+  color: var(--home-text-secondary);
+}
+
+.monoMark {
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  color: var(--home-text);
+}
+
+.footerLinks {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sr-space-1) var(--sr-space-4);
+}
+
+.invite {
+  gap: var(--sr-space-1);
+  padding: var(--sr-space-4);
+}
+
+.inviteAction {
+  align-self: flex-start;
+  margin-top: var(--sr-space-2);
+}
+
+/* ---------- skeletons ---------- */
+
+.skeleton {
+  border-radius: var(--sr-radius-8);
+  background: var(--home-surface-hover);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
+/* ---------- profiles modal ---------- */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sr-space-4);
+  /* Same scrim as the approved MarketingDialog backdrop. */
+  background: color-mix(in srgb, var(--sr-neutral-950) 60%, transparent);
+}
+
+.modal {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 520px;
+  padding: var(--sr-space-6);
+  border-radius: var(--sr-radius-16);
+  background: var(--home-surface);
+  box-shadow: var(--sr-elevation-modal);
+}
+
+.modalHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--sr-space-4);
+}
+
+.profileRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sr-space-4);
+  padding: var(--sr-space-4) 0;
+  border-bottom: var(--sr-shape-border-default-width) solid var(--home-border-subtle);
+}
+
+.profileRow:last-child {
+  border-bottom: 0;
+}
+
+.profileList {
+  margin-top: var(--sr-space-4);
+}

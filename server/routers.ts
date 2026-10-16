@@ -19,6 +19,7 @@ import { scriptsRouter } from "./routers/scriptsRouter";
 import { viralityDiagnosticRouter } from "./routers/viralityDiagnosticRouter";
 import { onboardingRouter } from "./routers/onboardingRouter";
 import { onboardingV2Router } from "./routers/onboardingV2Router";
+import { homeV2Router } from "./routers/homeV2Router";
 import { adminRouter } from "./routers/adminRouter";
 import { firstDayOfNextMonthUtc, withSearchReelThumbnailMirroring } from "./routers/_shared";
 import { searchRouter } from "./routers/searchRouter";
@@ -873,6 +874,7 @@ export const appRouter = router({
   // ── Onboarding state (first-run experience flags + flow) ──
   onboarding: onboardingRouter,
   onboardingV2: onboardingV2Router,
+  homeV2: homeV2Router,
 
   // ── Blog ──
   blog: blogRouter,

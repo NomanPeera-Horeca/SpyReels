@@ -97,6 +97,12 @@ export type StudioPrefillMeta = {
 };
 
 export const STUDIO_PREFILL_META_KEY = "studio_prefill_meta";
+/** Set with STUDIO_PREFILL_KEY to submit the prefilled idea on arrival (Home v2 "Create script"). */
+export const STUDIO_PREFILL_AUTORUN_KEY = "studio_prefill_autorun";
+
+export function isCoachCapabilityId(value: string | null | undefined): value is CoachCapabilityId {
+  return COACH_CAPABILITIES.some((c) => c.id === value);
+}
 
 export function parseStudioPrefillMeta(raw: string | null): StudioPrefillMeta | null {
   if (!raw?.trim()) return null;

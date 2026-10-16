@@ -2429,7 +2429,7 @@ export default function Dashboard() {
                 <p className="text-sm text-muted-foreground text-center max-w-md">
                   {job.errorMessage || "An unknown error occurred"}
                 </p>
-                <Button variant="outline" onClick={() => setLocation("/")}>
+                <Button variant="outline" onClick={() => setLocation("/research")}>
                   Try again
                 </Button>
               </div>

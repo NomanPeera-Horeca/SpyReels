@@ -29,8 +29,11 @@ import {
   resolveStep,
   saveAttribution,
   saveUseCase,
+  listWorkspaceProfiles,
   startNotPostingYet,
+  switchActiveProfile,
 } from "./onboardingService";
+import { homeContextFromState } from "../home/homeService";
 
 const url = process.env.PERSONALIZATION_SCHEMA_TEST_DB;
 const root = path.resolve(__dirname, "../../..");
@@ -343,5 +346,38 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
     expect(state.items.filter(i => i.kind === "niche")).toHaveLength(1);
     expect(state.items.find(i => i.kind === "niche")!.payload).toMatchObject({ slug: "food" });
     expect(state.resumeStep).toBe("use_case");
+  });
+
+  it("profiles: a second profile can be added and switched; another workspace cannot switch to it", async () => {
+    const first = await confirmProfile(db, A, preview("test.kitchen"));
+    const second = await confirmProfile(db, A, { ...preview("test.kitchen.tt"), platform: "tiktok" });
+    let list = await listWorkspaceProfiles(db, A);
+    expect(list.map(p => [p.platform, p.active])).toEqual([
+      ["instagram", false],
+      ["tiktok", true],
+    ]);
+    await switchActiveProfile(db, A, first.profileId);
+    list = await listWorkspaceProfiles(db, A);
+    expect(list.find(p => p.active)?.id).toBe(first.profileId);
+    expect(await listWorkspaceProfiles(db, B)).toEqual([]);
+    await expect(switchActiveProfile(db, B, second.profileId)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    // Each profile keeps its own strategy: the switched-to profile starts its own steps.
+    expect((await loadOnboardingState(db, A)).profile?.handle).toBe("test.kitchen");
+  });
+
+  it("Home context: only confirmed values personalize Home; Finish setup points at the first open step", async () => {
+    await confirmProfile(db, A, preview("test.kitchen"));
+    let ctx = homeContextFromState(await loadOnboardingState(db, A));
+    expect(ctx).toMatchObject({ nicheLabel: null, personalizationComplete: false, nextStep: "goal" });
+    await addItem(db, A, "niche", { slug: "restaurants", label: "Restaurant business" });
+    await addItem(db, A, "goal", { text: "Help restaurant owners run better kitchens." });
+    await resolveStep(db, A, "goal", "confirm");
+    ctx = homeContextFromState(await loadOnboardingState(db, A));
+    expect(ctx).toMatchObject({
+      nicheLabel: "Restaurant business",
+      featuredNicheSlug: "restaurants-cafes",
+      personalizationComplete: false,
+      nextStep: "audience",
+    });
   });
 });

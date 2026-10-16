@@ -211,3 +211,92 @@ export function IconMinus(props: IconProps) {
     </svg>
   );
 }
+
+const SECONDARY = "var(--sr-color-text-secondary)";
+
+/** Icon / Tool Hook (143:333). */
+export function IconToolHook(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path
+        d="M10 2V6M10 14V18M2 10H6M14 10H18M4 4L7 7M13 13L16 16M16 4L13 7M7 13L4 16"
+        stroke={SECONDARY}
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Icon / Lucide / Link (1364:61). */
+export function IconLink(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path
+        d="M8.33334 10.8332C8.69122 11.3117 9.14781 11.7075 9.67214 11.994C10.1965 12.2805 10.7763 12.4508 11.3722 12.4935C11.9682 12.5362 12.5663 12.4502 13.1261 12.2414C13.6859 12.0326 14.1943 11.7058 14.6167 11.2832L17.1167 8.78322C17.8757 7.99738 18.2956 6.94487 18.2862 5.85238C18.2767 4.7599 17.8385 3.71485 17.0659 2.94231C16.2934 2.16978 15.2483 1.73157 14.1558 1.72208C13.0634 1.71259 12.0109 2.13256 11.225 2.89156L9.79168 4.31656"
+        stroke={SECONDARY}
+        strokeWidth="1.66667"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M11.6667 9.16653C11.3088 8.68809 10.8522 8.29221 10.3279 8.00575C9.80356 7.71928 9.22376 7.54893 8.62781 7.50625C8.03185 7.46357 7.43369 7.54956 6.87389 7.75838C6.31409 7.9672 5.80575 8.29397 5.38335 8.71653L2.88335 11.2165C2.12436 12.0024 1.70438 13.0549 1.71387 14.1474C1.72337 15.2399 2.16157 16.2849 2.9341 17.0574C3.70664 17.83 4.75169 18.2682 5.84418 18.2777C6.93666 18.2872 7.98917 17.8672 8.77501 17.1082L10.2 15.6832"
+        stroke={SECONDARY}
+        strokeWidth="1.66667"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Icon / Star (275:163). `filled` = saved. */
+export function IconStar({ filled = false, ...props }: IconProps & { filled?: boolean }) {
+  return (
+    <svg {...base(props)}>
+      <path
+        d="M10 2.1001L12.35 6.8601L17.6 7.6201L13.8 11.3201L14.7 16.5501L10 14.0801L5.30002 16.5501L6.20002 11.3201L2.40002 7.6201L7.65002 6.8601L10 2.1001Z"
+        stroke={filled ? "var(--sr-color-brand-primary)" : SECONDARY}
+        fill={filled ? "var(--sr-color-brand-primary)" : "none"}
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Icon / More (275:166). */
+export function IconMore(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <circle cx="4" cy="10" r="1.5" fill={SECONDARY} />
+      <circle cx="10" cy="10" r="1.5" fill={SECONDARY} />
+      <circle cx="16" cy="10" r="1.5" fill={SECONDARY} />
+    </svg>
+  );
+}
+
+/** Icon / Expand (375:1051). */
+export function IconExpand(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path
+        d="M7 3H3V7M13 3H17V7M17 13V17H13M7 17H3V13"
+        stroke={SECONDARY}
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Close (X). Same stroke as the step 4 remove control. */
+export function IconClose(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path d="M5 5L15 15M15 5L5 15" stroke="var(--sr-color-text-primary)" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}

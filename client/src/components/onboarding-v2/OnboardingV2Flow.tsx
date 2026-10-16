@@ -72,6 +72,23 @@ type Screen =
 const STEP_ORDER: PersonalizationStep[] = ["goal", "audience", "pillars"];
 const STEP_KIND = { goal: "goal", audience: "audience", pillars: "pillar" } as const;
 
+/**
+ * Entry points from Home v2 (read once on load):
+ * - ?step=goal|audience|pillars  "Finish setup": open that strategy step.
+ * - ?add=instagram|tiktok|youtube "Add profile": add another account, then
+ *   personalize it (use case and attribution are already answered).
+ */
+function readEntry(): { step: PersonalizationStep | null; add: SocialPlatform | null } {
+  if (typeof window === "undefined") return { step: null, add: null };
+  const p = new URLSearchParams(window.location.search);
+  const step = p.get("step");
+  const add = p.get("add");
+  return {
+    step: step === "goal" || step === "audience" || step === "pillars" ? step : null,
+    add: add === "instagram" || add === "tiktok" || add === "youtube" ? add : null,
+  };
+}
+
 function screenFromResume(step: string): Screen | "done" {
   switch (step) {
     case "platform":
@@ -123,6 +140,7 @@ export default function OnboardingV2Flow() {
   const [requested, setRequested] = useState<Partial<Record<PersonalizationStep, number>>>({});
   const completing = useRef(false);
   const noRightPanel = useNoRightPanel();
+  const entry = useRef(readEntry()).current;
 
   const track = useCallback(
     (event: string, props?: Record<string, unknown>) => {
@@ -164,6 +182,17 @@ export default function OnboardingV2Flow() {
   // First load: resume where the user left off.
   useEffect(() => {
     if (!state || screen !== null) return;
+    if (entry.add) {
+      setPlatform(entry.add);
+      setScreen("platform");
+      return;
+    }
+    if (entry.step && state.profile) {
+      setUseCase(state.answers.primaryUseCase);
+      setSource(state.answers.attributionSource);
+      setScreen(entry.step);
+      return;
+    }
     const s = screenFromResume(state.resumeStep);
     if (s === "done") {
       void finish();
@@ -173,7 +202,7 @@ export default function OnboardingV2Flow() {
     setSource(state.answers.attributionSource);
     if (state.profile?.platform) setPlatform(state.profile.platform);
     setScreen(s);
-  }, [state, screen, finish]);
+  }, [state, screen, finish, entry]);
 
   useEffect(() => {
     if (screen) track("step_viewed", { step: screen });
@@ -402,7 +431,8 @@ export default function OnboardingV2Flow() {
               }
               track("step_completed", { step: "profile" });
               await refresh();
-              setScreen("use_case");
+              // Adding another profile: the account answers exist, go straight to its strategy.
+              setScreen(entry.add && state.answers.primaryUseCase ? "goal" : "use_case");
             }, "profile")
           }
         />
