@@ -116,9 +116,13 @@ const AcceptInvitation = lazyWithRetry(() => import("./pages/AcceptInvitation"))
 const PublicScriptView = lazyWithRetry(() => import("./pages/PublicScriptView"));
 
 /** Dev-only onboarding v2 screen preview (fixtures). Not routed in production builds. */
-const DevOnboardingV2Preview = lazyWithRetry(() => import("./pages/DevOnboardingV2Preview"));
+const DevOnboardingV2Preview = import.meta.env.DEV
+  ? lazyWithRetry(() => import("./pages/DevOnboardingV2Preview"))
+  : () => null;
 /** Dev-only Home v2 preview (real page, fixture data link). Not routed in production builds. */
-const DevHomeV2Preview = lazyWithRetry(() => import("./pages/DevHomeV2Preview"));
+const DevHomeV2Preview = import.meta.env.DEV
+  ? lazyWithRetry(() => import("./pages/DevHomeV2Preview"))
+  : () => null;
 /** THROWAWAY: carousel layout preview. Remove with DevCarouselPreview page. */
 const DevCarouselPreview = lazyWithRetry(() => import("./pages/DevCarouselPreview"));
 /** THROWAWAY: remake workspace visual proof. Remove with DevRemakeWorkspacePreview. */
