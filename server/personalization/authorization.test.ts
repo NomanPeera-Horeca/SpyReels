@@ -177,44 +177,115 @@ describe("removing a profile", () => {
   });
 });
 
-describe("profileAnalysisJobKeys: no duplicate analysis jobs", () => {
-  const input = {
+describe("profileAnalysisJobKeys: one key per logical request, not per day", () => {
+  const account = {
     socialProfileId: "3f1b2c3d-0000-4000-8000-000000000001",
     platform: "instagram" as const,
     normalizedHandle: "noman_peera",
     platformAccountId: "123",
-    requestedAt: new Date("2026-10-16T09:00:00Z"),
   };
+  const initial = { ...account, requestKind: "initial" as const };
 
-  it("repeated requests on the same day give the same key", () => {
-    const a = profileAnalysisJobKeys(input);
-    const b = profileAnalysisJobKeys({
-      ...input,
-      requestedAt: new Date("2026-10-16T23:59:59Z"),
-    });
-    expect(a).toEqual(b);
-    expect(a.idempotencyKey).toMatch(
+  it("automatic retry / reload of the same request gives the same key (no duplicate provider work)", () => {
+    expect(profileAnalysisJobKeys(initial)).toEqual(
+      profileAnalysisJobKeys({ ...initial })
+    );
+    expect(profileAnalysisJobKeys(initial).idempotencyKey).toMatch(
       /^profile_analysis:3f1b2c3d-0000-4000-8000-000000000001:[a-f0-9]{32}$/
     );
   });
 
-  it("a new day, a changed handle or another profile gives a new key", () => {
-    const a = profileAnalysisJobKeys(input).idempotencyKey;
+  it("two simultaneous refresh taps compute the same sequence, so they share one key", () => {
+    const a = profileAnalysisJobKeys({
+      ...account,
+      requestKind: "user_refresh",
+      refreshSequence: 3,
+    });
+    const b = profileAnalysisJobKeys({
+      ...account,
+      requestKind: "user_refresh",
+      refreshSequence: 3,
+    });
+    expect(a).toEqual(b);
+  });
+
+  it("a legitimate refresh on the same day gets a NEW key (next sequence)", () => {
+    const keys = new Set(
+      [
+        profileAnalysisJobKeys(initial),
+        profileAnalysisJobKeys({
+          ...account,
+          requestKind: "user_refresh",
+          refreshSequence: 1,
+        }),
+        profileAnalysisJobKeys({
+          ...account,
+          requestKind: "user_refresh",
+          refreshSequence: 2,
+        }),
+        profileAnalysisJobKeys({
+          ...account,
+          requestKind: "background",
+          periodIndex: 2950,
+        }),
+      ].map(k => k.idempotencyKey)
+    );
+    expect(keys.size).toBe(4);
+  });
+
+  it("several background schedulers in the same period share one key; the next period differs", () => {
+    const p1 = profileAnalysisJobKeys({
+      ...account,
+      requestKind: "background",
+      periodIndex: 2950,
+    });
     expect(
       profileAnalysisJobKeys({
-        ...input,
-        requestedAt: new Date("2026-10-17T00:00:01Z"),
-      }).idempotencyKey
-    ).not.toBe(a);
+        ...account,
+        requestKind: "background",
+        periodIndex: 2950,
+      })
+    ).toEqual(p1);
     expect(
-      profileAnalysisJobKeys({ ...input, normalizedHandle: "noman_new" })
+      profileAnalysisJobKeys({
+        ...account,
+        requestKind: "background",
+        periodIndex: 2951,
+      }).idempotencyKey
+    ).not.toBe(p1.idempotencyKey);
+  });
+
+  it("a changed handle or another profile is a different request", () => {
+    const a = profileAnalysisJobKeys(initial).idempotencyKey;
+    expect(
+      profileAnalysisJobKeys({ ...initial, normalizedHandle: "noman_new" })
         .idempotencyKey
     ).not.toBe(a);
     expect(
       profileAnalysisJobKeys({
-        ...input,
+        ...initial,
         socialProfileId: "3f1b2c3d-0000-4000-8000-000000000002",
       }).idempotencyKey
     ).not.toBe(a);
+  });
+
+  it("rejects an invalid refresh sequence", () => {
+    expect(() =>
+      profileAnalysisJobKeys({
+        ...account,
+        requestKind: "user_refresh",
+        refreshSequence: 0,
+      })
+    ).toThrow();
+  });
+});
+
+describe("permission rule stays provisional and unchanged", () => {
+  it("members can select and edit (no owner check); only owners remove", () => {
+    expect(code(() => buildActiveSelection(profileA, member))).toBe("no error");
+    expect(code(() => assertCanRemoveSocialProfile(member))).toBe("FORBIDDEN");
+    expect(code(() => planProfileDeactivation(profileA, member))).toBe(
+      "FORBIDDEN"
+    );
   });
 });

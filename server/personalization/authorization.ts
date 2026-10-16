@@ -14,6 +14,7 @@
  */
 import { TRPCError } from "@trpc/server";
 import type { TrpcContext } from "../_core/context";
+import { PROFILE_SOFT_DELETE_STEPS } from "./lifecycle";
 
 export type PersonalizationCtx = Pick<
   TrpcContext,
@@ -136,13 +137,13 @@ export function planProfileDeactivation(
 ): {
   workspaceId: string;
   socialProfileId: string;
-  steps: readonly ["delete_active_selections", "soft_delete_profile"];
+  steps: typeof PROFILE_SOFT_DELETE_STEPS;
 } {
   assertCanRemoveSocialProfile(ctx);
   const live = assertSocialProfileInWorkspace(profile, ctx);
   return {
     workspaceId: live.workspaceId,
     socialProfileId: live.id,
-    steps: ["delete_active_selections", "soft_delete_profile"] as const,
+    steps: PROFILE_SOFT_DELETE_STEPS,
   };
 }

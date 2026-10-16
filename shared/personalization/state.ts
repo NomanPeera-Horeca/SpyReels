@@ -6,11 +6,14 @@
  * in state.test.ts.
  */
 import {
+  ANALYSIS_REFRESH_POLICY,
   ANALYSIS_STAGES,
   INVALIDATES_ON_EDIT,
   PERSONALIZATION_STEPS,
   PROFILE_ANALYSIS_JOB_TYPE,
   type AnalysisAvailability,
+  type AnalysisRefreshPolicy,
+  type AnalysisRequestKind,
   type AnalysisRunStatus,
   type AnalysisStage,
   type AnalysisStageStatus,
@@ -582,26 +585,204 @@ export function resolveActiveProfileId(input: {
 /* Analysis runs                                                       */
 /* ------------------------------------------------------------------ */
 
-/**
- * Canonical analysis input. Same profile + same account + same UTC day = same
- * fingerprint, so repeated taps, retries and page reloads map to one job.
- */
-export function analysisInputFingerprint(input: {
+export type AnalysisAccountIdentity = {
   socialProfileId: string;
   platform: SocialPlatform;
   normalizedHandle: string;
   platformAccountId: string | null;
-  requestedAt: Date;
-}): string {
-  const day = input.requestedAt.toISOString().slice(0, 10);
+};
+
+/**
+ * Identity of ONE logical analysis request (not of a time window):
+ * - initial: account identity + "initial" (same forever for that account)
+ * - user_refresh: account identity + refresh sequence number n. Two taps at
+ *   the same moment both compute the same n, so they collapse into one job;
+ *   the next refresh gets n+1, so a legitimate refresh is never blocked by
+ *   an old key.
+ * - background: account identity + policy period index (several schedulers in
+ *   the same period collapse into one job).
+ */
+export function analysisRequestFingerprint(
+  input: AnalysisAccountIdentity &
+    (
+      | { requestKind: "initial" }
+      | { requestKind: "user_refresh"; refreshSequence: number }
+      | { requestKind: "background"; periodIndex: number }
+    )
+): string {
+  const discriminator =
+    input.requestKind === "initial"
+      ? "initial"
+      : input.requestKind === "user_refresh"
+        ? `refresh:${input.refreshSequence}`
+        : `background:${input.periodIndex}`;
+  if (input.requestKind === "user_refresh" && !(input.refreshSequence >= 1)) {
+    throw new Error("refreshSequence must be >= 1");
+  }
   return [
-    "v1",
+    "v2",
     input.socialProfileId,
     input.platform,
     input.normalizedHandle,
     input.platformAccountId ?? "",
-    day,
+    discriminator,
   ].join("|");
+}
+
+export type ExistingRunSummary = {
+  id: string;
+  requestKind: AnalysisRequestKind;
+  status: AnalysisRunStatus;
+  /** Same account identity as now (handle/platform/account id unchanged). */
+  sameAccountIdentity: boolean;
+  createdAt: Date;
+  completedAt: Date | null;
+};
+
+export type AnalysisRequestDecision =
+  | { action: "reuse_active"; runId: string }
+  | { action: "reuse_completed"; runId: string }
+  | { action: "retry_failed"; runId: string }
+  | {
+      action: "create";
+      requestKind: AnalysisRequestKind;
+      refreshSequence: number | null;
+      periodIndex: number | null;
+    }
+  | {
+      action: "reject";
+      reason:
+        | "not_analyzable"
+        | "usage_limit"
+        | "cooldown"
+        | "background_disabled"
+        | "fresh_enough";
+      retryAfter?: Date;
+    };
+
+const ANALYZABLE: ReadonlySet<SocialProfileStatus> = new Set([
+  "pending_confirmation",
+  "confirmed",
+]);
+
+/**
+ * Decides what to do with an analysis request. Pure: the server loads the
+ * runs, calls this, then acts. Order of rules:
+ * 1. Accounts we cannot analyze (private, not found, not posting yet) never
+ *    trigger provider calls.
+ * 2. If any run is queued or running for this profile, reuse it (single
+ *    flight; also enforced by a DB unique key on the active slot).
+ * 3. initial: reuse a finished one for the same account; retry a failed one
+ *    in place; otherwise create.
+ * 4. user_refresh: needs usage allowance and the cooldown since the last
+ *    finished run; creates run n+1.
+ * 5. background: only when enabled and the last success is older than the
+ *    interval; one per policy period.
+ */
+export function decideAnalysisRequest(input: {
+  requestKind: AnalysisRequestKind;
+  profileStatus: SocialProfileStatus;
+  runs: ExistingRunSummary[];
+  now: Date;
+  /** user_refresh only: result of the existing usage-limit check. */
+  usageAllowed?: boolean;
+  policy?: AnalysisRefreshPolicy;
+}): AnalysisRequestDecision {
+  const policy = input.policy ?? ANALYSIS_REFRESH_POLICY;
+  if (!ANALYZABLE.has(input.profileStatus)) {
+    return { action: "reject", reason: "not_analyzable" };
+  }
+
+  const active = input.runs.find(
+    r => r.status === "queued" || r.status === "running"
+  );
+  if (active) return { action: "reuse_active", runId: active.id };
+
+  const finished = input.runs
+    .filter(r => r.completedAt !== null)
+    .sort((a, b) => b.completedAt!.getTime() - a.completedAt!.getTime());
+
+  if (input.requestKind === "initial") {
+    const initial = input.runs
+      .filter(r => r.requestKind === "initial" && r.sameAccountIdentity)
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+    if (initial?.status === "failed")
+      return { action: "retry_failed", runId: initial.id };
+    if (initial) return { action: "reuse_completed", runId: initial.id };
+    return {
+      action: "create",
+      requestKind: "initial",
+      refreshSequence: null,
+      periodIndex: null,
+    };
+  }
+
+  if (input.requestKind === "user_refresh") {
+    if (!input.usageAllowed) return { action: "reject", reason: "usage_limit" };
+    const last = finished[0];
+    if (last) {
+      const readyAt = new Date(
+        last.completedAt!.getTime() + policy.userRefreshCooldownMinutes * 60_000
+      );
+      if (input.now < readyAt) {
+        return { action: "reject", reason: "cooldown", retryAfter: readyAt };
+      }
+    }
+    const refreshSequence =
+      input.runs.filter(r => r.requestKind === "user_refresh").length + 1;
+    return {
+      action: "create",
+      requestKind: "user_refresh",
+      refreshSequence,
+      periodIndex: null,
+    };
+  }
+
+  // background
+  if (!policy.backgroundRefreshEnabled) {
+    return { action: "reject", reason: "background_disabled" };
+  }
+  const intervalMs = policy.backgroundRefreshIntervalDays * 86_400_000;
+  const lastSuccess = finished.find(
+    r => r.status === "succeeded" || r.status === "partial"
+  );
+  if (
+    lastSuccess &&
+    input.now.getTime() - lastSuccess.completedAt!.getTime() < intervalMs
+  ) {
+    return {
+      action: "reject",
+      reason: "fresh_enough",
+      retryAfter: new Date(lastSuccess.completedAt!.getTime() + intervalMs),
+    };
+  }
+  return {
+    action: "create",
+    requestKind: "background",
+    refreshSequence: null,
+    periodIndex: Math.floor(input.now.getTime() / intervalMs),
+  };
+}
+
+/**
+ * When a new analysis produces suggestions, older AI suggestions that the
+ * user never acted on are superseded (kept, hidden). Confirmed values,
+ * user-written values and dismissed rows are never touched.
+ */
+export function idsToSupersedeOnRegeneration(
+  existing: ItemRecord[],
+  newRunId: string,
+  kinds: PersonalizationItemKind[]
+): string[] {
+  return existing
+    .filter(
+      i =>
+        kinds.includes(i.kind) &&
+        i.status === "suggested" &&
+        i.source === "ai_suggested" &&
+        i.analysisRunId !== newRunId
+    )
+    .map(i => i.id);
 }
 
 /** Same profile + same inputs = same durable job. A duplicate enqueue is a no-op. */

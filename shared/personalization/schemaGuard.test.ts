@@ -94,12 +94,64 @@ describe("personalization schema: Drizzle and SQL draft match", () => {
           ref.columns.map(c => c.name),
           `${cfg.name}.${fk.getName()}`
         ).toEqual(["socialProfileId", "workspaceId"]);
-        expect(ref.foreignColumns.map(c => c.name)).toEqual([
-          "id",
-          "workspaceId",
-        ]);
+        // Active selections point at the LIVE workspace column so a
+        // soft-deleted profile cannot stay selected.
+        const expectedParent =
+          cfg.name === "workspace_member_active_profiles"
+            ? ["id", "liveWorkspaceId"]
+            : ["id", "workspaceId"];
+        expect(ref.foreignColumns.map(c => c.name)).toEqual(expectedParent);
       }
     }
+  });
+
+  for (const table of tables) {
+    const cfg = getTableConfig(table);
+    it(`${cfg.name}: nullability and deletion rules match the SQL draft`, () => {
+      const block = sqlBlockFor(cfg.name);
+      for (const col of cfg.columns) {
+        const line =
+          block
+            .split("\n")
+            .find(l => new RegExp(`^\\s+\`${col.name}\`\\s`).test(l)) ?? "";
+        const sqlNotNull =
+          /\bNOT NULL\b/.test(line) || /PRIMARY KEY/.test(line);
+        const pkCols = [
+          ...(block.match(/PRIMARY KEY \(([^)]+)\)/)?.[1] ?? "").matchAll(
+            /`(\w+)`/g
+          ),
+        ].map(m => m[1]);
+        expect(col.notNull, `${cfg.name}.${col.name} nullability`).toBe(
+          sqlNotNull || pkCols.includes(col.name)
+        );
+      }
+      for (const fk of cfg.foreignKeys) {
+        const m = block.match(
+          new RegExp(
+            `CONSTRAINT \`${fk.getName()}\` [^\\n]*ON DELETE (CASCADE|RESTRICT|SET NULL)`
+          )
+        );
+        expect(m?.[1]?.toLowerCase(), `${fk.getName()} ON DELETE`).toBe(
+          fk.onDelete
+        );
+      }
+    });
+  }
+
+  it("history tables never cascade deletes; only selections and account answers do", () => {
+    const cascading: string[] = [];
+    for (const table of tables) {
+      const cfg = getTableConfig(table);
+      for (const fk of cfg.foreignKeys) {
+        if (fk.onDelete === "cascade")
+          cascading.push(`${cfg.name}.${fk.getName()}`);
+      }
+    }
+    expect(cascading.sort()).toEqual([
+      "user_onboarding_answers.fk_user_onboarding_answers_user",
+      "workspace_member_active_profiles.fk_member_active_profile_member",
+      "workspace_member_active_profiles.fk_member_active_profile_profile",
+    ]);
   });
 
   it("the SQL draft is additive only (no ALTER, no DROP outside comments)", () => {

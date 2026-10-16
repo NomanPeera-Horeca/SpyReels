@@ -4,7 +4,9 @@ import {
   allowedSuggestionEvidence,
   canCompleteStep,
   deriveReadiness,
+  decideAnalysisRequest,
   deriveRunStatus,
+  idsToSupersedeOnRegeneration,
   idsToConfirmForStep,
   initialStepStatuses,
   isPersonalizationComplete,
@@ -20,6 +22,7 @@ import {
   resolveResumeStep,
   validateSuggestion,
   type AiSuggestion,
+  type ExistingRunSummary,
   type ItemRecord,
   type OnboardingProgressInput,
 } from "./state";
@@ -1011,5 +1014,312 @@ describe("analysis runs", () => {
         niche_opportunities: "failed",
       })
     ).toBe("failed");
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Task 2: retry vs user refresh vs background refresh                 */
+/* ------------------------------------------------------------------ */
+
+describe("decideAnalysisRequest", () => {
+  const now = new Date("2026-10-16T12:00:00Z");
+  const minutesAgo = (m: number) => new Date(now.getTime() - m * 60_000);
+  const run = (over: Partial<ExistingRunSummary>): ExistingRunSummary => ({
+    id: "r1",
+    requestKind: "initial",
+    status: "succeeded",
+    sameAccountIdentity: true,
+    createdAt: minutesAgo(120),
+    completedAt: minutesAgo(110),
+    ...over,
+  });
+
+  describe("never calls the provider for accounts we cannot analyze", () => {
+    for (const profileStatus of [
+      "private",
+      "not_posting_yet",
+      "not_found",
+      "lookup_failed",
+    ] as const) {
+      it(profileStatus, () => {
+        for (const requestKind of [
+          "initial",
+          "user_refresh",
+          "background",
+        ] as const) {
+          expect(
+            decideAnalysisRequest({
+              requestKind,
+              profileStatus,
+              runs: [],
+              now,
+              usageAllowed: true,
+            })
+          ).toEqual({ action: "reject", reason: "not_analyzable" });
+        }
+      });
+    }
+  });
+
+  describe("automatic retry and repeated requests", () => {
+    it("first 'That's me' creates the initial run", () => {
+      expect(
+        decideAnalysisRequest({
+          requestKind: "initial",
+          profileStatus: "confirmed",
+          runs: [],
+          now,
+        })
+      ).toEqual({
+        action: "create",
+        requestKind: "initial",
+        refreshSequence: null,
+        periodIndex: null,
+      });
+    });
+
+    it("reload or double tap while running reuses the active run (no duplicate job)", () => {
+      const active = run({
+        id: "r-active",
+        status: "running",
+        completedAt: null,
+      });
+      for (const requestKind of [
+        "initial",
+        "user_refresh",
+        "background",
+      ] as const) {
+        expect(
+          decideAnalysisRequest({
+            requestKind,
+            profileStatus: "confirmed",
+            runs: [active],
+            now,
+            usageAllowed: true,
+          })
+        ).toEqual({ action: "reuse_active", runId: "r-active" });
+      }
+    });
+
+    it("a failed initial analysis is retried in place (same run, same key)", () => {
+      expect(
+        decideAnalysisRequest({
+          requestKind: "initial",
+          profileStatus: "confirmed",
+          runs: [run({ id: "r-failed", status: "failed" })],
+          now,
+        })
+      ).toEqual({ action: "retry_failed", runId: "r-failed" });
+    });
+
+    it("after success, 'That's me' again reuses the finished run (no new provider work)", () => {
+      expect(
+        decideAnalysisRequest({
+          requestKind: "initial",
+          profileStatus: "confirmed",
+          runs: [run({ id: "r-ok" })],
+          now,
+        })
+      ).toEqual({ action: "reuse_completed", runId: "r-ok" });
+    });
+
+    it("a changed handle counts as a new account: a new initial run", () => {
+      expect(
+        decideAnalysisRequest({
+          requestKind: "initial",
+          profileStatus: "confirmed",
+          runs: [run({ sameAccountIdentity: false })],
+          now,
+        })
+      ).toMatchObject({ action: "create", requestKind: "initial" });
+    });
+  });
+
+  describe("user-authorized refresh", () => {
+    it("allowed on the same day once the cooldown has passed: creates run n+1, keeps history", () => {
+      const runs = [
+        run({ id: "r0", requestKind: "initial", completedAt: minutesAgo(300) }),
+        run({
+          id: "r1",
+          requestKind: "user_refresh",
+          completedAt: minutesAgo(61),
+        }),
+      ];
+      expect(
+        decideAnalysisRequest({
+          requestKind: "user_refresh",
+          profileStatus: "confirmed",
+          runs,
+          now,
+          usageAllowed: true,
+        })
+      ).toEqual({
+        action: "create",
+        requestKind: "user_refresh",
+        refreshSequence: 2,
+        periodIndex: null,
+      });
+    });
+
+    it("refused during the cooldown, with the time it becomes available", () => {
+      const d = decideAnalysisRequest({
+        requestKind: "user_refresh",
+        profileStatus: "confirmed",
+        runs: [run({ completedAt: minutesAgo(10) })],
+        now,
+        usageAllowed: true,
+      });
+      expect(d).toEqual({
+        action: "reject",
+        reason: "cooldown",
+        retryAfter: new Date(now.getTime() + 50 * 60_000),
+      });
+    });
+
+    it("refused when the existing usage-limit check says no", () => {
+      expect(
+        decideAnalysisRequest({
+          requestKind: "user_refresh",
+          profileStatus: "confirmed",
+          runs: [],
+          now,
+          usageAllowed: false,
+        })
+      ).toEqual({ action: "reject", reason: "usage_limit" });
+      expect(
+        decideAnalysisRequest({
+          requestKind: "user_refresh",
+          profileStatus: "confirmed",
+          runs: [],
+          now,
+        })
+      ).toEqual({ action: "reject", reason: "usage_limit" });
+    });
+
+    it("a failed run also starts the cooldown (no hammering a failing provider)", () => {
+      expect(
+        decideAnalysisRequest({
+          requestKind: "user_refresh",
+          profileStatus: "confirmed",
+          runs: [run({ status: "failed", completedAt: minutesAgo(5) })],
+          now,
+          usageAllowed: true,
+        })
+      ).toMatchObject({ action: "reject", reason: "cooldown" });
+    });
+  });
+
+  describe("background refresh", () => {
+    const enabled = {
+      userRefreshCooldownMinutes: 60,
+      backgroundRefreshEnabled: true,
+      backgroundRefreshIntervalDays: 7,
+    };
+
+    it("off by default (no approved policy yet)", () => {
+      expect(
+        decideAnalysisRequest({
+          requestKind: "background",
+          profileStatus: "confirmed",
+          runs: [],
+          now,
+        })
+      ).toEqual({ action: "reject", reason: "background_disabled" });
+    });
+
+    it("when enabled, skips profiles analyzed within the interval", () => {
+      const d = decideAnalysisRequest({
+        requestKind: "background",
+        profileStatus: "confirmed",
+        runs: [run({ completedAt: minutesAgo(60 * 24 * 3) })],
+        now,
+        policy: enabled,
+      });
+      expect(d).toMatchObject({ action: "reject", reason: "fresh_enough" });
+    });
+
+    it("when enabled and stale, creates one run for the current period", () => {
+      const d = decideAnalysisRequest({
+        requestKind: "background",
+        profileStatus: "confirmed",
+        runs: [run({ completedAt: minutesAgo(60 * 24 * 8) })],
+        now,
+        policy: enabled,
+      });
+      expect(d).toEqual({
+        action: "create",
+        requestKind: "background",
+        refreshSequence: null,
+        periodIndex: Math.floor(now.getTime() / (7 * 86_400_000)),
+      });
+    });
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Task 1: regeneration never touches confirmed values                 */
+/* ------------------------------------------------------------------ */
+
+describe("idsToSupersedeOnRegeneration", () => {
+  const items: ItemRecord[] = [
+    item({
+      id: "old-ai",
+      kind: "pillar",
+      payload: { title: "a", description: "", viewSharePercent: null },
+      analysisRunId: "run-1",
+    }),
+    item({
+      id: "inferred",
+      kind: "pillar",
+      payload: { title: "b", description: "", viewSharePercent: null },
+    }),
+    item({
+      id: "confirmed",
+      kind: "pillar",
+      payload: { title: "c", description: "", viewSharePercent: 30 },
+      status: "confirmed",
+      evidence: "performance_backed",
+      analysisRunId: "run-1",
+    }),
+    item({
+      id: "user",
+      kind: "pillar",
+      payload: { title: "d", description: "", viewSharePercent: null },
+      source: "user_entered",
+      evidence: "user_provided",
+    }),
+    item({
+      id: "dismissed",
+      kind: "pillar",
+      payload: { title: "e", description: "", viewSharePercent: null },
+      status: "dismissed",
+      dismissedAtVersion: 1,
+    }),
+    item({
+      id: "new-run",
+      kind: "pillar",
+      payload: { title: "f", description: "", viewSharePercent: null },
+      analysisRunId: "run-2",
+    }),
+    item({ id: "goal-ai", kind: "goal", payload: { text: "g" } }),
+  ];
+
+  it("supersedes only unconfirmed AI suggestions of the regenerated kinds from older runs", () => {
+    expect(idsToSupersedeOnRegeneration(items, "run-2", ["pillar"])).toEqual([
+      "old-ai",
+      "inferred",
+    ]);
+  });
+
+  it("confirmed, user-written and dismissed values are never in the list", () => {
+    const ids = idsToSupersedeOnRegeneration(items, "run-2", [
+      "pillar",
+      "goal",
+      "audience",
+      "niche",
+      "language",
+    ]);
+    for (const kept of ["confirmed", "user", "dismissed", "new-run"])
+      expect(ids).not.toContain(kept);
   });
 });

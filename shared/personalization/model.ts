@@ -224,3 +224,39 @@ export type AnalysisAvailability = (typeof ANALYSIS_AVAILABILITY)[number];
 
 /** Durable job type for the profile analysis (to be registered in server/durableJobs/types.ts). */
 export const PROFILE_ANALYSIS_JOB_TYPE = "profile_analysis";
+
+/**
+ * Why an analysis run exists. One run = one logical request.
+ * - initial: started by "That's me". One per account identity, ever.
+ *   Reloads and repeated taps reuse it; a failed one is retried in place.
+ * - user_refresh: the user explicitly asked for fresh analysis. Each one is a
+ *   new run (history kept), subject to cooldown and usage limits.
+ * - background: scheduled refresh. Only when the refresh policy allows it.
+ *
+ * Automatic retries are NOT new runs: the durable job retries the same row
+ * (attempt counter, lease expiry) under the same idempotency key.
+ */
+export const ANALYSIS_REQUEST_KINDS = [
+  "initial",
+  "user_refresh",
+  "background",
+] as const;
+export type AnalysisRequestKind = (typeof ANALYSIS_REQUEST_KINDS)[number];
+
+/**
+ * PROVISIONAL refresh policy (needs CEO confirmation). Each analysis costs
+ * provider calls, so refreshes are rate limited:
+ * - a user refresh needs this long since the last finished run
+ * - background refresh is OFF until a policy is approved; when on, it only
+ *   runs if the last successful analysis is older than the interval
+ */
+export const ANALYSIS_REFRESH_POLICY = {
+  userRefreshCooldownMinutes: 60,
+  backgroundRefreshEnabled: false,
+  backgroundRefreshIntervalDays: 7,
+} as const;
+export type AnalysisRefreshPolicy = {
+  userRefreshCooldownMinutes: number;
+  backgroundRefreshEnabled: boolean;
+  backgroundRefreshIntervalDays: number;
+};

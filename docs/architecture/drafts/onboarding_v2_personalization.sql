@@ -23,6 +23,24 @@
 -- * Items reference (analysisRunId, socialProfileId), so an item can only cite
 --   an analysis run of its own profile.
 --
+-- History is protected by the database:
+-- * Every foreign key between history tables (profiles, analysis runs, stages,
+--   personalization items, progress) is ON DELETE RESTRICT. Deleting, retrying
+--   or cleaning up an analysis run can never delete a confirmed goal, audience,
+--   pillar, niche or language: the delete is refused while anything cites it.
+-- * Profiles are soft deleted (deletedAt). Their history stays.
+-- * Only non-history rows cascade: an active-profile selection disappears when
+--   its member leaves or its profile row is purged.
+-- * A soft-deleted profile cannot stay selected: the selection references
+--   social_profiles (id, liveWorkspaceId), and liveWorkspaceId becomes NULL on
+--   soft delete. Soft delete is refused until selections are cleared, and a
+--   soft-deleted profile cannot be selected again.
+-- * At most one queued/running analysis per profile (UNIQUE activeProfileSlot).
+--
+-- Full erasure (e.g. a data-deletion request) is an explicit ops procedure that
+-- deletes in this order: selections, items, progress, stages, runs, profiles
+-- (see PERSONALIZATION_PURGE_ORDER in server/personalization/lifecycle.ts).
+--
 -- Rollback (only while no deployed code reads these tables): see bottom.
 
 CREATE TABLE IF NOT EXISTS `social_profiles` (
@@ -45,11 +63,13 @@ CREATE TABLE IF NOT EXISTS `social_profiles` (
   `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   `deletedAt` timestamp NULL,
+  `liveWorkspaceId` varchar(36) GENERATED ALWAYS AS (IF(`deletedAt` IS NULL, `workspaceId`, NULL)) STORED,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uniq_social_profiles_id_workspace` (`id`, `workspaceId`),
+  UNIQUE KEY `uniq_social_profiles_id_live_workspace` (`id`, `liveWorkspaceId`),
   UNIQUE KEY `uniq_social_profiles_ws_platform_handle` (`workspaceId`, `platform`, `normalizedHandle`),
   KEY `idx_social_profiles_workspace` (`workspaceId`, `deletedAt`),
-  CONSTRAINT `fk_social_profiles_workspace` FOREIGN KEY (`workspaceId`) REFERENCES `workspaces` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_social_profiles_workspace` FOREIGN KEY (`workspaceId`) REFERENCES `workspaces` (`id`) ON DELETE RESTRICT,
   CONSTRAINT `fk_social_profiles_created_by` FOREIGN KEY (`createdByUserId`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `chk_social_profiles_identity` CHECK (
     (`status` = 'not_posting_yet' AND `normalizedHandle` IS NULL)
@@ -65,7 +85,7 @@ CREATE TABLE IF NOT EXISTS `workspace_member_active_profiles` (
   PRIMARY KEY (`workspaceId`, `userId`),
   KEY `idx_member_active_profile_profile` (`socialProfileId`, `workspaceId`),
   CONSTRAINT `fk_member_active_profile_member` FOREIGN KEY (`workspaceId`, `userId`) REFERENCES `workspace_members` (`workspaceId`, `userId`) ON DELETE CASCADE,
-  CONSTRAINT `fk_member_active_profile_profile` FOREIGN KEY (`socialProfileId`, `workspaceId`) REFERENCES `social_profiles` (`id`, `workspaceId`) ON DELETE CASCADE
+  CONSTRAINT `fk_member_active_profile_profile` FOREIGN KEY (`socialProfileId`, `workspaceId`) REFERENCES `social_profiles` (`id`, `liveWorkspaceId`) ON DELETE CASCADE ON UPDATE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `user_onboarding_answers` (
@@ -88,6 +108,8 @@ CREATE TABLE IF NOT EXISTS `profile_analysis_runs` (
   `socialProfileId` varchar(36) NOT NULL,
   `inputHash` varchar(64) NOT NULL,
   `idempotencyKey` varchar(191) NOT NULL,
+  `requestKind` enum('initial','user_refresh','background') NOT NULL,
+  `refreshSequence` int NULL,
   `durableJobId` bigint unsigned NULL,
   `status` enum('queued','running','partial','succeeded','failed') NOT NULL DEFAULT 'queued',
   `postsInWindow` int NULL,
@@ -99,14 +121,20 @@ CREATE TABLE IF NOT EXISTS `profile_analysis_runs` (
   `completedAt` timestamp NULL,
   `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `activeProfileSlot` varchar(36) GENERATED ALWAYS AS (IF(`status` IN ('queued','running'), `socialProfileId`, NULL)) STORED,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uniq_profile_analysis_runs_idempotency` (`idempotencyKey`),
+  UNIQUE KEY `uniq_profile_analysis_runs_active_slot` (`activeProfileSlot`),
   UNIQUE KEY `uniq_profile_analysis_runs_id_profile` (`id`, `socialProfileId`),
   KEY `idx_profile_analysis_runs_profile` (`socialProfileId`, `workspaceId`, `createdAt`),
   KEY `idx_profile_analysis_runs_workspace` (`workspaceId`),
-  CONSTRAINT `fk_profile_analysis_runs_profile` FOREIGN KEY (`socialProfileId`, `workspaceId`) REFERENCES `social_profiles` (`id`, `workspaceId`) ON DELETE CASCADE,
+  CONSTRAINT `fk_profile_analysis_runs_profile` FOREIGN KEY (`socialProfileId`, `workspaceId`) REFERENCES `social_profiles` (`id`, `workspaceId`) ON DELETE RESTRICT,
   CONSTRAINT `fk_profile_analysis_runs_requested_by` FOREIGN KEY (`requestedByUserId`) REFERENCES `users` (`id`) ON DELETE SET NULL,
-  CONSTRAINT `chk_profile_analysis_runs_posts` CHECK (`postsInWindow` IS NULL OR `postsInWindow` >= 0)
+  CONSTRAINT `chk_profile_analysis_runs_posts` CHECK (`postsInWindow` IS NULL OR `postsInWindow` >= 0),
+  CONSTRAINT `chk_profile_analysis_runs_refresh_sequence` CHECK (
+    (`requestKind` = 'user_refresh' AND `refreshSequence` IS NOT NULL AND `refreshSequence` >= 1)
+    OR (`requestKind` <> 'user_refresh' AND `refreshSequence` IS NULL)
+  )
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `profile_analysis_stages` (
@@ -118,7 +146,7 @@ CREATE TABLE IF NOT EXISTS `profile_analysis_stages` (
   `completedAt` timestamp NULL,
   `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (`runId`, `stage`),
-  CONSTRAINT `fk_profile_analysis_stages_run` FOREIGN KEY (`runId`) REFERENCES `profile_analysis_runs` (`id`) ON DELETE CASCADE
+  CONSTRAINT `fk_profile_analysis_stages_run` FOREIGN KEY (`runId`) REFERENCES `profile_analysis_runs` (`id`) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `personalization_items` (
@@ -143,8 +171,8 @@ CREATE TABLE IF NOT EXISTS `personalization_items` (
   KEY `idx_personalization_items_workspace` (`workspaceId`),
   KEY `idx_personalization_items_run` (`analysisRunId`, `socialProfileId`),
   KEY `idx_personalization_items_supersedes` (`supersedesItemId`),
-  CONSTRAINT `fk_personalization_items_profile` FOREIGN KEY (`socialProfileId`, `workspaceId`) REFERENCES `social_profiles` (`id`, `workspaceId`) ON DELETE CASCADE,
-  CONSTRAINT `fk_personalization_items_run` FOREIGN KEY (`analysisRunId`, `socialProfileId`) REFERENCES `profile_analysis_runs` (`id`, `socialProfileId`) ON DELETE CASCADE,
+  CONSTRAINT `fk_personalization_items_profile` FOREIGN KEY (`socialProfileId`, `workspaceId`) REFERENCES `social_profiles` (`id`, `workspaceId`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_personalization_items_run` FOREIGN KEY (`analysisRunId`, `socialProfileId`) REFERENCES `profile_analysis_runs` (`id`, `socialProfileId`) ON DELETE RESTRICT,
   CONSTRAINT `fk_personalization_items_created_by` FOREIGN KEY (`createdByUserId`) REFERENCES `users` (`id`) ON DELETE SET NULL,
   CONSTRAINT `chk_personalization_items_performance_run` CHECK (`evidence` <> 'performance_backed' OR `analysisRunId` IS NOT NULL),
   CONSTRAINT `chk_personalization_items_no_invented_numbers` CHECK (
@@ -169,7 +197,7 @@ CREATE TABLE IF NOT EXISTS `personalization_progress` (
   PRIMARY KEY (`socialProfileId`),
   KEY `idx_personalization_progress_workspace` (`workspaceId`),
   KEY `idx_personalization_progress_profile_ws` (`socialProfileId`, `workspaceId`),
-  CONSTRAINT `fk_personalization_progress_profile` FOREIGN KEY (`socialProfileId`, `workspaceId`) REFERENCES `social_profiles` (`id`, `workspaceId`) ON DELETE CASCADE,
+  CONSTRAINT `fk_personalization_progress_profile` FOREIGN KEY (`socialProfileId`, `workspaceId`) REFERENCES `social_profiles` (`id`, `workspaceId`) ON DELETE RESTRICT,
   CONSTRAINT `chk_personalization_progress_version` CHECK (`personalizationVersion` >= 1)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 

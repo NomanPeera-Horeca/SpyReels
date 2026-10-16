@@ -16,6 +16,10 @@
  * Isolation is enforced by the database: social_profiles has UNIQUE
  * (id, workspaceId) and every child references (socialProfileId, workspaceId)
  * together, so no row can point at another workspace's profile.
+ *
+ * History is protected by the database: every FK between history tables is
+ * ON DELETE RESTRICT, so deleting or cleaning up an analysis run can never
+ * delete confirmed personalization. Only active selections cascade.
  */
 import {
   bigint,
@@ -36,6 +40,7 @@ import {
 import { sql } from "drizzle-orm";
 import { users, workspaceMembers, workspaces } from "./schema";
 import {
+  ANALYSIS_REQUEST_KINDS,
   ANALYSIS_RUN_STATUSES,
   ANALYSIS_STAGES,
   ANALYSIS_STAGE_STATUSES,
@@ -85,11 +90,22 @@ export const socialProfiles = mysqlTable(
     confirmedAt: timestamp("confirmedAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-    /** Soft delete. The server clears active selections in the same transaction. */
+    /** Soft delete. Refused by the DB while any member still has it selected. */
     deletedAt: timestamp("deletedAt"),
+    /** workspaceId while live, NULL once soft deleted. Target of active selections. */
+    liveWorkspaceId: varchar("liveWorkspaceId", {
+      length: 36,
+    }).generatedAlwaysAs(
+      sql`IF(\`deletedAt\` IS NULL, \`workspaceId\`, NULL)`,
+      { mode: "stored" }
+    ),
   },
   t => [
     unique("uniq_social_profiles_id_workspace").on(t.id, t.workspaceId),
+    unique("uniq_social_profiles_id_live_workspace").on(
+      t.id,
+      t.liveWorkspaceId
+    ),
     uniqueIndex("uniq_social_profiles_ws_platform_handle").on(
       t.workspaceId,
       t.platform,
@@ -100,7 +116,7 @@ export const socialProfiles = mysqlTable(
       name: "fk_social_profiles_workspace",
       columns: [t.workspaceId],
       foreignColumns: [workspaces.id],
-    }).onDelete("cascade"),
+    }).onDelete("restrict"),
     foreignKey({
       name: "fk_social_profiles_created_by",
       columns: [t.createdByUserId],
@@ -136,8 +152,10 @@ export const workspaceMemberActiveProfiles = mysqlTable(
     foreignKey({
       name: "fk_member_active_profile_profile",
       columns: [t.socialProfileId, t.workspaceId],
-      foreignColumns: [socialProfiles.id, socialProfiles.workspaceId],
-    }).onDelete("cascade"),
+      foreignColumns: [socialProfiles.id, socialProfiles.liveWorkspaceId],
+    })
+      .onDelete("cascade")
+      .onUpdate("restrict"),
   ]
 );
 
@@ -177,6 +195,9 @@ export const profileAnalysisRuns = mysqlTable(
     inputHash: varchar("inputHash", { length: 64 }).notNull(),
     /** Same value as durable_jobs.idempotencyKey. */
     idempotencyKey: varchar("idempotencyKey", { length: 191 }).notNull(),
+    requestKind: mysqlEnum("requestKind", ANALYSIS_REQUEST_KINDS).notNull(),
+    /** user_refresh only: 1, 2, 3... (two simultaneous taps share the same number). */
+    refreshSequence: int("refreshSequence"),
     durableJobId: bigint("durableJobId", { mode: "number", unsigned: true }),
     status: mysqlEnum("status", ANALYSIS_RUN_STATUSES)
       .default("queued")
@@ -190,9 +211,19 @@ export const profileAnalysisRuns = mysqlTable(
     completedAt: timestamp("completedAt"),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
     updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+    /** socialProfileId while queued or running, else NULL. UNIQUE = one active analysis per profile. */
+    activeProfileSlot: varchar("activeProfileSlot", {
+      length: 36,
+    }).generatedAlwaysAs(
+      sql`IF(\`status\` IN ('queued','running'), \`socialProfileId\`, NULL)`,
+      { mode: "stored" }
+    ),
   },
   t => [
     uniqueIndex("uniq_profile_analysis_runs_idempotency").on(t.idempotencyKey),
+    uniqueIndex("uniq_profile_analysis_runs_active_slot").on(
+      t.activeProfileSlot
+    ),
     unique("uniq_profile_analysis_runs_id_profile").on(t.id, t.socialProfileId),
     index("idx_profile_analysis_runs_profile").on(
       t.socialProfileId,
@@ -204,7 +235,7 @@ export const profileAnalysisRuns = mysqlTable(
       name: "fk_profile_analysis_runs_profile",
       columns: [t.socialProfileId, t.workspaceId],
       foreignColumns: [socialProfiles.id, socialProfiles.workspaceId],
-    }).onDelete("cascade"),
+    }).onDelete("restrict"),
     foreignKey({
       name: "fk_profile_analysis_runs_requested_by",
       columns: [t.requestedByUserId],
@@ -213,6 +244,10 @@ export const profileAnalysisRuns = mysqlTable(
     check(
       "chk_profile_analysis_runs_posts",
       sql`${t.postsInWindow} IS NULL OR ${t.postsInWindow} >= 0`
+    ),
+    check(
+      "chk_profile_analysis_runs_refresh_sequence",
+      sql`(${t.requestKind} = 'user_refresh' AND ${t.refreshSequence} IS NOT NULL AND ${t.refreshSequence} >= 1) OR (${t.requestKind} <> 'user_refresh' AND ${t.refreshSequence} IS NULL)`
     ),
   ]
 );
@@ -237,7 +272,7 @@ export const profileAnalysisStages = mysqlTable(
       name: "fk_profile_analysis_stages_run",
       columns: [t.runId],
       foreignColumns: [profileAnalysisRuns.id],
-    }).onDelete("cascade"),
+    }).onDelete("restrict"),
   ]
 );
 
@@ -290,7 +325,7 @@ export const personalizationItems = mysqlTable(
       name: "fk_personalization_items_profile",
       columns: [t.socialProfileId, t.workspaceId],
       foreignColumns: [socialProfiles.id, socialProfiles.workspaceId],
-    }).onDelete("cascade"),
+    }).onDelete("restrict"),
     foreignKey({
       name: "fk_personalization_items_run",
       columns: [t.analysisRunId, t.socialProfileId],
@@ -298,7 +333,7 @@ export const personalizationItems = mysqlTable(
         profileAnalysisRuns.id,
         profileAnalysisRuns.socialProfileId,
       ],
-    }).onDelete("cascade"),
+    }).onDelete("restrict"),
     foreignKey({
       name: "fk_personalization_items_created_by",
       columns: [t.createdByUserId],
@@ -349,7 +384,7 @@ export const personalizationProgress = mysqlTable(
       name: "fk_personalization_progress_profile",
       columns: [t.socialProfileId, t.workspaceId],
       foreignColumns: [socialProfiles.id, socialProfiles.workspaceId],
-    }).onDelete("cascade"),
+    }).onDelete("restrict"),
     check(
       "chk_personalization_progress_version",
       sql`${t.personalizationVersion} >= 1`

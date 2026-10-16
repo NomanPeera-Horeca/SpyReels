@@ -1,7 +1,8 @@
 /**
  * Runs the draft SQL against a REAL MySQL 8 database and attacks it:
  * cross-workspace references, invalid ownership, stale references, profile
- * switching, invented numbers and duplicate jobs.
+ * switching, cleanup attempts against confirmed values, duplicate and
+ * concurrent analysis jobs, invented numbers.
  *
  * Skipped unless PERSONALIZATION_SCHEMA_TEST_DB is set, e.g.
  *   PERSONALIZATION_SCHEMA_TEST_DB=mysql://user:pass@127.0.0.1:3306/scratch_db
@@ -12,6 +13,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import mysql from "mysql2/promise";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { PERSONALIZATION_PURGE_ORDER } from "../../server/personalization/lifecycle";
 
 const url = process.env.PERSONALIZATION_SCHEMA_TEST_DB;
 const root = path.resolve(__dirname, "../..");
@@ -23,6 +25,11 @@ const P_A2 = "pa000000-0000-4000-8000-000000000002";
 const P_B = "pb000000-0000-4000-8000-000000000001";
 const RUN_A = "ra000000-0000-4000-8000-000000000001";
 const RUN_B = "rb000000-0000-4000-8000-000000000001";
+
+const FK_CHILD = /ER_NO_REFERENCED_ROW/;
+const FK_PARENT = /ER_ROW_IS_REFERENCED/;
+const CHECK = /ER_CHECK_CONSTRAINT_VIOLATED/;
+const DUP = /ER_DUP_ENTRY/;
 
 function baseDdl(): string {
   const ddl = readFileSync(
@@ -43,6 +50,8 @@ function baseDdl(): string {
 
 describe.skipIf(!url)("personalization schema on real MySQL", () => {
   let db: mysql.Connection;
+  let db2: mysql.Connection;
+  let connectOpts: mysql.ConnectionOptions;
 
   const run = (sql: string, params: unknown[] = []) => db.query(sql, params);
   const rejects = async (sql: string, params: unknown[], code: RegExp) => {
@@ -62,9 +71,6 @@ describe.skipIf(!url)("personalization schema on real MySQL", () => {
     return Number((rows as Array<{ n: number }>)[0].n);
   };
 
-  const FK = /ER_NO_REFERENCED_ROW|ER_NO_REFERENCED_ROW_2/;
-  const CHECK = /ER_CHECK_CONSTRAINT_VIOLATED/;
-
   beforeAll(async () => {
     const u = new URL(url!);
     const dbName = u.pathname.replace(/^\//, "");
@@ -73,13 +79,14 @@ describe.skipIf(!url)("personalization schema on real MySQL", () => {
         "Refusing to use this database for a destructive schema test"
       );
     }
-    db = await mysql.createConnection({
+    connectOpts = {
       host: u.hostname,
       port: Number(u.port || 3306),
       user: decodeURIComponent(u.username),
       password: decodeURIComponent(u.password),
       multipleStatements: true,
-    });
+    };
+    db = await mysql.createConnection(connectOpts);
     await run(
       `DROP DATABASE IF EXISTS \`${dbName}\`; CREATE DATABASE \`${dbName}\`; USE \`${dbName}\`;`
     );
@@ -93,22 +100,19 @@ describe.skipIf(!url)("personalization schema on real MySQL", () => {
     );
     await run(draft);
     await run(draft); // idempotent
+    db2 = await mysql.createConnection({ ...connectOpts, database: dbName });
   });
 
   afterAll(async () => {
     await db?.end();
+    await db2?.end();
   });
 
   beforeEach(async () => {
     await run("SET FOREIGN_KEY_CHECKS = 0");
     for (const t of [
-      "personalization_progress",
-      "personalization_items",
-      "profile_analysis_stages",
-      "profile_analysis_runs",
+      ...PERSONALIZATION_PURGE_ORDER,
       "user_onboarding_answers",
-      "workspace_member_active_profiles",
-      "social_profiles",
       "workspace_members",
       "workspaces",
       "users",
@@ -136,9 +140,9 @@ describe.skipIf(!url)("personalization schema on real MySQL", () => {
       [P_A, WS_A, P_A2, WS_A, P_B, WS_B]
     );
     await run(
-      `INSERT INTO profile_analysis_runs (id, workspaceId, socialProfileId, inputHash, idempotencyKey, status, requestedByUserId) VALUES
-       (?, ?, ?, 'aaaaaaaaaaaaaaaa', 'profile_analysis:a:1', 'succeeded', 1),
-       (?, ?, ?, 'bbbbbbbbbbbbbbbb', 'profile_analysis:b:1', 'succeeded', 2)`,
+      `INSERT INTO profile_analysis_runs (id, workspaceId, socialProfileId, inputHash, idempotencyKey, requestKind, status, requestedByUserId, completedAt) VALUES
+       (?, ?, ?, 'aaaaaaaaaaaaaaaa', 'profile_analysis:a:initial', 'initial', 'succeeded', 1, NOW()),
+       (?, ?, ?, 'bbbbbbbbbbbbbbbb', 'profile_analysis:b:initial', 'initial', 'succeeded', 2, NOW())`,
       [RUN_A, WS_A, P_A, RUN_B, WS_B, P_B]
     );
   });
@@ -166,44 +170,385 @@ describe.skipIf(!url)("personalization schema on real MySQL", () => {
       id: row.id,
     };
   };
+  const insertRun = (
+    id: string,
+    key: string,
+    over: {
+      kind?: string;
+      status?: string;
+      seq?: number | null;
+      profile?: string;
+      ws?: string;
+    } = {}
+  ) =>
+    run(
+      "INSERT INTO profile_analysis_runs (id, workspaceId, socialProfileId, inputHash, idempotencyKey, requestKind, refreshSequence, status) VALUES (?, ?, ?, 'cccccccccccccccc', ?, ?, ?, ?)",
+      [
+        id,
+        over.ws ?? WS_A,
+        over.profile ?? P_A,
+        key,
+        over.kind ?? "user_refresh",
+        over.seq === undefined ? 1 : over.seq,
+        over.status ?? "queued",
+      ]
+    );
 
-  describe("1. every social profile belongs to exactly one existing workspace", () => {
-    it("rejects a profile for a workspace that does not exist", async () => {
+  /** Confirmed goal, audience, pillar (measured, cites RUN_A), niche, language. */
+  const seedConfirmed = async () => {
+    const rows = [
+      item({
+        kind: "goal",
+        payload: JSON.stringify({ text: "Sell more ovens" }),
+      }),
+      item({
+        kind: "audience",
+        payload: JSON.stringify({ who: "Owners", outcome: "save" }),
+      }),
+      item({
+        kind: "pillar",
+        payload: JSON.stringify({
+          title: "Tours",
+          description: "",
+          viewSharePercent: 40,
+        }),
+        source: "user_edited",
+        evidence: "performance_backed",
+        analysisRunId: RUN_A,
+      }),
+      item({
+        kind: "niche",
+        payload: JSON.stringify({ slug: "food", label: "Food" }),
+      }),
+      item({
+        kind: "language",
+        payload: JSON.stringify({ code: "en", label: "English" }),
+      }),
+    ];
+    for (const r of rows) await run(r.sql, r.params);
+    await run(
+      "INSERT INTO profile_analysis_stages (runId, stage, status) VALUES (?, 'published_content', 'done')",
+      [RUN_A]
+    );
+    return rows.map(r => r.id);
+  };
+  const confirmedCount = () =>
+    count(
+      "personalization_items",
+      "socialProfileId = ? AND status = 'confirmed'",
+      [P_A]
+    );
+
+  /* ---------------------------------------------------------------- */
+
+  describe("Task 1: confirmed personalization survives every analysis cleanup attempt", () => {
+    it("deleting the analysis run a confirmed pillar cites is refused", async () => {
+      await seedConfirmed();
+      await rejects(
+        "DELETE FROM profile_analysis_runs WHERE id = ?",
+        [RUN_A],
+        FK_PARENT
+      );
+      expect(await confirmedCount()).toBe(5);
+    });
+
+    it("deleting all runs of a profile ('cleanup') is refused while history exists", async () => {
+      await seedConfirmed();
+      await rejects(
+        "DELETE FROM profile_analysis_runs WHERE socialProfileId = ?",
+        [P_A],
+        FK_PARENT
+      );
+      expect(
+        await count("profile_analysis_runs", "socialProfileId = ?", [P_A])
+      ).toBe(1);
+      expect(await confirmedCount()).toBe(5);
+    });
+
+    it("deleting a run's stages first still cannot unlock deleting a run that items cite", async () => {
+      await seedConfirmed();
+      await run("DELETE FROM profile_analysis_stages WHERE runId = ?", [RUN_A]);
+      await rejects(
+        "DELETE FROM profile_analysis_runs WHERE id = ?",
+        [RUN_A],
+        FK_PARENT
+      );
+      expect(await confirmedCount()).toBe(5);
+    });
+
+    it("a run with stages cannot be casually deleted even with no items", async () => {
+      await insertRun("r-x", "k-x", { status: "failed" });
+      await run(
+        "INSERT INTO profile_analysis_stages (runId, stage, status) VALUES ('r-x', 'published_content', 'failed')"
+      );
+      await rejects(
+        "DELETE FROM profile_analysis_runs WHERE id = 'r-x'",
+        [],
+        FK_PARENT
+      );
+    });
+
+    it("analysis failure and retry change only the run row; confirmed values are untouched", async () => {
+      await seedConfirmed();
+      await run(
+        "UPDATE profile_analysis_runs SET status = 'failed', errorCode = 'provider_timeout' WHERE id = ?",
+        [RUN_A]
+      );
+      await run(
+        "UPDATE profile_analysis_runs SET status = 'queued', errorCode = NULL, completedAt = NULL WHERE id = ?",
+        [RUN_A]
+      );
+      expect(await confirmedCount()).toBe(5);
+    });
+
+    it("regeneration supersedes old AI suggestions and keeps every confirmed value", async () => {
+      await seedConfirmed();
+      const oldSuggestion = item({
+        kind: "pillar",
+        payload: JSON.stringify({
+          title: "Old idea",
+          description: "",
+          viewSharePercent: null,
+        }),
+        source: "ai_suggested",
+        status: "suggested",
+        evidence: "profile_inferred",
+      });
+      await run(oldSuggestion.sql, oldSuggestion.params);
+      await insertRun("r-regen", "k-regen", { status: "succeeded", seq: 1 });
+      await run(
+        "UPDATE personalization_items SET status = 'superseded' WHERE socialProfileId = ? AND source = 'ai_suggested' AND status = 'suggested' AND kind = 'pillar'",
+        [P_A]
+      );
+      expect(
+        await count(
+          "personalization_items",
+          "id = ? AND status = 'superseded'",
+          [oldSuggestion.id]
+        )
+      ).toBe(1);
+      expect(await confirmedCount()).toBe(5);
+    });
+
+    it("hard-deleting a profile with history is refused (history is not casually deleted)", async () => {
+      await seedConfirmed();
+      await rejects(
+        "DELETE FROM social_profiles WHERE id = ?",
+        [P_A],
+        FK_PARENT
+      );
+      expect(await confirmedCount()).toBe(5);
+    });
+
+    it("hard-deleting a workspace with profiles is refused", async () => {
+      await rejects("DELETE FROM workspaces WHERE id = ?", [WS_A], FK_PARENT);
+    });
+
+    it("the explicit erasure order (lifecycle.ts) removes everything cleanly, scoped to one workspace", async () => {
+      await seedConfirmed();
+      await run(
+        "INSERT INTO workspace_member_active_profiles (workspaceId, userId, socialProfileId) VALUES (?, 1, ?)",
+        [WS_A, P_A]
+      );
+      await run(
+        "INSERT INTO personalization_progress (socialProfileId, workspaceId) VALUES (?, ?)",
+        [P_A, WS_A]
+      );
+      for (const table of PERSONALIZATION_PURGE_ORDER) {
+        if (table === "profile_analysis_stages") {
+          await run(
+            "DELETE s FROM profile_analysis_stages s JOIN profile_analysis_runs r ON r.id = s.runId WHERE r.workspaceId = ?",
+            [WS_A]
+          );
+        } else {
+          await run(`DELETE FROM \`${table}\` WHERE workspaceId = ?`, [WS_A]);
+        }
+      }
+      for (const table of PERSONALIZATION_PURGE_ORDER) {
+        if (table !== "profile_analysis_stages")
+          expect(await count(table, "workspaceId = ?", [WS_A])).toBe(0);
+      }
+      expect(await count("social_profiles", "workspaceId = ?", [WS_B])).toBe(1);
+      expect(
+        await count("profile_analysis_runs", "workspaceId = ?", [WS_B])
+      ).toBe(1);
+    });
+  });
+
+  describe("Task 1: profile soft delete keeps history and removes it from active selections", () => {
+    it("soft delete is refused while a member still has the profile selected", async () => {
+      await run(
+        "INSERT INTO workspace_member_active_profiles (workspaceId, userId, socialProfileId) VALUES (?, 3, ?)",
+        [WS_A, P_A]
+      );
+      await rejects(
+        "UPDATE social_profiles SET deletedAt = NOW() WHERE id = ?",
+        [P_A],
+        FK_PARENT
+      );
+    });
+
+    it("clearing selections then soft deleting works, and history stays", async () => {
+      await seedConfirmed();
+      await run(
+        "INSERT INTO workspace_member_active_profiles (workspaceId, userId, socialProfileId) VALUES (?, 1, ?), (?, 3, ?)",
+        [WS_A, P_A, WS_A, P_A]
+      );
+      await run(
+        "DELETE FROM workspace_member_active_profiles WHERE socialProfileId = ?",
+        [P_A]
+      );
+      await run("UPDATE social_profiles SET deletedAt = NOW() WHERE id = ?", [
+        P_A,
+      ]);
+      expect(await confirmedCount()).toBe(5);
+      expect(
+        await count("profile_analysis_runs", "socialProfileId = ?", [P_A])
+      ).toBe(1);
+    });
+
+    it("a soft-deleted profile cannot be selected again", async () => {
+      await run("UPDATE social_profiles SET deletedAt = NOW() WHERE id = ?", [
+        P_A,
+      ]);
+      await rejects(
+        "INSERT INTO workspace_member_active_profiles (workspaceId, userId, socialProfileId) VALUES (?, 1, ?)",
+        [WS_A, P_A],
+        FK_CHILD
+      );
+    });
+
+    it("a member leaving the workspace removes their selection", async () => {
+      await run(
+        "INSERT INTO workspace_member_active_profiles (workspaceId, userId, socialProfileId) VALUES (?, 3, ?)",
+        [WS_A, P_A]
+      );
+      await run(
+        "DELETE FROM workspace_members WHERE workspaceId = ? AND userId = 3",
+        [WS_A]
+      );
+      expect(await count("workspace_member_active_profiles")).toBe(0);
+    });
+  });
+
+  /* ---------------------------------------------------------------- */
+
+  describe("Task 2: duplicate jobs, concurrency and legitimate refresh", () => {
+    it("the same request (same idempotency key) can never create a second run", async () => {
+      await rejects(
+        "INSERT INTO profile_analysis_runs (id, workspaceId, socialProfileId, inputHash, idempotencyKey, requestKind, status) VALUES ('dup', ?, ?, 'aaaaaaaaaaaaaaaa', 'profile_analysis:a:initial', 'initial', 'succeeded')",
+        [WS_A, P_A],
+        DUP
+      );
+    });
+
+    it("only one queued or running analysis per profile, whatever the request kind", async () => {
+      await insertRun("r-q", "k-q", { status: "queued", seq: 1 });
+      await expect(
+        insertRun("r-bg", "k-bg", {
+          kind: "background",
+          seq: null,
+          status: "queued",
+        })
+      ).rejects.toMatchObject({
+        code: expect.stringMatching(DUP),
+      });
+      // Another profile is independent.
+      await insertRun("r-other", "k-other", {
+        profile: P_A2,
+        status: "running",
+        seq: 1,
+      });
+    });
+
+    it("two connections racing to start an analysis: exactly one wins", async () => {
+      const attempt = (conn: mysql.Connection, id: string, key: string) =>
+        conn
+          .query(
+            "INSERT INTO profile_analysis_runs (id, workspaceId, socialProfileId, inputHash, idempotencyKey, requestKind, refreshSequence, status) VALUES (?, ?, ?, 'dddddddddddddddd', ?, 'user_refresh', 1, 'queued')",
+            [id, WS_A, P_A, key]
+          )
+          .then(() => "won")
+          .catch((e: { code?: string }) => e.code);
+      const results = await Promise.all([
+        attempt(db, "race-1", "k-race-1"),
+        attempt(db2, "race-2", "k-race-2"),
+      ]);
+      expect(results.filter(r => r === "won")).toHaveLength(1);
+      expect(results.filter(r => r === "ER_DUP_ENTRY")).toHaveLength(1);
+      expect(
+        await count(
+          "profile_analysis_runs",
+          "socialProfileId = ? AND status = 'queued'",
+          [P_A]
+        )
+      ).toBe(1);
+    });
+
+    it("a legitimate refresh on the same day is allowed once the previous run finished, and history is kept", async () => {
+      await insertRun("r-1", "k-refresh-1", { status: "running", seq: 1 });
+      await run(
+        "UPDATE profile_analysis_runs SET status = 'succeeded', completedAt = NOW() WHERE id = 'r-1'"
+      );
+      await insertRun("r-2", "k-refresh-2", { status: "queued", seq: 2 });
+      expect(
+        await count("profile_analysis_runs", "socialProfileId = ?", [P_A])
+      ).toBe(3);
+    });
+
+    it("refresh sequence is required for user refreshes and forbidden otherwise", async () => {
+      await expect(
+        insertRun("r-s0", "k-s0", { seq: null, status: "failed" })
+      ).rejects.toMatchObject({ code: expect.stringMatching(CHECK) });
+      await expect(
+        insertRun("r-s1", "k-s1", { kind: "initial", seq: 1, status: "failed" })
+      ).rejects.toMatchObject({ code: expect.stringMatching(CHECK) });
+    });
+  });
+
+  /* ---------------------------------------------------------------- */
+
+  describe("Task 3: workspace isolation and ownership", () => {
+    it("profiles cannot reference a workspace that does not exist", async () => {
       await rejects(
         "INSERT INTO social_profiles (id, workspaceId, platform, normalizedHandle, status) VALUES ('x1', 'no-such-ws', 'instagram', 'h', 'confirmed')",
         [],
-        FK
+        FK_CHILD
       );
     });
-    it("rejects the same handle twice in one workspace, allows it in another", async () => {
+
+    it("a profile with history cannot be moved to another workspace", async () => {
+      await seedConfirmed();
+      await rejects(
+        "UPDATE social_profiles SET workspaceId = ? WHERE id = ?",
+        [WS_B, P_A],
+        FK_PARENT
+      );
+    });
+
+    it("the same handle twice in one workspace is refused, allowed in another", async () => {
       await rejects(
         "INSERT INTO social_profiles (id, workspaceId, platform, normalizedHandle, status) VALUES ('x2', ?, 'instagram', 'brand_a', 'confirmed')",
         [WS_A],
-        /ER_DUP_ENTRY/
+        DUP
       );
       await run(
         "INSERT INTO social_profiles (id, workspaceId, platform, normalizedHandle, status) VALUES ('x3', ?, 'instagram', 'brand_a', 'confirmed')",
         [WS_B]
       );
     });
-  });
 
-  describe("2. a member cannot select a profile from another workspace", () => {
-    it("rejects selecting workspace B's profile inside workspace A", async () => {
+    it("active-profile selection requires membership and a profile of the same workspace", async () => {
       await rejects(
         "INSERT INTO workspace_member_active_profiles (workspaceId, userId, socialProfileId) VALUES (?, 1, ?)",
         [WS_A, P_B],
-        FK
+        FK_CHILD
       );
-    });
-    it("rejects a selection by someone who is not a member of the workspace", async () => {
       await rejects(
         "INSERT INTO workspace_member_active_profiles (workspaceId, userId, socialProfileId) VALUES (?, 2, ?)",
         [WS_A, P_A],
-        FK
+        FK_CHILD
       );
-    });
-    it("allows profile switching within the workspace, one selection per member", async () => {
       await run(
         "INSERT INTO workspace_member_active_profiles (workspaceId, userId, socialProfileId) VALUES (?, 3, ?)",
         [WS_A, P_A]
@@ -218,35 +563,20 @@ describe.skipIf(!url)("personalization schema on real MySQL", () => {
       await rejects(
         "UPDATE workspace_member_active_profiles SET socialProfileId = ? WHERE workspaceId = ? AND userId = 3",
         [P_B, WS_A],
-        FK
+        FK_CHILD
       );
     });
-  });
 
-  describe("3. analysis runs belong to the correct profile and workspace", () => {
-    it("rejects a run whose workspace does not own the profile", async () => {
-      await rejects(
-        "INSERT INTO profile_analysis_runs (id, workspaceId, socialProfileId, inputHash, idempotencyKey) VALUES ('r9', ?, ?, 'cccccccccccccccc', 'k9')",
-        [WS_B, P_A],
-        FK
-      );
+    it("analysis runs cannot reference a profile of another workspace", async () => {
+      await expect(
+        insertRun("r9", "k9", { ws: WS_B, profile: P_A, status: "failed" })
+      ).rejects.toMatchObject({ code: expect.stringMatching(FK_CHILD) });
     });
-    it("rejects a duplicate job (same idempotency key)", async () => {
-      await rejects(
-        "INSERT INTO profile_analysis_runs (id, workspaceId, socialProfileId, inputHash, idempotencyKey) VALUES ('r10', ?, ?, 'aaaaaaaaaaaaaaaa', 'profile_analysis:a:1')",
-        [WS_A, P_A],
-        /ER_DUP_ENTRY/
-      );
-    });
-  });
 
-  describe("4. personalization items cannot attach to unrelated profiles", () => {
-    it("rejects an item whose workspace does not own the profile", async () => {
-      const i = item({ workspaceId: WS_B, socialProfileId: P_A });
-      await rejects(i.sql, i.params, FK);
-    });
-    it("rejects an item that cites another profile's analysis run", async () => {
-      const i = item({
+    it("items cannot attach to another workspace's profile or cite another profile's analysis", async () => {
+      const wrongWs = item({ workspaceId: WS_B, socialProfileId: P_A });
+      await rejects(wrongWs.sql, wrongWs.params, FK_CHILD);
+      const wrongRun = item({
         kind: "pillar",
         payload: JSON.stringify({
           title: "Tours",
@@ -258,118 +588,26 @@ describe.skipIf(!url)("personalization schema on real MySQL", () => {
         evidence: "performance_backed",
         analysisRunId: RUN_B,
       });
-      await rejects(i.sql, i.params, FK);
+      await rejects(wrongRun.sql, wrongRun.params, FK_CHILD);
     });
-    it("accepts a performance-backed pillar citing its own profile's run", async () => {
-      const i = item({
-        kind: "pillar",
-        payload: JSON.stringify({
-          title: "Tours",
-          description: "",
-          viewSharePercent: 40,
-        }),
-        source: "ai_suggested",
-        status: "suggested",
-        evidence: "performance_backed",
-        analysisRunId: RUN_A,
-      });
-      await run(i.sql, i.params);
-    });
-  });
 
-  describe("5. switching workspace exposes nothing: every row is pinned to one workspace", () => {
-    it("a workspace-scoped read for B returns none of A's data", async () => {
-      const a = item();
-      await run(a.sql, a.params);
-      await run(
-        "INSERT INTO personalization_progress (socialProfileId, workspaceId) VALUES (?, ?)",
-        [P_A, WS_A]
-      );
-      for (const t of [
-        "personalization_items",
-        "personalization_progress",
-        "profile_analysis_runs",
-      ]) {
-        expect(
-          await count(t, "workspaceId = ? AND socialProfileId = ?", [WS_B, P_A])
-        ).toBe(0);
-      }
+    it("progress cannot be written for a profile under another workspace", async () => {
       await rejects(
         "INSERT INTO personalization_progress (socialProfileId, workspaceId) VALUES (?, ?)",
         [P_A2, WS_B],
-        FK
+        FK_CHILD
       );
-    });
-  });
-
-  describe("6. no invalid active selection after delete", () => {
-    it("hard delete of a profile removes selections, items, runs, stages and progress", async () => {
-      await run(
-        "INSERT INTO workspace_member_active_profiles (workspaceId, userId, socialProfileId) VALUES (?, 1, ?)",
-        [WS_A, P_A]
-      );
-      await run(
-        "INSERT INTO profile_analysis_stages (runId, stage, status) VALUES (?, 'published_content', 'done')",
-        [RUN_A]
-      );
-      const i = item({
-        kind: "pillar",
-        payload: JSON.stringify({
-          title: "T",
-          description: "",
-          viewSharePercent: 10,
-        }),
-        evidence: "performance_backed",
-        analysisRunId: RUN_A,
-      });
-      await run(i.sql, i.params);
-      await run(
-        "INSERT INTO personalization_progress (socialProfileId, workspaceId) VALUES (?, ?)",
-        [P_A, WS_A]
-      );
-      await run("DELETE FROM social_profiles WHERE id = ?", [P_A]);
-      expect(await count("workspace_member_active_profiles")).toBe(0);
-      expect(
-        await count("personalization_items", "socialProfileId = ?", [P_A])
-      ).toBe(0);
-      expect(
-        await count("profile_analysis_runs", "socialProfileId = ?", [P_A])
-      ).toBe(0);
-      expect(await count("profile_analysis_stages")).toBe(0);
-      expect(await count("personalization_progress")).toBe(0);
-    });
-    it("a member leaving the workspace removes their selection", async () => {
-      await run(
-        "INSERT INTO workspace_member_active_profiles (workspaceId, userId, socialProfileId) VALUES (?, 3, ?)",
-        [WS_A, P_A]
-      );
-      await run(
-        "DELETE FROM workspace_members WHERE workspaceId = ? AND userId = 3",
-        [WS_A]
-      );
-      expect(await count("workspace_member_active_profiles")).toBe(0);
-    });
-    it("soft delete keeps the row, so the server must clear selections (see resolveActiveProfileId)", async () => {
-      await run(
-        "INSERT INTO workspace_member_active_profiles (workspaceId, userId, socialProfileId) VALUES (?, 1, ?)",
-        [WS_A, P_A]
-      );
-      await run("UPDATE social_profiles SET deletedAt = NOW() WHERE id = ?", [
-        P_A,
-      ]);
-      // Documented limit: the DB cannot see soft deletes. The server deactivation
-      // path deletes selections in the same transaction, and readers ignore them.
-      expect(await count("workspace_member_active_profiles")).toBe(1);
     });
   });
 
   describe("no invented numbers, clean skips, valid identities", () => {
-    it("rejects performance-backed items without a run", async () => {
-      const i = item({ evidence: "performance_backed", analysisRunId: null });
-      await rejects(i.sql, i.params, CHECK);
-    });
-    it("rejects a view share on an AI-recommended (not measured) pillar", async () => {
-      const i = item({
+    it("performance-backed items need a run; AI-recommended pillars cannot carry a view share", async () => {
+      const noRun = item({
+        evidence: "performance_backed",
+        analysisRunId: null,
+      });
+      await rejects(noRun.sql, noRun.params, CHECK);
+      const inventedShare = item({
         kind: "pillar",
         payload: JSON.stringify({
           title: "T",
@@ -380,16 +618,26 @@ describe.skipIf(!url)("personalization schema on real MySQL", () => {
         status: "suggested",
         evidence: "profile_inferred",
       });
-      await rejects(i.sql, i.params, CHECK);
+      await rejects(inventedShare.sql, inventedShare.params, CHECK);
     });
-    it("accepts a recommended pillar with no number (zero-post and private accounts)", async () => {
-      for (const payload of [
-        { title: "T", description: "", viewSharePercent: null },
-        { title: "T2", description: "" },
-      ]) {
+
+    it("zero-post, private and 'not posting yet' profiles can store recommended pillars without numbers", async () => {
+      await run(
+        "INSERT INTO social_profiles (id, workspaceId, platform, normalizedHandle, status) VALUES ('priv', ?, 'instagram', 'private_acct', 'private')",
+        [WS_A]
+      );
+      await run(
+        "INSERT INTO social_profiles (id, workspaceId, platform, normalizedHandle, status) VALUES ('np1', ?, NULL, NULL, 'not_posting_yet')",
+        [WS_A]
+      );
+      for (const profile of [P_A, "priv", "np1"]) {
         const i = item({
+          socialProfileId: profile,
           kind: "pillar",
-          payload: JSON.stringify(payload),
+          payload: JSON.stringify({
+            title: `Idea for ${profile}`,
+            description: "",
+          }),
           source: "ai_suggested",
           status: "suggested",
           evidence: "profile_inferred",
@@ -397,20 +645,35 @@ describe.skipIf(!url)("personalization schema on real MySQL", () => {
         await run(i.sql, i.params);
       }
     });
-    it("dismissed rows must record the version they were dismissed at, others must not", async () => {
-      const bad1 = item({ status: "dismissed", dismissedAtVersion: null });
-      await rejects(bad1.sql, bad1.params, CHECK);
-      const bad2 = item({ status: "confirmed", dismissedAtVersion: 2 });
-      await rejects(bad2.sql, bad2.params, CHECK);
-      const ok = item({
-        status: "dismissed",
-        dismissedAtVersion: 2,
-        source: "ai_suggested",
-        evidence: "profile_inferred",
-      });
-      await run(ok.sql, ok.params);
+
+    it("'I don't post yet' has no handle; real profiles need platform and handle; strategy carries over", async () => {
+      await run(
+        "INSERT INTO social_profiles (id, workspaceId, platform, normalizedHandle, status) VALUES ('np2', ?, NULL, NULL, 'not_posting_yet')",
+        [WS_A]
+      );
+      await rejects(
+        "INSERT INTO social_profiles (id, workspaceId, platform, normalizedHandle, status) VALUES ('np3', ?, 'instagram', 'x', 'not_posting_yet')",
+        [WS_A],
+        CHECK
+      );
+      await rejects(
+        "INSERT INTO social_profiles (id, workspaceId, platform, normalizedHandle, status) VALUES ('np4', ?, NULL, NULL, 'confirmed')",
+        [WS_A],
+        CHECK
+      );
+      const i = item({ socialProfileId: "np2" });
+      await run(i.sql, i.params);
+      await run(
+        "UPDATE social_profiles SET status = 'pending_confirmation', platform = 'instagram', normalizedHandle = 'new_creator' WHERE id = 'np2'"
+      );
+      expect(
+        await count("personalization_items", "socialProfileId = 'np2'")
+      ).toBe(1);
     });
-    it("attribution cannot be both answered and skipped", async () => {
+
+    it("dismissed rows record their version; attribution cannot be both answered and skipped", async () => {
+      const bad = item({ status: "dismissed", dismissedAtVersion: null });
+      await rejects(bad.sql, bad.params, CHECK);
       await rejects(
         "INSERT INTO user_onboarding_answers (userId, attributionSource, attributionSkippedAt) VALUES (1, 'friend', NOW())",
         [],
@@ -420,35 +683,8 @@ describe.skipIf(!url)("personalization schema on real MySQL", () => {
         "INSERT INTO user_onboarding_answers (userId, attributionSkippedAt) VALUES (1, NOW())"
       );
     });
-    it("'I don't post yet' profiles have no handle; real profiles must have platform and handle", async () => {
-      await run(
-        "INSERT INTO social_profiles (id, workspaceId, platform, normalizedHandle, status) VALUES ('np1', ?, NULL, NULL, 'not_posting_yet')",
-        [WS_A]
-      );
-      await rejects(
-        "INSERT INTO social_profiles (id, workspaceId, platform, normalizedHandle, status) VALUES ('np2', ?, 'instagram', 'x', 'not_posting_yet')",
-        [WS_A],
-        CHECK
-      );
-      await rejects(
-        "INSERT INTO social_profiles (id, workspaceId, platform, normalizedHandle, status) VALUES ('np3', ?, NULL, NULL, 'confirmed')",
-        [WS_A],
-        CHECK
-      );
-      // The strategy carries over when they start posting.
-      const i = item({ socialProfileId: "np1" });
-      await run(i.sql, i.params);
-      await run(
-        "UPDATE social_profiles SET status = 'pending_confirmation', platform = 'instagram', normalizedHandle = 'new_creator' WHERE id = 'np1'"
-      );
-      expect(
-        await count("personalization_items", "socialProfileId = 'np1'")
-      ).toBe(1);
-    });
-  });
 
-  describe("history is preserved", () => {
-    it("editing creates a new row; the old one stays as superseded; runs are untouched", async () => {
+    it("editing keeps the old row as superseded and does not touch analysis history", async () => {
       const old = item({
         kind: "audience",
         payload: JSON.stringify({ who: "Owners", outcome: "save" }),

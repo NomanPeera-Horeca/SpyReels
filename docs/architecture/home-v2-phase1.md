@@ -67,10 +67,39 @@ Every item carries `evidence`: `performance_backed`, `profile_inferred` or `user
 | 3 | Runs belong to the right profile and workspace | composite FK `(socialProfileId, workspaceId)` | `assertChildOfProfile` |
 | 4 | Items cannot attach to unrelated profiles | composite FK `(socialProfileId, workspaceId)`; FK `(analysisRunId, socialProfileId)` to the run | `assertChildOfProfile` (also for the superseded item) |
 | 5 | Switching workspace exposes nothing | every row pinned by composite FKs | `ctx.workspaceId` is membership-checked in `server/_core/workspaceContext.ts`; `resolveActiveProfileId` ignores foreign ids |
-| 6 | No invalid active selection | hard delete and member removal cascade the selection | soft delete: `planProfileDeactivation` clears selections first; readers ignore stale ones |
+| 6 | No invalid active selection | selection FK targets `social_profiles (id, liveWorkspaceId)`: soft delete is refused while selected, and a soft-deleted profile cannot be selected; member removal cascades | `planProfileDeactivation` clears selections then soft deletes; readers ignore stale ones |
 | 7 | Server-side permissions | n/a | NOT_FOUND for other workspaces; removing a profile is owner-only |
 
-Tested on real MySQL 8.0 (`schema.mysql.test.ts`, 21 attack cases). A mutation check (weakening one FK) made the suite fail, so the tests do guard.
+Tested on real MySQL 8.0 (`schema.mysql.test.ts`, 30 cases). Mutation checks (weakening a constraint) make the suite fail, so the tests do guard.
+
+### History protection (analysis vs strategy)
+
+| Rule | How it is enforced |
+|---|---|
+| Deleting, retrying or cleaning up an analysis run never deletes confirmed goals, audiences, pillars, niche or language | every FK between history tables is `ON DELETE RESTRICT`; a delete of anything still referenced is refused |
+| Analysis history is not casually deleted | runs are append-only in product code; stages and items reference runs with RESTRICT; profiles and workspaces with history refuse hard delete |
+| Confirmed values survive failure, cleanup and regeneration | failure and retry only change the run row; regeneration supersedes unconfirmed AI suggestions (`idsToSupersedeOnRegeneration`) and never touches confirmed, user-written or dismissed rows |
+| Analytics separate from strategy | runs and stages never point at items; an item only cites a run for provenance (`evidence = performance_backed`) |
+| Soft delete keeps history, removes selection | see isolation row 6 |
+| Full erasure | explicit ops procedure, child-first order in `server/personalization/lifecycle.ts` (`PERSONALIZATION_PURGE_ORDER`), scoped to one workspace |
+
+Only three FKs cascade, none on history: selection when a member leaves, selection when its profile row is purged, and a user's own onboarding answers when the user is deleted.
+
+### Analysis retry and refresh
+
+One run = one logical request. `decideAnalysisRequest` (pure) decides; the existing durable queue executes.
+
+| Request | Identity (idempotency key) | Behaviour |
+|---|---|---|
+| Automatic retry | same key as the original request | durable job retries the same row (attempt counter, lease expiry); `enqueueDurableJob` requeues failed/dead in place; no new run, no duplicate provider work |
+| Initial ("That's me") | account identity + `initial` | reloads and double taps reuse it; failed = retried in place; succeeded = reused (not re-run) |
+| User refresh | account identity + refresh sequence n | allowed when no analysis is active, the cooldown since the last finished run has passed, and the existing usage-limit check allows it; creates run n+1 and keeps all earlier runs; two simultaneous taps compute the same n and collapse into one job |
+| Background refresh | account identity + policy period index | off until a policy is approved; when on, only if the last success is older than the interval; schedulers in the same period collapse into one job |
+| Private / not found / not posting yet | n/a | never triggers provider calls |
+
+Simultaneous duplicates are prevented at three layers: `durable_jobs.idempotencyKey` UNIQUE (upsert), `profile_analysis_runs.idempotencyKey` UNIQUE, and `profile_analysis_runs.activeProfileSlot` UNIQUE (at most one queued/running analysis per profile, any kind). A real two-connection race test confirms exactly one wins.
+
+PROVISIONAL policy values (`ANALYSIS_REFRESH_POLICY`, need CEO confirmation): user refresh cooldown 60 minutes; background refresh disabled; interval 7 days. Which usage counter a user refresh consumes is also a CEO decision.
 
 ### Seven-table review
 
@@ -101,6 +130,12 @@ Exact checks needed before a number is assigned (read-only, run by someone with 
 2. `SELECT VERSION();` must be 8.0.16 or later (CHECK constraints are enforced from 8.0.16).
 3. `SHOW CREATE TABLE workspaces; SHOW CREATE TABLE workspace_members; SHOW CREATE TABLE users;` collation must be `utf8mb4_0900_ai_ci` and `users.id` must be `int` (foreign keys fail otherwise).
 4. `SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME IN ('social_profiles','workspace_member_active_profiles','user_onboarding_answers','profile_analysis_runs','profile_analysis_stages','personalization_items','personalization_progress');` must return nothing.
+
+Migration notes:
+
+- The numbered migration must be the hand-written SQL, not `drizzle-kit generate` output: Drizzle does not write a collation, so generated SQL would inherit the server default. Both were loaded into MySQL 8.0 and compared via information_schema: identical columns, nullability, collations, generated columns, indexes, FKs with delete/update rules and CHECKs (only cosmetic literal-charset labels and `now()` vs `CURRENT_TIMESTAMP` differ).
+- Ordering: one file, tables created parent first (`social_profiles` before its children). It depends only on `users`, `workspaces`, `workspace_members` (0000, 0042).
+- Backward compatible: only new tables; no existing table, column or row is changed. Nothing reads the tables until Phase 3 code ships behind the flags.
 
 Rule: no migration file is created until the CEO confirms the next number against production.
 
