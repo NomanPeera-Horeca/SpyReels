@@ -89,7 +89,9 @@ export type OnboardingStateView = {
     handle: string | null;
     displayName: string | null;
     avatarUrl: string | null;
+    bio: string | null;
     followerCount: number | null;
+    followingCount: number | null;
     postCount: number | null;
     status: SocialProfileStatus;
   } | null;
@@ -235,7 +237,9 @@ export async function loadOnboardingState(db: Db, ctx: OnboardingCtx): Promise<O
           handle: profile.normalizedHandle,
           displayName: profile.displayName,
           avatarUrl: profile.avatarUrl,
+          bio: profile.bio,
           followerCount: profile.followerCount,
+          followingCount: profile.followingCount,
           postCount: profile.postCount,
           status: profile.status,
         }

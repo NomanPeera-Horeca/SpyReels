@@ -39,11 +39,14 @@ const LINE_LABEL: Record<AnalysisRunStatus, string> = {
 export function AnalysisStatusLine({
   status,
   handle,
+  label,
   className,
 }: {
   status: AnalysisRunStatus;
-  /** Shown exactly as the user typed it, with a leading @. */
+  /** Shown exactly as the user typed it, with a leading @. Empty to hide. */
   handle: string;
+  /** Replaces the default status text (same real-job states). */
+  label?: string;
   className?: string;
 }) {
   const indicator =
@@ -66,8 +69,8 @@ export function AnalysisStatusLine({
     >
       <span className={styles.indicator}>{indicator}</span>
       <span className={["sr-text-product-body-small", styles.lineText].join(" ")}>
-        <span>{LINE_LABEL[status]}</span>
-        <span>{handle}</span>
+        <span>{label ?? LINE_LABEL[status]}</span>
+        {handle ? <span>{handle}</span> : null}
       </span>
     </div>
   );

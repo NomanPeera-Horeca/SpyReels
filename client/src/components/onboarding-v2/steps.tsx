@@ -225,11 +225,37 @@ export function ProfileStep({
   );
 }
 
+/** Real analysis status for the typed handle, with "Try again" only after a real failure. */
+function RunStatus({
+  handle,
+  runStatus,
+  onRetry,
+  busy,
+}: {
+  handle: string | null;
+  runStatus: AnalysisRunStatus | null;
+  onRetry?: () => void;
+  busy: boolean;
+}) {
+  if (!handle || !runStatus) return null;
+  return (
+    <div className={styles.statusRow}>
+      <AnalysisStatusLine status={runStatus} handle={`@${handle}`} />
+      {runStatus === "failed" && onRetry ? (
+        <GhostButton onClick={onRetry} disabled={busy}>
+          {COPY.tryAgain}
+        </GhostButton>
+      ) : null}
+    </div>
+  );
+}
+
 /* ---------- Step 3a: What brings you to SpyReels? ---------- */
 
 export function UseCaseStep({
   handle,
   runStatus,
+  onRetry,
   value,
   busy,
   preview,
@@ -240,6 +266,8 @@ export function UseCaseStep({
   /** As the user typed it, without @. Null for "I don't post yet". */
   handle: string | null;
   runStatus: AnalysisRunStatus | null;
+  /** Shown only when the real analysis failed. */
+  onRetry?: () => void;
   value: PrimaryUseCase | null;
   busy: boolean;
   preview: ReactNode;
@@ -266,13 +294,7 @@ export function UseCaseStep({
       mobileActions={continueButton}
       testId="onboarding-step-use-case"
     >
-      {handle && runStatus ? (
-        <AnalysisStatusLine
-          status={runStatus}
-          handle={`@${handle}`}
-          className={styles.statusLine}
-        />
-      ) : null}
+      <RunStatus handle={handle} runStatus={runStatus} onRetry={onRetry} busy={busy} />
       <StepHeader title={COPY.useCase.title} subtitle={COPY.useCase.subtitle} />
       <div className={styles.options} role="radiogroup" aria-label={COPY.useCase.title}>
         {USE_CASE_OPTIONS.map(o => (
@@ -295,6 +317,7 @@ export function UseCaseStep({
 export function AttributionStep({
   handle,
   runStatus,
+  onRetry,
   value,
   busy,
   preview,
@@ -305,6 +328,8 @@ export function AttributionStep({
 }: {
   handle: string | null;
   runStatus: AnalysisRunStatus | null;
+  /** Shown only when the real analysis failed. */
+  onRetry?: () => void;
   value: AttributionSource | null;
   busy: boolean;
   preview: ReactNode;
@@ -337,13 +362,7 @@ export function AttributionStep({
       mobileActions={end}
       testId="onboarding-step-attribution"
     >
-      {handle && runStatus ? (
-        <AnalysisStatusLine
-          status={runStatus}
-          handle={`@${handle}`}
-          className={styles.statusLine}
-        />
-      ) : null}
+      <RunStatus handle={handle} runStatus={runStatus} onRetry={onRetry} busy={busy} />
       <StepHeader title={COPY.attribution.title} subtitle={COPY.attribution.subtitle} />
       <div className={styles.optionsGrid} role="radiogroup" aria-label={COPY.attribution.title}>
         {ATTRIBUTION_OPTIONS.map(o => (

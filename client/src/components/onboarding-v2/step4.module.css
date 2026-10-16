@@ -1,0 +1,221 @@
+/* Step 4 screens (Figma 1293:19647, 1216:178, 1216:106). Tokens only. */
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-space-3);
+  margin-top: var(--sr-space-8);
+}
+
+.title {
+  color: var(--sr-color-text-primary);
+}
+
+.subtitle {
+  display: flex;
+  align-items: center;
+  gap: var(--sr-space-2);
+  color: var(--sr-color-text-secondary);
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-space-3);
+  margin-top: var(--sr-space-8);
+}
+
+.card {
+  box-sizing: border-box;
+  padding: var(--sr-space-5);
+  border: var(--sr-shape-border-default-width) solid var(--sr-color-border-default);
+  border-radius: var(--sr-radius-16);
+  background: var(--sr-color-surface-default);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--sr-space-4);
+}
+
+.text {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: var(--sr-space-1);
+  min-width: 0;
+  margin: 0;
+}
+
+/* Audience row: one sentence that wraps naturally. */
+.sentence {
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0;
+}
+
+.value {
+  color: var(--sr-color-text-primary);
+}
+
+.muted {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+}
+
+.inline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sr-space-1);
+}
+
+.profileCard {
+  display: flex;
+  align-items: center;
+  gap: var(--sr-space-4);
+}
+
+.avatar {
+  display: block;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  border-radius: var(--sr-radius-full);
+  background: var(--sr-neutral-100);
+  object-fit: cover;
+}
+
+/* Figma 4a: Niche 317, Language 190 (of 520 with a 12 gap). */
+.twoUp {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 3fr);
+  gap: var(--sr-space-3);
+}
+
+.editButton {
+  flex: 0 0 auto;
+}
+
+.remove {
+  display: inline-flex;
+  flex: 0 0 32px;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: var(--sr-shape-border-default-width) solid var(--sr-color-border-default);
+  border-radius: var(--sr-radius-full);
+  background: var(--sr-color-surface-default);
+  color: var(--sr-color-text-primary);
+  cursor: pointer;
+}
+
+.remove:hover {
+  background: var(--sr-color-surface-hover);
+}
+
+.remove:focus-visible {
+  outline: none;
+  box-shadow: var(--sr-elevation-focus-neutral-action);
+}
+
+.share {
+  display: flex;
+  flex: 0 0 64px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--sr-radius-12);
+  background: var(--sr-color-brand-surface-subtle);
+}
+
+.shareValue {
+  color: var(--sr-color-text-brand);
+}
+
+.shareLabel {
+  color: var(--sr-color-text-brand);
+}
+
+.addButton {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 44px;
+  padding: var(--sr-space-3) var(--sr-space-4);
+  border: var(--sr-shape-border-default-width) dashed var(--sr-color-border-default);
+  border-radius: var(--sr-radius-12);
+  background: var(--sr-color-surface-default);
+  color: var(--sr-color-text-primary);
+  font: inherit;
+  font-size: var(--sr-type-product-label-size);
+  font-weight: var(--sr-font-weight-semibold);
+  line-height: var(--sr-type-product-label-line);
+  cursor: pointer;
+}
+
+.addButton:hover {
+  background: var(--sr-color-surface-hover);
+}
+
+.addButton:focus-visible {
+  outline: none;
+  box-shadow: var(--sr-elevation-focus-neutral-action);
+}
+
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-space-3);
+}
+
+.editorActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sr-space-2);
+}
+
+.aiLine {
+  margin-bottom: var(--sr-space-1);
+}
+
+.actionsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sr-space-3);
+  width: 100%;
+}
+
+.actionsEnd {
+  display: flex;
+  align-items: center;
+  gap: var(--sr-space-2);
+}
+
+/* Figma: main button 240 wide on desktop. */
+.main {
+  min-width: 240px;
+}
+
+@media (max-width: 900px) {
+  .main {
+    min-width: 0;
+    flex: 2 1 0 !important;
+  }
+
+  .skip {
+    flex: 0 0 auto !important;
+  }
+
+  .twoUp {
+    grid-template-columns: 1fr;
+  }
+
+  .header,
+  .content {
+    margin-top: var(--sr-space-6);
+  }
+}

@@ -94,6 +94,21 @@ export function IconToolFinder(props: IconProps) {
   );
 }
 
+/** Icon / Tool Carousel (143:337). */
+export function IconToolCarousel(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path
+        d="M2 6V14M18 6V14M6 3H14V17H6V3Z"
+        stroke="var(--sr-color-text-secondary)"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 /** Icon / Tool Script (143:329). */
 export function IconToolScript(props: IconProps) {
   return (

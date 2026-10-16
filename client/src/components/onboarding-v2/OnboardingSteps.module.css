@@ -21,6 +21,14 @@
   margin-bottom: var(--sr-space-8);
 }
 
+.statusRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--sr-space-3);
+  margin-bottom: var(--sr-space-8);
+}
+
 .stack {
   display: flex;
   flex-direction: column;
