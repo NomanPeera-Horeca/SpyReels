@@ -1,0 +1,180 @@
+/*
+ * Pattern / Onboarding Shell (Figma 1026:997). Tokens only.
+ * Desktop frame: 1440x900, two 720 columns, logo at (48,32), content column
+ * at x=100. Mobile frame: 390x844, 20px gutters, actions 24px from bottom.
+ */
+.shell {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  min-height: 100dvh;
+}
+
+.left {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  background: var(--sr-color-surface-default);
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: var(--sr-space-2);
+  padding: var(--sr-space-8) var(--sr-space-12) 0;
+}
+
+.mobileBack {
+  display: none;
+}
+
+.body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: 100%;
+  /* Content column starts at x=100 in the 720 column. */
+  padding: var(--sr-space-8) var(--sr-space-6) var(--sr-space-16) 100px;
+}
+
+.narrow .content,
+.narrow .desktopActions {
+  max-width: 440px;
+}
+
+.wide .content,
+.wide .desktopActions {
+  max-width: 520px; /* Figma content column width on steps 3 and 4 */
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.desktopActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sr-space-3);
+  width: 100%;
+}
+
+/* Step 1: content and actions centered together, 80px between them. */
+.inline {
+  justify-content: center;
+}
+
+.inline .desktopActions {
+  margin-top: calc(var(--sr-space-16) + var(--sr-space-4));
+}
+
+/* Other steps: content centered, actions pinned 66px above the bottom. */
+.pinned {
+  justify-content: space-between;
+}
+
+.pinned .content {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+.pinned .desktopActions {
+  margin-top: var(--sr-space-8);
+}
+
+/* Steps 3 and 4 (wide): content starts at the same height on every screen
+   (Figma: status line at y=168), so moving between steps never jumps. */
+.wide.pinned .content {
+  justify-content: flex-start;
+  padding-top: calc(var(--sr-space-12) + var(--sr-space-2));
+}
+
+.mobileBar {
+  display: none;
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--sr-color-surface-subtle);
+}
+
+@media (max-width: 900px) {
+  .shell {
+    grid-template-columns: 1fr;
+  }
+
+  .right {
+    display: none;
+  }
+
+  .top {
+    padding: var(--sr-space-4) var(--sr-space-5) 0 14px;
+    min-height: 61px;
+  }
+
+  .mobileBack {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: var(--sr-shape-border-default-width) solid var(--sr-color-border-default);
+    border-radius: var(--sr-radius-full);
+    background: var(--sr-color-surface-default);
+    cursor: pointer;
+  }
+
+  .mobileBack:focus-visible {
+    outline: none;
+    box-shadow: var(--sr-elevation-focus-neutral-action);
+  }
+
+  .body {
+    padding: var(--sr-space-8) var(--sr-space-5) calc(44px + var(--sr-space-6) * 2);
+  }
+
+  .narrow .content,
+  .wide .content {
+    max-width: none;
+  }
+
+  .pinned .content,
+  .inline {
+    justify-content: flex-start;
+  }
+
+  .wide.pinned .content {
+    padding-top: 0;
+  }
+
+  .desktopActions {
+    display: none;
+  }
+
+  .mobileBar {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 10;
+    display: flex;
+    gap: var(--sr-space-2);
+    box-sizing: border-box;
+    padding: var(--sr-space-3) var(--sr-space-5)
+      calc(var(--sr-space-6) + env(safe-area-inset-bottom));
+    background: var(--sr-color-surface-default);
+  }
+
+  .mobileBar > * {
+    flex: 1 1 0;
+  }
+}

@@ -3,6 +3,10 @@
  * Uses global fetch with x-api-key (no direct Instagram mobile API calls).
  */
 
+import {
+  meterScrapeCreatorsRequest,
+  meterScrapeCreatorsResponse,
+} from "./scrapeCreatorsMeter";
 import { MIN_SPY_DISPLAY_REELS } from "@shared/spyReelsLimits";
 import { normalizeInstagramHandle } from "@shared/instagramHandle";
 import { parseInstagramReelShortcode } from "./instagramUrl";
@@ -119,6 +123,8 @@ async function scGet(
       logDiscoveryFuseIfNeeded(tracker);
     }
   }
+  const metered = meterScrapeCreatorsRequest();
+  if (metered) return metered;
 
   const url = new URL(`${API_BASE}${path}`);
   for (const [k, v] of Object.entries(query)) {
@@ -137,6 +143,7 @@ async function scGet(
     });
   } catch (e) {
     if (e instanceof Error && e.name === "AbortError") {
+      meterScrapeCreatorsResponse(408);
       return { status: 408, data: { error: "scrapecreators_request_timeout" } };
     }
     throw e;
@@ -155,6 +162,7 @@ async function scGet(
   console.log(
     `[Bug #64 diag] scGet path=${path} status=${res.status} bodyLength=${text.length}${formatScrapeCallContextLogSuffix()}`
   );
+  meterScrapeCreatorsResponse(res.status);
   return { status: res.status, data };
 }
 
@@ -245,6 +253,39 @@ export interface ProfileInfo {
   isVerified: boolean;
   category: string;
   externalUrl: string;
+  /**
+   * Recent posts that came back in the SAME profile response (no extra
+   * request). Only the graph-user shape carries them; otherwise empty.
+   */
+  recentMedia?: InstagramRecentMedia[];
+}
+
+export type InstagramRecentMedia = {
+  shortcode: string;
+  thumbnailUrl: string;
+  viewCount: number | null;
+  isPinned: boolean;
+};
+
+/** Parses the recent posts already present in a graph-user profile payload. */
+export function recentMediaFromGraphUser(user: any): InstagramRecentMedia[] {
+  const edges = user?.edge_owner_to_timeline_media?.edges;
+  if (!Array.isArray(edges)) return [];
+  const out: InstagramRecentMedia[] = [];
+  for (const edge of edges) {
+    const node = edge?.node;
+    const shortcode = typeof node?.shortcode === "string" ? node.shortcode : "";
+    const thumbnailUrl = String(node?.thumbnail_src || node?.display_url || "");
+    if (!shortcode || !thumbnailUrl) continue;
+    const views = node?.video_view_count ?? node?.video_play_count;
+    out.push({
+      shortcode,
+      thumbnailUrl,
+      viewCount: typeof views === "number" && Number.isFinite(views) ? views : null,
+      isPinned: Array.isArray(node?.pinned_for_users) && node.pinned_for_users.length > 0,
+    });
+  }
+  return out;
 }
 
 export type InstagramResolutionMethod =
@@ -437,6 +478,7 @@ function profileFromGraphUser(user: any, fallbackHandle: string): ProfileInfo {
     isVerified: !!user.is_verified,
     category: user.category_name || user.category || "",
     externalUrl: user.external_url || "",
+    recentMedia: recentMediaFromGraphUser(user),
   };
 }
 

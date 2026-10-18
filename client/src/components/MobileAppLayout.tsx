@@ -8,13 +8,16 @@ import { cn } from "@/lib/utils";
 import { getCurrentAppPath, recordAppNavigation } from "@shared/appNavigation";
 import { resolvePrimaryNicheLabel } from "@shared/primaryNiche";
 import {
+  MOBILE_CREATE_HOME_PATH,
   MOBILE_CREATE_TAB_PATHS,
   mobileCreateTabForPath,
   type MobileCreateTabId,
 } from "@shared/mobileCreateApp";
+import { useExperienceAccess } from "@/lib/experienceAccess";
 import {
   CalendarDays,
   FileText,
+  Home,
   MoreHorizontal,
   Sparkles,
 } from "lucide-react";
@@ -31,6 +34,12 @@ const TABS: Array<{
   { id: "write", label: "Agent", path: MOBILE_CREATE_TAB_PATHS.write, icon: Sparkles },
   { id: "scripts", label: "Scripts", path: MOBILE_CREATE_TAB_PATHS.scripts, icon: FileText },
   { id: "more", label: "More", path: MOBILE_CREATE_TAB_PATHS.more, icon: MoreHorizontal },
+];
+
+/** Home v2 users (server HOME_V2_MODE): Home replaces Today as the first tab. */
+const HOME_V2_TABS: typeof TABS = [
+  { id: "home", label: "Home", path: MOBILE_CREATE_HOME_PATH, icon: Home },
+  ...TABS.slice(1),
 ];
 
 function MobileNicheBar({
@@ -55,8 +64,10 @@ function MobileNicheBar({
 
 function MobileTabBar({
   activeTab,
+  tabs,
 }: {
   activeTab: MobileCreateTabId;
+  tabs: typeof TABS;
 }) {
   return (
     <nav
@@ -64,7 +75,7 @@ function MobileTabBar({
       aria-label="Main"
     >
       <div className="mx-auto flex max-w-lg items-stretch px-1 pt-1">
-        {TABS.map((tab) => {
+        {tabs.map((tab) => {
           const active = tab.id === activeTab;
           const Icon = tab.icon;
           return (
@@ -121,7 +132,9 @@ export default function MobileAppLayout({ children }: { children: React.ReactNod
 function MobileAppLayoutShell({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const searchString = useSearch();
-  const activeTab = mobileCreateTabForPath(location);
+  const { access } = useExperienceAccess();
+  const homeV2 = access.home === "v2";
+  const activeTab = mobileCreateTabForPath(location, { homeV2 });
   const isScriptDetail =
     location.startsWith("/scripts/") && location !== "/scripts";
 
@@ -154,7 +167,7 @@ function MobileAppLayoutShell({ children }: { children: React.ReactNode }) {
           {children}
         </div>
       </main>
-      <MobileTabBar activeTab={activeTab} />
+      <MobileTabBar activeTab={activeTab} tabs={homeV2 ? HOME_V2_TABS : TABS} />
     </div>
   );
 }

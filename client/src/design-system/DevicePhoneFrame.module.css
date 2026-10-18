@@ -1,0 +1,71 @@
+/* Pattern / Device Phone Frame (Figma 1164:1031). Tokens only. */
+.frame {
+  position: relative;
+  box-sizing: border-box;
+  width: 390px;
+  height: 800px;
+  margin: 0;
+  padding: var(--sr-space-2);
+  border-radius: var(--sr-radius-24);
+  background: var(--sr-neutral-950);
+  box-shadow: var(--sr-elevation-surface-raised);
+  flex: 0 0 auto;
+}
+
+.viewport {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: var(--sr-radius-24);
+  background: var(--sr-color-surface-default);
+}
+
+/* Status bar row: 9:41 at (33,23) and icons at (294,25) in frame space. */
+.statusBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 50px;
+  height: 50px;
+  box-sizing: border-box;
+  padding: 0 var(--sr-space-5) 0 var(--sr-space-6);
+}
+
+.time {
+  color: var(--sr-neutral-950);
+}
+
+.content {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.island {
+  position: absolute;
+  top: var(--sr-space-5);
+  left: 50%;
+  width: 106px;
+  height: 24px;
+  transform: translateX(-50%);
+  border-radius: var(--sr-radius-full);
+  background: var(--sr-neutral-950);
+}
+
+.sideButton {
+  position: absolute;
+  top: 170px;
+  left: -2px;
+  width: 3px;
+  height: 60px;
+  border-radius: var(--sr-radius-full);
+  background: var(--sr-neutral-600);
+}
+
+.dark .time {
+  color: var(--sr-white);
+}

@@ -1,0 +1,36 @@
+/* Card / Selectable (Figma 52:44). Tokens only. radius/12, padding space/5. */
+.root {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sr-space-3);
+  padding: var(--sr-space-5);
+  border: var(--sr-shape-border-default-width) solid var(--sr-color-border-default);
+  border-radius: var(--sr-radius-12);
+  background: var(--sr-color-surface-default);
+  color: var(--sr-color-text-primary);
+  cursor: pointer;
+  text-align: center;
+  transition: background-color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.root:hover:not(.selected):not(:disabled) {
+  background: var(--sr-color-surface-hover);
+}
+
+.root:focus-visible {
+  outline: none;
+  box-shadow: var(--sr-elevation-focus-neutral-action);
+}
+
+.selected {
+  background: var(--sr-color-brand-surface-selected);
+  border-color: var(--sr-color-brand-primary);
+}
+
+.root:disabled {
+  cursor: not-allowed;
+  color: var(--sr-color-text-disabled);
+}

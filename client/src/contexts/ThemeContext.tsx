@@ -8,6 +8,7 @@ import React, {
   useState,
   useSyncExternalStore,
 } from "react";
+import { trpc } from "@/lib/trpc";
 
 const STORAGE_KEY = "theme";
 
@@ -109,9 +110,37 @@ export function ThemeProvider({
     getSystemIsDarkServerSnapshot
   );
 
+  // Account theme (user_preferences.theme). Null means "never chosen": legacy
+  // accounts keep the existing local behavior. Signed-out visitors use local only.
+  const meQuery = trpc.auth.me.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+  const signedIn = Boolean(meQuery.data);
+  const prefsQuery = trpc.preferences.get.useQuery(undefined, {
+    enabled: signedIn && switchable,
+    refetchOnWindowFocus: false,
+  });
+  const saveTheme = trpc.preferences.update.useMutation();
+  const accountTheme = prefsQuery.data?.theme ?? null;
+
+  // Reveal the page once the theme is known: signed-out visitors immediately,
+  // signed-in users after their saved preference (or an error) has resolved.
+  useLayoutEffect(() => {
+    const settled = !meQuery.isLoading && (!signedIn || !prefsQuery.isLoading);
+    if (settled) document.documentElement.classList.remove("theme-pending");
+  }, [meQuery.isLoading, signedIn, prefsQuery.isLoading]);
+
   const [themePreference, setThemePreferenceState] = useState<ThemePreference>(
     () => (switchable ? readStoredPreference() : defaultTheme)
   );
+
+  // Once the account's saved theme arrives, it wins on every device.
+  useEffect(() => {
+    if (!switchable) return;
+    if (accountTheme !== "light" && accountTheme !== "dark" && accountTheme !== "system") return;
+    setThemePreferenceState(prev => (prev === accountTheme ? prev : accountTheme));
+  }, [accountTheme, switchable]);
 
   const activePreference: ThemePreference = switchable
     ? themePreference
@@ -135,22 +164,26 @@ export function ThemeProvider({
     }
   }, [themePreference, switchable]);
 
+  /** Explicit user choice: apply now, remember locally, and save to the account when signed in. */
   const setThemePreference = useCallback(
     (t: ThemePreference) => {
       if (!switchable) return;
       setThemePreferenceState(t);
+      if (signedIn) {
+        saveTheme.mutate({ theme: t });
+      }
     },
-    [switchable]
+    // saveTheme is a stable mutation object per render; signedIn/switchable gate the save.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [switchable, signedIn]
   );
 
   const cycleThemePreference = useCallback(() => {
     if (!switchable) return;
-    setThemePreferenceState((prev) => {
-      if (prev === "system") return "light";
-      if (prev === "light") return "dark";
-      return "system";
-    });
-  }, [switchable]);
+    const next: ThemePreference =
+      themePreference === "system" ? "light" : themePreference === "light" ? "dark" : "system";
+    setThemePreference(next);
+  }, [switchable, themePreference, setThemePreference]);
 
   const value: ThemeContextType = {
     themePreference: activePreference,

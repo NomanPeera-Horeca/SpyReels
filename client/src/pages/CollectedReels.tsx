@@ -1078,6 +1078,8 @@ export default function CollectedReels() {
           <Link2 className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             placeholder="Paste Instagram, TikTok, or YouTube URL..."
+            // Home v2 "Paste a video link" opens /collected?add=1 with the box focused.
+            autoFocus={new URLSearchParams(window.location.search).get("add") === "1"}
             value={urlInput}
             onChange={(e) => setUrlInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleAddUrl()}

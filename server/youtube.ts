@@ -3,6 +3,10 @@
  * Uses global fetch with x-api-key (same pattern as server/tiktok.ts).
  */
 
+import {
+  meterScrapeCreatorsRequest,
+  meterScrapeCreatorsResponse,
+} from "./scrapeCreatorsMeter";
 import { MIN_SPY_DISPLAY_REELS } from "@shared/spyReelsLimits";
 
 const API_BASE = "https://api.scrapecreators.com";
@@ -20,6 +24,8 @@ async function scGet(
   path: string,
   query: Record<string, string | undefined>
 ): Promise<{ status: number; data: any }> {
+  const metered = meterScrapeCreatorsRequest();
+  if (metered) return metered;
   const url = new URL(`${API_BASE}${path}`);
   for (const [key, value] of Object.entries(query)) {
     if (value !== undefined && value !== "") {
@@ -41,6 +47,7 @@ async function scGet(
     });
   } catch (error) {
     if (error instanceof Error && error.name === "AbortError") {
+      meterScrapeCreatorsResponse(408);
       return {
         status: 408,
         data: { error: "scrapecreators_request_timeout" },
@@ -61,6 +68,7 @@ async function scGet(
     }
   }
 
+  meterScrapeCreatorsResponse(response.status);
   return { status: response.status, data };
 }
 
@@ -146,7 +154,7 @@ export interface YouTubeTranscriptResult {
   segments: Array<{ start: number; end: number; text: string }>;
 }
 
-async function fetchYouTubeChannel(handle: string): Promise<YouTubeChannelInfo> {
+export async function fetchYouTubeChannel(handle: string): Promise<YouTubeChannelInfo> {
   const cleanHandle = cleanYouTubeHandle(handle);
   const maxTries = 5;
 

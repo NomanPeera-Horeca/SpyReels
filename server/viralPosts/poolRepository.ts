@@ -116,6 +116,36 @@ export async function ensurePools(
   });
 }
 
+/**
+ * Read-only twin of ensurePools: returns the pools that ALREADY exist for
+ * these specs and never inserts. A new pool row gets picked up by the
+ * background refresh (paid provider calls), so callers that must not cost
+ * money (Home v2 render) use this instead.
+ */
+export async function findExistingPools(
+  specs: ViralPoolEnsureSpec[]
+): Promise<ViralPostPool[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const v1Specs = filterViralPostsV1PoolSpecs(specs);
+  if (v1Specs.length === 0) return [];
+  const keys = v1Specs.map((s) =>
+    buildPoolKey({
+      platform: s.platform,
+      niche: s.niche,
+      pillar: s.pillar,
+      language: s.language,
+      region: s.region,
+    })
+  );
+  const rows = await db
+    .select()
+    .from(viralPostPools)
+    .where(inArray(viralPostPools.poolKey, keys));
+  const byKey = new Map(rows.map((p) => [p.poolKey, p]));
+  return keys.map((k) => byKey.get(k)).filter((p): p is ViralPostPool => Boolean(p));
+}
+
 export async function listPoolsNeedingRefresh(limit = 8): Promise<ViralPostPool[]> {
   const db = await getDb();
   if (!db) return [];

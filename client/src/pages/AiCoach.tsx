@@ -5,7 +5,9 @@ import { trpc } from "@/lib/trpc";
 import { STUDIO_PREFILL_KEY } from "@shared/studioHeit";
 import {
   buildPlanPrefill,
+  isCoachCapabilityId,
   parseStudioPrefillMeta,
+  STUDIO_PREFILL_AUTORUN_KEY,
   STUDIO_PREFILL_META_KEY,
   type CoachCapabilityId,
   type StudioPrefillMeta,
@@ -188,13 +190,19 @@ export default function AiCoach() {
     [onboardingState]
   );
 
+  /** Home v2 "Create script": submit the prefilled idea once on arrival. */
+  const autoRunPrefillRef = useRef(false);
+
   useEffect(() => {
     const prefill = sessionStorage.getItem(STUDIO_PREFILL_KEY);
     const metaRaw = sessionStorage.getItem(STUDIO_PREFILL_META_KEY);
     const meta = parseStudioPrefillMeta(metaRaw);
+    const autorun = sessionStorage.getItem(STUDIO_PREFILL_AUTORUN_KEY) === "1";
+    sessionStorage.removeItem(STUDIO_PREFILL_AUTORUN_KEY);
     if (prefill) {
       setDescription(prefill);
       sessionStorage.removeItem(STUDIO_PREFILL_KEY);
+      if (autorun) autoRunPrefillRef.current = true;
     }
     if (meta) {
       setAttachedContext(meta);
@@ -546,6 +554,13 @@ export default function AiCoach() {
   useEffect(() => {
     if (launchQueryHandledRef.current) return;
     const params = new URLSearchParams(window.location.search);
+    const capabilityParam = params.get("capability");
+    if (isCoachCapabilityId(capabilityParam)) {
+      launchQueryHandledRef.current = true;
+      setActiveCapability(capabilityParam);
+      window.history.replaceState(null, "", "/studio");
+      return;
+    }
     if (params.get("new") === "1") {
       launchQueryHandledRef.current = true;
       setOpeningScriptFromUrl(false);
@@ -815,6 +830,14 @@ export default function AiCoach() {
         : (activeCapability ?? undefined);
     void runCoachFlow(capability);
   };
+
+  useEffect(() => {
+    if (!autoRunPrefillRef.current || phase !== "idle" || !description.trim()) return;
+    autoRunPrefillRef.current = false;
+    handleSubmit();
+    // handleSubmit reads the latest state; run once when the prefill lands.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [description, phase]);
 
   const historyPanel = (
     <AiCoachHistoryPanel

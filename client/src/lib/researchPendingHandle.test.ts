@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   applyLandingAuthHandoff,
   consumeResearchPendingHandle,
+  hasResearchPendingHandle,
   parseLandingAuthQuery,
+  stashResearchHandleForAfterAuth,
 } from "./researchPendingHandle";
 
 const memory = new Map<string, string>();
@@ -62,5 +64,19 @@ describe("landing auth query handoff", () => {
       platform: "instagram",
     });
     expect(consumeResearchPendingHandle().handle).toBeNull();
+  });
+});
+
+describe("hasResearchPendingHandle", () => {
+  it("is false when nothing is stashed", () => {
+    expect(hasResearchPendingHandle()).toBe(false);
+  });
+
+  it("is true after a stash and does NOT consume it", () => {
+    stashResearchHandleForAfterAuth("nike", true, "instagram");
+    expect(hasResearchPendingHandle()).toBe(true);
+    expect(hasResearchPendingHandle()).toBe(true);
+    expect(consumeResearchPendingHandle().handle).toBe("nike");
+    expect(hasResearchPendingHandle()).toBe(false);
   });
 });

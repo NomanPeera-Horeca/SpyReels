@@ -3,10 +3,16 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { UpgradeProvider } from "@/components/UpgradeSidesheet";
 import OnboardingGate from "@/components/OnboardingGate";
-import { Route, Switch, Redirect, useLocation } from "wouter";
+import { Route, Switch, Redirect, useLocation, useSearch } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { isAdminPanelClient } from "@/admin/isAdminClient";
 import { isDiscoveryV1Enabled } from "@/lib/featureFlags";
+import { useExperienceAccess } from "@/lib/experienceAccess";
+import { hasResearchPendingHandle } from "@/lib/researchPendingHandle";
+import {
+  resolveDesktopRootView,
+  resolveOnboardingVariant,
+} from "@shared/homeV2FeatureFlags";
 import { lazyWithRetry } from "@/lib/lazyWithRetry";
 import ErrorBoundary from "./components/ErrorBoundary";
 import DashboardLayout from "./components/DashboardLayout";
@@ -21,6 +27,10 @@ import { RetellChatWidget } from "@/components/RetellChatWidget";
 const NotFound = lazyWithRetry(() => import("@/pages/NotFound"));
 const OnboardingPage = lazyWithRetry(() => import("@/pages/onboarding"));
 const Home = lazyWithRetry(() => import("./pages/Home"));
+/** Loaded only when HOME_V2_ENABLED (+ ONBOARDING_V2_ENABLED) is on. */
+const HomeV2 = lazyWithRetry(() => import("./pages/HomeV2"));
+/** Loaded only when ONBOARDING_V2_ENABLED is on. */
+const OnboardingV2Page = lazyWithRetry(() => import("./pages/OnboardingV2"));
 const Dashboard = lazyWithRetry(() => import("./pages/Dashboard"));
 const ScrapingProgress = lazyWithRetry(() => import("./pages/ScrapingProgress"));
 const TikTokScrapingProgress = lazyWithRetry(() => import("./pages/TikTokScrapingProgress"));
@@ -105,6 +115,14 @@ const ResetPassword = lazyWithRetry(() => import("./pages/ResetPassword"));
 const AcceptInvitation = lazyWithRetry(() => import("./pages/AcceptInvitation"));
 const PublicScriptView = lazyWithRetry(() => import("./pages/PublicScriptView"));
 
+/** Dev-only onboarding v2 screen preview (fixtures). Not routed in production builds. */
+const DevOnboardingV2Preview = import.meta.env.DEV
+  ? lazyWithRetry(() => import("./pages/DevOnboardingV2Preview"))
+  : () => null;
+/** Dev-only Home v2 preview (real page, fixture data link). Not routed in production builds. */
+const DevHomeV2Preview = import.meta.env.DEV
+  ? lazyWithRetry(() => import("./pages/DevHomeV2Preview"))
+  : () => null;
 /** THROWAWAY: carousel layout preview. Remove with DevCarouselPreview page. */
 const DevCarouselPreview = lazyWithRetry(() => import("./pages/DevCarouselPreview"));
 /** THROWAWAY: remake workspace visual proof. Remove with DevRemakeWorkspacePreview. */
@@ -120,14 +138,28 @@ const MobileMore = lazyWithRetry(() => import("./pages/MobileMore"));
 
 function MobileCreateRouteGuard({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
-  if (!isMobileCreateAllowedPath(location)) {
-    return <Redirect to="/plan" />;
+  const { ready, access } = useExperienceAccess();
+  const homeV2 = access.home === "v2";
+  // "/" is only decided once the server answered (Home v2 or Today).
+  if (location === "/" && !ready) return null;
+  if (!isMobileCreateAllowedPath(location, { homeV2 })) {
+    return <Redirect to={homeV2 ? "/" : "/plan"} />;
   }
   return <>{children}</>;
 }
 
+/** Installed app fallback: Today for everyone, Home for Home v2 users. */
 function MobileHomeRedirect() {
-  return <Redirect to="/plan" />;
+  const { ready, access } = useExperienceAccess();
+  if (!ready) return null;
+  return <Redirect to={access.home === "v2" ? "/" : "/plan"} />;
+}
+
+/** Installed app "/": Home v2 for Home v2 users (first tab), Today otherwise. */
+function MobileRootRoute() {
+  const { ready, access } = useExperienceAccess();
+  if (!ready) return null;
+  return access.home === "v2" ? <HomeV2 /> : <Redirect to="/plan" />;
 }
 
 /** Unpolished product surfaces: admin email only until ready for everyone. */
@@ -138,14 +170,52 @@ function AdminEmailOnly({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * Desktop "/" switch point. Flag off: the research page, exactly as today.
+ * Flag on: Home v2, unless the visit carries research intent (saved-search
+ * link, job deep link, or a handle stashed before sign-in).
+ * "/research" never goes through here.
+ */
+function DesktopRootRoute() {
+  const search = useSearch();
+  const { ready, access } = useExperienceAccess();
+  if (!ready) return null;
+  const homeV2Enabled = access.home === "v2";
+  const view = resolveDesktopRootView({
+    homeV2Enabled,
+    search,
+    hasPendingResearchHandle: homeV2Enabled && hasResearchPendingHandle(),
+  });
+  return view === "home-v2" ? <HomeV2 /> : <Home />;
+}
+
+/** "/onboarding" inside the app layouts: always the current onboarding. */
+function OnboardingRoute() {
+  return <OnboardingPage />;
+}
+
+/**
+ * Top-level "/onboarding" switch point (server decides, per user).
+ * v2 renders full screen, outside the dashboard chrome, as in Figma.
+ * Everyone else gets the existing layouts and the current onboarding.
+ */
+function OnboardingEntry() {
+  const { ready, access } = useExperienceAccess();
+  if (!ready) return null;
+  const variant = resolveOnboardingVariant({
+    onboardingV2Enabled: access.onboarding === "v2",
+  });
+  return variant === "v2" ? <OnboardingV2Page /> : <DashboardRouter />;
+}
+
 function MobileCreateRouter() {
   return (
     <MobileAppLayout>
       <Suspense fallback={<MobileAppLayoutSkeleton />}>
         <MobileCreateRouteGuard>
           <Switch>
-            <Route path="/onboarding" component={OnboardingPage} />
-            <Route path="/" component={MobileHomeRedirect} />
+            <Route path="/onboarding" component={OnboardingRoute} />
+            <Route path="/" component={MobileRootRoute} />
             <Route path="/research" component={MobileHomeRedirect} />
             <Route path="/dashboard" component={MobileHomeRedirect} />
             <Route path="/plan" component={ThirtyDayPlan} />
@@ -171,8 +241,8 @@ function DesktopDashboardRouter() {
     <DashboardLayout>
       <Suspense fallback={<DashboardLayoutSkeleton />}>
         <Switch>
-          <Route path="/onboarding" component={OnboardingPage} />
-          <Route path="/" component={Home} />
+          <Route path="/onboarding" component={OnboardingRoute} />
+          <Route path="/" component={DesktopRootRoute} />
           <Route path="/research" component={Home} />
           <Route path="/interests" component={Interests} />
           <Route path="/scraping" component={ScrapingProgress} />
@@ -369,6 +439,15 @@ function Router() {
             <AdminEmailOnly>
               <CarouselStudio />
             </AdminEmailOnly>
+          </OnboardingGate>
+        </Route>
+        {import.meta.env.DEV ? (
+          <Route path="/dev/onboarding-v2" component={DevOnboardingV2Preview} />
+        ) : null}
+        {import.meta.env.DEV ? <Route path="/dev/home-v2" component={DevHomeV2Preview} /> : null}
+        <Route path="/onboarding">
+          <OnboardingGate>
+            <OnboardingEntry />
           </OnboardingGate>
         </Route>
         {/* Everything else goes through DashboardLayout (which shows landing page if not auth'd) */}

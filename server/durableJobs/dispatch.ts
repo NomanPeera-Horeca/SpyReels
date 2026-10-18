@@ -9,6 +9,8 @@ const FLAG_BY_JOB_TYPE: Record<PilotJobType, string> = {
   featured_reel_transcription: "DURABLE_QUEUE_FEATURED_TRANSCRIPTION_ENABLED",
   creator_radar_refresh: "DURABLE_QUEUE_CREATOR_RADAR_REFRESH_ENABLED",
   queue_safety_probe: "DURABLE_QUEUE_SAFETY_PROBE_ENABLED",
+  profile_analysis: "DURABLE_QUEUE_PERSONALIZATION_ENABLED",
+  personalization_recommendations: "DURABLE_QUEUE_PERSONALIZATION_ENABLED",
 };
 
 const ROLLOUT_PERCENT_ENV_BY_JOB_TYPE: Partial<Record<PilotJobType, string>> = {

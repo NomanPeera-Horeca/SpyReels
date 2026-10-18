@@ -81,7 +81,7 @@ async function loadUserBusinessDescription(userId: number): Promise<string> {
     : "Instagram Reels ideas for small business owners who want practical, remakeable content.";
 }
 
-async function ensureBrowsePools(args: { niche: string; pillars: string[] }) {
+function browsePoolSpecs(args: { niche: string; pillars: string[] }) {
   const specs: Array<{
     niche: string;
     pillar: string;
@@ -105,7 +105,11 @@ async function ensureBrowsePools(args: { niche: string; pillars: string[] }) {
   }
   // Viral Posts V1: no YouTube pool ensure (historical rows may remain).
 
-  return poolRepo.ensurePools(specs);
+  return specs;
+}
+
+async function ensureBrowsePools(args: { niche: string; pillars: string[] }) {
+  return poolRepo.ensurePools(browsePoolSpecs(args));
 }
 
 function candidateToAdapted(
@@ -258,7 +262,48 @@ export async function browseViralPosts(userId: number): Promise<{
   const niche = inferNiche(businessDescription);
   const pillars = inferActivePillars(businessDescription, niche);
   const pools = await ensureBrowsePools({ niche, pillars });
+  return assembleBrowse({ userId, pools, niche, allowRefresh: true, limit: EXPLORE_BROWSE_LIMIT });
+}
 
+/**
+ * Home v2 "Videos for you": the same ranking as Explore over pools that
+ * already exist for this niche. Never inserts a pool and never schedules a
+ * refresh, so rendering Home costs no provider calls. Thin or missing pools
+ * simply return fewer posts (Home shows its empty state).
+ */
+export async function browseIndexedViralPosts(args: {
+  userId: number;
+  /** Personalization text (niche, goal, pillars). Null uses the legacy profile text. */
+  description: string | null;
+  limit: number;
+}): Promise<{ items: ViralPost[]; niche: string; poolRefreshStarted: false }> {
+  if (!isViralPostsLive) return { items: [], niche: "", poolRefreshStarted: false };
+  const text =
+    args.description && args.description.trim().length >= 3
+      ? args.description
+      : await loadUserBusinessDescription(args.userId);
+  const niche = inferNiche(text);
+  const pillars = inferActivePillars(text, niche);
+  const pools = await poolRepo.findExistingPools(browsePoolSpecs({ niche, pillars }));
+  if (pools.length === 0) return { items: [], niche, poolRefreshStarted: false };
+  const res = await assembleBrowse({
+    userId: args.userId,
+    pools,
+    niche,
+    allowRefresh: false,
+    limit: args.limit,
+  });
+  return { items: res.items, niche, poolRefreshStarted: false };
+}
+
+async function assembleBrowse(args: {
+  userId: number;
+  pools: Awaited<ReturnType<typeof poolRepo.ensurePools>>;
+  niche: string;
+  allowRefresh: boolean;
+  limit: number;
+}): Promise<{ items: ViralPost[]; niche: string; poolRefreshStarted: boolean }> {
+  const { userId, pools, niche } = args;
   const [poolRows, hidden, dismissed, saved] = await Promise.all([
     poolRepo.loadPoolCandidatesForAssembly({
       poolIds: pools.map((p) => p.id),
@@ -270,7 +315,7 @@ export async function browseViralPosts(userId: number): Promise<{
   ]);
 
   let poolRefreshStarted = false;
-  if (poolRows.length < EXPLORE_BROWSE_LIMIT) {
+  if (args.allowRefresh && poolRows.length < EXPLORE_BROWSE_LIMIT) {
     for (const pool of pools.slice(0, 3)) {
       schedulePoolRefresh(pool.id, false);
       poolRefreshStarted = true;
@@ -323,7 +368,7 @@ export async function browseViralPosts(userId: number): Promise<{
   const creatorCounts = new Map<string, number>();
   const selected: typeof ranked = [];
   for (const entry of ranked) {
-    if (selected.length >= EXPLORE_BROWSE_LIMIT) break;
+    if (selected.length >= args.limit) break;
     const creatorKey = (
       entry.row.candidate.creatorId ||
       entry.row.candidate.creatorHandle ||

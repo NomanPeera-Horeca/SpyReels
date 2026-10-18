@@ -1,0 +1,103 @@
+/* Analysis status patterns (Figma 1259:518, 1259:489, 1260:1494). Tokens only. */
+.line {
+  display: flex;
+  align-items: center;
+  gap: var(--sr-space-2);
+}
+
+.lineText {
+  display: flex;
+  gap: var(--sr-space-1);
+  color: var(--sr-color-text-secondary);
+  white-space: nowrap;
+}
+
+.indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  overflow: hidden;
+}
+
+.pendingRing {
+  box-sizing: border-box;
+  width: 14px;
+  height: 14px;
+  border: var(--sr-shape-border-strong-width) solid var(--sr-color-border-default);
+  border-radius: var(--sr-radius-full);
+}
+
+.spin {
+  animation: sr-spin 1s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+}
+
+@keyframes sr-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.checklist {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--sr-space-5);
+  padding: var(--sr-space-6);
+  border-radius: var(--sr-shape-panel-radius);
+  background: var(--sr-color-surface-default);
+}
+
+.stages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-space-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stage {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sr-space-3);
+}
+
+.stageText {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--sr-space-1);
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sr-space-2);
+}
+
+.textPrimary {
+  color: var(--sr-color-text-primary);
+}
+
+.textSecondary {
+  color: var(--sr-color-text-secondary);
+}
+
+.textTertiary {
+  color: var(--sr-color-text-tertiary);
+}
+
+.textError {
+  color: var(--sr-color-status-error-foreground);
+}
