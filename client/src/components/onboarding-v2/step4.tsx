@@ -1,11 +1,13 @@
 /**
- * Step 4: Goal, Audience, Pillars (build plan version, CEO decision
- * 2026-10-16; Figma 4a fallback frame 1293:19647, 4b 1216:178, 4c 1216:106).
+ * Step 4: Goal, Audience, Pillars. Approved Figma: Goal desktop 1080:3458,
+ * Audience desktop 1216:178, Audience mobile 1413:4427, Pillars desktop
+ * 1216:106. Mobile Goal (1080:4452) and mobile Pillars (1216:18669) are
+ * REVIEW PENDING in Figma: they reflow this same structure.
  *
  * Presentational. Values come from the server; nothing here invents a value
- * or a number. A pillar shows its "% of views" tile only when the value is
- * measured (performance_backed) and present. Every screen can be confirmed
- * or skipped with the user's own values, whatever the AI did.
+ * or a number. Every screen can be confirmed or skipped with the user's own
+ * values, whatever the AI did. Edits go through the server, which supersedes
+ * (never overwrites) a confirmed value.
  */
 import { useId, useState, type ReactNode } from "react";
 import type {
@@ -18,14 +20,12 @@ import type {
   SocialPlatform,
 } from "@shared/personalization/model";
 import { nicheSlugFromLabel } from "@shared/personalization/growthNiches";
-import { formatProfileCount } from "@shared/personalization/publicProfilePreview";
 import { AnalysisStatusLine } from "@/design-system/AnalysisStatus";
-import { FieldInput, PrimaryButton, SecondaryButton } from "@/design-system/core";
+import { FieldInput, PrimaryButton } from "@/design-system/core";
 import { GhostButton } from "@/design-system/GhostButton";
-import { IconAiSparkle } from "@/design-system/icons";
+import { IconPencil, IconPillar, IconTrash } from "@/design-system/icons";
 import { OnboardingShell } from "@/design-system/OnboardingShell";
 import { PersonalizationStepper } from "@/design-system/PersonalizationStepper";
-import { PlatformFullColorMark } from "@/design-system/platformMarks";
 import { COPY } from "./copy";
 import styles from "./step4.module.css";
 
@@ -48,7 +48,7 @@ export type AiState =
 type Common = {
   busy: boolean;
   preview: ReactNode;
-  /** Shown only when suggestions were built from analyzed posts. */
+  /** Suggestions were built from analyzed posts (kept for callers; the approved subtitle is per step). */
   fromPosts: boolean;
   ai: AiState;
   onBack: () => void;
@@ -65,17 +65,10 @@ function ChevronLeft() {
   );
 }
 
-function CloseIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden focusable={false}>
-      <path d="M5 5L15 15M15 5L5 15" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  );
-}
-
 function StepFrame({
   step,
   title,
+  subtitle,
   mainLabel,
   common,
   canConfirm,
@@ -83,6 +76,7 @@ function StepFrame({
 }: {
   step: PersonalizationStep;
   title: string;
+  subtitle: string;
   mainLabel: string;
   common: Common;
   canConfirm: boolean;
@@ -122,10 +116,7 @@ function StepFrame({
       <PersonalizationStepper current={step} onSelect={common.onStepSelect} />
       <div className={styles.header}>
         <h1 className={["sr-text-product-heading-1", styles.title].join(" ")}>{title}</h1>
-        <p className={["sr-text-product-body-large", styles.subtitle].join(" ")}>
-          {common.fromPosts ? <IconAiSparkle size={16} /> : null}
-          {common.fromPosts ? P.subtitleFromPosts : P.subtitle}
-        </p>
+        <p className={["sr-text-product-body-large", styles.subtitle].join(" ")}>{subtitle}</p>
       </div>
       <div className={styles.content}>
         {common.ai.state === "running" ? (
@@ -152,6 +143,8 @@ function InlineEditor({
   busy,
   onSave,
   onCancel,
+  onRemove,
+  removeLabel,
 }: {
   fields: FieldSpec[];
   initial: Record<string, string>;
@@ -159,6 +152,9 @@ function InlineEditor({
   onSave: (values: Record<string, string>) => void;
   /** Omitted when there is nothing to go back to (no value yet). */
   onCancel?: () => void;
+  /** Group edit mode only: remove this value (never shown on a chip). */
+  onRemove?: () => void;
+  removeLabel?: string;
 }) {
   const base = useId();
   const [values, setValues] = useState(initial);
@@ -184,6 +180,17 @@ function InlineEditor({
         />
       ))}
       <div className={styles.editorActions}>
+        {onRemove ? (
+          <GhostButton
+            type="button"
+            onClick={onRemove}
+            disabled={busy}
+            className={styles.editorRemove}
+            aria-label={removeLabel ? `${P.remove} ${removeLabel}` : P.remove}
+          >
+            {P.remove}
+          </GhostButton>
+        ) : null}
         {onCancel ? (
           <GhostButton type="button" onClick={onCancel} disabled={busy}>
             {P.cancel}
@@ -197,23 +204,215 @@ function InlineEditor({
   );
 }
 
-function EditButton({ onClick, label = P.edit }: { onClick: () => void; label?: string }) {
-  return (
-    <SecondaryButton onClick={onClick} className={styles.editButton}>
-      {label}
-    </SecondaryButton>
-  );
-}
+/* ---------- shared actions (Figma "Action / Edit / Pencil + Label", trash) ---------- */
 
-function RemoveButton({ onClick, label }: { onClick: () => void; label: string }) {
+/** Pencil + "Edit", 44px tall tap target (Figma 1450:4488). */
+function EditAction({ onClick, label, disabled }: { onClick: () => void; label: string; disabled?: boolean }) {
   return (
-    <button type="button" className={styles.remove} onClick={onClick} aria-label={`${P.remove} ${label}`}>
-      <CloseIcon />
+    <button
+      type="button"
+      className={styles.editAction}
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={`${P.edit} ${label}`}
+    >
+      <IconPencil size={16} />
+      <span>{P.edit}</span>
     </button>
   );
 }
 
-/* ---------- 4a Goal ---------- */
+/** Muted red trash, 20px icon in a 44px tap target (Figma 1437:4522 / 1437:4524). */
+function TrashAction({ onClick, label, disabled }: { onClick: () => void; label: string; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      className={styles.trashAction}
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={`${P.remove} ${label}`}
+    >
+      <IconTrash size={20} />
+    </button>
+  );
+}
+
+/* ---------- chip group (Goals 1080:3458, Audience 1216:178 / 1413:4427) ---------- */
+
+type ChipItem = { id: string; label: string; initial: Record<string, string> };
+
+function ChipGroup({
+  groupLabel,
+  items,
+  addLabel,
+  max,
+  min = 0,
+  busy,
+  fields,
+  emptyInitial,
+  autoOpenAdd = false,
+  onSave,
+  onRemove,
+}: {
+  groupLabel: string;
+  items: ChipItem[];
+  addLabel: string;
+  max?: number;
+  min?: number;
+  busy: boolean;
+  fields: FieldSpec[];
+  emptyInitial: Record<string, string>;
+  /** Open the add form straight away (no value yet and the AI asked or failed). */
+  autoOpenAdd?: boolean;
+  onSave: (values: Record<string, string>, itemId: string | null) => void;
+  onRemove: (itemId: string) => void;
+}) {
+  const [mode, setMode] = useState<"view" | "add" | "edit">("view");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const adding = mode === "add" || (autoOpenAdd && items.length === 0 && mode === "view");
+  const canAdd = max === undefined || items.length < max;
+  const canRemove = items.length > min;
+
+  if (mode === "edit") {
+    return (
+      <section className={[styles.card, styles.group].join(" ")} aria-label={groupLabel}>
+        <ul className={styles.editList}>
+          {items.map(item =>
+            editingId === item.id ? (
+              <li key={item.id} className={styles.editListItem}>
+                <InlineEditor
+                  key={item.id}
+                  fields={fields}
+                  initial={item.initial}
+                  busy={busy}
+                  onCancel={() => setEditingId(null)}
+                  onRemove={
+                    canRemove
+                      ? () => {
+                          onRemove(item.id);
+                          setEditingId(null);
+                        }
+                      : undefined
+                  }
+                  removeLabel={item.label}
+                  onSave={v => {
+                    onSave(v, item.id);
+                    setEditingId(null);
+                  }}
+                />
+              </li>
+            ) : (
+              <li key={item.id} className={[styles.editListItem, styles.editListRow].join(" ")}>
+                <span className={["sr-text-product-body-large", styles.editListText].join(" ")}>{item.label}</span>
+                <EditAction onClick={() => setEditingId(item.id)} label={item.label} disabled={busy} />
+              </li>
+            )
+          )}
+        </ul>
+        <div className={styles.groupActions}>
+          <span />
+          <GhostButton
+            type="button"
+            onClick={() => {
+              setEditingId(null);
+              setMode("view");
+            }}
+          >
+            {P.done}
+          </GhostButton>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className={[styles.card, styles.group].join(" ")} aria-label={groupLabel}>
+      {items.length ? (
+        <ul className={styles.chips}>
+          {items.map(item => (
+            <li key={item.id} className={styles.chip}>
+              {item.label}
+            </li>
+          ))}
+        </ul>
+      ) : !adding ? (
+        <p className={["sr-text-product-body-small", styles.muted].join(" ")}>{P.notSet}</p>
+      ) : null}
+      {adding ? (
+        <InlineEditor
+          key="new"
+          fields={fields}
+          initial={emptyInitial}
+          busy={busy}
+          onCancel={items.length || mode === "add" ? () => setMode("view") : undefined}
+          onSave={v => {
+            onSave(v, null);
+            setMode("view");
+          }}
+        />
+      ) : (
+        <div className={styles.groupActions}>
+          {canAdd ? (
+            <button type="button" className={styles.textAction} onClick={() => setMode("add")} disabled={busy}>
+              {addLabel}
+            </button>
+          ) : (
+            <span />
+          )}
+          {items.length ? <EditAction onClick={() => setMode("edit")} label={groupLabel} disabled={busy} /> : null}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* ---------- labelled value with Edit (Niche, Language) ---------- */
+
+function ValueCard({
+  label,
+  value,
+  editing,
+  busy,
+  max,
+  className,
+  onEdit,
+  onCancel,
+  onSave,
+}: {
+  label: string;
+  value: string | null;
+  editing: boolean;
+  busy: boolean;
+  max: number;
+  className?: string;
+  onEdit: () => void;
+  onCancel: () => void;
+  onSave: (value: string) => void;
+}) {
+  return (
+    <section className={[styles.card, styles.valueCard, className ?? ""].join(" ")}>
+      {editing ? (
+        <InlineEditor
+          fields={[{ key: "label", label, max, required: true }]}
+          initial={{ label: value ?? "" }}
+          busy={busy}
+          onCancel={onCancel}
+          onSave={v => onSave(v.label.trim())}
+        />
+      ) : (
+        <div className={styles.row}>
+          <div className={styles.text}>
+            <span className={["sr-text-product-caption", styles.caption].join(" ")}>{label}</span>
+            <span className={["sr-text-product-card-title", styles.value].join(" ")}>{value ?? P.notSet}</span>
+          </div>
+          <EditAction onClick={onEdit} label={label} disabled={busy} />
+        </div>
+      )}
+    </section>
+  );
+}
+
+/* ---------- 4a Goal (1080:3458) ---------- */
 
 export type ProfileSummary = {
   displayName: string | null;
@@ -223,138 +422,81 @@ export type ProfileSummary = {
   followerCount: number | null;
 };
 
+export const MAX_GOALS = 5;
+
 export function GoalStep({
   common,
-  profile,
-  goal,
+  goals,
   niche,
   language,
   onSaveGoal,
+  onRemoveGoal,
   onSaveNiche,
   onSaveLanguage,
 }: {
   common: Common;
-  profile: ProfileSummary;
-  goal: StepItem<GoalPayload> | null;
+  goals: StepItem<GoalPayload>[];
   niche: StepItem<NichePayload> | null;
   language: StepItem<LanguagePayload> | null;
   onSaveGoal: (payload: GoalPayload, itemId: string | null) => void;
+  onRemoveGoal: (itemId: string) => void;
   onSaveNiche: (payload: NichePayload, itemId: string | null) => void;
   onSaveLanguage: (payload: LanguagePayload, itemId: string | null) => void;
 }) {
-  const [editing, setEditing] = useState<"goal" | "niche" | "language" | null>(
-    null
-  );
+  const [editing, setEditing] = useState<"niche" | "language" | null>(null);
   const clarify = common.ai.state === "clarify" ? common.ai.question : null;
-  const goalEditorOpen = editing === "goal" || (!goal && (clarify !== null || common.ai.state === "failed"));
   return (
-    <StepFrame step="goal" title={P.goal.title} mainLabel={P.goal.main} common={common} canConfirm>
-      <section className={styles.card}>
-        {goalEditorOpen ? (
-          <InlineEditor
-            fields={[
-              {
-                key: "text",
-                label: clarify ?? P.goal.sentenceLabel,
-                max: 300,
-                required: true,
-                placeholder: P.goal.placeholder,
-              },
-            ]}
-            initial={{ text: goal?.payload.text ?? "" }}
-            busy={common.busy}
-            onCancel={goal || editing === "goal" ? () => setEditing(null) : undefined}
-            onSave={v => {
-              onSaveGoal({ text: v.text.trim() }, goal?.id ?? null);
-              setEditing(null);
-            }}
-          />
-        ) : (
-          <div className={styles.row}>
-            <div className={styles.text}>
-              <span className={["sr-text-product-caption", styles.muted].join(" ")}>{P.goal.sentenceLabel}</span>
-              <span className={["sr-text-product-body-large", styles.value].join(" ")}>
-                {goal?.payload.text ?? P.notSet}
-              </span>
-            </div>
-            <EditButton onClick={() => setEditing("goal")} label={goal ? P.edit : P.add} />
-          </div>
-        )}
-      </section>
-
-      {profile.handle ? (
-        <section className={[styles.card, styles.profileCard].join(" ")}>
-          {profile.avatarUrl ? (
-            <img className={styles.avatar} src={profile.avatarUrl} alt="" referrerPolicy="no-referrer" />
-          ) : (
-            <span className={styles.avatar} />
-          )}
-          <div className={styles.text}>
-            {profile.displayName ? (
-              <span className={["sr-text-product-card-title", styles.value].join(" ")}>{profile.displayName}</span>
-            ) : null}
-            <span className={["sr-text-product-caption", styles.muted, styles.inline].join(" ")}>
-              {profile.platform ? <PlatformFullColorMark platform={profile.platform} size={14} /> : null}
-              @{profile.handle}
-              {profile.followerCount !== null
-                ? ` · ${formatProfileCount(profile.followerCount)} followers`
-                : ""}
-            </span>
-          </div>
-        </section>
-      ) : null}
-
+    <StepFrame
+      step="goal"
+      title={P.goal.title}
+      subtitle={P.goal.subtitle}
+      mainLabel={P.goal.main}
+      common={common}
+      canConfirm
+    >
+      <ChipGroup
+        groupLabel={P.goal.groupLabel}
+        items={goals.map(g => ({ id: g.id, label: g.payload.text, initial: { text: g.payload.text } }))}
+        addLabel={P.goal.add}
+        max={MAX_GOALS}
+        min={1}
+        busy={common.busy}
+        fields={[
+          { key: "text", label: clarify ?? P.goal.fieldLabel, max: 300, required: true, placeholder: P.goal.placeholder },
+        ]}
+        emptyInitial={{ text: "" }}
+        autoOpenAdd={clarify !== null || common.ai.state === "failed"}
+        onSave={(v, id) => onSaveGoal({ text: v.text.trim() }, id)}
+        onRemove={onRemoveGoal}
+      />
       <div className={styles.twoUp}>
-        <section className={styles.card}>
-          {editing === "niche" ? (
-            <InlineEditor
-              fields={[{ key: "label", label: P.goal.nicheLabel, max: 60, required: true }]}
-              initial={{ label: niche?.payload.label ?? "" }}
-              busy={common.busy}
-              onCancel={() => setEditing(null)}
-              onSave={v => {
-                const label = v.label.trim();
-                onSaveNiche({ slug: nicheSlugFromLabel(label), label }, niche?.id ?? null);
-                setEditing(null);
-              }}
-            />
-          ) : (
-            <div className={styles.row}>
-              <div className={styles.text}>
-                <span className={["sr-text-product-caption", styles.muted].join(" ")}>{P.goal.nicheLabel}</span>
-                <span className={["sr-text-product-card-title", styles.value].join(" ")}>
-                  {niche?.payload.label ?? P.notSet}
-                </span>
-              </div>
-              <EditButton onClick={() => setEditing("niche")} label={niche ? P.edit : P.add} />
-            </div>
-          )}
-        </section>
-        <section className={styles.card}>
-          {editing === "language" ? (
-            <InlineEditor
-              fields={[{ key: "label", label: P.goal.languageLabel, max: 40, required: true }]}
-              initial={{ label: language?.payload.label ?? "" }}
-              busy={common.busy}
-              onCancel={() => setEditing(null)}
-              onSave={v => {
-                const label = v.label.trim();
-                onSaveLanguage({ code: languageCode(label), label }, language?.id ?? null);
-                setEditing(null);
-              }}
-            />
-          ) : (
-            <div className={styles.row}>
-              <div className={styles.text}>
-                <span className={["sr-text-product-caption", styles.muted].join(" ")}>{P.goal.languageLabel}</span>
-                <span className={["sr-text-product-card-title", styles.value].join(" ")}>
-                  {language?.payload.label ?? P.notSet}
-                </span>
-              </div>
-              <EditButton onClick={() => setEditing("language")} label={language ? P.edit : P.add} />
-            </div>
-          )}
-        </section>
+        <ValueCard
+          label={P.goal.nicheLabel}
+          value={niche?.payload.label ?? null}
+          editing={editing === "niche"}
+          busy={common.busy}
+          max={60}
+          onEdit={() => setEditing("niche")}
+          onCancel={() => setEditing(null)}
+          onSave={label => {
+            onSaveNiche({ slug: nicheSlugFromLabel(label), label }, niche?.id ?? null);
+            setEditing(null);
+          }}
+        />
+        <ValueCard
+          label={P.goal.languageLabel}
+          value={language?.payload.label ?? null}
+          editing={editing === "language"}
+          busy={common.busy}
+          max={40}
+          className={styles.languageCard}
+          onEdit={() => setEditing("language")}
+          onCancel={() => setEditing(null)}
+          onSave={label => {
+            onSaveLanguage({ code: languageCode(label), label }, language?.id ?? null);
+            setEditing(null);
+          }}
+        />
       </div>
     </StepFrame>
   );
@@ -377,7 +519,7 @@ function languageCode(label: string): string {
   return LANGUAGE_CODES[label.trim().toLowerCase()] ?? "und";
 }
 
-/* ---------- 4b Audience ---------- */
+/* ---------- 4b Audience (1216:178, mobile 1413:4427) ---------- */
 
 export function AudienceStep({
   common,
@@ -390,61 +532,41 @@ export function AudienceStep({
   onSave: (payload: AudiencePayload, itemId: string | null) => void;
   onRemove: (itemId: string) => void;
 }) {
-  const [editing, setEditing] = useState<string | "new" | null>(null);
+  // The chip shows who. The saved value keeps both parts (who, outcome), so
+  // the form still asks for both; the server requires them.
   const fields: FieldSpec[] = [
     { key: "who", label: P.audience.whoLabel, max: 120, required: true },
     { key: "outcome", label: P.audience.outcomeLabel, max: 160, required: true },
   ];
   return (
-    <StepFrame step="audience" title={P.audience.title} mainLabel={P.audience.main} common={common} canConfirm>
-      {audiences.map(a =>
-        editing === a.id ? (
-          <section key={a.id} className={styles.card}>
-            <InlineEditor
-              fields={fields}
-              initial={{ who: a.payload.who, outcome: a.payload.outcome }}
-              busy={common.busy}
-              onCancel={() => setEditing(null)}
-              onSave={v => {
-                onSave({ who: v.who.trim(), outcome: v.outcome.trim() }, a.id);
-                setEditing(null);
-              }}
-            />
-          </section>
-        ) : (
-          <section key={a.id} className={[styles.card, styles.row].join(" ")}>
-            <p className={["sr-text-product-body-medium", styles.value, styles.sentence].join(" ")}>
-              {P.audience.rowPrefix} <strong>{a.payload.who}</strong> {P.audience.rowMiddle}{" "}
-              <strong>{a.payload.outcome}</strong>
-            </p>
-            <EditButton onClick={() => setEditing(a.id)} />
-            <RemoveButton onClick={() => onRemove(a.id)} label={a.payload.who} />
-          </section>
-        )
-      )}
-      {editing === "new" ? (
-        <section className={styles.card}>
-          <InlineEditor
-            fields={fields}
-            initial={{ who: "", outcome: "" }}
-            busy={common.busy}
-            onCancel={() => setEditing(null)}
-            onSave={v => {
-              onSave({ who: v.who.trim(), outcome: v.outcome.trim() }, null);
-              setEditing(null);
-            }}
-          />
-        </section>
-      ) : (
-        <button type="button" className={styles.addButton} onClick={() => setEditing("new")}>
-          {P.audience.add}
-        </button>
-      )}
+    <StepFrame
+      step="audience"
+      title={P.audience.title}
+      subtitle={P.audience.subtitle}
+      mainLabel={P.audience.main}
+      common={common}
+      canConfirm
+    >
+      <ChipGroup
+        groupLabel={P.audience.groupLabel}
+        items={audiences.map(a => ({
+          id: a.id,
+          label: a.payload.who,
+          initial: { who: a.payload.who, outcome: a.payload.outcome },
+        }))}
+        addLabel={P.audience.add}
+        busy={common.busy}
+        fields={fields}
+        emptyInitial={{ who: "", outcome: "" }}
+        autoOpenAdd={common.ai.state === "failed" || common.ai.state === "clarify"}
+        onSave={(v, id) => onSave({ who: v.who.trim(), outcome: v.outcome.trim() }, id)}
+        onRemove={onRemove}
+      />
     </StepFrame>
   );
 }
 
-/* ---------- 4c Pillars ---------- */
+/* ---------- 4c Pillars (1216:106) ---------- */
 
 export function PillarsStep({
   common,
@@ -463,11 +585,16 @@ export function PillarsStep({
     { key: "description", label: P.pillars.descriptionLabel, max: 200 },
   ];
   return (
-    <StepFrame step="pillars" title={P.pillars.title} mainLabel={P.pillars.main} common={common} canConfirm>
-      {pillars.map(p => {
-        const measured =
-          p.evidence === "performance_backed" && typeof p.payload.viewSharePercent === "number";
-        return editing === p.id ? (
+    <StepFrame
+      step="pillars"
+      title={P.pillars.title}
+      subtitle={P.pillars.subtitle}
+      mainLabel={P.pillars.main}
+      common={common}
+      canConfirm
+    >
+      {pillars.map(p =>
+        editing === p.id ? (
           <section key={p.id} className={styles.card}>
             <InlineEditor
               fields={fields}
@@ -481,26 +608,25 @@ export function PillarsStep({
             />
           </section>
         ) : (
-          <section key={p.id} className={[styles.card, styles.row].join(" ")}>
-            {measured ? (
-              <span className={styles.share}>
-                <span className={["sr-text-product-heading-4", styles.shareValue].join(" ")}>
-                  {Math.round(p.payload.viewSharePercent!)}%
-                </span>
-                <span className={["sr-text-product-caption", styles.shareLabel].join(" ")}>{P.pillars.ofViews}</span>
-              </span>
-            ) : null}
-            <div className={styles.text}>
+          <section key={p.id} className={[styles.card, styles.pillarCard].join(" ")}>
+            <span className={styles.pillarTile}>
+              <IconPillar size={24} />
+            </span>
+            <div className={styles.pillarText}>
               <span className={["sr-text-product-card-title", styles.value].join(" ")}>{p.payload.title}</span>
               {p.payload.description ? (
-                <span className={["sr-text-product-body-small", styles.muted].join(" ")}>{p.payload.description}</span>
+                <span className={["sr-text-product-body-small", styles.muted, styles.clamp2].join(" ")}>
+                  {p.payload.description}
+                </span>
               ) : null}
             </div>
-            <EditButton onClick={() => setEditing(p.id)} />
-            <RemoveButton onClick={() => onRemove(p.id)} label={p.payload.title} />
+            <div className={styles.pillarActions}>
+              <EditAction onClick={() => setEditing(p.id)} label={p.payload.title} disabled={common.busy} />
+              <TrashAction onClick={() => onRemove(p.id)} label={p.payload.title} disabled={common.busy} />
+            </div>
           </section>
-        );
-      })}
+        )
+      )}
       {editing === "new" ? (
         <section className={styles.card}>
           <InlineEditor
@@ -515,7 +641,7 @@ export function PillarsStep({
           />
         </section>
       ) : (
-        <button type="button" className={styles.addButton} onClick={() => setEditing("new")}>
+        <button type="button" className={styles.addButton} onClick={() => setEditing("new")} disabled={common.busy}>
           {P.pillars.add}
         </button>
       )}

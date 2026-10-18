@@ -12,11 +12,14 @@ import { discoverySearches, users, type User } from "../../drizzle/schema";
 import { inferOnboardingSlugsFromDescription } from "../../shared/onboardingDescription";
 import { mergeInferredNicheSlugs } from "../../shared/primaryNiche";
 import { protectedProcedure, router } from "../_core/trpc";
+import { parseAccountTheme, THEME_PREFERENCE_VALUES } from "../../shared/themePreference";
 
 export const preferencesRouter = router({
   get: protectedProcedure.query(async ({ ctx }) => {
     const prefs = await getUserPreferences(ctx.user.id);
-    return prefs || { timezone: "America/Chicago" };
+    return prefs
+      ? { timezone: prefs.timezone, theme: parseAccountTheme(prefs.theme) }
+      : { timezone: "America/Chicago", theme: null };
   }),
   latestDiscoveryBusinessDescription: protectedProcedure.query(
     async ({ ctx }) => {
@@ -37,9 +40,21 @@ export const preferencesRouter = router({
     }
   ),
   update: protectedProcedure
-    .input(z.object({ timezone: z.string().min(1).max(64) }))
+    .input(
+      z
+        .object({
+          timezone: z.string().min(1).max(64).optional(),
+          theme: z.enum(THEME_PREFERENCE_VALUES).optional(),
+        })
+        .refine(v => v.timezone !== undefined || v.theme !== undefined, {
+          message: "Nothing to update",
+        })
+    )
     .mutation(async ({ ctx, input }) => {
-      await upsertUserPreferences(ctx.user.id, { timezone: input.timezone });
+      await upsertUserPreferences(ctx.user.id, {
+        ...(input.timezone !== undefined ? { timezone: input.timezone } : {}),
+        ...(input.theme !== undefined ? { theme: input.theme } : {}),
+      });
       return { success: true };
     }),
   updateProfile: protectedProcedure

@@ -17,6 +17,7 @@ import {
 } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import { InsertUser, User, users, scrapeJobs, exportJobs, reels, transcriptions, recreatedScripts, savedReels, scriptTags, savedScripts, scriptTagAssignments, scriptVersions, userPreferences, subscriptions, extensionUsage, extensionTokens, blogPosts, telegramConnections, collectedReels, scriptIdeas, featuredAccounts, featuredReels, brandCoachScores, emailEvents, tiktokScrapeJobs, tiktokVideos, youtubeScrapeJobs, youtubeVideos, InsertScrapeJob, InsertExportJob, InsertReel, InsertTranscription, InsertRecreatedScript, InsertSavedReel, InsertScriptTag, InsertSavedScript, InsertScriptTagAssignment, InsertScriptVersion, ScrapeJob, ExportJob, Reel, Transcription, RecreatedScript, SavedReel, ScriptTag, SavedScript, ScriptTagAssignment, ScriptVersion, UserPreference, Subscription, ExtensionUsage, ExtensionToken, BlogPost, InsertBlogPost, TelegramConnection, InsertTelegramConnection, CollectedReel, InsertCollectedReel, ScriptIdea, InsertScriptIdea, FeaturedReel, BrandCoachScore, InsertBrandCoachScore, TikTokScrapeJob, TikTokVideo, YouTubeScrapeJob, YouTubeVideo } from "../drizzle/schema";
+import { NEW_ACCOUNT_THEME, type AccountThemePreference } from "../shared/themePreference";
 import { ENV } from './_core/env';
 import {
   createPersonalWorkspaceForUser,
@@ -134,6 +135,12 @@ export async function upsertUser(user: InsertUser): Promise<void> {
     if (!existingBefore) {
       const created = await getUserByOpenId(user.openId);
       if (created) {
+        // New accounts start in Light. Existing accounts are never touched here.
+        try {
+          await upsertUserPreferences(created.id, { theme: NEW_ACCOUNT_THEME });
+        } catch (themeErr) {
+          console.error("[Database] Failed to set default theme for new user:", themeErr);
+        }
         try {
           await createPersonalWorkspaceForUser(created.id);
         } catch (workspaceErr) {
@@ -2205,7 +2212,9 @@ export async function getUserPreferences(userId: number): Promise<UserPreference
   return result[0];
 }
 
-export async function upsertUserPreferences(userId: number, data: { timezone?: string }): Promise<void> {
+export type ThemePreferenceValue = AccountThemePreference;
+
+export async function upsertUserPreferences(userId: number, data: { timezone?: string; theme?: ThemePreferenceValue }): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const existing = await db.select().from(userPreferences).where(eq(userPreferences.userId, userId)).limit(1);

@@ -10,20 +10,17 @@
  */
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { SocialPlatform } from "@shared/personalization/model";
-import { followerViralBadge, type FollowerViralBadge } from "@shared/viralTier";
+import type { FollowerViralBadge } from "@shared/viralTier";
 import type { ViralPost } from "@shared/viralPosts";
 import { PrimaryButton } from "@/design-system/core";
 import {
   IconAiSparkle,
   IconClose,
-  IconExpand,
   IconLink,
-  IconMore,
-  IconPlay,
-  IconStar,
   IconToolHook,
   IconToolScript,
 } from "@/design-system/icons";
+import { ResultCard } from "@/design-system/ResultCard";
 import { PlatformFullColorMark } from "@/design-system/platformMarks";
 import { InstagramMark } from "@shared/ui/PlatformMarks";
 import { formatCompactCount } from "@/lib/viralPosts/format";
@@ -44,8 +41,15 @@ const TIER_CLASS: Record<FollowerViralBadge["tier"], string> = {
   Explosive: styles.badgeExplosive,
 };
 
+/**
+ * Creator multiplier badges ("Strong · 34x followers") are hidden in production.
+ * They divide views by followers, which is not a comparison against the
+ * creator's normal performance. Re-enable only with a validated baseline.
+ */
+export const SHOW_CREATOR_MULTIPLIER_BADGES = false;
+
 export function ViralBadge({ badge }: { badge: FollowerViralBadge | null }) {
-  if (!badge) return null;
+  if (!SHOW_CREATOR_MULTIPLIER_BADGES || !badge) return null;
   return (
     <span className={cx(styles.badge, TIER_CLASS[badge.tier])}>
       {badge.label}
@@ -131,12 +135,15 @@ export function AgentComposer({
   onSubmit,
   busy,
   error,
+  helper,
 }: {
   value: string;
   onChange: (v: string) => void;
   onSubmit: () => void;
   busy: boolean;
   error: string | null;
+  /** Mobile only: helper line next to the button (Figma 1498:2209). */
+  helper?: string;
 }) {
   const id = useId();
   return (
@@ -167,12 +174,16 @@ export function AgentComposer({
           aria-describedby={error ? `${id}-error` : undefined}
         />
         <div className={styles.composerActions}>
+          {helper ? (
+            <span className={cx("sr-text-product-caption", styles.composerHelper)}>{helper}</span>
+          ) : null}
           {/* Enabled like Figma; a too-short idea gets the Agent's own message on submit. */}
           <PrimaryButton
             type="submit"
             disabled={busy}
             aria-busy={busy}
             trailingIcon={!busy}
+            className={styles.composerSubmit}
           >
             {busy
               ? C.composer.creating
@@ -200,10 +211,13 @@ export function QuickActions({
   onWrite,
   onImprove,
   onHooks,
+  compact = false,
 }: {
   onWrite: () => void;
   onImprove: () => void;
   onHooks: () => void;
+  /** Mobile (1498:2199): 44px chips that wrap; only "Write a script" keeps its icon. */
+  compact?: boolean;
 }) {
   return (
     <div className={styles.chips}>
@@ -212,11 +226,11 @@ export function QuickActions({
         {C.quick.write}
       </button>
       <button type="button" className={styles.chip} onClick={onImprove}>
-        <IconAiSparkle />
+        {compact ? null : <IconAiSparkle />}
         {C.quick.improve}
       </button>
       <button type="button" className={styles.chip} onClick={onHooks}>
-        <IconToolHook />
+        {compact ? null : <IconToolHook />}
         {C.quick.hooks}
       </button>
     </div>
@@ -240,10 +254,34 @@ export function VideoLinkEntry({ onPaste }: { onPaste: () => void }) {
 export function SetupBanner({
   onFinish,
   onDismiss,
+  compact = false,
 }: {
   onFinish: () => void;
   onDismiss: () => void;
+  /** Mobile (1498:2273): stacked, filled "Finish setup" button, close top right. */
+  compact?: boolean;
 }) {
+  if (compact) {
+    return (
+      <div className={cx(styles.banner, styles.bannerCompact)} role="region" aria-label={C.banner.title}>
+        <div className={styles.bannerText}>
+          <span className={cx("sr-text-product-card-title", styles.h2)}>{C.banner.title}</span>
+          <span className={cx("sr-text-product-body-small", styles.muted)}>{C.banner.body}</span>
+        </div>
+        <PrimaryButton onClick={onFinish} trailingIcon className={styles.bannerCompactAction}>
+          {C.banner.action}
+        </PrimaryButton>
+        <button
+          type="button"
+          className={cx(styles.iconButton, styles.iconButtonBare, styles.bannerClose)}
+          onClick={onDismiss}
+          aria-label={C.banner.dismiss}
+        >
+          <IconClose />
+        </button>
+      </div>
+    );
+  }
   return (
     <div className={styles.banner} role="region" aria-label={C.banner.title}>
       <div className={styles.bannerText}>
@@ -276,9 +314,12 @@ export type HomeIdea = { id: number; title: string; hook: string | null };
 export function IdeaCard({
   idea,
   onWrite,
+  compact = false,
 }: {
   idea: HomeIdea;
   onWrite: () => void;
+  /** Mobile (1498:2244): text link "Write script →" instead of the outline button. */
+  compact?: boolean;
 }) {
   return (
     <article className={cx(styles.card, styles.idea)}>
@@ -296,10 +337,10 @@ export function IdeaCard({
       <span className={styles.ideaSpacer} />
       <button
         type="button"
-        className={cx(styles.outline, styles.ideaButton)}
+        className={compact ? cx(styles.ghost, styles.ghostBrand, styles.ideaButton) : cx(styles.outline, styles.ideaButton)}
         onClick={onWrite}
       >
-        {C.ideas.write}
+        {compact ? C.mobile.writeIdea : C.ideas.write}
       </button>
     </article>
   );
@@ -318,168 +359,63 @@ export function IdeasSkeleton() {
   );
 }
 
-/* ---------- Home / Result Card (compact) ---------- */
+/* ---------- Videos for you: shared Result Card (288:666) ---------- */
 
-export function HomeResultCard({
+/**
+ * Maps a Home video to the shared Result Card (Home media extension,
+ * 1603:3680 / 1605:4184). Not a separate card: layout and styles live in
+ * the design-system ResultCard. Viral score is off on Home (Figma instance
+ * setting) and the "↗ N×" pill stays hidden: Home has no validated
+ * creator-usual-views baseline yet, so no multiplier is computed or shown.
+ */
+export function HomeVideoCard({
   post,
   busy,
-  onCreate,
+  compact,
+  onRemake,
   onToggleSave,
 }: {
   post: ViralPost;
   busy: boolean;
-  onCreate: () => void;
+  /** Mobile: Expand hidden (Figma note on 288:666). */
+  compact: boolean;
+  onRemake: () => void;
   onToggleSave: () => void;
 }) {
-  const [menu, setMenu] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const [thumbFailed, setThumbFailed] = useState(false);
-  useEffect(() => {
-    if (!menu) return;
-    const onDown = (e: MouseEvent) => {
-      if (!menuRef.current?.contains(e.target as Node)) setMenu(false);
-    };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setMenu(false);
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [menu]);
-
   const title = post.hook?.trim() || post.caption?.trim() || C.videos.untitled;
   const views = formatCompactCount(post.views);
-  const badge = followerViralBadge(
-    post.views ?? null,
-    post.creatorFollowers ?? null
-  );
   const handle = (post.creatorHandle || "").replace(/^@/, "");
-  const open = () =>
-    window.open(post.sourceUrl, "_blank", "noopener,noreferrer");
-  const platform = post.platform as SocialPlatform;
-
+  const open = () => window.open(post.sourceUrl, "_blank", "noopener,noreferrer");
   return (
-    <article
-      className={cx(styles.card, styles.result)}
-      data-testid="home-result-card"
-    >
-      <div className={styles.media}>
-        {post.thumbnailUrl && !thumbFailed ? (
-          <img
-            className={styles.thumb}
-            src={post.thumbnailUrl}
-            alt=""
-            loading="lazy"
-            referrerPolicy="no-referrer"
-            onError={() => setThumbFailed(true)}
-          />
-        ) : null}
-        <span className={styles.badgeRowStart}>
-          <span className={cx(styles.badge, styles.badgeNeutral)}>
-            <PlatformFullColorMark platform={platform} size={16} />
-            {PLATFORM_BADGE[post.platform] ?? post.platform}
-          </span>
-        </span>
-        <span className={styles.badgeRowEnd}>
-          <ViralBadge badge={badge} />
-        </span>
-        <button
-          type="button"
-          className={cx(styles.iconButton, styles.mediaPlay)}
-          onClick={open}
-          aria-label={C.videos.play}
-        >
-          <IconPlay />
-        </button>
-        <button
-          type="button"
-          className={cx(styles.iconButton, styles.mediaExpand)}
-          onClick={open}
-          aria-label={C.videos.expand}
-        >
-          <IconExpand />
-        </button>
-      </div>
-      <div className={styles.resultContent}>
-        <p className={styles.resultTitle}>{title}</p>
-        {handle ? (
-          <p
-            className={cx(
-              "sr-text-product-body-small",
-              styles.muted,
-              styles.ellipsis
-            )}
-          >
-            @{handle}
-          </p>
-        ) : null}
-        {views ? (
-          <p className={cx("sr-text-product-body-small", styles.muted)}>
-            {views} views
-          </p>
-        ) : null}
-        <div className={styles.resultActions} ref={menuRef}>
-          <button
-            type="button"
-            className={styles.outline}
-            onClick={onCreate}
-            disabled={busy}
-            aria-busy={busy}
-          >
-            {C.videos.create}
-          </button>
-          <button
-            type="button"
-            className={styles.iconButton}
-            onClick={onToggleSave}
-            aria-pressed={post.saved}
-            aria-label={post.saved ? C.videos.saved : C.videos.save}
-          >
-            <IconStar filled={post.saved} />
-          </button>
-          <button
-            type="button"
-            className={styles.iconButton}
-            onClick={() => setMenu(m => !m)}
-            aria-expanded={menu}
-            aria-haspopup="menu"
-            aria-label={C.videos.more}
-          >
-            <IconMore />
-          </button>
-          {menu ? (
-            <div className={styles.menu} role="menu">
-              <a
-                role="menuitem"
-                className={styles.menuItem}
-                href={post.sourceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={() => setMenu(false)}
-              >
-                {C.videos.openOriginal}
-              </a>
-            </div>
-          ) : null}
-        </div>
-      </div>
-    </article>
+    <ResultCard
+      testId="home-result-card"
+      platform={post.platform as SocialPlatform}
+      platformLabel={PLATFORM_BADGE[post.platform] ?? post.platform}
+      thumbnailUrl={post.thumbnailUrl ?? null}
+      title={title}
+      creator={handle ? `@${handle}` : null}
+      metrics={views ? [`${views} views`] : []}
+      signal={null}
+      labels={{
+        play: C.videos.play,
+        expand: C.videos.expand,
+        remake: C.videos.remake,
+        save: C.videos.save,
+        saved: C.videos.saved,
+        more: C.videos.more,
+      }}
+      onPlay={open}
+      onExpand={compact ? undefined : open}
+      onRemake={onRemake}
+      remakeBusy={busy}
+      saved={post.saved}
+      onToggleSave={onToggleSave}
+      menu={[{ label: C.videos.openOriginal, href: post.sourceUrl }]}
+    />
   );
 }
 
-export function ResultSkeleton() {
-  return (
-    <div className={cx(styles.card, styles.result)} aria-busy>
-      <div className={styles.media} />
-      <div className={styles.resultContent}>
-        <Skeleton w="70%" h={16} />
-        <Skeleton w="40%" h={12} />
-        <Skeleton w="85%" h={36} />
-      </div>
-    </div>
-  );
-}
+export { ResultCardSkeleton as ResultSkeleton } from "@/design-system/ResultCard";
 
 /* ---------- creators ---------- */
 
@@ -495,9 +431,11 @@ export type HomeCreatorView = {
 export function CreatorRow({
   creator,
   onSee,
+  compact = false,
 }: {
   creator: HomeCreatorView;
   onSee: () => void;
+  compact?: boolean;
 }) {
   const [imgFailed, setImgFailed] = useState(false);
   const name = creator.displayName?.trim() || `@${creator.handle}`;
@@ -533,8 +471,8 @@ export function CreatorRow({
         </span>
         <ViralBadge badge={creator.badge} />
       </div>
-      <button type="button" className={styles.ghost} onClick={onSee}>
-        {C.creators.seeVideos}
+      <button type="button" className={compact ? cx(styles.ghost, styles.ghostBrand) : styles.ghost} onClick={onSee}>
+        {compact ? C.mobile.seeVideos : C.creators.seeVideos}
       </button>
     </div>
   );
@@ -559,24 +497,31 @@ export function CreatorsSkeleton() {
 
 /* ---------- profiles ---------- */
 
-export function ProfilesInvite({ onManage }: { onManage: () => void }) {
+export function ProfilesInvite({
+  onManage,
+  compact = false,
+}: {
+  onManage: () => void;
+  /** Mobile (1498:2268): subtle panel, approved mobile copy, text link. */
+  compact?: boolean;
+}) {
   return (
-    <div className={cx(styles.card, styles.invite)}>
+    <div className={cx(styles.card, styles.invite, compact && styles.inviteCompact)}>
       <span
         className={cx("sr-text-product-label", styles.h2)}
-        style={{ fontWeight: 500 }}
+        style={{ fontWeight: compact ? 600 : 500 }}
       >
-        {C.profiles.inviteTitle}
+        {compact ? C.mobile.inviteTitle : C.profiles.inviteTitle}
       </span>
       <span className={cx("sr-text-product-body-small", styles.muted)}>
-        {C.profiles.inviteBody}
+        {compact ? C.mobile.inviteBody : C.profiles.inviteBody}
       </span>
       <button
         type="button"
-        className={cx(styles.outline, styles.inviteAction)}
+        className={compact ? cx(styles.ghost, styles.ghostBrand, styles.inviteAction) : cx(styles.outline, styles.inviteAction)}
         onClick={onManage}
       >
-        {C.profiles.manage}
+        {compact ? C.mobile.manage : C.profiles.manage}
       </button>
     </div>
   );

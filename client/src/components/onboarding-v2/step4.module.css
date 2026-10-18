@@ -1,4 +1,4 @@
-/* Step 4 screens (Figma 1293:19647, 1216:178, 1216:106). Tokens only. */
+/* Step 4 screens (Figma 1080:3458, 1216:178, 1413:4427, 1216:106). Tokens only. */
 .header {
   display: flex;
   flex-direction: column;
@@ -47,13 +47,6 @@
   margin: 0;
 }
 
-/* Audience row: one sentence that wraps naturally. */
-.sentence {
-  flex: 1 1 0;
-  min-width: 0;
-  margin: 0;
-}
-
 .value {
   color: var(--sr-color-text-primary);
 }
@@ -63,67 +56,180 @@
   color: var(--sr-color-text-secondary);
 }
 
-.inline {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sr-space-1);
+/* Figma 1080:3458: Niche fills, Language 190 wide, 12 gap. */
+.twoUp {
+  display: flex;
+  gap: var(--sr-space-3);
 }
 
-.profileCard {
+.valueCard {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-right: var(--sr-space-3);
+}
+
+.languageCard {
+  flex: 0 0 190px;
+}
+
+.caption {
+  color: var(--sr-color-text-tertiary);
+}
+
+/* Chip group card: chips, then "+ Add" and pencil Edit (gap 16). */
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-space-4);
+  padding-bottom: var(--sr-space-2);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sr-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  max-width: 100%;
+  /* Figma chip: 6px block padding (half of space-3). */
+  padding: calc(var(--sr-space-3) / 2) var(--sr-space-3);
+  border-radius: var(--sr-radius-full);
+  background: var(--sr-color-surface-hover);
+  color: var(--sr-color-text-primary);
+  font-size: var(--sr-type-product-body-large-size);
+  font-weight: var(--sr-font-weight-medium);
+  line-height: var(--sr-type-product-body-large-line);
+  overflow-wrap: anywhere;
+}
+
+.groupActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sr-space-3);
+  margin-top: calc(-1 * var(--sr-space-2));
+}
+
+.textAction {
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sr-color-text-primary);
+  font: inherit;
+  font-size: var(--sr-type-product-label-size);
+  font-weight: var(--sr-font-weight-medium);
+  line-height: var(--sr-type-product-label-line);
+  cursor: pointer;
+}
+
+.textAction:hover {
+  text-decoration: underline;
+}
+
+.textAction:focus-visible,
+.editAction:focus-visible,
+.trashAction:focus-visible {
+  outline: none;
+  border-radius: var(--sr-radius-8);
+  box-shadow: var(--sr-elevation-focus-neutral-action);
+}
+
+/* Figma "Action / Edit / Pencil + Label": 44 x 64, 16 pencil, 4 gap, Regular 14. */
+.editAction {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--sr-space-1);
+  min-width: 64px;
+  min-height: 44px;
+  padding: 0 var(--sr-space-2);
+  border: 0;
+  background: none;
+  color: var(--sr-color-text-primary);
+  font: inherit;
+  font-size: var(--sr-type-product-body-small-size);
+  font-weight: var(--sr-font-weight-regular);
+  line-height: var(--sr-type-product-body-small-line);
+  cursor: pointer;
+}
+
+.editAction:hover,
+.trashAction:hover {
+  border-radius: var(--sr-radius-8);
+  background: var(--sr-color-surface-hover);
+}
+
+.trashAction {
+  display: inline-flex;
+  flex: 0 0 44px;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.editAction:disabled,
+.trashAction:disabled,
+.textAction:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* Group edit mode: one row per value, each with its own Edit. */
+.editList {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.editListItem {
+  padding: var(--sr-space-2) 0;
+  border-bottom: var(--sr-shape-border-default-width) solid var(--sr-color-border-default);
+}
+
+.editListItem:last-child {
+  border-bottom: 0;
+}
+
+.editListRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sr-space-3);
+}
+
+.editListText {
+  flex: 1 1 0;
+  min-width: 0;
+  color: var(--sr-color-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.editorRemove {
+  margin-right: auto;
+  color: var(--sr-color-action-destructive-default);
+}
+
+/* Pillar card (1216:106): 64 icon tile, text, Edit + trash. Gap 16, padding 20. */
+.pillarCard {
   display: flex;
   align-items: center;
   gap: var(--sr-space-4);
 }
 
-.avatar {
-  display: block;
-  width: 48px;
-  height: 48px;
-  flex: 0 0 48px;
-  border-radius: var(--sr-radius-full);
-  background: var(--sr-neutral-100);
-  object-fit: cover;
-}
-
-/* Figma 4a: Niche 317, Language 190 (of 520 with a 12 gap). */
-.twoUp {
-  display: grid;
-  grid-template-columns: minmax(0, 5fr) minmax(0, 3fr);
-  gap: var(--sr-space-3);
-}
-
-.editButton {
-  flex: 0 0 auto;
-}
-
-.remove {
-  display: inline-flex;
-  flex: 0 0 32px;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: var(--sr-shape-border-default-width) solid var(--sr-color-border-default);
-  border-radius: var(--sr-radius-full);
-  background: var(--sr-color-surface-default);
-  color: var(--sr-color-text-primary);
-  cursor: pointer;
-}
-
-.remove:hover {
-  background: var(--sr-color-surface-hover);
-}
-
-.remove:focus-visible {
-  outline: none;
-  box-shadow: var(--sr-elevation-focus-neutral-action);
-}
-
-.share {
+.pillarTile {
   display: flex;
   flex: 0 0 64px;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   width: 64px;
@@ -132,12 +238,25 @@
   background: var(--sr-color-brand-surface-subtle);
 }
 
-.shareValue {
-  color: var(--sr-color-text-brand);
+.pillarText {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  gap: var(--sr-space-1);
+  min-width: 0;
 }
 
-.shareLabel {
-  color: var(--sr-color-text-brand);
+.clamp2 {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.pillarActions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
 }
 
 .addButton {
@@ -146,7 +265,7 @@
   min-height: 44px;
   padding: var(--sr-space-3) var(--sr-space-4);
   border: var(--sr-shape-border-default-width) dashed var(--sr-color-border-default);
-  border-radius: var(--sr-radius-12);
+  border-radius: var(--sr-shape-control-radius);
   background: var(--sr-color-surface-default);
   color: var(--sr-color-text-primary);
   font: inherit;
@@ -211,7 +330,27 @@
   }
 
   .twoUp {
-    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+
+  .languageCard {
+    flex: 1 1 auto;
+  }
+
+  /* Pillar card on a phone: text gets the full width; actions sit under it. */
+  .pillarCard {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .pillarText {
+    flex-basis: calc(100% - 64px - var(--sr-space-4));
+  }
+
+  .pillarActions {
+    width: 100%;
+    justify-content: flex-end;
+    margin: calc(-1 * var(--sr-space-2)) 0 calc(-1 * var(--sr-space-3));
   }
 
   .header,

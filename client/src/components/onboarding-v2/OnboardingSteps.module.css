@@ -139,7 +139,21 @@
   display: none;
 }
 
+.mobileChoice {
+  display: none;
+}
+
 @media (max-width: 900px) {
+  .mobileChoice {
+    display: flex;
+    gap: var(--sr-space-3);
+    margin-top: var(--sr-space-6);
+  }
+
+  .mobileChoice > * {
+    flex: 1 1 0;
+  }
+
   .mobileOnly {
     display: flex;
     justify-content: center;

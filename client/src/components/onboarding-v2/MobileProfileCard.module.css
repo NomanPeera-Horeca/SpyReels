@@ -1,0 +1,213 @@
+/* Mobile step 2 compact profile cards (approved Figma 1458:6925, 1474:4463, 1474:4832). */
+
+.card,
+.cardCentered,
+.cardYouTube {
+  box-sizing: border-box;
+  width: 100%;
+  border: var(--sr-shape-border-default-width) solid var(--sr-color-border-default);
+  border-radius: var(--sr-shape-card-radius);
+  background: var(--sr-color-surface-default);
+  color: var(--sr-color-text-primary);
+  padding: var(--sr-space-5);
+}
+
+/* Instagram */
+.igName {
+  display: flex;
+  align-items: center;
+  gap: var(--sr-space-2);
+  margin-bottom: var(--sr-space-4);
+}
+
+.igHandle {
+  font-size: var(--sr-type-product-card-title-size);
+  font-weight: var(--sr-font-weight-bold);
+}
+
+.igTop {
+  display: flex;
+  align-items: center;
+  gap: var(--sr-space-4);
+}
+
+.igStats {
+  display: flex;
+  flex: 1 1 auto;
+  justify-content: space-between;
+  margin: 0;
+}
+
+.igStat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.igStatValue {
+  margin: 0;
+  font-size: var(--sr-type-product-card-title-size);
+  font-weight: var(--sr-font-weight-bold);
+}
+
+.igStatLabel {
+  margin: 0;
+  font-size: var(--sr-type-product-body-small-size);
+  color: var(--sr-color-text-secondary);
+}
+
+.category {
+  margin: var(--sr-space-4) 0 var(--sr-space-1);
+  font-size: var(--sr-type-product-body-small-size);
+  color: var(--sr-color-text-secondary);
+}
+
+.bioLine {
+  margin: 0;
+  font-size: var(--sr-type-product-body-medium-size);
+}
+
+.link {
+  margin: var(--sr-space-2) 0 0;
+  font-size: var(--sr-type-product-body-medium-size);
+  font-weight: var(--sr-font-weight-semibold);
+  color: var(--sr-color-text-brand);
+  overflow-wrap: anywhere;
+}
+
+.igRing {
+  flex: 0 0 auto;
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 50%;
+  background: linear-gradient(45deg, #f9ce34, #ee2a7b, #6228d7);
+}
+
+.igRing .avatar,
+.igRing .avatarFallback {
+  border: 3px solid var(--sr-color-surface-default);
+}
+
+/* TikTok */
+.cardCentered {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: var(--sr-space-6) var(--sr-space-5);
+}
+
+.name {
+  margin: var(--sr-space-4) 0 0;
+  font-size: var(--sr-type-product-card-title-size);
+  font-weight: var(--sr-font-weight-bold);
+}
+
+.handle {
+  margin: 0;
+  font-size: var(--sr-type-product-body-small-size);
+  color: var(--sr-color-text-secondary);
+}
+
+.ttStats {
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  width: 100%;
+  margin: var(--sr-space-4) 0;
+}
+
+.ttStat {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ttStat + .ttStat {
+  border-left: var(--sr-shape-border-default-width) solid var(--sr-color-border-default);
+}
+
+.ttStatValue {
+  margin: 0;
+  font-size: var(--sr-type-product-card-title-size);
+  font-weight: var(--sr-font-weight-bold);
+}
+
+.ttStatLabel {
+  margin: 0;
+  font-size: var(--sr-type-product-body-small-size);
+  color: var(--sr-color-text-secondary);
+}
+
+.bioCentered {
+  margin: 0;
+  font-size: var(--sr-type-product-body-medium-size);
+}
+
+/* YouTube: dark channel panel inside the bordered card (same #0f0f0f as the desktop preview). */
+.cardYouTube {
+  padding: var(--sr-space-3);
+}
+
+.ytDark {
+  border-radius: var(--sr-shape-card-radius);
+  background: #0f0f0f;
+  color: #ffffff;
+  padding: var(--sr-space-5);
+}
+
+.ytHead {
+  display: flex;
+  align-items: center;
+  gap: var(--sr-space-4);
+}
+
+.ytIdentity {
+  min-width: 0;
+}
+
+.ytName {
+  margin: 0;
+  font-size: var(--sr-type-product-card-title-size);
+  font-weight: var(--sr-font-weight-bold);
+}
+
+.ytHandle {
+  margin: 0;
+  font-size: var(--sr-type-product-body-small-size);
+  color: #ffffff;
+}
+
+.ytCounts {
+  margin: var(--sr-space-1) 0 0;
+  font-size: var(--sr-type-product-body-small-size);
+  color: #aaaaaa;
+}
+
+.ytDescription {
+  margin: var(--sr-space-4) 0 0;
+  font-size: var(--sr-type-product-body-small-size);
+  color: #aaaaaa;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Avatars */
+.avatar,
+.avatarFallback {
+  flex: 0 0 auto;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.avatarFallback {
+  display: block;
+  background: var(--sr-color-surface-subtle);
+}
+
+.cardYouTube .avatarFallback {
+  background: #3a3a3a;
+}

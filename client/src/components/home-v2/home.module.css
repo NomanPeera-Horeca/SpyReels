@@ -414,121 +414,7 @@
   margin-top: var(--sr-space-2);
 }
 
-/* ---------- Home / Result Card (compact) ---------- */
-
-.result {
-  overflow: hidden;
-  border-radius: var(--sr-radius-12);
-}
-
-.media {
-  position: relative;
-  height: 220px;
-  overflow: hidden;
-  background: var(--home-surface-subtle);
-}
-
-.thumb {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.badgeRowStart {
-  position: absolute;
-  top: var(--sr-space-3);
-  left: var(--sr-space-3);
-}
-
-.badgeRowEnd {
-  position: absolute;
-  top: var(--sr-space-3);
-  right: var(--sr-space-3);
-}
-
-.mediaPlay {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-}
-
-.mediaExpand {
-  position: absolute;
-  right: var(--sr-space-3);
-  bottom: var(--sr-space-3);
-}
-
-.resultContent {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sr-space-3);
-  padding: var(--sr-space-5);
-}
-
-.resultTitle {
-  display: -webkit-box;
-  min-height: 40px;
-  margin: 0;
-  overflow: hidden;
-  color: var(--home-text);
-  font-size: var(--sr-type-product-body-large-size);
-  font-weight: var(--sr-font-weight-semibold);
-  line-height: 20px;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.resultActions {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.resultActions .outline {
-  flex: 1 1 0;
-  min-width: 0;
-  overflow: hidden;
-  padding-inline: var(--sr-space-3);
-  text-overflow: ellipsis;
-}
-
-.menu {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + var(--sr-space-1));
-  z-index: 5;
-  min-width: 180px;
-  padding: var(--sr-space-1);
-  border: var(--sr-shape-border-default-width) solid var(--home-border);
-  border-radius: var(--sr-radius-12);
-  background: var(--home-surface);
-  box-shadow: var(--sr-elevation-menu);
-}
-
-.menuItem {
-  display: block;
-  box-sizing: border-box;
-  width: 100%;
-  padding: var(--sr-space-2) var(--sr-space-3);
-  border: 0;
-  border-radius: var(--sr-radius-8);
-  background: transparent;
-  color: var(--home-text);
-  font: inherit;
-  font-size: var(--sr-type-product-body-small-size);
-  line-height: var(--sr-type-product-body-small-line);
-  text-align: left;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.menuItem:hover {
-  background: var(--home-surface-hover);
-}
+/* Videos for you uses the shared design-system Result Card (288:666). */
 
 /* Badge (Figma Badge: neutral, success, brand, info, warning). */
 .badge {
@@ -727,4 +613,130 @@
 
 .profileList {
   margin-top: var(--sr-space-4);
+}
+
+/* ---------- mobile (Figma Mobile Home 1498:2199 / 2273 / 2327 / 2398) ---------- */
+
+.composerHelper {
+  flex: 1 1 auto;
+  align-self: flex-end;
+  min-width: 0;
+  color: var(--home-text-secondary);
+}
+
+.composerSubmit {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.composerActions {
+  gap: var(--sr-space-3);
+}
+
+.ghostBrand {
+  color: var(--home-text-brand);
+}
+
+.bannerCompact {
+  position: relative;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sr-space-3);
+  padding: var(--sr-space-4);
+  padding-right: calc(var(--sr-space-4) + 44px);
+}
+
+.bannerCompactAction {
+  min-width: 144px;
+}
+
+.bannerClose {
+  position: absolute;
+  top: var(--sr-space-1);
+  right: var(--sr-space-1);
+}
+
+.inviteCompact {
+  border-color: transparent;
+  background: var(--home-surface-subtle);
+}
+
+/* Section wrappers; flex children of main/rail on desktop. */
+.slotBanner,
+.slotAgent,
+.slotCreators,
+.slotIdeas,
+.slotVideos,
+.slotInvite {
+  min-width: 0;
+}
+
+.slotCreators {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-space-4);
+}
+
+/*
+ * Phone width. One page, one set of parts: main and rail dissolve and the
+ * sections reorder to the approved mobile order (composer, creators, ideas,
+ * videos, profile invitation). Both mobile shells pad 16px; the page bleeds
+ * over that and pads 20px itself. The page scrolls naturally.
+ */
+@container (max-width: 640px) {
+  .page {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--sr-space-8);
+    /* Bleed over the shell's 16px inset so the light page reaches the
+       screen edge, then pad the approved 20px gutter. */
+    margin: calc(-1 * var(--sr-space-4)) calc(-1 * var(--sr-space-4)) 0;
+    padding: var(--sr-space-6) var(--sr-space-5) var(--sr-space-12);
+  }
+
+  .main,
+  .rail {
+    display: contents;
+  }
+
+  .slotBanner {
+    order: 1;
+    margin-bottom: calc(-1 * var(--sr-space-2));
+  }
+
+  .slotAgent {
+    order: 2;
+  }
+
+  .slotCreators {
+    order: 3;
+  }
+
+  .slotIdeas {
+    order: 4;
+  }
+
+  .slotVideos {
+    order: 5;
+  }
+
+  .slotInvite {
+    order: 6;
+  }
+
+  .h1 {
+    /* Figma mobile title is ~28px: Product Heading 2. */
+    font-size: var(--sr-type-product-heading-2-size);
+    line-height: var(--sr-type-product-heading-2-line);
+  }
+
+  .chip {
+    min-height: 44px;
+    padding-inline: var(--sr-space-4);
+  }
+
+  .idea {
+    min-height: 0;
+  }
 }

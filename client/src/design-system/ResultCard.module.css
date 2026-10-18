@@ -1,0 +1,233 @@
+/* Result Card (Figma 288:666), Home media 180 (1603:3680, 1605:4184). Locked tokens only. */
+.card {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-width: 0;
+  overflow: hidden;
+  border: var(--sr-shape-border-default-width) solid var(--sr-color-border-default);
+  border-radius: var(--sr-shape-card-radius);
+  background: var(--sr-color-surface-default);
+  color: var(--sr-color-text-primary);
+}
+
+/* Home media: fixed 180 tall, image cropped (cover), never stretched. */
+.media {
+  position: relative;
+  flex: 0 0 180px;
+  height: 180px;
+  overflow: hidden;
+  background: var(--sr-color-surface-subtle);
+}
+
+.thumb {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.platformBadge {
+  position: absolute;
+  top: var(--sr-space-3);
+  left: var(--sr-space-3);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sr-space-2);
+  padding: var(--sr-space-2) var(--sr-space-3);
+  border-radius: var(--sr-shape-badge-radius);
+  background: var(--sr-color-badge-neutral-background);
+  color: var(--sr-color-badge-neutral-foreground);
+  font-size: var(--sr-type-product-caption-size);
+  line-height: var(--sr-type-product-caption-line);
+  white-space: nowrap;
+}
+
+.topEnd {
+  position: absolute;
+  top: var(--sr-space-3);
+  right: var(--sr-space-3);
+}
+
+/* Performance signal 1577:167: 27 visible, 44 transparent tap target. */
+.signalTarget {
+  position: absolute;
+  top: 0;
+  right: var(--sr-space-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 var(--sr-space-2);
+  border: 0;
+  background: transparent;
+  cursor: help;
+}
+
+.signal {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sr-space-1);
+  height: 27px;
+  padding: 0 var(--sr-space-2);
+  border-radius: var(--sr-radius-8);
+  background: var(--sr-color-badge-neutral-background);
+  color: var(--sr-color-badge-neutral-foreground);
+  /* Figma 1577:167 specifies 13px semibold; no 13px type token exists. */
+  font-size: 13px;
+  font-weight: var(--sr-font-weight-semibold);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.iconButton {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: var(--sr-shape-border-default-width) solid var(--sr-color-border-default);
+  border-radius: var(--sr-shape-badge-radius);
+  background: var(--sr-color-surface-default);
+  cursor: pointer;
+}
+
+.iconButton:hover {
+  background: var(--sr-color-surface-hover);
+}
+
+.iconButton:focus-visible,
+.remake:focus-visible,
+.signalTarget:focus-visible,
+.menuItem:focus-visible {
+  outline: none;
+  box-shadow: var(--sr-elevation-focus-neutral-action);
+}
+
+.play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.expand {
+  position: absolute;
+  right: var(--sr-space-3);
+  bottom: var(--sr-space-3);
+}
+
+.content {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--sr-layout-stack-sm);
+  padding: var(--sr-layout-card-padding);
+}
+
+.title {
+  display: -webkit-box;
+  min-height: 40px;
+  margin: 0;
+  overflow: hidden;
+  color: var(--sr-color-text-primary);
+  font-size: var(--sr-type-product-card-title-size);
+  font-weight: var(--sr-font-weight-semibold);
+  line-height: var(--sr-type-product-card-title-line);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.meta {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+  font-size: var(--sr-type-product-body-small-size);
+  line-height: var(--sr-type-product-body-small-line);
+}
+
+.ellipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--sr-space-2);
+  margin-top: auto;
+}
+
+/* Figma Remake Button: Secondary, fills the row. */
+.remake {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 44px;
+  overflow: hidden;
+  padding: var(--sr-space-3) var(--sr-space-4);
+  border: var(--sr-shape-border-default-width) solid var(--sr-color-border-default);
+  border-radius: var(--sr-shape-control-radius);
+  background: var(--sr-color-surface-default);
+  color: var(--sr-color-text-primary);
+  font: inherit;
+  font-size: var(--sr-type-product-button-size);
+  font-weight: var(--sr-font-weight-semibold);
+  line-height: var(--sr-type-product-button-line);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.remake:hover {
+  background: var(--sr-color-surface-hover);
+}
+
+.remake:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+.menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + var(--sr-space-1));
+  z-index: 5;
+  min-width: 180px;
+  padding: var(--sr-space-1);
+  border: var(--sr-shape-border-default-width) solid var(--sr-color-border-default);
+  border-radius: var(--sr-radius-12);
+  background: var(--sr-color-surface-default);
+  box-shadow: var(--sr-elevation-menu);
+}
+
+.menuItem {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  padding: var(--sr-space-2) var(--sr-space-3);
+  border: 0;
+  border-radius: var(--sr-radius-8);
+  background: transparent;
+  color: var(--sr-color-text-primary);
+  font: inherit;
+  font-size: var(--sr-type-product-body-small-size);
+  line-height: var(--sr-type-product-body-small-line);
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.menuItem:hover {
+  background: var(--sr-color-surface-hover);
+}
+
+.skeleton {
+  display: block;
+  border-radius: var(--sr-radius-8);
+  background: var(--sr-color-surface-hover);
+}

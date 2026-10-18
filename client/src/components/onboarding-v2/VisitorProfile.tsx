@@ -338,7 +338,7 @@ function IgBackIcon() {
 }
 const TtBackIcon = IgBackIcon;
 
-function VerifiedIcon() {
+export function VerifiedIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-label="Verified" role="img">
       <path d="M7.99999 1L9.73333 2.33333L11.9333 2.13333L12.6 4.2L14.4667 5.4L13.8 7.46667L14.4667 9.53333L12.6 10.7333L11.9333 12.8L9.73333 12.6L7.99999 13.9333L6.26666 12.6L4.06666 12.8L3.39999 10.7333L1.53333 9.53333L2.19999 7.46667L1.53333 5.4L3.39999 4.2L4.06666 2.13333L6.26666 2.33333L7.99999 1Z" fill="#0095F6" />

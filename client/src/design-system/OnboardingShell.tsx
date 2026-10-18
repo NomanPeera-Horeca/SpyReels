@@ -23,8 +23,8 @@ export function OnboardingShell({
   children: ReactNode;
   /** Desktop action row (Back on the left, primary on the right). */
   actions: ReactNode;
-  /** Mobile fixed bottom bar. Defaults to `actions` when omitted. */
-  mobileActions?: ReactNode;
+  /** Mobile fixed bottom bar. Defaults to `actions` when omitted. Pass `false` when the mobile actions sit inline in the content. */
+  mobileActions?: ReactNode | false;
   /** Desktop right panel. Hidden on mobile. */
   preview?: ReactNode;
   /** Mobile top-left back arrow. Omit on the first step. */
@@ -62,7 +62,9 @@ export function OnboardingShell({
           <div className={styles.content}>{children}</div>
           <div className={styles.desktopActions}>{actions}</div>
         </main>
-        <div className={styles.mobileBar}>{mobileActions ?? actions}</div>
+        {mobileActions === false ? null : (
+          <div className={styles.mobileBar}>{mobileActions ?? actions}</div>
+        )}
       </section>
       {preview ? (
         <aside className={styles.right} aria-label="Preview">

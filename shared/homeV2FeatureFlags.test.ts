@@ -92,8 +92,8 @@ describe("routing guards in App.tsx", () => {
     expect(app).toContain('<Route path="/research" component={Home} />');
   });
 
-  it("mobile '/' and '/research' still redirect to /plan", () => {
-    expect(app).toContain('<Route path="/" component={MobileHomeRedirect} />');
+  it("mobile '/' is Home v2 for Home v2 users, Today otherwise; '/research' redirects by flag", () => {
+    expect(app).toContain('<Route path="/" component={MobileRootRoute} />');
     expect(app).toContain(
       '<Route path="/research" component={MobileHomeRedirect} />'
     );
@@ -110,15 +110,15 @@ describe("routing guards in App.tsx", () => {
 describe("Phase 1 placeholders cannot change behavior", () => {
   const pages = path.resolve(__dirname, "../client/src/pages");
 
-  it("HomeV2 re-exports the research page until Home v2 UI ships", () => {
+  it("HomeV2 page renders the Home v2 implementation", () => {
     expect(readFileSync(path.join(pages, "HomeV2.tsx"), "utf8")).toMatch(
-      /export \{ default \} from "\.\/Home";/
+      /export \{ default \} from "@\/components\/home-v2\/HomeV2Page";/
     );
   });
 
-  it("OnboardingV2 re-exports the current onboarding until the new flow ships", () => {
+  it("OnboardingV2 page renders the Onboarding v2 implementation", () => {
     expect(readFileSync(path.join(pages, "OnboardingV2.tsx"), "utf8")).toMatch(
-      /export \{ default \} from "\.\/onboarding";/
+      /export \{ default \} from "@\/components\/onboarding-v2\/OnboardingV2Flow";/
     );
   });
 });

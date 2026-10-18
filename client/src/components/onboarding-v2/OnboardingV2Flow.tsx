@@ -41,7 +41,7 @@ import {
   UseCaseStep,
   type PlatformError,
 } from "./steps";
-import { AudienceStep, GoalStep, PillarsStep, type AiState, type StepItem } from "./step4";
+import { AudienceStep, GoalStep, MAX_GOALS, PillarsStep, type AiState, type StepItem } from "./step4";
 import { WhatWorksStep } from "./step3c";
 
 /** Same breakpoint as OnboardingShell: below it there is no right panel. */
@@ -521,27 +521,22 @@ export default function OnboardingV2Flow() {
         />
       );
     }
-    case "goal": {
-      const goal = of<GoalPayload>("goal")[0] ?? null;
+    case "goal":
       return (
         <GoalStep
           common={common("goal")}
-          profile={{
-            displayName: state.profile?.displayName ?? null,
-            handle: state.profile?.handle ?? null,
-            platform: state.profile?.platform ?? null,
-            avatarUrl: state.profile?.avatarUrl ?? null,
-            followerCount: state.profile?.followerCount ?? null,
-          }}
-          goal={goal}
+          goals={of<GoalPayload>("goal").slice(0, MAX_GOALS)}
           niche={of<NichePayload>("niche")[0] ?? null}
           language={of<LanguagePayload>("language")[0] ?? null}
           onSaveGoal={(p, id) => void saveItem("goal", p, id)}
+          onRemoveGoal={id => void run(async () => {
+            await removeItem.mutateAsync({ itemId: id });
+            await refresh();
+          }, "goal")}
           onSaveNiche={(p, id) => void saveItem("niche", p, id)}
           onSaveLanguage={(p, id) => void saveItem("language", p, id)}
         />
       );
-    }
     case "audience":
       return (
         <AudienceStep

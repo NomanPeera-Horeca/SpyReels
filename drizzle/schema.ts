@@ -768,6 +768,8 @@ export const userPreferences = mysqlTable("user_preferences", {
   id: int("id").autoincrement().primaryKey(),
   userId: int("userId").notNull().unique(),
   timezone: varchar("timezone", { length: 64 }).default("America/Chicago").notNull(), // IANA timezone, default CST
+  /** Account theme: "light" | "dark" | "system". Null = never chosen (legacy accounts keep the existing behavior). */
+  theme: varchar("theme", { length: 16 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });

@@ -9,10 +9,16 @@
  * - Ideas: plan.listCards (existing 30-Day Plan).
  * - Videos: homeV2.videos (indexed Viral Posts pools only; no scraping).
  * - Creators: homeV2.creators (stored featured catalog; no scraping).
- * - Create my script: the existing Collected Reels remake chain.
+ * - Remake (shared Result Card 288:666): the existing Collected Reels remake chain.
  * Rendering Home never starts paid scraping, a pool refresh or a model call.
+ *
+ * Mobile (Figma 1498:2199, 1498:2273, 1498:2327, 1498:2398) is this same page:
+ * below 640px of content width the sections reorder by CSS and a few strings
+ * switch to their approved mobile copy (HOME_COPY.mobile). The surrounding
+ * shell (mobile browser header + menu, or the installed app's bottom tabs)
+ * comes from the existing layouts, not from this page.
  */
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { usePostHog } from "@posthog/react";
@@ -36,7 +42,7 @@ import {
   COMPOSER_MIN_CHARS,
   CreatorRow,
   CreatorsSkeleton,
-  HomeResultCard,
+  HomeVideoCard,
   IdeaCard,
   IdeasSkeleton,
   ManageProfilesModal,
@@ -51,6 +57,26 @@ import {
 import styles from "./home.module.css";
 
 const BANNER_KEY = "sr_home_v2_setup_banner_dismissed";
+
+/** Same breakpoint as the CSS container query in home.module.css. */
+const COMPACT_MAX = 640;
+
+/** True when Home's own content width is phone sized (matches the container query). */
+function useCompact(ref: React.RefObject<HTMLElement | null>): boolean {
+  const [compact, setCompact] = useState(() =>
+    typeof window === "undefined" ? false : window.innerWidth <= COMPACT_MAX
+  );
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(([entry]) => {
+      if (entry) setCompact(entry.contentRect.width <= COMPACT_MAX);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return compact;
+}
 
 function readFlag(key: string): boolean {
   try {
@@ -72,6 +98,8 @@ export default function HomeV2Page() {
   const posthog = usePostHog();
   const { access } = useExperienceAccess();
   const utils = trpc.useUtils();
+  const frameRef = useRef<HTMLDivElement>(null);
+  const compact = useCompact(frameRef);
 
   const track = useCallback(
     (event: string, props?: Record<string, unknown>) => {
@@ -278,27 +306,36 @@ export default function HomeV2Page() {
       ? C.creators.inNiche(nicheLabel)
       : C.creators.general;
 
+  const ghostLink = compact ? [styles.ghost, styles.ghostBrand].join(" ") : styles.ghost;
+
   return (
-    <div className={styles.frame}>
+    <div className={styles.frame} ref={frameRef}>
       <div
         className={["sr-scope-light", styles.page].join(" ")}
         data-testid="home-v2"
+        data-compact={compact ? "true" : undefined}
       >
         <div className={styles.main}>
           {showBanner ? (
-            <SetupBanner
-              onFinish={() => {
-                track("finish_setup");
-                navigate(`/onboarding?step=${ctx?.nextStep ?? "goal"}`);
-              }}
-              onDismiss={() => {
-                writeFlag(BANNER_KEY);
-                setBannerDismissed(true);
-              }}
-            />
+            <div className={styles.slotBanner}>
+              <SetupBanner
+                compact={compact}
+                onFinish={() => {
+                  track("finish_setup");
+                  navigate(`/onboarding?step=${ctx?.nextStep ?? "goal"}`);
+                }}
+                onDismiss={() => {
+                  writeFlag(BANNER_KEY);
+                  setBannerDismissed(true);
+                }}
+              />
+            </div>
           ) : null}
 
-          <section className={styles.agent} aria-labelledby="home-v2-title">
+          <section
+            className={[styles.agent, styles.slotAgent].join(" ")}
+            aria-labelledby="home-v2-title"
+          >
             <div className={styles.titles}>
               <h1 id="home-v2-title" className={styles.h1}>
                 {C.title}
@@ -320,8 +357,10 @@ export default function HomeV2Page() {
               onSubmit={submitIdea}
               busy={composerBusy}
               error={composerError}
+              helper={compact ? C.mobile.composerHelper : undefined}
             />
             <QuickActions
+              compact={compact}
               onWrite={() => quick("write_script")}
               onImprove={() => quick("refine_script")}
               onHooks={() => quick("hook_ideas")}
@@ -334,7 +373,10 @@ export default function HomeV2Page() {
             />
           </section>
 
-          <section className={styles.section} aria-labelledby="home-v2-ideas">
+          <section
+            className={[styles.section, styles.slotIdeas].join(" ")}
+            aria-labelledby="home-v2-ideas"
+          >
             <div className={styles.sectionHeader}>
               <h2
                 id="home-v2-ideas"
@@ -345,10 +387,10 @@ export default function HomeV2Page() {
               {hasPlan ? (
                 <button
                   type="button"
-                  className={styles.ghost}
+                  className={ghostLink}
                   onClick={() => navigate("/plan")}
                 >
-                  {C.ideas.viewPlan}
+                  {compact ? C.mobile.viewPlan : C.ideas.viewPlan}
                 </button>
               ) : null}
             </div>
@@ -375,6 +417,7 @@ export default function HomeV2Page() {
                   <IdeaCard
                     key={i.id}
                     idea={i}
+                    compact={compact}
                     onWrite={() => writeIdea(i.id)}
                   />
                 ))}
@@ -398,7 +441,10 @@ export default function HomeV2Page() {
             )}
           </section>
 
-          <section className={styles.section} aria-labelledby="home-v2-videos">
+          <section
+            className={[styles.section, styles.slotVideos].join(" ")}
+            aria-labelledby="home-v2-videos"
+          >
             <div
               className={[styles.sectionHeader, styles.sectionHeaderEnd].join(
                 " "
@@ -421,10 +467,10 @@ export default function HomeV2Page() {
               </div>
               <button
                 type="button"
-                className={styles.ghost}
+                className={ghostLink}
                 onClick={() => navigate("/viral-posts")}
               >
-                {C.videos.seeMore}
+                {compact ? C.mobile.seeMore : C.videos.seeMore}
               </button>
             </div>
             {videosQ.isLoading ? (
@@ -455,11 +501,12 @@ export default function HomeV2Page() {
                     saved: savedOverride[post.id] ?? post.saved,
                   };
                   return (
-                    <HomeResultCard
+                    <HomeVideoCard
                       key={post.id}
                       post={p}
+                      compact={compact}
                       busy={remakeBusyId === post.id}
-                      onCreate={() => void createFromVideo(post)}
+                      onRemake={() => void createFromVideo(post)}
                       onToggleSave={() => void toggleSave(p)}
                     />
                   );
@@ -485,85 +532,90 @@ export default function HomeV2Page() {
         </div>
 
         <aside className={styles.rail} aria-labelledby="home-v2-creators">
-          <div className={styles.sectionTitles}>
-            <h2
-              id="home-v2-creators"
-              className={["sr-text-product-heading-4", styles.h2].join(" ")}
-            >
-              {C.creators.title}
-            </h2>
-            <p
-              className={["sr-text-product-body-small", styles.muted].join(" ")}
-            >
-              {creatorsSubtitle}
-            </p>
-          </div>
-          {creatorsQ.isLoading ? (
-            <CreatorsSkeleton />
-          ) : creatorsQ.isError ? (
-            <StateCard
-              stack
-              title={C.creators.errorTitle}
-              body={C.creators.errorBody}
-              action={
-                <button
-                  type="button"
-                  className={styles.outline}
-                  onClick={() => void creatorsQ.refetch()}
-                >
-                  {C.tryAgain}
-                </button>
-              }
-            />
-          ) : creators && creators.creators.length > 0 ? (
-            <div className={[styles.card, styles.creatorsCard].join(" ")}>
-              {creators.creators.map(c => (
-                <div key={c.id}>
-                  <CreatorRow
-                    creator={c}
-                    onSee={() => {
-                      track("creator_open");
-                      navigate(`/dashboard?featuredAccountId=${c.id}`);
-                    }}
-                  />
-                  <div className={styles.divider} />
-                </div>
-              ))}
-              <div className={styles.footerLinks}>
-                <button
-                  type="button"
-                  className={styles.ghost}
-                  onClick={() => navigate("/research")}
-                >
-                  {C.creators.findMore}
-                </button>
-                <button
-                  type="button"
-                  className={styles.ghost}
-                  onClick={() => navigate("/history")}
-                >
-                  {C.creators.radar}
-                </button>
-              </div>
+          <section className={styles.slotCreators} aria-labelledby="home-v2-creators">
+            <div className={styles.sectionTitles}>
+              <h2
+                id="home-v2-creators"
+                className={["sr-text-product-heading-4", styles.h2].join(" ")}
+              >
+                {C.creators.title}
+              </h2>
+              <p
+                className={["sr-text-product-body-small", styles.muted].join(" ")}
+              >
+                {creatorsSubtitle}
+              </p>
             </div>
-          ) : (
-            <StateCard
-              stack
-              title={C.creators.emptyTitle}
-              body={C.creators.emptyBody}
-              action={
-                <button
-                  type="button"
-                  className={styles.outline}
-                  onClick={() => navigate("/research")}
-                >
-                  {C.creators.findMore}
-                </button>
-              }
-            />
-          )}
+            {creatorsQ.isLoading ? (
+              <CreatorsSkeleton />
+            ) : creatorsQ.isError ? (
+              <StateCard
+                stack
+                title={C.creators.errorTitle}
+                body={C.creators.errorBody}
+                action={
+                  <button
+                    type="button"
+                    className={styles.outline}
+                    onClick={() => void creatorsQ.refetch()}
+                  >
+                    {C.tryAgain}
+                  </button>
+                }
+              />
+            ) : creators && creators.creators.length > 0 ? (
+              <div className={[styles.card, styles.creatorsCard].join(" ")}>
+                {creators.creators.map(c => (
+                  <div key={c.id}>
+                    <CreatorRow
+                      creator={c}
+                      compact={compact}
+                      onSee={() => {
+                        track("creator_open");
+                        navigate(`/dashboard?featuredAccountId=${c.id}`);
+                      }}
+                    />
+                    <div className={styles.divider} />
+                  </div>
+                ))}
+                <div className={styles.footerLinks}>
+                  <button
+                    type="button"
+                    className={ghostLink}
+                    onClick={() => navigate("/research")}
+                  >
+                    {C.creators.findMore}
+                  </button>
+                  <button
+                    type="button"
+                    className={ghostLink}
+                    onClick={() => navigate("/history")}
+                  >
+                    {compact ? C.mobile.radar : C.creators.radar}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <StateCard
+                stack
+                title={C.creators.emptyTitle}
+                body={C.creators.emptyBody}
+                action={
+                  <button
+                    type="button"
+                    className={styles.outline}
+                    onClick={() => navigate("/research")}
+                  >
+                    {C.creators.findMore}
+                  </button>
+                }
+              />
+            )}
+          </section>
           {ctx?.hasProfile ? (
-            <ProfilesInvite onManage={() => setProfilesOpen(true)} />
+            <div className={styles.slotInvite}>
+              <ProfilesInvite compact={compact} onManage={() => setProfilesOpen(true)} />
+            </div>
           ) : null}
         </aside>
 

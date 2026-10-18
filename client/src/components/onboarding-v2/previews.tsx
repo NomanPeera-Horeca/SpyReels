@@ -20,6 +20,7 @@ import { AnalysisStatusChecklist } from "@/design-system/AnalysisStatus";
 import { DevicePhoneFrame } from "@/design-system/DevicePhoneFrame";
 import { IconPlay } from "@/design-system/icons";
 import { ANALYSIS_STAGE_COPY, COPY } from "./copy";
+import { MobileProfileCard } from "./MobileProfileCard";
 import styles from "./previews.module.css";
 import {
   InstagramVisitorProfile,
@@ -93,11 +94,11 @@ export function ProfilePhonePreview({
   );
 }
 
-/** Mobile step 2 (Figma 1092:18053): the visitor view inline, no phone frame, no platform back arrow. */
+/** Mobile step 2: the compact platform profile card from the approved mobile frames (no phone frame, no post grid). */
 export function ProfileMobilePreview({ profile }: { profile: PublicProfilePreview }) {
   return (
-    <div className={styles.mobileVisitor} aria-label={`@${profile.handle} public profile`}>
-      <VisitorProfileScreen profile={profile} hideBack />
+    <div className={styles.mobileProfile} aria-label={`@${profile.handle} public profile`}>
+      <MobileProfileCard profile={profile} />
     </div>
   );
 }

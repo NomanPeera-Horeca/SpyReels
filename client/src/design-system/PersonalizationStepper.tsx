@@ -8,7 +8,7 @@ import styles from "./PersonalizationStepper.module.css";
  * semibold, done primary, upcoming tertiary. Each step is clickable.
  */
 const STEPS: Array<{ key: PersonalizationStep; label: string; Icon: typeof IconToolScript }> = [
-  { key: "goal", label: "Goal", Icon: IconToolScript },
+  { key: "goal", label: "Goals", Icon: IconToolScript },
   { key: "audience", label: "Audience", Icon: IconToolCreators },
   { key: "pillars", label: "Pillars", Icon: IconToolCarousel },
 ];

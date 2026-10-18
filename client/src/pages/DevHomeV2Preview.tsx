@@ -3,9 +3,12 @@
  * page with a fixture tRPC link, for visual QA against Figma. All data here
  * is clearly sample data; nothing reaches the server.
  *
- * /dev/home-v2?state=A|B|C|loading|error
+ * /dev/home-v2?state=A|B|C|loading|error[&shell=web|app]
  *   A = personalization complete, B = incomplete (banner, general picks),
  *   C = no plan yet, loading = every section loading, error = every section failed.
+ *   shell=web: inside the real DashboardLayout (browser shell: header + menu).
+ *   shell=app: inside the real MobileAppLayout (installed app: bottom tabs).
+ *   No shell: the page alone with the 16px inset both shells give it.
  */
 import { useMemo, useState } from "react";
 import { useSearch } from "wouter";
@@ -15,6 +18,8 @@ import { observable } from "@trpc/server/observable";
 import type { AppRouter } from "../../../server/routers";
 import { trpc } from "@/lib/trpc";
 import HomeV2Page from "@/components/home-v2/HomeV2Page";
+import DashboardLayout from "@/components/DashboardLayout";
+import MobileAppLayout from "@/components/MobileAppLayout";
 
 type State = "A" | "B" | "C" | "loading" | "error";
 
@@ -90,13 +95,27 @@ function fixtureLink(state: State): TRPCLink<AppRouter> {
 }
 
 export default function DevHomeV2Preview() {
-  const state = (new URLSearchParams(useSearch()).get("state") ?? "A") as State;
+  const params = new URLSearchParams(useSearch());
+  const state = (params.get("state") ?? "A") as State;
+  const shell = params.get("shell");
   const [queryClient] = useState(() => new QueryClient({ defaultOptions: { queries: { retry: false } } }));
   const client = useMemo(() => trpc.createClient({ links: [fixtureLink(state)] }), [state]);
   return (
     <trpc.Provider client={client} queryClient={queryClient}>
       <QueryClientProvider client={queryClient}>
-        <HomeV2Page />
+        {shell === "web" ? (
+          <DashboardLayout>
+            <HomeV2Page />
+          </DashboardLayout>
+        ) : shell === "app" ? (
+          <MobileAppLayout>
+            <HomeV2Page />
+          </MobileAppLayout>
+        ) : (
+          <div style={{ padding: 16 }}>
+            <HomeV2Page />
+          </div>
+        )}
       </QueryClientProvider>
     </trpc.Provider>
   );

@@ -36,7 +36,7 @@ export const HOME_COPY = {
     general: "General picks, not personalized yet",
     allPlatforms: "All platforms",
     seeMore: "See more in Discover",
-    create: "Create my script",
+    remake: "Remake →",
     save: "Save",
     saved: "Saved",
     more: "More",
@@ -75,4 +75,19 @@ export const HOME_COPY = {
     close: "Close",
   },
   tryAgain: "Try again",
+  /**
+   * Mobile copy (Figma Mobile Home 1498:2199, 1498:2273, 1498:2327, 1498:2398,
+   * approved). Same page and parts; only these strings differ on a phone.
+   */
+  mobile: {
+    composerHelper: "Your next idea starts here",
+    viewPlan: "View plan →",
+    writeIdea: "Write script →",
+    seeMore: "See more →",
+    seeVideos: "See videos →",
+    radar: "Open Creator Radar →",
+    inviteTitle: "Bring your channels together",
+    inviteBody: "Add another profile to your content workspace.",
+    manage: "Manage profiles →",
+  },
 } as const;

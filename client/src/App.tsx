@@ -138,14 +138,28 @@ const MobileMore = lazyWithRetry(() => import("./pages/MobileMore"));
 
 function MobileCreateRouteGuard({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
-  if (!isMobileCreateAllowedPath(location)) {
-    return <Redirect to="/plan" />;
+  const { ready, access } = useExperienceAccess();
+  const homeV2 = access.home === "v2";
+  // "/" is only decided once the server answered (Home v2 or Today).
+  if (location === "/" && !ready) return null;
+  if (!isMobileCreateAllowedPath(location, { homeV2 })) {
+    return <Redirect to={homeV2 ? "/" : "/plan"} />;
   }
   return <>{children}</>;
 }
 
+/** Installed app fallback: Today for everyone, Home for Home v2 users. */
 function MobileHomeRedirect() {
-  return <Redirect to="/plan" />;
+  const { ready, access } = useExperienceAccess();
+  if (!ready) return null;
+  return <Redirect to={access.home === "v2" ? "/" : "/plan"} />;
+}
+
+/** Installed app "/": Home v2 for Home v2 users (first tab), Today otherwise. */
+function MobileRootRoute() {
+  const { ready, access } = useExperienceAccess();
+  if (!ready) return null;
+  return access.home === "v2" ? <HomeV2 /> : <Redirect to="/plan" />;
 }
 
 /** Unpolished product surfaces: admin email only until ready for everyone. */
@@ -201,7 +215,7 @@ function MobileCreateRouter() {
         <MobileCreateRouteGuard>
           <Switch>
             <Route path="/onboarding" component={OnboardingRoute} />
-            <Route path="/" component={MobileHomeRedirect} />
+            <Route path="/" component={MobileRootRoute} />
             <Route path="/research" component={MobileHomeRedirect} />
             <Route path="/dashboard" component={MobileHomeRedirect} />
             <Route path="/plan" component={ThirtyDayPlan} />

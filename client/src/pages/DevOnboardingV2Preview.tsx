@@ -76,12 +76,10 @@ const RUNNING: AnalysisView = {
 };
 
 /** Fixture suggestions, clearly sample text. */
-const FAKE_GOAL: StepItem<GoalPayload> = {
-  id: "g1",
-  status: "suggested",
-  evidence: "profile_inferred",
-  payload: { text: "Help busy parents cook simple weeknight dinners." },
-};
+const FAKE_GOALS: StepItem<GoalPayload>[] = [
+  { id: "g1", status: "suggested", evidence: "profile_inferred", payload: { text: "Help parents cook faster" } },
+  { id: "g2", status: "suggested", evidence: "profile_inferred", payload: { text: "Grow a cooking community" } },
+];
 const FAKE_AUDIENCES: StepItem<AudiencePayload>[] = [
   { id: "a1", status: "suggested", evidence: "profile_inferred", payload: { who: "busy parents", outcome: "cook dinner in 20 minutes" } },
   { id: "a2", status: "suggested", evidence: "profile_inferred", payload: { who: "new home cooks", outcome: "build confidence in the kitchen" } },
@@ -191,11 +189,11 @@ export default function DevOnboardingV2Preview() {
       return (
         <GoalStep
           common={common}
-          profile={{ displayName: profile.displayName, handle: profile.handle, platform, avatarUrl: null, followerCount: profile.followerCount }}
-          goal={empty ? null : FAKE_GOAL}
+          goals={empty ? [] : params.get("goals") === "5" ? [...FAKE_GOALS, ...FAKE_GOALS.map(g => ({ ...g, id: g.id + "b" })), { ...FAKE_GOALS[0], id: "g5" }] : FAKE_GOALS}
           niche={empty ? null : { id: "n1", status: "suggested", evidence: "profile_inferred", payload: { slug: "food", label: "Food" } }}
           language={empty ? null : { id: "l1", status: "suggested", evidence: "profile_inferred", payload: { code: "en", label: "English" } }}
           onSaveGoal={noop}
+          onRemoveGoal={noop}
           onSaveNiche={noop}
           onSaveLanguage={noop}
         />

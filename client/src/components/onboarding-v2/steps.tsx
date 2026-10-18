@@ -207,20 +207,19 @@ export function ProfileStep({
           </div>
         </div>
       }
-      mobileActions={
-        <>
-          <SecondaryButton onClick={onNotMe} disabled={busy}>
-            {COPY.profile.notMe}
-          </SecondaryButton>
-          <PrimaryButton onClick={onConfirm} disabled={busy} aria-busy={busy}>
-            {COPY.profile.thatsMe}
-          </PrimaryButton>
-        </>
-      }
+      mobileActions={false}
       testId="onboarding-step-profile"
     >
       <StepHeader title={COPY.profile.title} subtitle={COPY.profile.subtitle} />
       <div className={styles.mobileOnly}>{mobilePreview}</div>
+      <div className={styles.mobileChoice}>
+        <SecondaryButton onClick={onNotMe} disabled={busy}>
+          {COPY.profile.notMe}
+        </SecondaryButton>
+        <PrimaryButton onClick={onConfirm} disabled={busy} aria-busy={busy}>
+          {COPY.profile.thatsMe}
+        </PrimaryButton>
+      </div>
     </OnboardingShell>
   );
 }

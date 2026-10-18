@@ -300,3 +300,63 @@ export function IconClose(props: IconProps) {
     </svg>
   );
 }
+
+/** Pencil / Approved action (1437:4519). 16 grid; drawn at 16 by default. */
+export function IconPencil({ size = 16, ...props }: IconProps) {
+  return (
+    <svg {...base({ size, ...props })} viewBox="0 0 16 16">
+      <path
+        d="M10.667 2.66667L13.3337 5.33334M13.3337 5.33334L6.00033 12.7333L2.66699 13.3333L3.33366 10L10.667 2.66667C11.0402 2.48843 11.4595 2.43027 11.8671 2.50021C12.2748 2.57015 12.6507 2.76474 12.9431 3.05719C13.2356 3.34964 13.4302 3.72557 13.5001 4.1332C13.5701 4.54084 13.5119 4.96013 13.3337 5.33334Z"
+        stroke="var(--sr-color-text-secondary)"
+        strokeWidth="1.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Trash / Approved action (1437:4522). Destructive red from the locked tokens. */
+export function IconTrash(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path
+        d="M2.5 5.00001H17.5M6.66667 5.00001V3.33334H13.3333V5.00001M5 5.00001L5.83333 16.6667H14.1667L15 5.00001M8.33333 8.33334V14.1667M11.6667 8.33334V14.1667"
+        stroke="var(--sr-color-action-destructive-default)"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Icon / Pillar (1402:4927). 24 grid. */
+export function IconPillar({ size = 24, ...props }: IconProps) {
+  return (
+    <svg {...base({ size, ...props })} viewBox="0 0 24 24">
+      <path
+        d="M2 6V14M18 6V14M6 3H14V17H6V3Z"
+        stroke="var(--sr-color-text-brand)"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Neutral up-right arrow for the performance signal (1562:24203, Icon / Navigation rotated). 14px. */
+export function IconArrowUpRight({ size = 14, ...props }: IconProps) {
+  return (
+    <svg {...base({ size, ...props })} viewBox="8 6.5 14 14">
+      <path
+        d="M10.4789 18.0211L19.5211 8.97894M19.5211 15.555V8.97894H12.945"
+        stroke="currentColor"
+        strokeWidth="2.0925"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
