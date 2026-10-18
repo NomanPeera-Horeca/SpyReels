@@ -47,6 +47,27 @@ describe("resolveExperienceAccess", () => {
     expect(resolveExperienceAccess(admin, c).onboarding).toBe("v2");
   });
 
+  it("all: every signed-in user, new and returning, gets v2 (Home v2 too when its switch is all)", () => {
+    const c = cfg({ ONBOARDING_V2_MODE: "all", HOME_V2_MODE: "all" });
+    for (const u of [customer, newSignup, admin, tester]) {
+      expect(resolveExperienceAccess(u, c)).toMatchObject({ onboarding: "v2", home: "v2" });
+    }
+    // Signed-out visitors still get the legacy experience.
+    expect(resolveExperienceAccess(null, c)).toMatchObject({ onboarding: "legacy", home: "research" });
+  });
+
+  it("all: Home stays on research while only the onboarding switch is all", () => {
+    const c = cfg({ ONBOARDING_V2_MODE: "all", HOME_V2_MODE: "off" });
+    expect(resolveExperienceAccess(customer, c)).toMatchObject({ onboarding: "v2", home: "research" });
+  });
+
+  it("all: switching back to off is the immediate rollback for every user", () => {
+    const on = cfg({ ONBOARDING_V2_MODE: "all", HOME_V2_MODE: "all" });
+    const off = cfg({ ONBOARDING_V2_MODE: "off", HOME_V2_MODE: "off" });
+    expect(resolveExperienceAccess(customer, on)).toMatchObject({ onboarding: "v2", home: "v2" });
+    expect(resolveExperienceAccess(customer, off)).toMatchObject({ onboarding: "legacy", home: "research" });
+  });
+
   it("new_signups without a valid cutoff only lets internal users in", () => {
     for (const from of [undefined, "", "not-a-date"]) {
       const env: Record<string, string> = { ONBOARDING_V2_MODE: "new_signups" };

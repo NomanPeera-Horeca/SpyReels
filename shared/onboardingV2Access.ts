@@ -4,8 +4,8 @@
  * The decision is made on the SERVER per signed-in user, from environment
  * settings, so it can change without a rebuild:
  *
- *   ONBOARDING_V2_MODE   off | internal | new_signups     (default off)
- *   HOME_V2_MODE         off | internal | new_signups     (default off)
+ *   ONBOARDING_V2_MODE   off | internal | new_signups | all   (default off)
+ *   HOME_V2_MODE         off | internal | new_signups | all   (default off)
  *   EXPERIENCE_V2_INTERNAL_EMAILS   comma separated allowlist
  *   EXPERIENCE_V2_NEW_SIGNUPS_FROM  ISO time; accounts created at or after it
  *
@@ -14,13 +14,16 @@
  * - new_signups: internal users, plus accounts created at or after the
  *   cutoff. Existing customers never qualify. If the cutoff is missing or
  *   invalid, only internal users qualify (fails closed).
+ * - all: every signed-in user, new and returning. Returning customers keep
+ *   their saved data and preferences; completed onboarding is not repeated.
+ *   Still subject to the server's personalization-table readiness check.
  *
  * Home v2 is only ever on for a user who also gets onboarding v2, so Home
  * can never ship ahead of onboarding.
  *
  * Unknown values fail closed to off.
  */
-export const EXPERIENCE_MODES = ["off", "internal", "new_signups"] as const;
+export const EXPERIENCE_MODES = ["off", "internal", "new_signups", "all"] as const;
 export type ExperienceMode = (typeof EXPERIENCE_MODES)[number];
 
 export const ONBOARDING_V2_MODE_ENV = "ONBOARDING_V2_MODE";
@@ -101,6 +104,7 @@ function qualifies(
   internal: boolean
 ): boolean {
   if (mode === "off") return false;
+  if (mode === "all") return true;
   if (internal) return true;
   if (mode !== "new_signups" || !cfg.newSignupsFrom) return false;
   const created = toDate(user.createdAt);
