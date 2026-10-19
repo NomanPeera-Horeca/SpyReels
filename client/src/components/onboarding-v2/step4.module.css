@@ -434,3 +434,123 @@
 .subtopic[data-revealed="true"] .subtopicX {
   opacity: 1;
 }
+
+/* Inline chip editing (Figma 1676:468 / 1676:537): each grey chip holds its own text field. */
+.chipEditList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chipEditRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sr-space-2);
+}
+
+.chipField {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: calc(var(--sr-space-3) / 2) var(--sr-space-3);
+  border: var(--sr-shape-border-default-width) solid transparent;
+  border-radius: var(--sr-radius-full);
+  background: var(--sr-color-surface-hover);
+  cursor: text;
+}
+
+.chipField:focus-within {
+  border-color: var(--sr-color-border-focus, var(--sr-purple-500));
+  background: var(--sr-color-surface-default);
+}
+
+.chipInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--sr-color-text-primary);
+  font: inherit;
+  font-size: var(--sr-type-product-body-large-size);
+  font-weight: var(--sr-font-weight-medium);
+  line-height: var(--sr-type-product-body-large-line);
+}
+
+.chipInput:disabled {
+  opacity: 0.6;
+}
+
+/* Keeps a row aligned when there is no trash (new chip). */
+.chipSpacer {
+  flex: 0 0 44px;
+  width: 44px;
+}
+
+/* Dashed "+ Add goal" pill (Figma 1676:468). */
+.addChip {
+  min-height: 44px;
+  padding: 0 var(--sr-space-4);
+  border: var(--sr-shape-border-default-width) dashed var(--sr-color-border-default);
+  border-radius: var(--sr-radius-full);
+  background: var(--sr-color-surface-default);
+  color: var(--sr-color-text-primary);
+  font: inherit;
+  font-size: var(--sr-type-product-label-size);
+  font-weight: var(--sr-font-weight-medium);
+  line-height: var(--sr-type-product-label-line);
+  cursor: pointer;
+}
+
+.addChip:hover {
+  background: var(--sr-color-surface-hover);
+}
+
+.addChip:focus-visible {
+  outline: none;
+  box-shadow: var(--sr-elevation-focus-neutral-action);
+}
+
+.addChip:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.editActions {
+  display: flex;
+  align-items: center;
+  gap: var(--sr-space-2);
+}
+
+.smallSave {
+  min-height: 40px;
+  padding: 0 var(--sr-space-4);
+}
+
+/* Pillar title editor (Figma 1676:628): caption, title field, subtopics, Cancel / Save. */
+.pillarEditHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sr-space-2);
+}
+
+.pillarTitleButton {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: text;
+}
+
+/* Edit mode: the action row sits below the chips (view mode pulls it up to the chips). */
+.groupActionsEdit {
+  margin-top: var(--sr-space-3);
+  flex-wrap: wrap;
+}

@@ -603,11 +603,110 @@ export async function removeItem(db: Db, ctx: OnboardingCtx, itemId: string) {
       .set({ status: "dismissed", dismissedAtVersion: plan.dismissedAtVersion })
       .where(and(eq(personalizationItems.id, item.id), eq(personalizationItems.status, "suggested")));
   } else if (item.status === "confirmed") {
+    // The confirmed row is superseded and a tombstone copy is written in the same
+    // transaction. The tombstone is what makes Undo exact: restoreItem rebuilds the
+    // value from it. Regeneration never creates tombstones, so only a user removal can be undone.
+    await db.transaction(async tx => {
+      const res = await tx
+        .update(personalizationItems)
+        .set({ status: "superseded" })
+        .where(and(eq(personalizationItems.id, item.id), eq(personalizationItems.status, "confirmed")));
+      const affected = (res as unknown as [{ affectedRows?: number }])[0]?.affectedRows;
+      if (affected === 0) {
+        throw new TRPCError({ code: "CONFLICT", message: "This value changed. Reload and try again." });
+      }
+      await tx.insert(personalizationItems).values(
+        copyOfItem(item, {
+          id: randomUUID(),
+          workspaceId: ctx.workspaceId,
+          socialProfileId: profile.id,
+          status: "superseded",
+          supersedesItemId: item.id,
+          createdByUserId: ctx.userId,
+        })
+      );
+    });
+  }
+}
+
+/** Every stored column of an item except the ones passed in `over` (used for tombstones and restores). */
+function copyOfItem(
+  item: ItemRecord,
+  over: {
+    id: string;
+    workspaceId: string;
+    socialProfileId: string;
+    status: "confirmed" | "superseded";
+    supersedesItemId: string;
+    createdByUserId: number;
+  }
+) {
+  return {
+    ...over,
+    kind: item.kind,
+    payload: item.payload,
+    source: item.source,
+    evidence: item.evidence,
+    basedOnVersion: item.basedOnVersion,
+    dismissedAtVersion: null,
+    analysisRunId: item.analysisRunId,
+  };
+}
+
+/**
+ * Undo of a removal. Rebuilds the removed value from its own stored row (payload,
+ * subtopics and their removal states, evidence, source, run) and never from
+ * client data. Refuses when the value was changed or was not removed by the user,
+ * so a regenerated suggestion can never come back by accident.
+ */
+export async function restoreItem(db: Db, ctx: OnboardingCtx, itemId: string): Promise<{ itemId: string }> {
+  const { profile, item } = await itemOfActiveProfile(db, ctx, itemId);
+  const progress = await ensureProgress(db, profile.id, ctx.workspaceId);
+  const conflict = (message: string) => new TRPCError({ code: "CONFLICT", message });
+
+  if (item.status === "dismissed") {
+    if (item.dismissedAtVersion !== progress.personalizationVersion) {
+      throw conflict("Your answers changed, so this suggestion is no longer current.");
+    }
     await db
       .update(personalizationItems)
-      .set({ status: "superseded" })
-      .where(and(eq(personalizationItems.id, item.id), eq(personalizationItems.status, "confirmed")));
+      .set({ status: "suggested", dismissedAtVersion: null })
+      .where(and(eq(personalizationItems.id, item.id), eq(personalizationItems.status, "dismissed")));
+    return { itemId: item.id };
   }
+
+  if (item.status !== "superseded") throw conflict("This value cannot be restored.");
+  const successors = await db
+    .select()
+    .from(personalizationItems)
+    .where(
+      and(
+        eq(personalizationItems.supersedesItemId, item.id),
+        eq(personalizationItems.workspaceId, ctx.workspaceId),
+        eq(personalizationItems.socialProfileId, profile.id)
+      )
+    );
+  const tombstone = successors.length === 1 && successors[0].status === "superseded" ? toItemRecord(successors[0]) : null;
+  if (!tombstone) throw conflict("This value was changed. Reload to see the current version.");
+  const after = await db
+    .select({ id: personalizationItems.id })
+    .from(personalizationItems)
+    .where(eq(personalizationItems.supersedesItemId, tombstone.id))
+    .limit(1);
+  if (after.length) throw conflict("This value was already restored.");
+
+  const newId = randomUUID();
+  await db.insert(personalizationItems).values(
+    copyOfItem(item, {
+      id: newId,
+      workspaceId: ctx.workspaceId,
+      socialProfileId: profile.id,
+      status: "confirmed",
+      supersedesItemId: tombstone.id,
+      createdByUserId: ctx.userId,
+    })
+  );
+  return { itemId: newId };
 }
 
 /**

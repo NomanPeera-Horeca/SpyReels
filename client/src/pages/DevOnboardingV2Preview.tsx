@@ -5,7 +5,7 @@
  *        |what_works|goal|audience|pillars
  *        &platform=instagram|tiktok|youtube &error=not_found &selected=1
  *        &run=running|failed|succeeded   (analysis line on 3a/3b)
- *        &ai=idle|running|failed|clarify &empty=1   (step 4)
+ *        &ai=idle|running|failed|clarify &empty=1 &saveFail=1  (step 4)
  */
 import { useState } from "react";
 import { useSearch } from "wouter";
@@ -107,7 +107,9 @@ export default function DevOnboardingV2Preview() {
   const [p, setP] = useState<SocialPlatform | null>(platform);
   const [handle, setHandle] = useState(preselect || error ? "@sample.creator" : "");
   const noop = () => undefined;
-  const noopSave = async () => true;
+  // saveFail=1 simulates a server failure on every save (the editor must stay open).
+  const saveFail = params.get("saveFail") === "1";
+  const noopSave = async () => !saveFail;
   const run = (params.get("run") ?? "running") as AnalysisRunStatus;
   const empty = params.get("empty") === "1";
   const aiParam = params.get("ai") ?? "idle";

@@ -38,6 +38,7 @@ import {
   editItem,
   loadOnboardingState,
   removeItem,
+  restoreItem,
   resolveStep,
   saveAttribution,
   setPillarSubtopicRemoved,
@@ -253,6 +254,11 @@ export const onboardingV2Router = router({
     .mutation(async ({ ctx, input }) =>
       editItem(await requireDb(), octx(ctx), input.itemId, normalizePayload(input.value) as never)
     ),
+
+  /** Undo of removeItem: rebuilds the removed value from its stored row. */
+  restoreItem: v2Procedure
+    .input(z.object({ itemId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => restoreItem(await requireDb(), octx(ctx), input.itemId)),
 
   /** Remove (removed: true) or restore (false) one AI subtopic of a pillar. */
   setSubtopicRemoved: v2Procedure

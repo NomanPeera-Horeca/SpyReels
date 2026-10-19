@@ -161,6 +161,7 @@ export default function OnboardingV2Flow() {
   const editItem = trpc.onboardingV2.editItem.useMutation();
   const removeItem = trpc.onboardingV2.removeItem.useMutation();
   const setSubtopicRemoved = trpc.onboardingV2.setSubtopicRemoved.useMutation();
+  const restoreItem = trpc.onboardingV2.restoreItem.useMutation();
   const resolveStep = trpc.onboardingV2.resolveStep.useMutation();
   const complete = trpc.onboardingV2.complete.useMutation();
   const retryAnalysis = trpc.onboardingV2.retryAnalysis.useMutation();
@@ -220,6 +221,7 @@ export default function OnboardingV2Flow() {
     editItem.isPending ||
     removeItem.isPending ||
     setSubtopicRemoved.isPending ||
+    restoreItem.isPending ||
     resolveStep.isPending ||
     retryAnalysis.isPending ||
     complete.isPending;
@@ -355,20 +357,19 @@ export default function OnboardingV2Flow() {
       await refresh();
     }, kind);
 
-  // Remove now, with Undo. Undo adds the same value back as a new row.
+  // Remove now, with Undo. Undo restores the removed row itself (the server rebuilds
+  // the value from its stored row: description, subtopics, removal states, source).
   const removeWithUndo = (itemId: string, step: string) =>
     run(async () => {
-      const item = items.find(i => i.id === itemId);
       await removeItem.mutateAsync({ itemId });
       await refresh();
-      if (!item) return;
       toast(COPY.personalization.removed, {
         duration: 6000,
         action: {
           label: COPY.personalization.undo,
           onClick: () =>
             void run(async () => {
-              await addItem.mutateAsync({ kind: item.kind, payload: item.payload } as never);
+              await restoreItem.mutateAsync({ itemId });
               await refresh();
             }, step),
         },

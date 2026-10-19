@@ -26,6 +26,7 @@ import {
   editItem,
   loadOnboardingState,
   removeItem,
+  restoreItem,
   resolveStep,
   saveAttribution,
   saveUseCase,
@@ -358,6 +359,75 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
     const { itemId: audienceId } = await addItem(db, A, "audience", { who: "Students", outcome: "" });
     state = await loadOnboardingState(db, A);
     expect(state.items.find(i => i.id === audienceId)?.payload).toMatchObject({ who: "Students", outcome: "" });
+  });
+
+  it("undo of a removed pillar restores the exact stored value (description, subtopics, removal states)", async () => {
+    await confirmProfile(db, A, preview("test.kitchen"));
+    const { itemId: pillarId } = await addItem(db, A, "pillar", {
+      title: "Dinners",
+      description: "Fast recipes for weeknights.",
+      viewSharePercent: null,
+      subtopics: [
+        { id: "s1", text: "One-pan meals", removed: true },
+        { id: "s2", text: "Budget dinners", removed: false },
+      ],
+    } as never);
+    await removeItem(db, A, pillarId);
+    let state = await loadOnboardingState(db, A);
+    expect(state.items.find(i => i.id === pillarId)).toBeUndefined();
+
+    const { itemId: restoredId } = await restoreItem(db, A, pillarId);
+    state = await loadOnboardingState(db, A);
+    const restored = state.items.find(i => i.id === restoredId)!;
+    expect(restored).toMatchObject({ kind: "pillar", status: "confirmed", source: "user_entered" });
+    expect(restored.payload).toEqual({
+      title: "Dinners",
+      description: "Fast recipes for weeknights.",
+      viewSharePercent: null,
+      subtopics: [
+        { id: "s1", text: "One-pan meals", removed: true },
+        { id: "s2", text: "Budget dinners", removed: false },
+      ],
+    });
+
+    // A second undo of the same removal is refused, never a duplicate.
+    await expect(restoreItem(db, A, pillarId)).rejects.toThrow(/already restored|changed/);
+  });
+
+  it("undo refuses values that the system superseded (regenerated suggestions never come back)", async () => {
+    await confirmProfile(db, A, preview("test.kitchen"));
+    const { itemId: goalId } = await addItem(db, A, "goal", { text: "Grow fast" });
+    // Simulate the analysis store superseding an unconfirmed row without a user removal.
+    await q("UPDATE personalization_items SET status = 'suggested' WHERE id = ?", [goalId]);
+    await q("UPDATE personalization_items SET status = 'superseded' WHERE id = ?", [goalId]);
+    await expect(restoreItem(db, A, goalId)).rejects.toThrow(/changed|cannot be restored/);
+  });
+
+  it("undo of a removed suggestion returns it only while the answers it was built on are current", async () => {
+    const { profileId } = await confirmProfile(db, A, preview("test.kitchen"));
+    const store = createRecommendationStore(db);
+    const invoker = fakeInvoker({
+      personalization_goal_inference: GOAL_OUT,
+      personalization_audience_recommendations: AUDIENCE_OUT,
+    });
+    await generateRecommendations({ store, invoker }, { ctx: authCtx(A), socialProfileId: profileId, step: "goal" });
+    const state = await loadOnboardingState(db, A);
+    const suggestion = state.items.find(i => i.kind === "goal" && i.status === "suggested")!;
+    await removeItem(db, A, suggestion.id);
+    await restoreItem(db, A, suggestion.id);
+    const after = await loadOnboardingState(db, A);
+    expect(after.items.find(i => i.id === suggestion.id)).toMatchObject({ status: "suggested" });
+  });
+
+  it("existing customer data: an audience edited from the single field keeps its stored outcome", async () => {
+    await confirmProfile(db, A, preview("test.kitchen"));
+    const { itemId: a1 } = await addItem(db, A, "audience", { who: "Restaurant owners", outcome: "cut food cost" });
+    const { itemId: a2 } = await editItem(db, A, a1, { who: "Restaurant owners in Texas", outcome: "cut food cost" } as never);
+    const state = await loadOnboardingState(db, A);
+    expect(state.items.find(i => i.id === a2)?.payload).toEqual({
+      who: "Restaurant owners in Texas",
+      outcome: "cut food cost",
+    });
   });
 
   it("workspace isolation: another workspace cannot read, edit or remove these values", async () => {
