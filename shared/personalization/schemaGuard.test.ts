@@ -27,10 +27,11 @@ function sqlBlockFor(table: string): string {
 }
 
 describe("personalization schema: Drizzle and SQL draft match", () => {
-  it("defines the seven approved tables", () => {
+  it("defines the personalization tables", () => {
     expect(tables.map(t => getTableConfig(t).name).sort()).toEqual([
       "personalization_items",
       "personalization_progress",
+      "pillar_subtopics",
       "profile_analysis_runs",
       "profile_analysis_stages",
       "social_profiles",
@@ -190,7 +191,7 @@ describe("migration gate: drafts cannot reach a database by accident", () => {
 
   it("only personalization modules touch the personalization tables", () => {
     const hits = execSync(
-      'git grep --untracked -l -E "(from|import\\()\\s*[\'\\"][^\'\\"]*personalizationSchema" -- server client/src shared public-web scripts || true',
+      'git grep --untracked -l -E "(from|import\\()[[:space:]]*[\'\\"][^\'\\"]*personalizationSchema" -- server client/src shared public-web scripts || true',
       { cwd: root }
     )
       .toString()
@@ -203,7 +204,7 @@ describe("migration gate: drafts cannot reach a database by accident", () => {
 
   it("the live server reaches personalization code only through the gated entry points", () => {
     const hits = execSync(
-      'git grep --untracked -l -E "(from|import\\()\\s*[\'\\"][^\'\\"]*personalization/" -- server || true',
+      'git grep --untracked -l -E "(from|import\\()[[:space:]]*[\'\\"][^\'\\"]*personalization/" -- server || true',
       { cwd: root }
     )
       .toString()

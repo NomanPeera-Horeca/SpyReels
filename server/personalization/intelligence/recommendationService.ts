@@ -18,14 +18,16 @@
  * AI failure never touches confirmed data: the step stays completable by
  * typing values manually.
  *
- * Wiring: not connected yet. It will run as a durable job keyed by
- * recommendationJobKey() once the tables exist.
+ * Wired from server/personalization/jobs.ts. The durable key includes the
+ * personalization version. A finished success is not requeued.
  */
 import type {
   AnalysisSourceSnapshot,
   AudiencePayload,
   GenerationMeta,
   ItemPayloadByKind,
+  LanguagePayload,
+  NichePayload,
   PersonalizationItemKind,
   PillarPayload,
   SocialPlatform,
@@ -53,7 +55,13 @@ import { GOAL_PROMPT_VERSION, inferGoal } from "./goalInference";
 import {
   PILLAR_PROMPT_VERSION,
   recommendPillars,
+  recommendSubtopics,
 } from "./pillarRecommendations";
+import {
+  catalogNiche,
+  detectContentLanguage,
+  inferNicheLabel,
+} from "./profileBasics";
 import {
   IntelligenceError,
   type LlmInvoker,
@@ -111,10 +119,23 @@ export interface RecommendationStore {
       guard:
         | { type: "inputs_unchanged"; expected: string }
         | { type: "no_confirmed" };
+      /**
+       * Personalization version captured before the model call. If the user
+       * edited anything while the model was running, the write is dropped.
+       */
+      expectedVersion?: number;
       supersedeIds: string[];
       inserts: GeneratedInsert[];
     }
   ): Promise<"applied" | "stale">;
+  /** Pillars that have no live subtopic yet. Optional so tests can omit it. */
+  pillarsMissingSubtopics?(
+    profileId: string
+  ): Promise<{ title: string; description: string }[]>;
+  saveSubtopics?(
+    profileId: string,
+    groups: { title: string; labels: string[]; pillarHash: string }[]
+  ): Promise<void>;
 }
 
 export type RecommendationResult =
@@ -200,8 +221,6 @@ export async function generateRecommendations(
 
   const goals = confirmedOf(items, "goal");
   const audiences = confirmedOf(items, "audience");
-  if (input.step === "goal" && goals.length > 0)
-    return { status: "already_confirmed" };
   if (input.step !== "goal" && goals.length === 0)
     return { status: "blocked", reason: "goal_not_confirmed" };
   if (input.step === "pillars" && audiences.length === 0)
@@ -216,6 +235,28 @@ export async function generateRecommendations(
     items,
   });
   const inputsHash = stepInputsHash(input.step, items, evidence);
+  const versionAtStart = await deps.store.loadPersonalizationVersion(profile.id);
+
+  const settled = (k: PersonalizationItemKind) =>
+    items.some(i => i.kind === k && i.status !== "superseded");
+
+  if (input.step === "goal") {
+    return runGoalStep({
+      deps,
+      profileId: profile.id,
+      items,
+      evidence,
+      inputsHash,
+      versionAtStart,
+      profileText: [profile.displayName, profile.bio, ...evidence.topCaptions]
+        .filter((s): s is string => Boolean(s && s.trim()))
+        .join("\n"),
+      needGoal: !settled("goal"),
+      needNiche: !settled("niche"),
+      needLanguage: !settled("language"),
+      timeoutMs: deps.timeoutMs,
+    });
+  }
 
   // Cache / idempotency: same inputs already answered.
   const sameInputs = items.filter(
@@ -225,6 +266,15 @@ export async function generateRecommendations(
       i.basedOnInputsHash === inputsHash
   );
   if (sameInputs.length > 0) {
+    if (input.step === "pillars") {
+      await fillMissingSubtopics(deps, {
+        profileId: profile.id,
+        evidence,
+        goal: goals.map(g => g.text).join(" "),
+        inputsHash,
+        timeoutMs: deps.timeoutMs,
+      });
+    }
     const live = sameInputs.filter(
       i => i.status === "suggested" || i.status === "confirmed"
     );
@@ -240,34 +290,9 @@ export async function generateRecommendations(
   let usage: LlmUsage;
   let attempts: number;
   let confidence: "high" | "medium" | "low";
+  let subtopicGroups: { title: string; labels: string[] }[] = [];
   try {
-    if (input.step === "goal") {
-      const r = await inferGoal({
-        evidence,
-        invoker: deps.invoker,
-        timeoutMs: deps.timeoutMs,
-        onRejected: deps.onRejected,
-      });
-      if (r.status === "needs_clarification") {
-        return {
-          status: "needs_clarification",
-          question: r.question,
-          reason: r.reason,
-          usage: r.usage,
-        };
-      }
-      usage = r.usage;
-      attempts = r.attempts;
-      confidence = r.confidence;
-      suggestions = [
-        {
-          kind: "goal",
-          payload: { text: r.goal },
-          evidence: "profile_inferred",
-          analysisRunId: null,
-        },
-      ];
-    } else if (input.step === "audience") {
+    if (input.step === "audience") {
       const r = await recommendAudiences({
         evidence,
         confirmedGoal: goals.map(g => g.text).join(" "),
@@ -304,6 +329,10 @@ export async function generateRecommendations(
         evidence: "profile_inferred" as const,
         analysisRunId: null,
       }));
+      subtopicGroups = r.pillars.map((p, i) => ({
+        title: p.title,
+        labels: r.subtopics[i] ?? [],
+      }));
     }
   } catch (err) {
     if (err instanceof IntelligenceError)
@@ -321,11 +350,13 @@ export async function generateRecommendations(
     evidenceStrength: evidence.strength,
     evidenceBasis: evidence.sources,
   };
-  const version = await deps.store.loadPersonalizationVersion(profile.id);
+  const versionNow = await deps.store.loadPersonalizationVersion(profile.id);
+  if (versionNow !== versionAtStart)
+    return { status: "stale_discarded", usage };
   const plan = planAiSuggestionMerge(
     items,
     suggestions.map(s => ({ ...s, basedOnInputsHash: inputsHash, confidence })),
-    version,
+    versionNow,
     "unavailable" // recommendations are never performance-backed
   );
   const supersedeIds = idsToSupersedeOnRegeneration(items, "__none__", [
@@ -336,18 +367,321 @@ export async function generateRecommendations(
   });
   const applied = await deps.store.applyGeneratedSuggestions(profile.id, {
     kind,
-    guard:
-      input.step === "goal"
-        ? { type: "no_confirmed" }
-        : { type: "inputs_unchanged", expected: inputsHash },
+    guard: { type: "inputs_unchanged", expected: inputsHash },
+    expectedVersion: versionAtStart,
     supersedeIds,
     inserts: plan.insert.map(i => ({ ...i, generationMeta: meta })),
   });
   if (applied === "stale") return { status: "stale_discarded", usage };
+  if (input.step === "pillars" && subtopicGroups.length) {
+    await deps.store.saveSubtopics?.(
+      profile.id,
+      subtopicGroups.map(g => ({ ...g, pillarHash: inputsHash }))
+    );
+  }
   return {
     status: "generated",
     inserted: plan.insert.length,
     usage,
     confidence,
   };
+}
+
+const EMPTY_USAGE: LlmUsage = {
+  model: null,
+  inputTokens: 0,
+  outputTokens: 0,
+  estimatedUsd: 0,
+};
+
+async function commitSuggestions(
+  store: RecommendationStore,
+  input: {
+    profileId: string;
+    items: ItemRecord[];
+    kind: PersonalizationItemKind;
+    suggestions: AiSuggestion[];
+    inputsHash: string;
+    versionAtStart: number;
+    confidence: "high" | "medium" | "low";
+    evidence: CreatorEvidence;
+    promptVersion: string;
+    usage: LlmUsage;
+    attempts: number;
+  }
+): Promise<"applied" | "stale" | "empty"> {
+  if (input.suggestions.length === 0) return "empty";
+  const versionNow = await store.loadPersonalizationVersion(input.profileId);
+  if (versionNow !== input.versionAtStart) return "stale";
+  const meta: GenerationMeta = {
+    promptVersion: input.promptVersion,
+    model: input.usage.model,
+    inputTokens: input.usage.inputTokens,
+    outputTokens: input.usage.outputTokens,
+    estimatedUsd: input.usage.estimatedUsd,
+    attempts: input.attempts,
+    evidenceStrength: input.evidence.strength,
+    evidenceBasis: input.evidence.sources,
+  };
+  const plan = planAiSuggestionMerge(
+    input.items,
+    input.suggestions.map(s => ({
+      ...s,
+      basedOnInputsHash: input.inputsHash,
+      confidence: input.confidence,
+    })),
+    versionNow,
+    "unavailable"
+  );
+  const supersedeIds = idsToSupersedeOnRegeneration(input.items, "__none__", [
+    input.kind,
+  ]).filter(id => {
+    const row = input.items.find(i => i.id === id);
+    return row?.basedOnInputsHash !== input.inputsHash;
+  });
+  return store.applyGeneratedSuggestions(input.profileId, {
+    kind: input.kind,
+    guard: { type: "no_confirmed" },
+    expectedVersion: input.versionAtStart,
+    supersedeIds,
+    inserts: plan.insert.map(i => ({ ...i, generationMeta: meta })),
+  });
+}
+
+async function runGoalStep(input: {
+  deps: {
+    store: RecommendationStore;
+    invoker?: LlmInvoker;
+    onRejected?: (reason: string) => void;
+  };
+  profileId: string;
+  items: ItemRecord[];
+  evidence: CreatorEvidence;
+  inputsHash: string;
+  versionAtStart: number;
+  profileText: string;
+  needGoal: boolean;
+  needNiche: boolean;
+  needLanguage: boolean;
+  timeoutMs?: number;
+}): Promise<RecommendationResult> {
+  const { deps, evidence } = input;
+  if (!input.needGoal && !input.needNiche && !input.needLanguage) {
+    const same = input.items.filter(
+      i =>
+        i.kind === "goal" &&
+        i.source === "ai_suggested" &&
+        i.basedOnInputsHash === input.inputsHash
+    );
+    if (same.length > 0) {
+      const live = same.filter(
+        i => i.status === "suggested" || i.status === "confirmed"
+      );
+      return {
+        status: "reused",
+        liveSuggestionIds: live.map(i => i.id),
+        dismissedForTheseInputs:
+          live.length === 0 && same.some(i => i.status === "dismissed"),
+      };
+    }
+    return { status: "already_confirmed" };
+  }
+
+  const goalCached =
+    input.needGoal &&
+    input.items.some(
+      i =>
+        i.kind === "goal" &&
+        i.source === "ai_suggested" &&
+        i.basedOnInputsHash === input.inputsHash &&
+        i.status !== "superseded"
+    );
+
+  const goalTask = (async () => {
+    if (!input.needGoal || goalCached) return null;
+    return inferGoal({
+      evidence,
+      invoker: deps.invoker,
+      timeoutMs: input.timeoutMs,
+      onRejected: deps.onRejected,
+    });
+  })();
+
+  const basicsTask = (async () => {
+    const language = input.needLanguage
+      ? detectContentLanguage(input.profileText)
+      : null;
+    let niche = input.needNiche ? catalogNiche(input.profileText) : null;
+    let usage: LlmUsage | null = null;
+    if (input.needNiche && !niche && evidence.strength !== "none") {
+      const inferred = await inferNicheLabel({
+        evidence,
+        invoker: deps.invoker,
+        timeoutMs: Math.min(input.timeoutMs ?? 12_000, 12_000),
+      });
+      niche = inferred.niche;
+      usage = inferred.usage;
+    }
+    return { niche, language, usage };
+  })();
+
+  let goalResult: Awaited<ReturnType<typeof inferGoal>> | null = null;
+  let goalError: IntelligenceError | null = null;
+  try {
+    goalResult = await goalTask;
+  } catch (err) {
+    if (err instanceof IntelligenceError) goalError = err;
+    else throw err;
+  }
+  const basics = await basicsTask;
+
+  const usage = goalResult && goalResult.status !== "needs_clarification"
+    ? goalResult.usage
+    : (basics.usage ?? goalError?.usage ?? EMPTY_USAGE);
+
+  let inserted = 0;
+  if (goalResult && goalResult.status === "suggested") {
+    const wrote = await commitSuggestions(deps.store, {
+      profileId: input.profileId,
+      items: input.items,
+      kind: "goal",
+      suggestions: [
+        {
+          kind: "goal",
+          payload: { text: goalResult.goal },
+          evidence: "profile_inferred",
+          analysisRunId: null,
+        },
+      ],
+      inputsHash: input.inputsHash,
+      versionAtStart: input.versionAtStart,
+      confidence: goalResult.confidence,
+      evidence,
+      promptVersion: GOAL_PROMPT_VERSION,
+      usage: goalResult.usage,
+      attempts: goalResult.attempts,
+    });
+    if (wrote === "stale") return { status: "stale_discarded", usage: goalResult.usage };
+    if (wrote === "applied") inserted += 1;
+  }
+
+  if (basics.niche) {
+    const wrote = await commitSuggestions(deps.store, {
+      profileId: input.profileId,
+      items: input.items,
+      kind: "niche",
+      suggestions: [
+        {
+          kind: "niche",
+          payload: {
+            slug: basics.niche.slug,
+            label: basics.niche.label,
+          } satisfies NichePayload,
+          evidence: "profile_inferred",
+          analysisRunId: null,
+        },
+      ],
+      inputsHash: input.inputsHash,
+      versionAtStart: input.versionAtStart,
+      confidence: "medium",
+      evidence,
+      promptVersion: "niche-v1",
+      usage: basics.usage ?? EMPTY_USAGE,
+      attempts: basics.usage ? 1 : 0,
+    });
+    if (wrote === "stale")
+      return { status: "stale_discarded", usage };
+    if (wrote === "applied") inserted += 1;
+  }
+
+  if (basics.language) {
+    const wrote = await commitSuggestions(deps.store, {
+      profileId: input.profileId,
+      items: input.items,
+      kind: "language",
+      suggestions: [
+        {
+          kind: "language",
+          payload: basics.language satisfies LanguagePayload,
+          evidence: "profile_inferred",
+          analysisRunId: null,
+        },
+      ],
+      inputsHash: input.inputsHash,
+      versionAtStart: input.versionAtStart,
+      confidence: "medium",
+      evidence,
+      promptVersion: "language-v1",
+      usage: EMPTY_USAGE,
+      attempts: 0,
+    });
+    if (wrote === "stale") return { status: "stale_discarded", usage };
+    if (wrote === "applied") inserted += 1;
+  }
+
+  if (goalResult && goalResult.status === "needs_clarification" && inserted === 0) {
+    return {
+      status: "needs_clarification",
+      question: goalResult.question,
+      reason: goalResult.reason,
+      usage: goalResult.usage,
+    };
+  }
+  if (goalError && inserted === 0)
+    return { status: "failed", kind: goalError.kind, usage: goalError.usage };
+  if (inserted === 0) {
+    const live = input.items.filter(
+      i => i.kind === "goal" && (i.status === "suggested" || i.status === "confirmed")
+    );
+    return {
+      status: "reused",
+      liveSuggestionIds: live.map(i => i.id),
+      dismissedForTheseInputs: false,
+    };
+  }
+  return {
+    status: "generated",
+    inserted,
+    usage,
+    confidence:
+      goalResult && goalResult.status === "suggested" ? goalResult.confidence : "medium",
+  };
+}
+
+async function fillMissingSubtopics(
+  deps: {
+    store: RecommendationStore;
+    invoker?: LlmInvoker;
+    onRejected?: (reason: string) => void;
+  },
+  input: {
+    profileId: string;
+    evidence: CreatorEvidence;
+    goal: string;
+    inputsHash: string;
+    timeoutMs?: number;
+  }
+): Promise<void> {
+  if (!deps.store.pillarsMissingSubtopics || !deps.store.saveSubtopics) return;
+  const missing = await deps.store.pillarsMissingSubtopics(input.profileId);
+  if (missing.length === 0) return;
+  try {
+    const extra = await recommendSubtopics({
+      evidence: input.evidence,
+      confirmedGoal: input.goal,
+      pillars: missing,
+      invoker: deps.invoker,
+      timeoutMs: Math.min(input.timeoutMs ?? 12_000, 12_000),
+    });
+    await deps.store.saveSubtopics(
+      input.profileId,
+      extra.groups.map(g => ({
+        title: g.title,
+        labels: g.labels,
+        pillarHash: input.inputsHash,
+      }))
+    );
+  } catch {
+    // The pillars are already saved. A later retry can fill subtopics.
+  }
 }

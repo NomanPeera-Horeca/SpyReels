@@ -7,7 +7,9 @@
  *
  * Every write that touches personalization items runs in one transaction and
  * only ever inserts rows or moves rows to superseded/dismissed. Confirmed
- * rows are never updated in place.
+ * payloads are never edited in place. Undo of a user delete is the exception:
+ * restorePersonalizationItem returns that same row to its previous status
+ * and does not change subtopic rows.
  */
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { MySql2Database } from "drizzle-orm/mysql2";
@@ -36,6 +38,10 @@ import {
   type AnalysisStore,
   type RunSummaryWithKey,
 } from "../analysis/contract";
+import {
+  pillarsMissingSubtopics as listPillarsMissingSubtopics,
+  saveGeneratedSubtopics,
+} from "../subtopics";
 import type {
   GenerationProfile,
   RecommendationStore,
@@ -409,6 +415,18 @@ export function createRecommendationStore(db: Db): RecommendationStore {
           .for("update")
           .limit(1);
         if (!owner[0]) return "stale" as const;
+        if (input.expectedVersion !== undefined) {
+          const [progress] = await tx
+            .select({
+              version: personalizationProgress.personalizationVersion,
+            })
+            .from(personalizationProgress)
+            .where(eq(personalizationProgress.socialProfileId, profileId))
+            .for("update")
+            .limit(1);
+          const version = progress?.version ?? 1;
+          if (version !== input.expectedVersion) return "stale" as const;
+        }
         const items: ItemRecord[] = (
           await tx
             .select()
@@ -455,6 +473,30 @@ export function createRecommendationStore(db: Db): RecommendationStore {
           );
         }
         return "applied" as const;
+      });
+    },
+
+    async pillarsMissingSubtopics(profileId) {
+      const [owner] = await db
+        .select({ workspaceId: socialProfiles.workspaceId })
+        .from(socialProfiles)
+        .where(eq(socialProfiles.id, profileId))
+        .limit(1);
+      if (!owner) return [];
+      return listPillarsMissingSubtopics(db, profileId, owner.workspaceId);
+    },
+
+    async saveSubtopics(profileId, groups) {
+      const [owner] = await db
+        .select({ workspaceId: socialProfiles.workspaceId })
+        .from(socialProfiles)
+        .where(eq(socialProfiles.id, profileId))
+        .limit(1);
+      if (!owner) return;
+      await saveGeneratedSubtopics(db, {
+        workspaceId: owner.workspaceId,
+        socialProfileId: profileId,
+        groups,
       });
     },
   };

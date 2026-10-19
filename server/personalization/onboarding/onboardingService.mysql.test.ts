@@ -19,6 +19,7 @@ import { createAnalysisStore, createRecommendationStore, type Db } from "../db/a
 import { requestProfileAnalysis } from "../analysis/requestProfileAnalysis";
 import { runProfileAnalysis } from "../analysis/runProfileAnalysis";
 import { generateRecommendations } from "../intelligence/recommendationService";
+import { upstreamInputsHash } from "@shared/personalization/state";
 import {
   addItem,
   completeOnboarding,
@@ -27,13 +28,20 @@ import {
   loadOnboardingState,
   removeItem,
   resolveStep,
+  restorePersonalizationItem,
   saveAttribution,
   saveUseCase,
   listWorkspaceProfiles,
   startNotPostingYet,
   switchActiveProfile,
 } from "./onboardingService";
-import { homeContextFromState } from "../home/homeService";
+import { homeContextFromState, videoMatchText } from "../home/homeService";
+import {
+  addPillarSubtopic,
+  dismissPillarSubtopic,
+  restorePillarSubtopic,
+  saveGeneratedSubtopics,
+} from "../subtopics";
 
 const url = process.env.PERSONALIZATION_SCHEMA_TEST_DB;
 const root = path.resolve(__dirname, "../../..");
@@ -139,6 +147,7 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
   beforeEach(async () => {
     await q("SET FOREIGN_KEY_CHECKS = 0");
     for (const t of [
+      "pillar_subtopics",
       "personalization_items",
       "personalization_progress",
       "profile_analysis_stages",
@@ -258,8 +267,12 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
     expect(state.items.find(i => i.kind === "goal")!.status).toBe("confirmed");
     expect(state.steps.goal).toBe("confirmed");
 
-    // The engine never regenerates a confirmed goal.
-    expect((await generateRecommendations({ store, invoker }, { ctx: authCtx(A), socialProfileId: profileId, step: "goal" })).status).toBe("already_confirmed");
+    // The engine never writes a second goal for the same answers.
+    const again = await generateRecommendations({ store, invoker }, { ctx: authCtx(A), socialProfileId: profileId, step: "goal" });
+    expect(["reused", "already_confirmed"]).toContain(again.status);
+    expect((await loadOnboardingState(db, A)).items.filter(i => i.kind === "goal")).toEqual([
+      expect.objectContaining({ id: suggestedGoal.id, status: "confirmed" }),
+    ]);
 
     const aud = await generateRecommendations({ store, invoker }, { ctx: authCtx(A), socialProfileId: profileId, step: "audience" });
     expect(aud.status).toBe("generated");
@@ -285,6 +298,27 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
       inserts: [],
     });
     expect(staleWrite).toBe("stale");
+
+    // Same inputs hash, older version: the version alone rejects the write.
+    const currentHash = upstreamInputsHash("audience", await store.loadItems(profileId));
+    const [beforeRows] = await q("SELECT COUNT(*) AS n FROM personalization_items WHERE socialProfileId = ? AND kind = 'audience'", [profileId]);
+    const before = Number((beforeRows as Array<{ n: number }>)[0].n);
+    expect(await store.applyGeneratedSuggestions(profileId, {
+      kind: "audience",
+      guard: { type: "inputs_unchanged", expected: currentHash },
+      expectedVersion: 1,
+      supersedeIds: [],
+      inserts: [],
+    })).toBe("stale");
+    expect(await store.applyGeneratedSuggestions(profileId, {
+      kind: "audience",
+      guard: { type: "inputs_unchanged", expected: currentHash },
+      expectedVersion: state.version,
+      supersedeIds: [],
+      inserts: [],
+    })).toBe("applied");
+    const [afterRows] = await q("SELECT COUNT(*) AS n FROM personalization_items WHERE socialProfileId = ? AND kind = 'audience'", [profileId]);
+    expect(Number((afterRows as Array<{ n: number }>)[0].n)).toBe(before);
   });
 
   it("remove: suggestion dismissed, confirmed value kept as history; add is a confirmed user value", async () => {
@@ -352,7 +386,8 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
     const first = await confirmProfile(db, A, preview("test.kitchen"));
     const second = await confirmProfile(db, A, { ...preview("test.kitchen.tt"), platform: "tiktok" });
     let list = await listWorkspaceProfiles(db, A);
-    expect(list.map(p => [p.platform, p.active])).toEqual([
+    // createdAt is second precision, so two profiles saved together have no stable order.
+    expect(list.map(p => [p.platform, p.active]).sort()).toEqual([
       ["instagram", false],
       ["tiktok", true],
     ]);
@@ -370,7 +405,7 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
     let ctx = homeContextFromState(await loadOnboardingState(db, A));
     expect(ctx).toMatchObject({ nicheLabel: null, personalizationComplete: false, nextStep: "goal" });
     await addItem(db, A, "niche", { slug: "restaurants", label: "Restaurant business" });
-    await addItem(db, A, "goal", { text: "Help restaurant owners run better kitchens." });
+    await addItem(db, A, "goal", { text: "Help fitness coaches sign clients." });
     await resolveStep(db, A, "goal", "confirm");
     ctx = homeContextFromState(await loadOnboardingState(db, A));
     expect(ctx).toMatchObject({
@@ -378,6 +413,219 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
       featuredNicheSlug: "restaurants-cafes",
       personalizationComplete: false,
       nextStep: "audience",
+    });
+    expect(ctx.description).toContain("fitness");
+    expect(videoMatchText(ctx)).toBe(ctx.nicheLabel);
+  });
+
+  it("pillar edits keep subtopic ids and dismissal, and Undo does not resurrect them", async () => {
+    const { profileId } = await confirmProfile(db, A, preview("test.kitchen"));
+    const { itemId } = await addItem(db, A, "pillar", {
+      title: "Menu engineering",
+      description: "How to price plates",
+      viewSharePercent: null,
+    });
+    expect(await saveGeneratedSubtopics(db, {
+      workspaceId: WS_A,
+      socialProfileId: profileId,
+      groups: [{
+        title: "Menu engineering",
+        labels: ["Food cost", "Menu pricing", "Weekly specials"],
+        pillarHash: "pillar-hash",
+      }],
+    })).toBe(3);
+    let state = await loadOnboardingState(db, A);
+    const topics = state.pillarSubtopics.filter(t => t.pillarItemId === itemId);
+    expect(topics.map(t => t.label).sort()).toEqual(["Food cost", "Menu pricing", "Weekly specials"]);
+    const food = topics.find(t => t.label === "Food cost")!;
+    const pricing = topics.find(t => t.label === "Menu pricing")!;
+    expect((await dismissPillarSubtopic(db, {
+      workspaceId: WS_A,
+      socialProfileId: profileId,
+      subtopicId: food.id,
+    })).ok).toBe(true);
+
+    const renamed = await editItem(db, A, itemId, {
+      title: "Plate pricing",
+      description: "How to price plates",
+      viewSharePercent: null,
+    });
+    const described = await editItem(db, A, renamed.itemId, {
+      title: "Plate pricing",
+      description: "What to charge for each plate",
+      viewSharePercent: null,
+    });
+    state = await loadOnboardingState(db, A);
+    const moved = state.pillarSubtopics.filter(t => t.pillarItemId === described.itemId);
+    expect(moved.map(t => t.id).sort()).toEqual(topics.map(t => t.id).sort());
+    expect(moved.find(t => t.id === food.id)?.status).toBe("dismissed");
+    expect(moved.find(t => t.id === pricing.id)?.status).toBe("suggested");
+    expect(state.pillarSubtopics.filter(t => t.pillarItemId === itemId)).toEqual([]);
+    expect(await saveGeneratedSubtopics(db, {
+      workspaceId: WS_A,
+      socialProfileId: profileId,
+      groups: [{ title: "Plate pricing", labels: ["Food cost", "Menu pricing"], pillarHash: "retry" }],
+    })).toBe(0);
+    expect((await addPillarSubtopic(db, {
+      workspaceId: WS_A,
+      socialProfileId: profileId,
+      pillarItemId: described.itemId,
+      label: "Food cost",
+    })).ok).toBe(false);
+
+    await removeItem(db, A, described.itemId);
+    state = await loadOnboardingState(db, A);
+    expect(state.items.find(i => i.id === described.itemId)).toBeUndefined();
+    const parked = state.pillarSubtopics.filter(t => t.pillarItemId === described.itemId);
+    expect(parked.find(t => t.id === food.id)?.status).toBe("dismissed");
+    expect(parked.find(t => t.id === pricing.id)?.status).toBe("suggested");
+
+    await restorePersonalizationItem(db, A, described.itemId);
+    state = await loadOnboardingState(db, A);
+    expect(state.items.find(i => i.id === described.itemId)).toMatchObject({
+      status: "confirmed",
+      kind: "pillar",
+    });
+    const restored = state.pillarSubtopics.filter(t => t.pillarItemId === described.itemId);
+    expect(restored.find(t => t.id === food.id)?.status).toBe("dismissed");
+    expect(restored.find(t => t.id === pricing.id)?.status).toBe("suggested");
+
+    expect((await restorePillarSubtopic(db, {
+      workspaceId: WS_A,
+      socialProfileId: profileId,
+      subtopicId: food.id,
+    })).ok).toBe(true);
+    state = await loadOnboardingState(db, A);
+    const afterOne = state.pillarSubtopics.filter(t => t.pillarItemId === described.itemId);
+    expect(afterOne.find(t => t.id === food.id)?.status).toBe("suggested");
+    const specials = afterOne.find(t => t.label === "Weekly specials")!;
+    await dismissPillarSubtopic(db, {
+      workspaceId: WS_A,
+      socialProfileId: profileId,
+      subtopicId: specials.id,
+    });
+    expect((await restorePillarSubtopic(db, {
+      workspaceId: WS_A,
+      socialProfileId: profileId,
+      subtopicId: food.id,
+    })).ok).toBe(true);
+    state = await loadOnboardingState(db, A);
+    const finalTopics = state.pillarSubtopics.filter(t => t.pillarItemId === described.itemId);
+    expect(finalTopics.find(t => t.id === specials.id)?.status).toBe("dismissed");
+    expect(finalTopics.find(t => t.id === food.id)?.status).toBe("suggested");
+  });
+
+  it("subtopic writes are isolated by workspace and collapse concurrent duplicates", async () => {
+    const { profileId } = await confirmProfile(db, A, preview("test.kitchen"));
+    await confirmProfile(db, B, preview("other.kitchen"));
+    const { itemId } = await addItem(db, A, "pillar", {
+      title: "Menu engineering",
+      description: "How to price plates",
+      viewSharePercent: null,
+    });
+    const added = await addPillarSubtopic(db, {
+      workspaceId: WS_A,
+      socialProfileId: profileId,
+      pillarItemId: itemId,
+      label: "Food cost",
+    });
+    expect(added.ok).toBe(true);
+    if (!added.ok) return;
+    const bState = await loadOnboardingState(db, B);
+    expect(bState.pillarSubtopics).toEqual([]);
+    expect(await dismissPillarSubtopic(db, {
+      workspaceId: WS_B,
+      socialProfileId: bState.profile!.id,
+      subtopicId: added.id,
+    })).toEqual({ ok: false, reason: "not_found" });
+    expect(await restorePillarSubtopic(db, {
+      workspaceId: WS_B,
+      socialProfileId: bState.profile!.id,
+      subtopicId: added.id,
+    })).toEqual({ ok: false, reason: "not_found" });
+    await expect(restorePersonalizationItem(db, B, itemId)).rejects.toMatchObject({ code: "NOT_FOUND" });
+    const still = (await loadOnboardingState(db, A)).pillarSubtopics.find(t => t.id === added.id);
+    expect(still?.status).toBe("confirmed");
+
+    const u = new URL(url!);
+    const dbName = `${u.pathname.replace(/^\//, "")}_svc`;
+    const conn2 = await mysql.createConnection({
+      host: u.hostname,
+      port: Number(u.port || 3306),
+      user: decodeURIComponent(u.username),
+      password: decodeURIComponent(u.password),
+      database: dbName,
+    });
+    const db2 = drizzle(conn2) as unknown as Db;
+    try {
+      const input = {
+        workspaceId: WS_A,
+        socialProfileId: profileId,
+        groups: [{ title: "Menu engineering", labels: ["Menu pricing", "Weekly specials"], pillarHash: "race" }],
+      };
+      await Promise.all([
+        saveGeneratedSubtopics(db, input),
+        saveGeneratedSubtopics(db2, input),
+      ]);
+    } finally {
+      await conn2.end();
+    }
+    const labels = (await loadOnboardingState(db, A)).pillarSubtopics
+      .filter(t => t.pillarItemId === itemId)
+      .map(t => t.label)
+      .sort();
+    expect(labels).toEqual(["Food cost", "Menu pricing", "Weekly specials"]);
+  });
+
+  it("a pillar edit still saves when the subtopic table is absent", async () => {
+    await confirmProfile(db, A, preview("test.kitchen"));
+    const { itemId } = await addItem(db, A, "pillar", {
+      title: "Menu engineering",
+      description: "How to price plates",
+      viewSharePercent: null,
+    });
+    await q("DROP TABLE pillar_subtopics");
+    try {
+      const edited = await editItem(db, A, itemId, {
+        title: "Plate pricing",
+        description: "How to price plates",
+        viewSharePercent: null,
+      });
+      const state = await loadOnboardingState(db, A);
+      expect(state.items.find(i => i.id === edited.itemId)).toMatchObject({ status: "confirmed" });
+      expect(state.pillarSubtopics).toEqual([]);
+    } finally {
+      await q(readFileSync(path.join(root, "drizzle/0104_pillar_subtopics.sql"), "utf8"));
+    }
+  });
+
+  it("does not restore a superseded row that the user did not delete", async () => {
+    await confirmProfile(db, A, preview("test.kitchen"));
+    const { itemId } = await addItem(db, A, "audience", { who: "Owners", outcome: "save time" });
+    await q(
+      "UPDATE personalization_items SET status = 'superseded', dismissedFromStatus = NULL WHERE id = ?",
+      [itemId]
+    );
+    await expect(restorePersonalizationItem(db, A, itemId)).rejects.toMatchObject({ code: "CONFLICT" });
+    const [rows] = await q("SELECT status FROM personalization_items WHERE id = ?", [itemId]);
+    expect((rows as Array<{ status: string }>)[0].status).toBe("superseded");
+  });
+
+  it("audience may have an empty outcome from the single-field editor", async () => {
+    await confirmProfile(db, A, preview("test.kitchen"));
+    const { itemId: audienceId } = await addItem(db, A, "audience", { who: "Students", outcome: "" });
+    const state = await loadOnboardingState(db, A);
+    expect(state.items.find(i => i.id === audienceId)?.payload).toMatchObject({ who: "Students", outcome: "" });
+  });
+
+  it("an audience edited from the single field keeps its stored outcome", async () => {
+    await confirmProfile(db, A, preview("test.kitchen"));
+    const { itemId: a1 } = await addItem(db, A, "audience", { who: "Restaurant owners", outcome: "cut food cost" });
+    const { itemId: a2 } = await editItem(db, A, a1, { who: "Restaurant owners in Texas", outcome: "cut food cost" });
+    const state = await loadOnboardingState(db, A);
+    expect(state.items.find(i => i.id === a2)?.payload).toEqual({
+      who: "Restaurant owners in Texas",
+      outcome: "cut food cost",
     });
   });
 });

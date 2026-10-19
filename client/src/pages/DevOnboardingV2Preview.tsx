@@ -5,7 +5,7 @@
  *        |what_works|goal|audience|pillars
  *        &platform=instagram|tiktok|youtube &error=not_found &selected=1
  *        &run=running|failed|succeeded   (analysis line on 3a/3b)
- *        &ai=idle|running|failed|clarify &empty=1   (step 4)
+ *        &ai=idle|running|failed|clarify &empty=1 &saveFail=1  (step 4)
  */
 import { useState } from "react";
 import { useSearch } from "wouter";
@@ -37,6 +37,7 @@ import {
   GoalStep,
   PillarsStep,
   type AiState,
+  type PillarSubtopicView,
   type StepItem,
 } from "@/components/onboarding-v2/step4";
 import type {
@@ -84,6 +85,11 @@ const FAKE_AUDIENCES: StepItem<AudiencePayload>[] = [
   { id: "a1", status: "suggested", evidence: "profile_inferred", payload: { who: "busy parents", outcome: "cook dinner in 20 minutes" } },
   { id: "a2", status: "suggested", evidence: "profile_inferred", payload: { who: "new home cooks", outcome: "build confidence in the kitchen" } },
 ];
+const FAKE_SUBTOPICS: PillarSubtopicView[] = [
+  { id: "s1", pillarItemId: "p1", label: "Budget weeknight recipes", status: "suggested" },
+  { id: "s2", pillarItemId: "p1", label: "One-pan meals", status: "suggested" },
+];
+
 const FAKE_PILLARS: StepItem<PillarPayload>[] = [
   { id: "p1", status: "suggested", evidence: "performance_backed", payload: { title: "20-minute dinners", description: "Fast recipes for weeknights.", viewSharePercent: 48 } },
   { id: "p2", status: "suggested", evidence: "profile_inferred", payload: { title: "Kitchen basics", description: "Skills every new cook needs.", viewSharePercent: null } },
@@ -107,6 +113,9 @@ export default function DevOnboardingV2Preview() {
   const [p, setP] = useState<SocialPlatform | null>(platform);
   const [handle, setHandle] = useState(preselect || error ? "@sample.creator" : "");
   const noop = () => undefined;
+  // saveFail=1 simulates a server failure on every save (the editor must stay open).
+  const saveFail = params.get("saveFail") === "1";
+  const noopSave = async () => !saveFail;
   const run = (params.get("run") ?? "running") as AnalysisRunStatus;
   const empty = params.get("empty") === "1";
   const aiParam = params.get("ai") ?? "idle";
@@ -192,16 +201,16 @@ export default function DevOnboardingV2Preview() {
           goals={empty ? [] : params.get("goals") === "5" ? [...FAKE_GOALS, ...FAKE_GOALS.map(g => ({ ...g, id: g.id + "b" })), { ...FAKE_GOALS[0], id: "g5" }] : FAKE_GOALS}
           niche={empty ? null : { id: "n1", status: "suggested", evidence: "profile_inferred", payload: { slug: "food", label: "Food" } }}
           language={empty ? null : { id: "l1", status: "suggested", evidence: "profile_inferred", payload: { code: "en", label: "English" } }}
-          onSaveGoal={noop}
+          onSaveGoal={noopSave}
           onRemoveGoal={noop}
-          onSaveNiche={noop}
-          onSaveLanguage={noop}
+          onSaveNiche={noopSave}
+          onSaveLanguage={noopSave}
         />
       );
     case "audience":
-      return <AudienceStep common={common} audiences={empty ? [] : FAKE_AUDIENCES} onSave={noop} onRemove={noop} />;
+      return <AudienceStep common={common} audiences={empty ? [] : FAKE_AUDIENCES} onSave={noopSave} onRemove={noop} />;
     case "pillars":
-      return <PillarsStep common={common} pillars={empty ? [] : FAKE_PILLARS} onSave={noop} onRemove={noop} />;
+      return <PillarsStep common={common} pillars={empty ? [] : FAKE_PILLARS} subtopics={empty ? [] : FAKE_SUBTOPICS} onSave={noopSave} onRemove={noop} onRemoveSubtopic={noop} />;
     case "niche":
       return (
         <GrowthNicheStep

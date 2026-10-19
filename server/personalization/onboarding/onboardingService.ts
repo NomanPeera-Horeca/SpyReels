@@ -24,6 +24,7 @@ import {
   type AttributionSource,
   type ItemPayloadByKind,
   type PersonalizationItemKind,
+  type PillarPayload,
   type PersonalizationStep,
   type PrimaryUseCase,
   type SocialPlatform,
@@ -53,6 +54,11 @@ import { users } from "../../../drizzle/schema";
 import type { Db } from "../db/analysisStore";
 import { pickBestPost, type BestPost } from "@shared/personalization/bestPost";
 import { toItemRecord } from "../db/rows";
+import {
+  listProfileSubtopics,
+  moveSubtopicsOntoPillar,
+  subtopicsTableReady,
+} from "../subtopics";
 
 export type OnboardingCtx = { userId: number; workspaceId: string };
 
@@ -108,6 +114,20 @@ export type OnboardingStateView = {
   steps: Record<PersonalizationStep, StepStatus>;
   version: number;
   items: OnboardingItemView[];
+  /**
+   * Subtopics for the active profile, including dismissed rows.
+   * pillarItemId is the active pillar after a title or description edit.
+   * Render status "suggested" or "confirmed" only, and only for a live pillar.
+   * Dismissed rows are returned so a client does not offer a removed topic.
+   * Empty when the table is not migrated yet.
+   */
+  pillarSubtopics: {
+    id: string;
+    pillarItemId: string;
+    label: string;
+    status: "suggested" | "confirmed" | "dismissed";
+    source: "ai_suggested" | "user_entered" | "user_edited";
+  }[];
   completedAt: Date | null;
 };
 
@@ -262,6 +282,15 @@ export async function loadOnboardingState(db: Db, ctx: OnboardingCtx): Promise<O
       source: i.source,
       evidence: i.evidence,
     })),
+    pillarSubtopics: profile
+      ? (await listProfileSubtopics(db, profile.id, ctx.workspaceId)).map(s => ({
+          id: s.id,
+          pillarItemId: s.pillarItemId,
+          label: s.label,
+          status: s.status,
+          source: s.source,
+        }))
+      : [],
     completedAt: progress?.completedAt ?? null,
   };
 }
@@ -513,20 +542,35 @@ export async function editItem(
   const progress = await ensureProgress(db, profile.id, ctx.workspaceId);
   const plan = planItemEdit(item, payload, progress.personalizationVersion);
   const newId = randomUUID();
+  const moveTopics = plan.insert.kind === "pillar" && (await subtopicsTableReady(db));
   await db.transaction(async tx => {
-    const res = await tx
+    const locked = await tx
+      .select({ id: personalizationItems.id })
+      .from(personalizationItems)
+      .where(
+        and(
+          eq(personalizationItems.id, plan.supersedeItemId),
+          eq(personalizationItems.socialProfileId, profile.id),
+          eq(personalizationItems.workspaceId, ctx.workspaceId),
+          inArray(personalizationItems.status, ["suggested", "confirmed"])
+        )
+      )
+      .for("update")
+      .limit(1);
+    if (!locked[0]) {
+      throw new TRPCError({ code: "CONFLICT", message: "This value changed. Reload and try again." });
+    }
+    await tx
       .update(personalizationItems)
       .set({ status: "superseded" })
       .where(
         and(
           eq(personalizationItems.id, plan.supersedeItemId),
+          eq(personalizationItems.socialProfileId, profile.id),
+          eq(personalizationItems.workspaceId, ctx.workspaceId),
           inArray(personalizationItems.status, ["suggested", "confirmed"])
         )
       );
-    const affected = (res as unknown as [{ affectedRows?: number }])[0]?.affectedRows;
-    if (affected === 0) {
-      throw new TRPCError({ code: "CONFLICT", message: "This value changed. Reload and try again." });
-    }
     await tx.insert(personalizationItems).values({
       id: newId,
       workspaceId: ctx.workspaceId,
@@ -538,10 +582,20 @@ export async function editItem(
       evidence: plan.insert.evidence,
       basedOnVersion: plan.insert.basedOnVersion,
       dismissedAtVersion: null,
+      dismissedFromStatus: null,
       supersedesItemId: plan.insert.supersedesItemId,
       analysisRunId: plan.insert.analysisRunId,
       createdByUserId: ctx.userId,
     });
+    if (moveTopics) {
+      await moveSubtopicsOntoPillar(tx, {
+        workspaceId: ctx.workspaceId,
+        socialProfileId: profile.id,
+        fromPillarItemId: plan.supersedeItemId,
+        toPillarItemId: newId,
+        nextTitle: (plan.insert.payload as PillarPayload).title,
+      });
+    }
     if (plan.nextVersion !== progress.personalizationVersion) {
       await tx
         .update(personalizationProgress)
@@ -574,18 +628,142 @@ export async function addItem<K extends PersonalizationItemKind>(
 export async function removeItem(db: Db, ctx: OnboardingCtx, itemId: string) {
   const { profile, item } = await itemOfActiveProfile(db, ctx, itemId);
   const progress = await ensureProgress(db, profile.id, ctx.workspaceId);
-  if (item.status === "suggested") {
-    const plan = planDismiss(item, progress.personalizationVersion);
-    await db
+  await db.transaction(async tx => {
+    const locked = await tx
+      .select({ id: personalizationItems.id, status: personalizationItems.status })
+      .from(personalizationItems)
+      .where(
+        and(
+          eq(personalizationItems.id, item.id),
+          eq(personalizationItems.socialProfileId, profile.id),
+          eq(personalizationItems.workspaceId, ctx.workspaceId),
+          inArray(personalizationItems.status, ["suggested", "confirmed"])
+        )
+      )
+      .for("update")
+      .limit(1);
+    const row = locked[0];
+    if (!row) return;
+    if (row.status === "suggested") {
+      const plan = planDismiss(
+        { ...item, status: "suggested" },
+        progress.personalizationVersion
+      );
+      await tx
+        .update(personalizationItems)
+        .set({
+          status: "dismissed",
+          dismissedAtVersion: plan.dismissedAtVersion,
+          dismissedFromStatus: "suggested",
+        })
+        .where(
+          and(
+            eq(personalizationItems.id, row.id),
+            eq(personalizationItems.socialProfileId, profile.id),
+            eq(personalizationItems.workspaceId, ctx.workspaceId),
+            eq(personalizationItems.status, "suggested")
+          )
+        );
+    } else {
+      await tx
+        .update(personalizationItems)
+        .set({ status: "superseded", dismissedFromStatus: "confirmed" })
+        .where(
+          and(
+            eq(personalizationItems.id, row.id),
+            eq(personalizationItems.socialProfileId, profile.id),
+            eq(personalizationItems.workspaceId, ctx.workspaceId),
+            eq(personalizationItems.status, "confirmed")
+          )
+        );
+    }
+  });
+}
+
+/**
+ * Undo a user delete. The same row comes back, so its subtopics stay attached.
+ * An edit (a live successor) is not undone here. AI regeneration is not undone.
+ * Subtopic statuses are not changed, so a dismissed topic stays dismissed.
+ */
+export async function restorePersonalizationItem(
+  db: Db,
+  ctx: OnboardingCtx,
+  itemId: string
+): Promise<{ itemId: string }> {
+  const { profile } = await itemOfActiveProfile(db, ctx, itemId);
+  await db.transaction(async tx => {
+    const locked = await tx
+      .select({
+        id: personalizationItems.id,
+        status: personalizationItems.status,
+        dismissedFromStatus: personalizationItems.dismissedFromStatus,
+      })
+      .from(personalizationItems)
+      .where(
+        and(
+          eq(personalizationItems.id, itemId),
+          eq(personalizationItems.socialProfileId, profile.id),
+          eq(personalizationItems.workspaceId, ctx.workspaceId)
+        )
+      )
+      .for("update")
+      .limit(1);
+    const row = locked[0];
+    if (!row) notFound();
+    if (row.status === "suggested" || row.status === "confirmed") return;
+    if (row.status === "dismissed") {
+      const back = row.dismissedFromStatus === "confirmed" ? "confirmed" : "suggested";
+      await tx
+        .update(personalizationItems)
+        .set({ status: back, dismissedAtVersion: null, dismissedFromStatus: null })
+        .where(
+          and(
+            eq(personalizationItems.id, row.id),
+            eq(personalizationItems.socialProfileId, profile.id),
+            eq(personalizationItems.workspaceId, ctx.workspaceId),
+            eq(personalizationItems.status, "dismissed")
+          )
+        );
+      return;
+    }
+    if (row.dismissedFromStatus !== "confirmed") {
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "This value was replaced and cannot be restored.",
+      });
+    }
+    const successors = await tx
+      .select({ id: personalizationItems.id })
+      .from(personalizationItems)
+      .where(
+        and(
+          eq(personalizationItems.supersedesItemId, row.id),
+          eq(personalizationItems.socialProfileId, profile.id),
+          eq(personalizationItems.workspaceId, ctx.workspaceId),
+          inArray(personalizationItems.status, ["suggested", "confirmed"])
+        )
+      )
+      .for("update");
+    if (successors.length > 0) {
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "A newer edit is already active.",
+      });
+    }
+    await tx
       .update(personalizationItems)
-      .set({ status: "dismissed", dismissedAtVersion: plan.dismissedAtVersion })
-      .where(and(eq(personalizationItems.id, item.id), eq(personalizationItems.status, "suggested")));
-  } else if (item.status === "confirmed") {
-    await db
-      .update(personalizationItems)
-      .set({ status: "superseded" })
-      .where(and(eq(personalizationItems.id, item.id), eq(personalizationItems.status, "confirmed")));
-  }
+      .set({ status: "confirmed", dismissedFromStatus: null })
+      .where(
+        and(
+          eq(personalizationItems.id, row.id),
+          eq(personalizationItems.socialProfileId, profile.id),
+          eq(personalizationItems.workspaceId, ctx.workspaceId),
+          eq(personalizationItems.status, "superseded"),
+          eq(personalizationItems.dismissedFromStatus, "confirmed")
+        )
+      );
+  });
+  return { itemId };
 }
 
 /**

@@ -38,8 +38,10 @@
 -- * At most one queued/running analysis per profile (UNIQUE activeProfileSlot).
 --
 -- Full erasure (e.g. a data-deletion request) is an explicit ops procedure that
--- deletes in this order: selections, items, progress, stages, runs, profiles
--- (see PERSONALIZATION_PURGE_ORDER in server/personalization/lifecycle.ts).
+-- deletes in this order: selections, pillar_subtopics, items, progress, stages,
+-- runs, profiles (see PERSONALIZATION_PURGE_ORDER in
+-- server/personalization/lifecycle.ts). Subtopics reference items, so they
+-- must go first.
 --
 -- Rollback (only while no deployed code reads these tables): see bottom.
 
@@ -162,6 +164,7 @@ CREATE TABLE IF NOT EXISTS `personalization_items` (
   `payload` json NOT NULL,
   `source` enum('ai_suggested','user_entered','user_edited') NOT NULL,
   `status` enum('suggested','confirmed','dismissed','superseded') NOT NULL,
+  `dismissedFromStatus` enum('suggested','confirmed') NULL,
   `evidence` enum('performance_backed','profile_inferred','user_provided') NOT NULL,
   `basedOnVersion` int NOT NULL,
   `dismissedAtVersion` int NULL,
@@ -190,7 +193,8 @@ CREATE TABLE IF NOT EXISTS `personalization_items` (
     OR JSON_TYPE(JSON_EXTRACT(`payload`, '$.viewSharePercent')) = 'NULL'
   ),
   CONSTRAINT `chk_personalization_items_dismissed` CHECK ((`status` = 'dismissed') = (`dismissedAtVersion` IS NOT NULL)),
-  CONSTRAINT `chk_personalization_items_confidence` CHECK (`confidence` IS NULL OR `source` = 'ai_suggested')
+  CONSTRAINT `chk_personalization_items_confidence` CHECK (`confidence` IS NULL OR `source` = 'ai_suggested'),
+  CONSTRAINT `chk_personalization_items_restore_memory` CHECK (`dismissedFromStatus` IS NULL OR `status` IN ('dismissed', 'superseded'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE IF NOT EXISTS `personalization_progress` (
@@ -210,7 +214,30 @@ CREATE TABLE IF NOT EXISTS `personalization_progress` (
   CONSTRAINT `chk_personalization_progress_version` CHECK (`personalizationVersion` >= 1)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+CREATE TABLE IF NOT EXISTS `pillar_subtopics` (
+  `id` varchar(36) NOT NULL,
+  `workspaceId` varchar(36) NOT NULL,
+  `socialProfileId` varchar(36) NOT NULL,
+  `pillarItemId` varchar(36) NOT NULL,
+  `label` varchar(80) NOT NULL,
+  `normalizedLabel` varchar(80) NOT NULL,
+  `normalizedPillarTitle` varchar(80) NOT NULL,
+  `status` enum('suggested','confirmed','dismissed') NOT NULL,
+  `dismissedFromStatus` enum('suggested','confirmed') NULL,
+  `source` enum('ai_suggested','user_entered','user_edited') NOT NULL,
+  `basedOnPillarHash` varchar(64) NOT NULL,
+  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_pillar_subtopics_pillar_label` (`pillarItemId`, `normalizedLabel`),
+  KEY `idx_pillar_subtopics_profile_title` (`socialProfileId`, `normalizedPillarTitle`, `status`),
+  CONSTRAINT `fk_pillar_subtopics_profile` FOREIGN KEY (`socialProfileId`, `workspaceId`) REFERENCES `social_profiles` (`id`, `workspaceId`) ON DELETE RESTRICT,
+  CONSTRAINT `fk_pillar_subtopics_pillar` FOREIGN KEY (`pillarItemId`) REFERENCES `personalization_items` (`id`) ON DELETE RESTRICT,
+  CONSTRAINT `chk_pillar_subtopics_dismiss_memory` CHECK (`dismissedFromStatus` IS NULL OR `status` = 'dismissed')
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
 -- ROLLBACK (manual, only while no deployed code reads these tables):
+-- DROP TABLE IF EXISTS `pillar_subtopics`;
 -- DROP TABLE IF EXISTS `personalization_progress`;
 -- DROP TABLE IF EXISTS `personalization_items`;
 -- DROP TABLE IF EXISTS `profile_analysis_stages`;

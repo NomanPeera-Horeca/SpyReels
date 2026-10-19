@@ -556,7 +556,6 @@ describe("Pillar recommendations", () => {
             title: "Viral fryer tips",
             serves: "Your best performing topic with 40% of views.",
           },
-          ...good.pillars.slice(1),
         ],
         confidence: "high",
       },
@@ -684,6 +683,11 @@ class MemoryRecoStore implements RecommendationStore {
     input: Parameters<RecommendationStore["applyGeneratedSuggestions"]>[1]
   ) {
     this.beforeWrite?.();
+    if (
+      input.expectedVersion !== undefined &&
+      input.expectedVersion !== this.version
+    )
+      return "stale" as const;
     const ok =
       input.guard.type === "no_confirmed"
         ? !this.items.some(
@@ -762,6 +766,10 @@ describe("generateRecommendations: Goal -> Audience -> Pillars", () => {
   it("never regenerates over a confirmed goal", async () => {
     const store = new MemoryRecoStore();
     store.items.push(item("goal", { text: "My own goal." }));
+    store.items.push(
+      item("niche", { slug: "restaurants-cafes", label: "Restaurants & Cafes" })
+    );
+    store.items.push(item("language", { code: "en", label: "English" }));
     const llm = fakeLlm();
     expect(
       await generateRecommendations(
@@ -783,8 +791,10 @@ describe("generateRecommendations: Goal -> Audience -> Pillars", () => {
       { store, invoker: llm.invoker },
       { ctx, socialProfileId: "prof-1", step: "goal" }
     );
-    expect(r).toMatchObject({ status: "generated", inserted: 1 });
-    const g = store.items[0] as ItemRecord & {
+    expect(r).toMatchObject({ status: "generated" });
+    expect(store.items.some(i => i.kind === "niche")).toBe(true);
+    expect(store.items.some(i => i.kind === "language")).toBe(true);
+    const g = store.items.find(i => i.kind === "goal") as ItemRecord & {
       generationMeta: GeneratedInsert["generationMeta"];
     };
     expect(g).toMatchObject({
@@ -993,6 +1003,22 @@ describe("generateRecommendations: Goal -> Audience -> Pillars", () => {
     );
     expect(r.status).toBe("stale_discarded");
     expect(store.items.filter(i => i.kind === "audience")).toEqual([]);
+  });
+
+  it("race: a newer personalization version discards the in-flight goal", async () => {
+    const store = new MemoryRecoStore();
+    store.beforeWrite = () => {
+      store.version = 2;
+    };
+    const llm = fakeLlm(
+      goalOut("Help restaurant owners choose the right equipment.")
+    );
+    const r = await generateRecommendations(
+      { store, invoker: llm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "goal" }
+    );
+    expect(r.status).toBe("stale_discarded");
+    expect(store.items.filter(i => i.kind === "goal")).toEqual([]);
   });
 
   it("race: the user confirms their own goal while the AI goal is generating, the AI goal is dropped", async () => {

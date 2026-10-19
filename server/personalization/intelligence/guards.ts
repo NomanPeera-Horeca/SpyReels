@@ -17,6 +17,28 @@ export function sanitizeCopy(text: string): string {
     .trim();
 }
 
+function topicTokens(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .split(/\s+/)
+    .filter(w => w.length > 2);
+}
+
+/**
+ * True when the suggestion copies a stretch of the creator's own bio or
+ * captions. A short purpose sentence that shares a few words is allowed.
+ */
+export function copiesSourceText(text: string, source: string): boolean {
+  const words = topicTokens(text);
+  const src = topicTokens(source).join(" ");
+  if (words.length < 8 || src.length < 40) return false;
+  for (let i = 0; i + 6 <= words.length; i++) {
+    if (src.includes(words.slice(i, i + 6).join(" "))) return true;
+  }
+  return false;
+}
+
 /** Numbers in the output must already appear in the evidence (no invented stats). */
 export function unsupportedNumbers(text: string, corpus: string): string[] {
   return (text.match(/\d[\d,.]*%?/g) ?? []).filter(

@@ -316,6 +316,8 @@ export const personalizationItems = mysqlTable(
       .notNull(),
     source: mysqlEnum("source", ITEM_SOURCES).notNull(),
     status: mysqlEnum("status", ITEM_STATUSES).notNull(),
+    /** Set only while dismissed or superseded by a user delete, so Undo can return the previous status. */
+    dismissedFromStatus: mysqlEnum("dismissedFromStatus", ["suggested", "confirmed"]),
     evidence: mysqlEnum("evidence", ITEM_EVIDENCE).notNull(),
     basedOnVersion: int("basedOnVersion").notNull(),
     dismissedAtVersion: int("dismissedAtVersion"),
@@ -378,6 +380,60 @@ export const personalizationItems = mysqlTable(
       "chk_personalization_items_confidence",
       sql`${t.confidence} IS NULL OR ${t.source} = 'ai_suggested'`
     ),
+    check(
+      "chk_personalization_items_restore_memory",
+      sql`${t.dismissedFromStatus} IS NULL OR ${t.status} IN ('dismissed', 'superseded')`
+    ),
+  ]
+);
+
+const SUBTOPIC_STATUSES = ["suggested", "confirmed", "dismissed"] as const;
+const SUBTOPIC_LIVE_STATUSES = ["suggested", "confirmed"] as const;
+
+/**
+ * Video topics under a pillar. Rows are never deleted.
+ * An edit moves these rows onto the new pillar id and keeps each status,
+ * including dismissed. dismissedFromStatus is what Undo restores.
+ * Migration: drizzle/0104_pillar_subtopics.sql (additive, safe to re-run).
+ */
+export const pillarSubtopics = mysqlTable(
+  "pillar_subtopics",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspaceId", { length: 36 }).notNull(),
+    socialProfileId: varchar("socialProfileId", { length: 36 }).notNull(),
+    pillarItemId: varchar("pillarItemId", { length: 36 }).notNull(),
+    label: varchar("label", { length: 80 }).notNull(),
+    normalizedLabel: varchar("normalizedLabel", { length: 80 }).notNull(),
+    normalizedPillarTitle: varchar("normalizedPillarTitle", { length: 80 }).notNull(),
+    status: mysqlEnum("status", SUBTOPIC_STATUSES).notNull(),
+    dismissedFromStatus: mysqlEnum("dismissedFromStatus", SUBTOPIC_LIVE_STATUSES),
+    source: mysqlEnum("source", ITEM_SOURCES).notNull(),
+    basedOnPillarHash: varchar("basedOnPillarHash", { length: 64 }).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  t => [
+    unique("uq_pillar_subtopics_pillar_label").on(t.pillarItemId, t.normalizedLabel),
+    index("idx_pillar_subtopics_profile_title").on(
+      t.socialProfileId,
+      t.normalizedPillarTitle,
+      t.status
+    ),
+    check(
+      "chk_pillar_subtopics_dismiss_memory",
+      sql`${t.dismissedFromStatus} IS NULL OR ${t.status} = 'dismissed'`
+    ),
+    foreignKey({
+      name: "fk_pillar_subtopics_profile",
+      columns: [t.socialProfileId, t.workspaceId],
+      foreignColumns: [socialProfiles.id, socialProfiles.workspaceId],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "fk_pillar_subtopics_pillar",
+      columns: [t.pillarItemId],
+      foreignColumns: [personalizationItems.id],
+    }).onDelete("restrict"),
   ]
 );
 

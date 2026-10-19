@@ -390,12 +390,21 @@ function DashboardLayoutContent({
   const onboardingStateQuery = trpc.onboarding.getState.useQuery(undefined, {
     staleTime: 60_000,
   });
+  const homeContextQuery = trpc.homeV2.context.useQuery(undefined, {
+    enabled: homeV2,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+  });
 
-  const nicheLabel = resolvePrimaryNicheLabel({
+  const legacyNicheLabel = resolvePrimaryNicheLabel({
     businessDescription: onboardingStateQuery.data?.businessDescription,
     targetAudience: onboardingStateQuery.data?.targetAudience,
     selectedNicheSlugs: onboardingStateQuery.data?.selectedNicheSlugs,
   });
+  const nicheLabel =
+    homeV2 && homeContextQuery.data?.nicheLabel
+      ? homeContextQuery.data.nicheLabel
+      : legacyNicheLabel;
 
   const savedTargetAudience = onboardingStateQuery.data?.targetAudience?.trim() || null;
   const targetAudience =

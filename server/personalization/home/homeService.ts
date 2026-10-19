@@ -49,6 +49,15 @@ export type HomeContext = {
 
 const ORDER: PersonalizationStep[] = ["goal", "audience", "pillars"];
 
+/**
+ * Pool matching follows the confirmed niche label when the user has one.
+ * Goal and pillar text must not pull videos from a different niche than the
+ * label Home shows.
+ */
+export function videoMatchText(context: HomeContext): string | null {
+  return context.nicheLabel ?? context.description;
+}
+
 /** Pure: personalization state -> Home context. Uses confirmed items only. */
 export function homeContextFromState(state: OnboardingStateView | null): HomeContext {
   if (!state) {
