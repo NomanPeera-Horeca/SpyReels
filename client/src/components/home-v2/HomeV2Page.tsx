@@ -36,6 +36,7 @@ import { useExperienceAccess } from "@/lib/experienceAccess";
 import { useLibraryRemakeChain } from "@/hooks/useLibraryRemakeChain";
 import { ingestUrlAndStartLibraryRemake } from "@/lib/ingestUrlAndStartLibraryRemake";
 import { buildRemakeIntentMedia } from "@/lib/remakeIntent";
+import { ViralPostPlayer } from "@/components/ViralPostPlayer";
 import { HOME_COPY as C } from "./copy";
 import {
   AgentComposer,
@@ -133,6 +134,8 @@ export default function HomeV2Page() {
   const [savedOverride, setSavedOverride] = useState<Record<string, boolean>>(
     {}
   );
+  const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
+  const closePlayer = useCallback(() => setPlayingVideoId(null), []);
 
   const ctx = contextQ.data;
   const complete = ctx?.personalizationComplete ?? false;
@@ -297,6 +300,17 @@ export default function HomeV2Page() {
   const showBanner = Boolean(ctx) && !complete && !bannerDismissed;
   const creators = creatorsQ.data;
   const videos = videosQ.data;
+  const playingPost = useMemo(() => {
+    if (!playingVideoId || !videos) return null;
+    return videos.items.find(item => item.id === playingVideoId) ?? null;
+  }, [playingVideoId, videos]);
+
+  useEffect(() => {
+    if (!playingVideoId || !videos) return;
+    if (!videos.items.some(item => item.id === playingVideoId)) {
+      setPlayingVideoId(null);
+    }
+  }, [playingVideoId, videos]);
   const videosSubtitle =
     videos?.personalized && nicheLabel
       ? `${nicheLabel} · ${C.videos.allPlatforms}`
@@ -506,6 +520,7 @@ export default function HomeV2Page() {
                       post={p}
                       compact={compact}
                       busy={remakeBusyId === post.id}
+                      onPlay={() => setPlayingVideoId(post.id)}
                       onRemake={() => void createFromVideo(post)}
                       onToggleSave={() => void toggleSave(p)}
                     />
@@ -619,6 +634,9 @@ export default function HomeV2Page() {
           ) : null}
         </aside>
 
+        {playingPost ? (
+          <ViralPostPlayer key={playingPost.id} post={playingPost} onClose={closePlayer} />
+        ) : null}
         {profilesOpen ? (
           <ManageProfilesModal
             profiles={profilesQ.data ?? []}
