@@ -528,13 +528,13 @@ export default function OnboardingV2Flow() {
           goals={of<GoalPayload>("goal").slice(0, MAX_GOALS)}
           niche={of<NichePayload>("niche")[0] ?? null}
           language={of<LanguagePayload>("language")[0] ?? null}
-          onSaveGoal={(p, id) => void saveItem("goal", p, id)}
+          onSaveGoal={(p, id) => saveItem("goal", p, id)}
           onRemoveGoal={id => void run(async () => {
             await removeItem.mutateAsync({ itemId: id });
             await refresh();
           }, "goal")}
-          onSaveNiche={(p, id) => void saveItem("niche", p, id)}
-          onSaveLanguage={(p, id) => void saveItem("language", p, id)}
+          onSaveNiche={(p, id) => saveItem("niche", p, id)}
+          onSaveLanguage={(p, id) => saveItem("language", p, id)}
         />
       );
     case "audience":
@@ -542,7 +542,7 @@ export default function OnboardingV2Flow() {
         <AudienceStep
           common={common("audience")}
           audiences={of<AudiencePayload>("audience")}
-          onSave={(p, id) => void saveItem("audience", p, id)}
+          onSave={(p, id) => saveItem("audience", p, id)}
           onRemove={id => void run(async () => {
             await removeItem.mutateAsync({ itemId: id });
             await refresh();
@@ -554,7 +554,7 @@ export default function OnboardingV2Flow() {
         <PillarsStep
           common={common("pillars")}
           pillars={of<PillarPayload>("pillar")}
-          onSave={(p, id) => void saveItem("pillar", p, id)}
+          onSave={(p, id) => saveItem("pillar", p, id)}
           onRemove={id => void run(async () => {
             await removeItem.mutateAsync({ itemId: id });
             await refresh();
