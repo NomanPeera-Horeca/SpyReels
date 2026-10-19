@@ -35,6 +35,7 @@ import { retryPillarSubtopics } from "../personalization/retrySubtopics";
 import {
   addPillarSubtopic,
   dismissPillarSubtopic,
+  restorePillarSubtopic,
 } from "../personalization/subtopics";
 import {
   addItem,
@@ -43,6 +44,7 @@ import {
   editItem,
   loadOnboardingState,
   removeItem,
+  restorePersonalizationItem,
   resolveStep,
   saveAttribution,
   saveUseCase,
@@ -263,6 +265,13 @@ export const onboardingV2Router = router({
       return { ok: true as const };
     }),
 
+  /** Undo a user delete of a goal, audience, pillar, niche or language. */
+  restorePersonalizationItem: v2Procedure
+    .input(z.object({ itemId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) =>
+      restorePersonalizationItem(await requireDb(), octx(ctx), input.itemId)
+    ),
+
   resolveStep: v2Procedure
     .input(z.object({ step: z.enum(PERSONALIZATION_STEPS), action: z.enum(["confirm", "skip"]) }))
     .mutation(async ({ ctx, input }) =>
@@ -296,7 +305,7 @@ export const onboardingV2Router = router({
       return result;
     }),
 
-  /** Claude's editing UI: remove a subtopic. The row stays dismissed. */
+  /** Claude's editing UI: remove a subtopic. The row stays, with its previous status saved. */
   dismissPillarSubtopic: v2Procedure
     .input(z.object({ subtopicId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
@@ -304,6 +313,24 @@ export const onboardingV2Router = router({
       const state = await loadOnboardingState(db, octx(ctx));
       if (!state.profile) throw new TRPCError({ code: "BAD_REQUEST", message: "No profile yet." });
       const result = await dismissPillarSubtopic(db, {
+        workspaceId: ctx.workspaceId,
+        socialProfileId: state.profile.id,
+        subtopicId: input.subtopicId,
+      });
+      if (!result.ok && result.reason === "not_found") {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Subtopic not found." });
+      }
+      return result;
+    }),
+
+  /** Undo one subtopic dismissal. Does not restore any other topic. */
+  restorePillarSubtopic: v2Procedure
+    .input(z.object({ subtopicId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await requireDb();
+      const state = await loadOnboardingState(db, octx(ctx));
+      if (!state.profile) throw new TRPCError({ code: "BAD_REQUEST", message: "No profile yet." });
+      const result = await restorePillarSubtopic(db, {
         workspaceId: ctx.workspaceId,
         socialProfileId: state.profile.id,
         subtopicId: input.subtopicId,

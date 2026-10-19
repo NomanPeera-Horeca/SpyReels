@@ -713,4 +713,80 @@ describe.skipIf(!url)("personalization schema on real MySQL", () => {
       expect(await count("profile_analysis_runs")).toBe(runsBefore);
     });
   });
+
+  describe("migration 0104 pillar_subtopics", () => {
+    const migration = () =>
+      readFileSync(path.join(root, "drizzle/0104_pillar_subtopics.sql"), "utf8");
+
+    it("keeps existing pillars, enforces keys, and rolls back without deleting them", async () => {
+      const pillar = item({
+        kind: "pillar",
+        payload: JSON.stringify({
+          title: "Tours",
+          description: "",
+          viewSharePercent: null,
+        }),
+        source: "user_entered",
+        evidence: "user_provided",
+      });
+      await run(pillar.sql, pillar.params);
+      const ensureTable = async () => {
+        const [rows] = await run(
+          "SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'pillar_subtopics'"
+        );
+        if (Number((rows as Array<{ n: number }>)[0].n) === 0) await run(migration());
+      };
+      try {
+        await run("DROP TABLE pillar_subtopics");
+        await expect(run("SELECT COUNT(*) AS n FROM pillar_subtopics")).rejects.toMatchObject({
+          code: "ER_NO_SUCH_TABLE",
+        });
+        expect(await count("personalization_items", "id = ?", [pillar.id])).toBe(1);
+
+        await run(migration());
+        expect(await count("pillar_subtopics")).toBe(0);
+        expect(await count("personalization_items", "id = ?", [pillar.id])).toBe(1);
+
+        await run(
+          `INSERT INTO pillar_subtopics (id, workspaceId, socialProfileId, pillarItemId, label, normalizedLabel, normalizedPillarTitle, status, source, basedOnPillarHash)
+           VALUES ('st-1', ?, ?, ?, 'Food cost', 'food cost', 'tours', 'suggested', 'ai_suggested', 'h')`,
+          [WS_A, P_A, pillar.id]
+        );
+        await rejects(
+          `INSERT INTO pillar_subtopics (id, workspaceId, socialProfileId, pillarItemId, label, normalizedLabel, normalizedPillarTitle, status, source, basedOnPillarHash)
+           VALUES ('st-2', ?, ?, ?, 'Menu', 'menu', 'tours', 'suggested', 'ai_suggested', 'h')`,
+          [WS_B, P_A, pillar.id],
+          FK_CHILD
+        );
+        await rejects(
+          `INSERT INTO pillar_subtopics (id, workspaceId, socialProfileId, pillarItemId, label, normalizedLabel, normalizedPillarTitle, status, source, basedOnPillarHash)
+           VALUES ('st-3', ?, ?, '00000000-0000-4000-8000-000000000099', 'Menu', 'menu', 'tours', 'suggested', 'ai_suggested', 'h')`,
+          [WS_A, P_A],
+          FK_CHILD
+        );
+        await rejects(
+          `INSERT INTO pillar_subtopics (id, workspaceId, socialProfileId, pillarItemId, label, normalizedLabel, normalizedPillarTitle, status, source, basedOnPillarHash)
+           VALUES ('st-4', ?, ?, ?, 'Food Cost', 'food cost', 'tours', 'suggested', 'ai_suggested', 'h')`,
+          [WS_A, P_A, pillar.id],
+          DUP
+        );
+        await rejects(
+          `INSERT INTO pillar_subtopics (id, workspaceId, socialProfileId, pillarItemId, label, normalizedLabel, normalizedPillarTitle, status, dismissedFromStatus, source, basedOnPillarHash)
+           VALUES ('st-5', ?, ?, ?, 'Ghost', 'ghost', 'tours', 'suggested', 'suggested', 'ai_suggested', 'h')`,
+          [WS_A, P_A, pillar.id],
+          CHECK
+        );
+        await rejects("DELETE FROM personalization_items WHERE id = ?", [pillar.id], FK_PARENT);
+
+        await run("DROP TABLE pillar_subtopics");
+        expect(await count("personalization_items", "id = ?", [pillar.id])).toBe(1);
+        await run(migration());
+        await run(migration());
+        expect(await count("pillar_subtopics")).toBe(0);
+        expect(await count("personalization_items", "id = ?", [pillar.id])).toBe(1);
+      } finally {
+        await ensureTable();
+      }
+    });
+  });
 });

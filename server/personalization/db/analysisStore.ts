@@ -7,7 +7,9 @@
  *
  * Every write that touches personalization items runs in one transaction and
  * only ever inserts rows or moves rows to superseded/dismissed. Confirmed
- * rows are never updated in place.
+ * payloads are never edited in place. Undo of a user delete is the exception:
+ * restorePersonalizationItem returns that same row to its previous status
+ * and does not change subtopic rows.
  */
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { MySql2Database } from "drizzle-orm/mysql2";
