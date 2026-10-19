@@ -9,6 +9,7 @@
  * hidden when data is missing.
  */
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { toast } from "sonner";
 import type { SocialPlatform } from "@shared/personalization/model";
 import type { FollowerViralBadge } from "@shared/viralTier";
 import type { ViralPost } from "@shared/viralPosts";
@@ -24,6 +25,7 @@ import { ResultCard } from "@/design-system/ResultCard";
 import { PlatformFullColorMark } from "@/design-system/platformMarks";
 import { InstagramMark } from "@shared/ui/PlatformMarks";
 import { formatCompactCount } from "@/lib/viralPosts/format";
+import { safeHttpUrl } from "@/lib/viralPostPlayback";
 import { HOME_COPY as C } from "./copy";
 import styles from "./home.module.css";
 
@@ -374,6 +376,7 @@ export function HomeVideoCard({
   compact,
   onRemake,
   onToggleSave,
+  onPlay,
 }: {
   post: ViralPost;
   busy: boolean;
@@ -381,11 +384,13 @@ export function HomeVideoCard({
   compact: boolean;
   onRemake: () => void;
   onToggleSave: () => void;
+  /** Opens the existing in-app preview. Expand uses the same player on desktop. */
+  onPlay: () => void;
 }) {
   const title = post.hook?.trim() || post.caption?.trim() || C.videos.untitled;
   const views = formatCompactCount(post.views);
   const handle = (post.creatorHandle || "").replace(/^@/, "");
-  const open = () => window.open(post.sourceUrl, "_blank", "noopener,noreferrer");
+  const originalUrl = safeHttpUrl(post.sourceUrl);
   return (
     <ResultCard
       testId="home-result-card"
@@ -404,13 +409,20 @@ export function HomeVideoCard({
         saved: C.videos.saved,
         more: C.videos.more,
       }}
-      onPlay={open}
-      onExpand={compact ? undefined : open}
+      onPlay={onPlay}
+      onExpand={compact ? undefined : onPlay}
       onRemake={onRemake}
       remakeBusy={busy}
       saved={post.saved}
       onToggleSave={onToggleSave}
-      menu={[{ label: C.videos.openOriginal, href: post.sourceUrl }]}
+      menu={[
+        originalUrl
+          ? { label: C.videos.openOriginal, href: originalUrl }
+          : {
+              label: C.videos.openOriginal,
+              onSelect: () => toast.error("Original link unavailable"),
+            },
+      ]}
     />
   );
 }

@@ -1,12 +1,18 @@
 import { useState, useEffect, useRef, useCallback, useId, useMemo } from "react";
-import { createPortal } from "react-dom";
 import { usePostHog } from "@posthog/react";
 import { Loader2, Maximize2, Play, X } from "lucide-react";
 import { toast } from "sonner";
+import { ReelPreviewLightbox } from "@/components/ReelPreviewLightbox";
 import { cn } from "@/lib/utils";
 import { needsVideoUrlRefresh } from "@shared/mediaUrl";
 import { trpc } from "@/lib/trpc";
 import { formatVideoPreviewError } from "@/lib/videoPreviewError";
+import { lightboxMediaPhase } from "@/lib/lightboxA11y";
+import {
+  PlaybackSession,
+  playbackResultIsCurrent,
+} from "@/lib/playbackSession";
+import { resolveGridPlayableUrl } from "@/lib/resolveGridPlayableUrl";
 import {
   registerGridVideoPlayer,
   releaseGridVideoPlay,
@@ -14,6 +20,21 @@ import {
 } from "@/lib/gridVideoPlaybackCoordinator";
 
 type Size = "default" | "compact";
+
+function safeExternalWatch(
+  link: { href: string; label: string } | null | undefined
+): { href: string; label: string } | null {
+  const href = (link?.href ?? "").trim();
+  const label = (link?.label ?? "").trim();
+  if (!href || !label) return null;
+  try {
+    const url = new URL(href);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    return { href: url.toString(), label };
+  } catch {
+    return null;
+  }
+}
 
 /** Grid/list tile: thumbnail + optional inline playback when `videoUrl` exists (R2 or platform CDN). */
 export function DashboardReelGridMedia({
@@ -30,6 +51,9 @@ export function DashboardReelGridMedia({
   onVideoUrlResolved,
   fallbackLabel,
   autoStart = false,
+  surface = "tile",
+  externalWatch = null,
+  onDismiss,
 }: {
   thumbnailUrl: string | null | undefined;
   videoUrl: string | null | undefined;
@@ -49,20 +73,34 @@ export function DashboardReelGridMedia({
   fallbackLabel?: string;
   /** Start playback once on mount (used when only the active tile mounts a player). */
   autoStart?: boolean;
+  /**
+   * tile: thumbnail with inline playback (existing grids).
+   * lightbox: open the existing enlarged preview immediately.
+   */
+  surface?: "tile" | "lightbox";
+  /** Shown when in-app playback cannot start. http(s) only. */
+  externalWatch?: { href: string; label: string } | null;
+  /** Lightbox surface closed by the user. */
+  onDismiss?: () => void;
 }) {
+  const lightboxOnly = surface === "lightbox";
   const posthog = usePostHog();
   const [playingLocal, setPlayingLocal] = useState(false);
   const [thumbFailed, setThumbFailed] = useState(false);
   const [resolvedSrc, setResolvedSrc] = useState(() => (videoUrl ?? "").trim());
   const [videoFailed, setVideoFailed] = useState(false);
   const [isPreparing, setIsPreparing] = useState(false);
+  /** False until the first lightbox attempt finishes, so the overlay never sits empty. */
+  const [playbackSettled, setPlaybackSettled] = useState(!lightboxOnly);
   /** Portrait lightbox instead of native landscape fullscreen (native FS breaks 9:16 reels). */
-  const [enlarged, setEnlarged] = useState(false);
+  const [enlarged, setEnlarged] = useState(lightboxOnly);
   const videoRef = useRef<HTMLVideoElement>(null);
   const enlargedVideoRef = useRef<HTMLVideoElement>(null);
   const userPausedRef = useRef(false);
   const programmaticPauseRef = useRef(false);
   const mediaErrorRetryRef = useRef(false);
+  const sessionRef = useRef<PlaybackSession | null>(null);
+  if (sessionRef.current == null) sessionRef.current = new PlaybackSession();
   const fallbackId = useId();
   const playerId = useMemo(() => {
     if (platform === "tiktok" && reelId != null) return `tiktok-${reelId}`;
@@ -75,14 +113,7 @@ export function DashboardReelGridMedia({
     if (code) return `shortcode-${code}`;
     return fallbackId;
   }, [platform, reelId, shortcode, videoPageUrl, fallbackId]);
-  const igRefreshMutation = trpc.reels.refreshVideoUrl.useMutation();
-  const ttRefreshMutation = trpc.tiktokScrape.refreshVideoUrl.useMutation();
-  const igMutateAsync = igRefreshMutation.mutateAsync;
-  const ttMutateAsync = ttRefreshMutation.mutateAsync;
-  const refreshPending =
-    platform === "tiktok"
-      ? ttRefreshMutation.isPending
-      : igRefreshMutation.isPending;
+  const utils = trpc.useUtils();
   const isCompact = size === "compact";
   const isControlled = playingControlled !== undefined;
   const playing = isControlled ? playingControlled : playingLocal;
@@ -96,10 +127,12 @@ export function DashboardReelGridMedia({
   const setPlaying = useCallback(
     (next: boolean) => {
       if (!next) {
+        sessionRef.current?.cancel();
+        setIsPreparing(false);
         pauseVideoElement(true);
         releaseGridVideoPlay(playerId);
         userPausedRef.current = false;
-        setEnlarged(false);
+        if (!lightboxOnly) setEnlarged(false);
       } else {
         userPausedRef.current = false;
       }
@@ -109,10 +142,15 @@ export function DashboardReelGridMedia({
         setPlayingLocal(next);
       }
     },
-    [isControlled, onPlayingChange, playerId, pauseVideoElement]
+    [isControlled, lightboxOnly, onPlayingChange, playerId, pauseVideoElement]
   );
   const setPlayingRef = useRef(setPlaying);
   setPlayingRef.current = setPlaying;
+
+  useEffect(() => {
+    const session = sessionRef.current;
+    return () => session?.cancel();
+  }, []);
 
   useEffect(() => {
     return registerGridVideoPlayer(playerId, {
@@ -137,11 +175,12 @@ export function DashboardReelGridMedia({
       : Boolean(shortcode?.trim()));
 
   // Do not overwrite the active preview URL while the inline player is open.
+  // Lightbox keeps its own resolved URL and failure state until it unmounts.
   useEffect(() => {
-    if (playing) return;
+    if (playing || lightboxOnly) return;
     setResolvedSrc((videoUrl ?? "").trim());
     setVideoFailed(false);
-  }, [videoUrl, playing]);
+  }, [videoUrl, playing, lightboxOnly]);
 
   useEffect(() => {
     setThumbFailed(false);
@@ -173,102 +212,106 @@ export function DashboardReelGridMedia({
       })
       .catch(() => {
         capturePreviewEvent("reel_preview_play_failed", { reason: "play_promise_rejected" });
+        if (lightboxOnly) return;
         setVideoFailed(true);
         setPlaying(false);
       });
-  }, [capturePreviewEvent, setPlaying, enlarged]);
+  }, [capturePreviewEvent, lightboxOnly, setPlaying, enlarged]);
 
-  const resolvePlayableUrl = useCallback(async (): Promise<string | null> => {
-    const current = resolvedSrc || (videoUrl ?? "").trim();
-    const code = (shortcode ?? "").trim();
-    const pageUrl = (videoPageUrl ?? "").trim();
-    if (platform === "tiktok") {
-      if (reelId == null && !current && !pageUrl) return null;
-    } else if (!code && !current) {
-      return null;
-    }
-    if (current && !needsVideoUrlRefresh(current)) return current;
-
-    try {
-      if (platform === "tiktok") {
-        const result = await ttMutateAsync(
-          reelId != null
-            ? { videoId: reelId }
-            : { videoPageUrl: pageUrl || current }
-        );
-        const next = result.videoUrl.trim();
-        if (!next) return null;
-        setResolvedSrc(next);
-        onVideoUrlResolved?.(next);
-        return next;
-      }
-      if (!code) return current || null;
-      const result = await igMutateAsync({
-        shortcode: code,
-        reelId,
-      });
-      const next = result.videoUrl.trim();
-      if (!next) return null;
-      setResolvedSrc(next);
-      onVideoUrlResolved?.(next);
-      return next;
-    } catch (err) {
+  const reportRefreshFailure = useCallback(
+    (err: unknown) => {
       const message = formatVideoPreviewError(err);
       capturePreviewEvent("reel_preview_play_failed", {
         reason: "refresh_failed",
         message: message.slice(0, 200),
       });
-      return null;
-    }
-  }, [
-    resolvedSrc,
-    videoUrl,
-    shortcode,
-    reelId,
-    platform,
-    videoPageUrl,
-    igMutateAsync,
-    ttMutateAsync,
-    onVideoUrlResolved,
-    capturePreviewEvent,
-  ]);
+    },
+    [capturePreviewEvent]
+  );
 
-  const startPlayback = useCallback(async () => {
-    if (isPreparing) return;
+  const startPlayback = useCallback(async (source: "user" | "retry" = "user") => {
+    const session = sessionRef.current;
+    if (!session) return;
+    if (source === "user") mediaErrorRetryRef.current = false;
     setVideoFailed(false);
     userPausedRef.current = false;
     setIsPreparing(true);
     capturePreviewEvent("reel_preview_play_started");
-    try {
-      const src = await resolvePlayableUrl();
-      if (!src) {
-        capturePreviewEvent("reel_preview_play_failed", { reason: "no_playable_url" });
-        setVideoFailed(true);
-        setPlaying(false);
-        toast.error("Preview failed. Tap to try again.");
-        return;
-      }
-      requestGridVideoPlay(playerId);
-      setResolvedSrc(src);
-      setPlaying(true);
-    } finally {
-      setIsPreparing(false);
+    const outcome = await session.run((signal) =>
+      resolveGridPlayableUrl({
+        platform,
+        videoUrl: resolvedSrc || videoUrl,
+        shortcode,
+        reelId,
+        videoPageUrl,
+        signal,
+        refreshInstagram: async (body, refreshSignal) => {
+          try {
+            return await utils.client.reels.refreshVideoUrl.mutate(body, {
+              signal: refreshSignal,
+            });
+          } catch (err) {
+            if (!refreshSignal.aborted) reportRefreshFailure(err);
+            throw err;
+          }
+        },
+        refreshTikTok: async (body, refreshSignal) => {
+          try {
+            return await utils.client.tiktokScrape.refreshVideoUrl.mutate(body, {
+              signal: refreshSignal,
+            });
+          } catch (err) {
+            if (!refreshSignal.aborted) reportRefreshFailure(err);
+            throw err;
+          }
+        },
+      })
+    );
+    if (outcome.status === "stale" || !playbackResultIsCurrent(session.generation, outcome)) return;
+    if (outcome.status === "failed") {
+      capturePreviewEvent("reel_preview_play_failed", {
+        reason: outcome.reason === "timeout" ? "refresh_timeout" : "no_playable_url",
+      });
+      setVideoFailed(true);
+      setPlaybackSettled(true);
+      setPlaying(false);
+      if (!lightboxOnly) toast.error("Preview failed. Tap to try again.");
+      return;
     }
-  }, [isPreparing, resolvePlayableUrl, setPlaying, playerId, capturePreviewEvent]);
+    const src = outcome.value.url;
+    requestGridVideoPlay(playerId);
+    setResolvedSrc(src);
+    if (outcome.value.refreshed) onVideoUrlResolved?.(src);
+    setPlaying(true);
+    setIsPreparing(false);
+    setPlaybackSettled(true);
+  }, [
+    capturePreviewEvent,
+    lightboxOnly,
+    onVideoUrlResolved,
+    platform,
+    playerId,
+    reelId,
+    reportRefreshFailure,
+    resolvedSrc,
+    setPlaying,
+    shortcode,
+    utils,
+    videoPageUrl,
+    videoUrl,
+  ]);
 
   useEffect(() => {
-    if (!playing) {
-      pauseVideoElement(true);
-      mediaErrorRetryRef.current = false;
-    }
+    if (!playing) pauseVideoElement(true);
   }, [playing, pauseVideoElement]);
 
+  const shouldAutoStart = autoStart || lightboxOnly;
   const autoStartedRef = useRef(false);
   useEffect(() => {
-    if (!autoStart || autoStartedRef.current) return;
+    if (!shouldAutoStart || autoStartedRef.current) return;
     autoStartedRef.current = true;
     void startPlayback();
-  }, [autoStart, startPlayback]);
+  }, [shouldAutoStart, startPlayback]);
 
   const openEnlarged = useCallback(() => {
     const inline = videoRef.current;
@@ -315,6 +358,14 @@ export function DashboardReelGridMedia({
     }, 0);
   }, []);
 
+  const dismissLightbox = useCallback(() => {
+    sessionRef.current?.cancel();
+    setIsPreparing(false);
+    pauseVideoElement(true);
+    releaseGridVideoPlay(playerId);
+    onDismiss?.();
+  }, [onDismiss, pauseVideoElement, playerId]);
+
   // Block native browser fullscreen (landscape letterboxing of vertical reels).
   useEffect(() => {
     const v = videoRef.current;
@@ -354,20 +405,6 @@ export function DashboardReelGridMedia({
     };
   }, [playing, resolvedSrc, openEnlarged]);
 
-  useEffect(() => {
-    if (!enlarged) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closeEnlarged();
-    };
-    window.addEventListener("keydown", onKey);
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      document.body.style.overflow = prevOverflow;
-    };
-  }, [enlarged, closeEnlarged]);
-
   const handleVideoLoadedData = () => {
     tryPlay();
   };
@@ -398,64 +435,90 @@ export function DashboardReelGridMedia({
         if (previous && needsVideoUrlRefresh(previous)) {
           setResolvedSrc("");
         }
-        await startPlayback();
+        await startPlayback("retry");
       })();
       return;
     }
     capturePreviewEvent("reel_preview_play_failed", { reason: "video_element_error" });
     setVideoFailed(true);
     stopPlayback();
-    toast.error("Preview failed. Tap to try again.");
+    if (!lightboxOnly) toast.error("Preview failed. Tap to try again.");
   };
 
   const handleVideoEnded = () => {
     stopPlayback();
   };
 
+  const watchLink = safeExternalWatch(externalWatch);
+  // Failure wins over a refresh that is still pending, so the overlay cannot spin forever.
+  const lightboxPhase = lightboxMediaPhase({
+    videoFailed,
+    isPreparing,
+    playbackSettled,
+    hasPlayableSrc: Boolean(resolvedSrc),
+  });
+  const showLightbox = lightboxOnly || (enlarged && Boolean(resolvedSrc));
   const lightbox =
-    enlarged && resolvedSrc && typeof document !== "undefined"
-      ? createPortal(
-          <div
-            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 p-3 sm:p-6"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Enlarged video preview"
-            onClick={closeEnlarged}
-          >
-            <div
-              className="relative flex h-full max-h-[100dvh] w-full max-w-[min(100vw,calc(100dvh*9/16))] items-center justify-center"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <video
-                ref={enlargedVideoRef}
-                src={resolvedSrc}
-                poster={thumb || undefined}
-                controls
-                playsInline
-                controlsList="nofullscreen"
-                disablePictureInPicture
-                loop={false}
-                preload="auto"
-                className="max-h-[100dvh] max-w-full rounded-lg bg-black object-contain"
-                onPause={handleVideoPause}
-                onPlay={handleVideoPlay}
-                onError={handleVideoError}
-                onEnded={handleVideoEnded}
-              />
-              <button
-                type="button"
-                className="absolute right-2 top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-black/70 text-white backdrop-blur hover:bg-black/90"
-                aria-label="Close enlarged video"
-                title="Close"
-                onClick={closeEnlarged}
-              >
-                <X className="h-4 w-4" />
-              </button>
+    showLightbox && typeof document !== "undefined" ? (
+      <ReelPreviewLightbox
+        onClose={lightboxOnly ? dismissLightbox : closeEnlarged}
+        label={lightboxOnly ? "Video preview" : "Enlarged video preview"}
+      >
+        {lightboxOnly && lightboxPhase !== "video" ? (
+          lightboxPhase === "loading" ? (
+            <Loader2 className="h-8 w-8 animate-spin text-white" aria-label="Loading video" />
+          ) : (
+            <div className="flex max-w-xs flex-col items-center gap-3 px-4 text-center text-white">
+              {thumb ? (
+                <img src={thumb} alt="" className="max-h-48 w-full rounded-lg object-cover" />
+              ) : null}
+              <p className="text-sm font-medium" role="status">
+                This video can't be played in SpyReels.
+              </p>
+              {hasResolvableVideo ? (
+                <button
+                  type="button"
+                  className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-black"
+                  onClick={() => void startPlayback()}
+                >
+                  Try again
+                </button>
+              ) : null}
+              {watchLink ? (
+                <a
+                  href={watchLink.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm font-semibold text-white underline"
+                >
+                  {watchLink.label}
+                </a>
+              ) : null}
             </div>
-          </div>,
-          document.body
-        )
-      : null;
+          )
+        ) : (
+          <video
+            ref={enlargedVideoRef}
+            src={resolvedSrc}
+            poster={thumb || undefined}
+            controls
+            playsInline
+            controlsList="nofullscreen"
+            disablePictureInPicture
+            loop={false}
+            preload="auto"
+            className="max-h-[100dvh] max-w-full rounded-lg bg-black object-contain"
+            onLoadedData={lightboxOnly ? handleVideoLoadedData : undefined}
+            onPause={handleVideoPause}
+            onPlay={handleVideoPlay}
+            onError={handleVideoError}
+            onEnded={handleVideoEnded}
+          />
+        )}
+      </ReelPreviewLightbox>
+      ) : null;
+
+  if (lightboxOnly) return lightbox;
 
   return (
     <div className={cn("relative h-full w-full", className)}>
@@ -542,13 +605,13 @@ export function DashboardReelGridMedia({
               )}
               aria-label={videoFailed ? "Play video again" : "Play video"}
               title={videoFailed ? "Preview failed. Tap to try again." : "Play video"}
-              disabled={isPreparing || refreshPending}
+              disabled={isPreparing}
               onClick={(e) => {
                 e.stopPropagation();
                 void startPlayback();
               }}
             >
-              {isPreparing || refreshPending ? (
+              {isPreparing ? (
                 <Loader2 className={cn("animate-spin", isCompact ? "h-4 w-4" : "h-5 w-5")} />
               ) : (
                 <Play

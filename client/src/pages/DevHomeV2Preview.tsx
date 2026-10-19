@@ -24,6 +24,11 @@ import MobileAppLayout from "@/components/MobileAppLayout";
 type State = "A" | "B" | "C" | "loading" | "error";
 
 const badge = (tier: string, multiple: number) => ({ tier, multiple, label: `${tier} · ${multiple}x followers` });
+const SAMPLE_MP4 = "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
+
+function readInput(input: unknown): Record<string, unknown> {
+  return input != null && typeof input === "object" ? (input as Record<string, unknown>) : {};
+}
 
 function fixture(path: string, state: State): unknown {
   const complete = state === "A" || state === "C";
@@ -66,8 +71,179 @@ function fixture(path: string, state: State): unknown {
         personalized: complete,
         nicheLabel: complete ? "Sample niche" : null,
         items: [
-          { id: "1", sourceId: "s1", platform: "instagram", creatorName: "Sample", creatorHandle: "sample_one", creatorFollowers: 1000, sourceUrl: "https://example.com/1", thumbnailUrl: null, hook: "Sample video title for QA", views: 34_000, trendStatus: "stable", relevanceLabel: "", relevanceReason: "", saved: false, dismissed: false, remade: false },
-          { id: "2", sourceId: "s2", platform: "tiktok", creatorName: "Sample", creatorHandle: "sample_two", creatorFollowers: 2000, sourceUrl: "https://example.com/2", thumbnailUrl: null, hook: "Second sample video title", views: 260_000, trendStatus: "stable", relevanceLabel: "", relevanceReason: "", saved: true, dismissed: false, remade: false },
+          {
+            id: "1",
+            sourceId: "C13BR_GvZVJ",
+            platform: "instagram",
+            creatorName: "Sample",
+            creatorHandle: "sample_one",
+            creatorFollowers: 1000,
+            sourceUrl: "https://www.instagram.com/reel/C13BR_GvZVJ/",
+            thumbnailUrl: null,
+            videoUrl: SAMPLE_MP4,
+            hook: "Sample video title for QA",
+            views: 34_000,
+            trendStatus: "stable",
+            relevanceLabel: "",
+            relevanceReason: "",
+            saved: false,
+            dismissed: false,
+            remade: false,
+          },
+          {
+            id: "2",
+            sourceId: "6718335390845095173",
+            platform: "tiktok",
+            creatorName: "Sample",
+            creatorHandle: "sample_two",
+            creatorFollowers: 2000,
+            sourceUrl: "https://www.tiktok.com/@scout2015/video/6718335390845095173",
+            thumbnailUrl: null,
+            videoUrl: SAMPLE_MP4,
+            hook: "Second sample video title",
+            views: 260_000,
+            trendStatus: "stable",
+            relevanceLabel: "",
+            relevanceReason: "",
+            saved: true,
+            dismissed: false,
+            remade: false,
+          },
+          {
+            id: "3",
+            sourceId: "aqz-KE-bpKQ",
+            platform: "youtube",
+            creatorName: "Sample",
+            creatorHandle: "sample_three",
+            creatorFollowers: 3000,
+            sourceUrl: "https://www.youtube.com/watch?v=aqz-KE-bpKQ",
+            thumbnailUrl: null,
+            videoUrl: null,
+            hook: "Sample YouTube video",
+            views: 12000,
+            trendStatus: "stable",
+            relevanceLabel: "",
+            relevanceReason: "",
+            saved: false,
+            dismissed: false,
+            remade: false,
+          },
+          {
+            id: "4",
+            sourceId: "",
+            platform: "instagram",
+            creatorName: "Sample",
+            creatorHandle: "sample_missing",
+            creatorFollowers: null,
+            sourceUrl: "",
+            thumbnailUrl: null,
+            videoUrl: null,
+            reelId: null,
+            hook: "Sample unavailable video",
+            views: null,
+            trendStatus: "unknown",
+            relevanceLabel: "",
+            relevanceReason: "",
+            saved: false,
+            dismissed: false,
+            remade: false,
+          },
+          {
+            id: "5",
+            sourceId: "REFRESHOK",
+            platform: "instagram",
+            creatorName: "Sample",
+            creatorHandle: "sample_refresh",
+            creatorFollowers: 1000,
+            sourceUrl: "https://www.instagram.com/reel/REFRESHOK/",
+            thumbnailUrl: null,
+            videoUrl: "https://scontent.cdninstagram.com/v/expired.mp4",
+            reelId: 55,
+            hook: "Sample expired Instagram URL",
+            views: 8000,
+            trendStatus: "stable",
+            relevanceLabel: "",
+            relevanceReason: "",
+            saved: false,
+            dismissed: false,
+            remade: false,
+          },
+          {
+            id: "6",
+            sourceId: "RESTRICTED",
+            platform: "instagram",
+            creatorName: "Sample",
+            creatorHandle: "sample_restricted",
+            creatorFollowers: 1000,
+            sourceUrl: "https://www.instagram.com/reel/RESTRICTED/",
+            thumbnailUrl: null,
+            videoUrl: "https://scontent.cdninstagram.com/v/restricted.mp4",
+            hook: "Sample restricted video",
+            views: 1000,
+            trendStatus: "stable",
+            relevanceLabel: "",
+            relevanceReason: "",
+            saved: false,
+            dismissed: false,
+            remade: false,
+          },
+          {
+            id: "7",
+            sourceId: "HANGREFRESH",
+            platform: "instagram",
+            creatorName: "Sample",
+            creatorHandle: "sample_hang",
+            creatorFollowers: 1000,
+            sourceUrl: "https://www.instagram.com/reel/HANGREFRESH/",
+            thumbnailUrl: null,
+            videoUrl: "https://video.fbcdn.net/v/hung.mp4",
+            hook: "Sample hung refresh",
+            views: 1000,
+            trendStatus: "stable",
+            relevanceLabel: "",
+            relevanceReason: "",
+            saved: false,
+            dismissed: false,
+            remade: false,
+          },
+          {
+            id: "8",
+            sourceId: "LATEURLCODE",
+            platform: "instagram",
+            creatorName: "Sample",
+            creatorHandle: "sample_late",
+            creatorFollowers: 1000,
+            sourceUrl: "https://www.instagram.com/reel/LATEURLCODE/",
+            thumbnailUrl: null,
+            videoUrl: "https://scontent.cdninstagram.com/v/late.mp4",
+            hook: "Sample late refresh",
+            views: 1000,
+            trendStatus: "stable",
+            relevanceLabel: "",
+            relevanceReason: "",
+            saved: false,
+            dismissed: false,
+            remade: false,
+          },
+          {
+            id: "9",
+            sourceId: "7000000000000000001",
+            platform: "tiktok",
+            creatorName: "Sample",
+            creatorHandle: "sample_tt_refresh",
+            creatorFollowers: 2000,
+            sourceUrl: "https://www.tiktok.com/@sample/video/7000000000000000001",
+            thumbnailUrl: null,
+            videoUrl: "https://v16.tiktokcdn.com/expired.mp4",
+            hook: "Sample expired TikTok URL",
+            views: 9000,
+            trendStatus: "stable",
+            relevanceLabel: "",
+            relevanceReason: "",
+            saved: false,
+            dismissed: false,
+            remade: false,
+          },
         ],
       };
     case "homeV2.profiles":
@@ -87,6 +263,39 @@ function fixtureLink(state: State): TRPCLink<AppRouter> {
         if (state === "error" && op.path !== "auth.me" && op.path !== "onboardingV2.experience" && op.path !== "homeV2.context") {
           observer.error(TRPCClientError.from(new Error("fixture error")));
           return () => undefined;
+        }
+        if (op.path === "reels.refreshVideoUrl" || op.path === "tiktokScrape.refreshVideoUrl") {
+          const input = readInput(op.input);
+          const shortcode = typeof input.shortcode === "string" ? input.shortcode : "";
+          const page = typeof input.videoPageUrl === "string" ? input.videoPageUrl : "";
+          if (shortcode === "HANGREFRESH" || page.includes("hang-refresh")) {
+            if (op.signal?.aborted) {
+              observer.error(TRPCClientError.from(new Error("aborted")));
+              return () => undefined;
+            }
+            const onAbort = () => observer.error(TRPCClientError.from(new Error("aborted")));
+            op.signal?.addEventListener("abort", onAbort, { once: true });
+            return () => op.signal?.removeEventListener("abort", onAbort);
+          }
+          if (shortcode === "LATEURLCODE") {
+            // Keep emitting after unsubscribe so a late payload cannot restart playback.
+            setTimeout(() => {
+              observer.next({ result: { type: "data", data: { videoUrl: SAMPLE_MP4 } } });
+              observer.complete();
+            }, 25_000);
+            return () => undefined;
+          }
+          if (shortcode === "RESTRICTED") {
+            observer.error(
+              TRPCClientError.from(new Error("Could not retrieve a fresh video URL for this reel."))
+            );
+            return () => undefined;
+          }
+          if (shortcode === "REFRESHOK" || page.includes("/video/7000000000000000001")) {
+            observer.next({ result: { type: "data", data: { videoUrl: SAMPLE_MP4 } } });
+            observer.complete();
+            return () => undefined;
+          }
         }
         observer.next({ result: { type: "data", data: fixture(op.path, state) } });
         observer.complete();
