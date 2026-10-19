@@ -381,6 +381,50 @@ export const personalizationItems = mysqlTable(
   ]
 );
 
+const SUBTOPIC_STATUSES = ["suggested", "confirmed", "dismissed"] as const;
+
+/**
+ * Video topics under a pillar. Dismissed rows are kept (not deleted) so a
+ * reload or a retry cannot recreate a topic the user removed. A different
+ * pillar title does not inherit those dismissals.
+ * Migration: drizzle/0104_pillar_subtopics.sql (additive, safe to re-run).
+ */
+export const pillarSubtopics = mysqlTable(
+  "pillar_subtopics",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspaceId", { length: 36 }).notNull(),
+    socialProfileId: varchar("socialProfileId", { length: 36 }).notNull(),
+    pillarItemId: varchar("pillarItemId", { length: 36 }).notNull(),
+    label: varchar("label", { length: 80 }).notNull(),
+    normalizedLabel: varchar("normalizedLabel", { length: 80 }).notNull(),
+    normalizedPillarTitle: varchar("normalizedPillarTitle", { length: 80 }).notNull(),
+    status: mysqlEnum("status", SUBTOPIC_STATUSES).notNull(),
+    source: mysqlEnum("source", ITEM_SOURCES).notNull(),
+    basedOnPillarHash: varchar("basedOnPillarHash", { length: 64 }).notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  t => [
+    unique("uq_pillar_subtopics_pillar_label").on(t.pillarItemId, t.normalizedLabel),
+    index("idx_pillar_subtopics_profile_title").on(
+      t.socialProfileId,
+      t.normalizedPillarTitle,
+      t.status
+    ),
+    foreignKey({
+      name: "fk_pillar_subtopics_profile",
+      columns: [t.socialProfileId, t.workspaceId],
+      foreignColumns: [socialProfiles.id, socialProfiles.workspaceId],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "fk_pillar_subtopics_pillar",
+      columns: [t.pillarItemId],
+      foreignColumns: [personalizationItems.id],
+    }).onDelete("restrict"),
+  ]
+);
+
 /** One row per profile: stepper state, version and completion. Resume step is derived, not stored. */
 export const personalizationProgress = mysqlTable(
   "personalization_progress",

@@ -137,7 +137,7 @@ export default function OnboardingV2Flow() {
   const [useCase, setUseCase] = useState<PrimaryUseCase | null>(null);
   const [source, setSource] = useState<AttributionSource | null>(null);
   const [niche, setNiche] = useState<string | null>(null);
-  const [requested, setRequested] = useState<Partial<Record<PersonalizationStep, number>>>({});
+  const [requested, setRequested] = useState<Partial<Record<PersonalizationStep, string>>>({});
   const completing = useRef(false);
   const noRightPanel = useNoRightPanel();
   const entry = useRef(readEntry()).current;
@@ -163,7 +163,13 @@ export default function OnboardingV2Flow() {
   const complete = trpc.onboardingV2.complete.useMutation();
   const retryAnalysis = trpc.onboardingV2.retryAnalysis.useMutation();
 
-  const refresh = useCallback(() => utils.onboardingV2.getState.invalidate(), [utils]);
+  const refresh = useCallback(() => {
+    void utils.onboardingV2.getState.invalidate();
+    void utils.homeV2.context.invalidate();
+    void utils.homeV2.videos.invalidate();
+    void utils.homeV2.creators.invalidate();
+    void utils.onboarding.getState.invalidate();
+  }, [utils]);
 
   const finish = useCallback(async () => {
     if (completing.current) return;
@@ -234,11 +240,20 @@ export default function OnboardingV2Flow() {
   // Ask the engine for suggestions once per step and answers version, only when it can run.
   useEffect(() => {
     if (!step4 || !state) return;
-    const hasItems = items.some(i => i.kind === STEP_KIND[step4]);
+    const hasItems =
+      step4 === "goal"
+        ? items.some(i => i.kind === "goal") &&
+          items.some(i => i.kind === "niche") &&
+          items.some(i => i.kind === "language")
+        : items.some(i => i.kind === STEP_KIND[step4]);
+    const requestKey =
+      step4 === "goal"
+        ? `${state.version}:${items.some(i => i.kind === "goal")}:${items.some(i => i.kind === "niche")}:${items.some(i => i.kind === "language")}`
+        : String(state.version);
     const ready =
       step4 === "goal" ? true : step4 === "audience" ? confirmedGoal : confirmedGoal && confirmedAudience;
-    if (hasItems || !ready || requested[step4] === state.version) return;
-    setRequested(r => ({ ...r, [step4]: state.version }));
+    if (hasItems || !ready || requested[step4] === requestKey) return;
+    setRequested(r => ({ ...r, [step4]: requestKey }));
     requestRecs.mutate({ step: step4 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step4, state?.version, items.length, confirmedGoal, confirmedAudience]);

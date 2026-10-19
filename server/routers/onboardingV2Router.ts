@@ -31,6 +31,11 @@ import {
   enqueueRecommendations,
   getRecommendationState,
 } from "../personalization/jobs";
+import { retryPillarSubtopics } from "../personalization/retrySubtopics";
+import {
+  addPillarSubtopic,
+  dismissPillarSubtopic,
+} from "../personalization/subtopics";
 import {
   addItem,
   completeOnboarding,
@@ -265,4 +270,61 @@ export const onboardingV2Router = router({
     ),
 
   complete: v2Procedure.mutation(async ({ ctx }) => completeOnboarding(await requireDb(), octx(ctx))),
+
+  /**
+   * Claude's editing UI: add a subtopic the user typed.
+   * A label they previously dismissed is not recreated.
+   */
+  addPillarSubtopic: v2Procedure
+    .input(z.object({
+      pillarItemId: z.string().uuid(),
+      label: z.string().trim().min(1).max(80),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await requireDb();
+      const state = await loadOnboardingState(db, octx(ctx));
+      if (!state.profile) throw new TRPCError({ code: "BAD_REQUEST", message: "No profile yet." });
+      const result = await addPillarSubtopic(db, {
+        workspaceId: ctx.workspaceId,
+        socialProfileId: state.profile.id,
+        pillarItemId: input.pillarItemId,
+        label: input.label,
+      });
+      if (!result.ok && result.reason === "not_found") {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Pillar not found." });
+      }
+      return result;
+    }),
+
+  /** Claude's editing UI: remove a subtopic. The row stays dismissed. */
+  dismissPillarSubtopic: v2Procedure
+    .input(z.object({ subtopicId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await requireDb();
+      const state = await loadOnboardingState(db, octx(ctx));
+      if (!state.profile) throw new TRPCError({ code: "BAD_REQUEST", message: "No profile yet." });
+      const result = await dismissPillarSubtopic(db, {
+        workspaceId: ctx.workspaceId,
+        socialProfileId: state.profile.id,
+        subtopicId: input.subtopicId,
+      });
+      if (!result.ok && result.reason === "not_found") {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Subtopic not found." });
+      }
+      return result;
+    }),
+
+  /** Fill subtopics for one pillar after a failed or empty generation. */
+  retryPillarSubtopics: v2Procedure
+    .input(z.object({ pillarItemId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await requireDb();
+      const state = await loadOnboardingState(db, octx(ctx));
+      if (!state.profile) throw new TRPCError({ code: "BAD_REQUEST", message: "No profile yet." });
+      return retryPillarSubtopics(db, {
+        workspaceId: ctx.workspaceId,
+        socialProfileId: state.profile.id,
+        pillarItemId: input.pillarItemId,
+      });
+    }),
 });

@@ -22,6 +22,7 @@ import {
 } from "./evidence";
 import {
   claimsPerformance,
+  copiesSourceText,
   sanitizeCopy,
   unsupportedNumbers,
   unsupportedProperNouns,
@@ -41,6 +42,8 @@ export const MAX_PILLARS = 5;
 export type PillarResult = {
   status: "suggested";
   pillars: PillarPayload[];
+  /** Subtopics aligned with `pillars` (empty when the model omitted them). */
+  subtopics: string[][];
   confidence: SuggestionConfidence;
   usedHistoricalContext: boolean;
   usage: LlmUsage;
@@ -54,8 +57,12 @@ const SCHEMA = {
       type: "array",
       items: {
         type: "object",
-        properties: { title: { type: "string" }, serves: { type: "string" } },
-        required: ["title", "serves"],
+        properties: {
+          title: { type: "string" },
+          serves: { type: "string" },
+          subtopics: { type: "array", items: { type: "string" } },
+        },
+        required: ["title", "serves", "subtopics"],
         additionalProperties: false,
       },
     },
@@ -66,7 +73,13 @@ const SCHEMA = {
 };
 
 const Shape = z.object({
-  pillars: z.array(z.object({ title: z.string(), serves: z.string() })),
+  pillars: z.array(
+    z.object({
+      title: z.string(),
+      serves: z.string(),
+      subtopics: z.array(z.string()).optional(),
+    })
+  ),
   confidence: z.enum(["high", "medium", "low"]),
 });
 
@@ -84,6 +97,7 @@ export function buildPillarPrompt(
     "Rules:",
     `- Between ${MIN_PILLARS} and ${MAX_PILLARS} distinct pillars, not counting pillars the user already confirmed.`,
     "- title: 1 to 4 words. serves: one sentence (max 20 words) saying how it serves the goal and the audience.",
+    "- subtopics: 3 short video topics under that pillar (2 to 4 words each). Specific themes, not a copy of the bio.",
     '- No numbers, percentages, view counts or claims about past performance (no "viral", "best performing").',
     "- Do not invent facts, names or products about the creator.",
     `- Write in ${e.outputLanguage.label}.`,
@@ -107,7 +121,11 @@ export function parsePillarOutput(
   goal: string,
   audiences: AudiencePayload[],
   keep: PillarPayload[]
-): ParseResult<{ pillars: PillarPayload[]; confidence: SuggestionConfidence }> {
+): ParseResult<{
+  pillars: PillarPayload[];
+  subtopics: string[][];
+  confidence: SuggestionConfidence;
+}> {
   const shape = Shape.safeParse(raw);
   if (!shape.success)
     return { ok: false, reason: "output did not match the schema" };
@@ -117,30 +135,36 @@ export function parsePillarOutput(
     .toLowerCase()}`;
   const seen = new Set(keep.map(p => itemIdentity("pillar", p)));
   const out: PillarPayload[] = [];
+  const subtopics: string[][] = [];
+  let droppedFor: string | null = null;
   for (const p of shape.data.pillars) {
     const title = sanitizeCopy(p.title).replace(/\.$/, "");
     const description = sanitizeCopy(p.serves);
-    if (!title || wordCount(title) > 5 || title.length > 45)
-      return { ok: false, reason: "a pillar title is empty or too long" };
-    if (!description || wordCount(description) > 26)
-      return { ok: false, reason: "a pillar explanation is empty or too long" };
-    if (claimsPerformance(`${title} ${description}`))
-      return {
-        ok: false,
-        reason: "pillars must not claim performance or use percentages",
-      };
-    const nums = unsupportedNumbers(`${title} ${description}`, corpus);
-    if (nums.length)
-      return {
-        ok: false,
-        reason: `pillar contains numbers not in the evidence (${nums.join(", ")})`,
-      };
-    const names = unsupportedProperNouns(`${title}. ${description}`, corpus);
-    if (names.length)
-      return {
-        ok: false,
-        reason: `pillar names things not in the evidence (${names.join(", ")})`,
-      };
+    // One bad pillar is dropped. The rest of the batch can still be saved.
+    if (!title || wordCount(title) > 5 || title.length > 45) {
+      droppedFor = "a pillar title is empty or too long";
+      continue;
+    }
+    if (!description || wordCount(description) > 26) {
+      droppedFor = "a pillar explanation is empty or too long";
+      continue;
+    }
+    if (copiesSourceText(description, e.declaredText)) {
+      droppedFor = "a pillar copies the biography";
+      continue;
+    }
+    if (claimsPerformance(`${title} ${description}`)) {
+      droppedFor = "pillars must not claim performance or use percentages";
+      continue;
+    }
+    if (unsupportedNumbers(`${title} ${description}`, corpus).length) {
+      droppedFor = "a pillar contains numbers that are not in the evidence";
+      continue;
+    }
+    if (unsupportedProperNouns(`${title}. ${description}`, corpus).length) {
+      droppedFor = "a pillar names things that are not in the evidence";
+      continue;
+    }
     const key = itemIdentity("pillar", {
       title,
       description,
@@ -149,20 +173,38 @@ export function parsePillarOutput(
     if (seen.has(key)) continue;
     seen.add(key);
     out.push({ title, description, viewSharePercent: null });
+    subtopics.push(cleanSubtopics(p.subtopics, corpus));
   }
   const needed = Math.max(0, MIN_PILLARS - keep.length);
-  if (out.length < Math.min(needed, MIN_PILLARS))
+  if (needed > 0 && out.length === 0)
     return {
       ok: false,
-      reason: `need at least ${needed} new distinct pillars`,
+      reason: droppedFor ?? "no usable pillars in the model output",
     };
+  const capped = out.slice(0, MAX_PILLARS);
   return {
     ok: true,
     value: {
-      pillars: out.slice(0, MAX_PILLARS),
+      pillars: capped,
+      subtopics: subtopics.slice(0, capped.length),
       confidence: shape.data.confidence,
     },
   };
+}
+
+function cleanSubtopics(raw: string[] | undefined, corpus: string): string[] {
+  const out: string[] = [];
+  for (const s of raw ?? []) {
+    const label = sanitizeCopy(s).replace(/\.$/, "");
+    if (!label || wordCount(label) > 4 || label.length > 40) continue;
+    if (claimsPerformance(label)) continue;
+    if (unsupportedNumbers(label, corpus).length) continue;
+    if (unsupportedProperNouns(label, corpus).length) continue;
+    if (out.some(x => x.toLowerCase() === label.toLowerCase())) continue;
+    out.push(label);
+    if (out.length === 4) break;
+  }
+  return out;
 }
 
 export async function recommendPillars(input: {
@@ -197,14 +239,83 @@ export async function recommendPillars(input: {
     invoker: input.invoker,
     timeoutMs: input.timeoutMs,
     onRejected: input.onRejected,
-    maxTokens: 700,
+    maxTokens: 900,
   });
   return {
     status: "suggested",
     pillars: value.pillars,
+    subtopics: value.subtopics,
     confidence: value.confidence,
     usedHistoricalContext: input.evidence.topCaptions.length > 0,
     usage,
     attempts,
   };
+}
+
+const SUBTOPIC_SCHEMA = {
+  type: "object",
+  properties: {
+    pillars: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          title: { type: "string" },
+          subtopics: { type: "array", items: { type: "string" } },
+        },
+        required: ["title", "subtopics"],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ["pillars"],
+  additionalProperties: false,
+};
+
+/** One short call to fill subtopics for pillars that were saved without any. */
+export async function recommendSubtopics(input: {
+  evidence: CreatorEvidence;
+  confirmedGoal: string;
+  pillars: { title: string; description: string }[];
+  invoker?: LlmInvoker;
+  timeoutMs?: number;
+}): Promise<{ groups: { title: string; labels: string[] }[]; usage: LlmUsage }> {
+  const { value, usage } = await callStructured({
+    operation: "personalization_pillar_subtopics",
+    system: [
+      "You name short video subtopics for content pillars a creator already has.",
+      "Each subtopic is 2 to 4 words. Specific themes a video could cover.",
+      "No numbers, no performance claims, and do not copy the biography.",
+      UNTRUSTED_DATA_RULE,
+    ].join("\n"),
+    user: [
+      `Goal: ${input.confirmedGoal}`,
+      ...input.pillars.map(p => `Pillar: ${p.title}. ${p.description}`),
+      "Return 3 subtopics for each pillar.",
+    ].join("\n"),
+    schemaName: "pillar_subtopics",
+    schema: SUBTOPIC_SCHEMA,
+    parse: raw => {
+      const shape = z
+        .object({
+          pillars: z.array(
+            z.object({ title: z.string(), subtopics: z.array(z.string()) })
+          ),
+        })
+        .safeParse(raw);
+      if (!shape.success)
+        return { ok: false as const, reason: "output did not match the schema" };
+      return {
+        ok: true as const,
+        value: shape.data.pillars.map(p => ({
+          title: sanitizeCopy(p.title),
+          labels: cleanSubtopics(p.subtopics, input.evidence.corpus),
+        })),
+      };
+    },
+    invoker: input.invoker,
+    timeoutMs: input.timeoutMs ?? 12_000,
+    maxTokens: 500,
+  });
+  return { groups: value, usage };
 }

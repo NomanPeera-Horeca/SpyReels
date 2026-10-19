@@ -110,16 +110,19 @@ export default function HomeV2Page() {
   );
 
   const contextQ = trpc.homeV2.context.useQuery(undefined, {
-    refetchOnWindowFocus: false,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
   const planQ = trpc.plan.listCards.useQuery(undefined, {
     refetchOnWindowFocus: false,
   });
   const creatorsQ = trpc.homeV2.creators.useQuery(undefined, {
-    refetchOnWindowFocus: false,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
   const videosQ = trpc.homeV2.videos.useQuery(undefined, {
-    refetchOnWindowFocus: false,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 
   const [idea, setIdea] = useState("");

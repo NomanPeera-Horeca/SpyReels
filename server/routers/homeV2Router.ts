@@ -15,7 +15,7 @@ import {
   switchActiveProfile,
   type OnboardingCtx,
 } from "../personalization/onboarding/onboardingService";
-import { homeContextFromState, loadViralCreators } from "../personalization/home/homeService";
+import { homeContextFromState, loadViralCreators, videoMatchText } from "../personalization/home/homeService";
 import { browseIndexedViralPosts } from "../viralPosts/browseService";
 
 export const HOME_VIDEO_LIMIT = 4;
@@ -54,7 +54,7 @@ export const homeV2Router = router({
     const c = await context(ctx);
     const res = await browseIndexedViralPosts({
       userId: ctx.user.id,
-      description: c.description,
+      description: videoMatchText(c),
       limit: HOME_VIDEO_LIMIT,
     });
     return { personalized: c.description !== null, nicheLabel: c.nicheLabel, items: res.items };

@@ -177,7 +177,10 @@ export async function enqueueRecommendations(
       idempotencyKey: key,
       payload,
       maxAttempts: RECOMMENDATION_MAX_ATTEMPTS,
-      requeueIfTerminal: true,
+      // A finished success stays finished. Failed and dead jobs still requeue
+      // (the queue resets those statuses on a duplicate key). This stops a
+      // reload from starting a second model call for the same answers.
+      requeueIfTerminal: false,
     });
     return "durable";
   }

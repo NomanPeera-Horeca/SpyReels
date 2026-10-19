@@ -53,6 +53,7 @@ import { users } from "../../../drizzle/schema";
 import type { Db } from "../db/analysisStore";
 import { pickBestPost, type BestPost } from "@shared/personalization/bestPost";
 import { toItemRecord } from "../db/rows";
+import { listProfileSubtopics } from "../subtopics";
 
 export type OnboardingCtx = { userId: number; workspaceId: string };
 
@@ -108,6 +109,19 @@ export type OnboardingStateView = {
   steps: Record<PersonalizationStep, StepStatus>;
   version: number;
   items: OnboardingItemView[];
+  /**
+   * Subtopics for the active profile, including dismissed rows.
+   * Render status "suggested" or "confirmed" only. Dismissed rows are
+   * returned so a client does not offer a topic the user already removed.
+   * Empty when the table is not migrated yet.
+   */
+  pillarSubtopics: {
+    id: string;
+    pillarItemId: string;
+    label: string;
+    status: "suggested" | "confirmed" | "dismissed";
+    source: "ai_suggested" | "user_entered" | "user_edited";
+  }[];
   completedAt: Date | null;
 };
 
@@ -262,6 +276,15 @@ export async function loadOnboardingState(db: Db, ctx: OnboardingCtx): Promise<O
       source: i.source,
       evidence: i.evidence,
     })),
+    pillarSubtopics: profile
+      ? (await listProfileSubtopics(db, profile.id, ctx.workspaceId)).map(s => ({
+          id: s.id,
+          pillarItemId: s.pillarItemId,
+          label: s.label,
+          status: s.status,
+          source: s.source,
+        }))
+      : [],
     completedAt: progress?.completedAt ?? null,
   };
 }
