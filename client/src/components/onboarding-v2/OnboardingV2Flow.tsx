@@ -162,7 +162,7 @@ export default function OnboardingV2Flow() {
   const removeItem = trpc.onboardingV2.removeItem.useMutation();
   const dismissSubtopic = trpc.onboardingV2.dismissPillarSubtopic.useMutation();
   const restoreSubtopic = trpc.onboardingV2.restorePillarSubtopic.useMutation();
-  const retrySubtopics = trpc.onboardingV2.retryPillarSubtopics.useMutation();
+  const requestTopics = trpc.onboardingV2.requestPillarSubtopics.useMutation();
   const restoreItem = trpc.onboardingV2.restorePersonalizationItem.useMutation();
   const resolveStep = trpc.onboardingV2.resolveStep.useMutation();
   const complete = trpc.onboardingV2.complete.useMutation();
@@ -230,6 +230,7 @@ export default function OnboardingV2Flow() {
     removeItem.isPending ||
     dismissSubtopic.isPending ||
     restoreSubtopic.isPending ||
+    requestTopics.isPending ||
     restoreItem.isPending ||
     resolveStep.isPending ||
     retryAnalysis.isPending ||
@@ -412,20 +413,13 @@ export default function OnboardingV2Flow() {
       });
     }, "pillars");
 
-  // Pillars with no subtopic rows at all (generation failed or came back empty) get one
-  // retry each per visit. Dismissed rows count as present, so a removed topic is never refilled.
-  const retriedPillars = useRef(new Set<string>());
-  useEffect(() => {
-    if (screen !== "pillars" || !state || ai.state === "running") return;
-    const pillarIds = items.filter(i => i.kind === "pillar").map(i => i.id);
-    const hasRows = new Set((state.pillarSubtopics ?? []).map(s => s.pillarItemId));
-    for (const id of pillarIds) {
-      if (hasRows.has(id) || retriedPillars.current.has(id)) continue;
-      retriedPillars.current.add(id);
-      void retrySubtopics.mutateAsync({ pillarItemId: id }).then(() => refresh(), () => undefined);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screen, state?.pillarSubtopics?.length, items.length, ai.state]);
+  // Topic ideas are generated only when the user asks for them, one pillar at a time.
+  const askForTopics = (pillarItemId: string) =>
+    void run(async () => {
+      await requestTopics.mutateAsync({ pillarItemId });
+      await refresh();
+    }, "pillars");
+
 
   if (!state || !screen) return null;
 
@@ -627,6 +621,8 @@ export default function OnboardingV2Flow() {
           onRemove={id => void removeWithUndo(id, "pillars")}
           subtopics={state.pillarSubtopics ?? []}
           onRemoveSubtopic={subtopicId => void dismissWithUndo(subtopicId)}
+          topics={state.pillarTopics ?? {}}
+          onRequestTopics={askForTopics}
         />
       );
   }

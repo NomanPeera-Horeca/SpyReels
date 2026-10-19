@@ -33,6 +33,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  tinyint,
   unique,
   uniqueIndex,
   varchar,
@@ -431,6 +432,38 @@ export const pillarSubtopics = mysqlTable(
     }).onDelete("restrict"),
     foreignKey({
       name: "fk_pillar_subtopics_pillar",
+      columns: [t.pillarItemId],
+      foreignColumns: [personalizationItems.id],
+    }).onDelete("restrict"),
+  ]
+);
+
+/** Explicit topic-idea requests. One row per pillar item. Migration: drizzle/0105_pillar_subtopic_jobs.sql. */
+export const pillarSubtopicJobs = mysqlTable(
+  "pillar_subtopic_jobs",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspaceId", { length: 36 }).notNull(),
+    socialProfileId: varchar("socialProfileId", { length: 36 }).notNull(),
+    pillarItemId: varchar("pillarItemId", { length: 36 }).notNull(),
+    status: mysqlEnum("status", ["running", "succeeded", "failed"]).notNull(),
+    attempts: tinyint("attempts").default(0).notNull(),
+    lastError: varchar("lastError", { length: 200 }),
+    lockedUntil: timestamp("lockedUntil"),
+    lastClaimedAt: timestamp("lastClaimedAt").defaultNow().notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  t => [
+    unique("uq_pillar_subtopic_jobs_pillar").on(t.pillarItemId),
+    index("idx_pillar_subtopic_jobs_profile_claimed").on(t.socialProfileId, t.lastClaimedAt),
+    foreignKey({
+      name: "fk_pillar_subtopic_jobs_profile",
+      columns: [t.socialProfileId, t.workspaceId],
+      foreignColumns: [socialProfiles.id, socialProfiles.workspaceId],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "fk_pillar_subtopic_jobs_pillar",
       columns: [t.pillarItemId],
       foreignColumns: [personalizationItems.id],
     }).onDelete("restrict"),

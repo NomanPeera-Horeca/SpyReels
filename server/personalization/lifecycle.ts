@@ -20,6 +20,7 @@
  */
 export const PERSONALIZATION_PURGE_ORDER = [
   "workspace_member_active_profiles",
+  "pillar_subtopic_jobs",
   "pillar_subtopics",
   "personalization_items",
   "personalization_progress",

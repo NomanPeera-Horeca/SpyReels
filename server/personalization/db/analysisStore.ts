@@ -39,7 +39,6 @@ import {
   type RunSummaryWithKey,
 } from "../analysis/contract";
 import {
-  pillarsMissingSubtopics as listPillarsMissingSubtopics,
   saveGeneratedSubtopics,
 } from "../subtopics";
 import type {
@@ -474,16 +473,6 @@ export function createRecommendationStore(db: Db): RecommendationStore {
         }
         return "applied" as const;
       });
-    },
-
-    async pillarsMissingSubtopics(profileId) {
-      const [owner] = await db
-        .select({ workspaceId: socialProfiles.workspaceId })
-        .from(socialProfiles)
-        .where(eq(socialProfiles.id, profileId))
-        .limit(1);
-      if (!owner) return [];
-      return listPillarsMissingSubtopics(db, profileId, owner.workspaceId);
     },
 
     async saveSubtopics(profileId, groups) {

@@ -64,13 +64,19 @@ again. Do not call `addItem` for Undo: a new id leaves the topics behind.
 A row superseded by AI regeneration (no user-delete marker) is `CONFLICT`
 and stays superseded.
 
-## Retry
+## Topic ideas (explicit only)
 
-`onboardingV2.retryPillarSubtopics({ pillarItemId })`
+`onboardingV2.requestPillarSubtopics({ pillarItemId })`
 
-Fills topics for one live pillar that has none. Dismissed labels are not
-inserted again. Result: `{ ok: true, inserted }` or
-`{ ok: false, reason: "not_found" | "failed" }`.
+The only path that calls the model for topic ideas. Nothing runs on page load,
+reload, pillar save, or cached reads. Bounded by a per-pillar job row:
+3 attempts, 60 s cooldown between attempts, 12 s per model call, and at most
+10 pillars claimed per profile per hour. A succeeded job is never retried.
+
+Result: `{ status: "generated", inserted }`, `{ status: "failed" }`, or a refusal
+(`already_has_topics`, `already_generated`, `in_progress`, `exhausted`,
+`cooldown`, `rate_limited`, `not_found`). Requires migrations 0104 and 0105;
+otherwise the call fails with `PRECONDITION_FAILED` and no model call is made.
 
 ## Add
 

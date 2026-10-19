@@ -210,7 +210,7 @@ export default function DevOnboardingV2Preview() {
     case "audience":
       return <AudienceStep common={common} audiences={empty ? [] : FAKE_AUDIENCES} onSave={noopSave} onRemove={noop} />;
     case "pillars":
-      return <PillarsStep common={common} pillars={empty ? [] : FAKE_PILLARS} subtopics={empty ? [] : FAKE_SUBTOPICS} onSave={noopSave} onRemove={noop} onRemoveSubtopic={noop} />;
+      return <PillarsStep common={common} pillars={empty ? [] : FAKE_PILLARS} subtopics={empty ? [] : FAKE_SUBTOPICS} onSave={noopSave} onRemove={noop} onRemoveSubtopic={noop} topics={{}} onRequestTopics={noop} />;
     case "niche":
       return (
         <GrowthNicheStep

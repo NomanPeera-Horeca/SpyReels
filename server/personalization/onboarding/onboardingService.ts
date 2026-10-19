@@ -57,8 +57,12 @@ import { toItemRecord } from "../db/rows";
 import {
   listProfileSubtopics,
   moveSubtopicsOntoPillar,
-  subtopicsTableReady,
+  normalizeTopicLabel,
+  topicRowsPossible,
+  verifyPillarSubtopicStore,
+  type SubtopicStoreCheck,
 } from "../subtopics";
+import { loadTopicStates, type PillarTopicState } from "../subtopicJobs";
 
 export type OnboardingCtx = { userId: number; workspaceId: string };
 
@@ -121,6 +125,10 @@ export type OnboardingStateView = {
    * Dismissed rows are returned so a client does not offer a removed topic.
    * Empty when the table is not migrated yet.
    */
+  /** Whether the topic tables (0104, 0105) are verified. Missing parts are named, never hidden. */
+  subtopicStore: { ready: boolean; missing: string[] };
+  /** Topic-idea state per pillar item. Empty when the store is not ready. */
+  pillarTopics: Record<string, { state: PillarTopicState; attempts: number }>;
   pillarSubtopics: {
     id: string;
     pillarItemId: string;
@@ -199,6 +207,16 @@ export async function loadOnboardingState(db: Db, ctx: OnboardingCtx): Promise<O
   const profile = await activeProfileRow(db, ctx);
   const progress = profile ? await ensureProgress(db, profile.id, ctx.workspaceId) : null;
   const items = profile ? liveItems(await loadItems(db, profile.id)) : [];
+  // Topics are read only when the store is verified. Nothing is generated here.
+  const store: SubtopicStoreCheck = profile
+    ? await verifyPillarSubtopicStore(db)
+    : { ready: true };
+  const storeReady = store.ready;
+  const pillarIds = items.filter(i => i.kind === "pillar").map(i => i.id);
+  const topicStates: Record<string, { state: PillarTopicState; attempts: number }> =
+    profile && storeReady
+      ? await loadTopicStates(db, { workspaceId: ctx.workspaceId, socialProfileId: profile.id, pillarItemIds: pillarIds })
+      : {};
 
   let analysis: OnboardingStateView["analysis"] = null;
   if (profile) {
@@ -282,7 +300,9 @@ export async function loadOnboardingState(db: Db, ctx: OnboardingCtx): Promise<O
       source: i.source,
       evidence: i.evidence,
     })),
-    pillarSubtopics: profile
+    subtopicStore: { ready: storeReady, missing: store.ready ? [] : store.missing },
+    pillarTopics: topicStates,
+    pillarSubtopics: profile && storeReady
       ? (await listProfileSubtopics(db, profile.id, ctx.workspaceId)).map(s => ({
           id: s.id,
           pillarItemId: s.pillarItemId,
@@ -542,7 +562,13 @@ export async function editItem(
   const progress = await ensureProgress(db, profile.id, ctx.workspaceId);
   const plan = planItemEdit(item, payload, progress.personalizationVersion);
   const newId = randomUUID();
-  const moveTopics = plan.insert.kind === "pillar" && (await subtopicsTableReady(db));
+  // Topics move only when the normalized title is unchanged. A changed title keeps
+  // its old topics on the superseded pillar as history; the new pillar starts empty.
+  const oldTitle = item.kind === "pillar" ? (item.payload as PillarPayload).title : null;
+  const newTitle = plan.insert.kind === "pillar" ? (plan.insert.payload as PillarPayload).title : null;
+  const sameTitle =
+    oldTitle !== null && newTitle !== null && normalizeTopicLabel(oldTitle) === normalizeTopicLabel(newTitle);
+  const moveTopics = sameTitle && (await topicRowsPossible(db));
   await db.transaction(async tx => {
     const locked = await tx
       .select({ id: personalizationItems.id })
@@ -593,7 +619,7 @@ export async function editItem(
         socialProfileId: profile.id,
         fromPillarItemId: plan.supersedeItemId,
         toPillarItemId: newId,
-        nextTitle: (plan.insert.payload as PillarPayload).title,
+        nextTitle: newTitle ?? "",
       });
     }
     if (plan.nextVersion !== progress.personalizationVersion) {
