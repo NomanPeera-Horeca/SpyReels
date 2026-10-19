@@ -738,6 +738,19 @@ export type PillarSubtopicView = {
   status: "suggested" | "confirmed" | "dismissed";
 };
 
+/** Per-pillar topic state from getState.pillarTopics (server-derived). */
+export type PillarTopicView = {
+  state:
+    | "never_generated"
+    | "generating"
+    | "ready"
+    | "all_dismissed"
+    | "no_topics"
+    | "failed"
+    | "exhausted";
+  attempts: number;
+};
+
 const visibleFor = (all: PillarSubtopicView[], pillarItemId: string) =>
   all
     .filter(s => s.pillarItemId === pillarItemId && s.status !== "dismissed")
@@ -747,19 +760,23 @@ const visibleFor = (all: PillarSubtopicView[], pillarItemId: string) =>
 function PillarCard({
   pillar,
   subtopics,
+  topic,
   busy,
   inEdit,
   onStartEdit,
   onRemove,
   onRemoveSubtopic,
+  onRequestTopics,
 }: {
   pillar: PillarItem;
   subtopics: { id: string; text: string }[];
+  topic: PillarTopicView | undefined;
   busy: boolean;
   inEdit: boolean;
   onStartEdit: () => void;
   onRemove: () => void;
   onRemoveSubtopic: (subtopicId: string) => void;
+  onRequestTopics: () => void;
 }) {
   return (
     <div className={styles.pillarGroup}>
@@ -788,8 +805,54 @@ function PillarCard({
         ) : null}
       </section>
       <SubtopicChips subtopics={subtopics} busy={busy} onRemove={onRemoveSubtopic} label={pillar.payload.title} />
+      <TopicStatus topic={topic} busy={busy} onRequest={onRequestTopics} />
     </div>
   );
+}
+
+/**
+ * Topic ideas are never generated on their own. This line shows the state and, when
+ * allowed, the one action that asks for ideas. Nothing is shown while topics are ready.
+ */
+function TopicStatus({
+  topic,
+  busy,
+  onRequest,
+}: {
+  topic: PillarTopicView | undefined;
+  busy: boolean;
+  onRequest: () => void;
+}) {
+  const T = P.topics;
+  const muted = ["sr-text-product-body-small", styles.muted].join(" ");
+  if (!topic) return null;
+  switch (topic.state) {
+    case "ready":
+      return null;
+    case "generating":
+      return <p className={muted} role="status">{T.finding}</p>;
+    case "never_generated":
+      return (
+        <button type="button" className={styles.textAction} onClick={onRequest} disabled={busy}>
+          {T.find}
+        </button>
+      );
+    case "failed":
+      return (
+        <>
+          <p className={muted}>{T.failed}</p>
+          <button type="button" className={styles.textAction} onClick={onRequest} disabled={busy}>
+            {T.retry}
+          </button>
+        </>
+      );
+    case "exhausted":
+      return <p className={muted}>{T.exhausted}</p>;
+    case "all_dismissed":
+      return <p className={muted}>{T.allRemoved}</p>;
+    case "no_topics":
+      return <p className={muted}>{T.none}</p>;
+  }
 }
 
 /** AI subtopics: always visible grey chips with the sparkle. The X shows on hover or focus, or after a tap. */
@@ -916,6 +979,12 @@ export function PillarsStep(props: {
   pillars: PillarItem[];
   /** getState.pillarSubtopics: canonical subtopic rows, dismissed included. */
   subtopics: PillarSubtopicView[];
+  /** getState.pillarTopics: per pillar state for the topic line. */
+  topics: Record<string, PillarTopicView>;
+  /** getState.subtopicStore.ready. When false, no topic line or topic chips are shown. */
+  subtopicStoreReady: boolean;
+  /** The one explicit way to ask for topic ideas for a pillar. */
+  onRequestTopics: (pillarItemId: string) => void;
   /** Title and description only; the server keeps subtopics. itemId null = new pillar. */
   onSave: (payload: { title: string; description: string }, itemId: string | null) => Promise<boolean>;
   onRemove: (itemId: string) => void;
@@ -940,6 +1009,9 @@ function PillarsBody({
   common,
   pillars,
   subtopics,
+  topics,
+  subtopicStoreReady,
+  onRequestTopics,
   onSave,
   onRemove,
   onRemoveSubtopic,
@@ -947,6 +1019,9 @@ function PillarsBody({
   common: Common;
   pillars: PillarItem[];
   subtopics: PillarSubtopicView[];
+  topics: Record<string, PillarTopicView>;
+  subtopicStoreReady: boolean;
+  onRequestTopics: (pillarItemId: string) => void;
   onSave: (payload: { title: string; description: string }, itemId: string | null) => Promise<boolean>;
   onRemove: (itemId: string) => void;
   onRemoveSubtopic: (subtopicId: string) => void;
@@ -988,11 +1063,13 @@ function PillarsBody({
             key={p.id}
             pillar={p}
             subtopics={visibleFor(subtopics, p.id)}
+            topic={subtopicStoreReady ? topics[p.id] : undefined}
             busy={common.busy}
             inEdit={mode === "edit"}
             onStartEdit={() => setEditing(p.id)}
             onRemove={() => onRemove(p.id)}
             onRemoveSubtopic={onRemoveSubtopic}
+            onRequestTopics={() => onRequestTopics(p.id)}
           />
         )
       )}

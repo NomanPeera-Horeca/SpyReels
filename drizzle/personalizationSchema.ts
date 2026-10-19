@@ -33,6 +33,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  tinyint,
   unique,
   uniqueIndex,
   varchar,
@@ -400,6 +401,8 @@ export const pillarSubtopics = mysqlTable(
     normalizedLabel: varchar("normalizedLabel", { length: 80 }).notNull(),
     normalizedPillarTitle: varchar("normalizedPillarTitle", { length: 80 }).notNull(),
     status: mysqlEnum("status", SUBTOPIC_STATUSES).notNull(),
+    /** Status before a user dismissal (migration 0105). Undo returns to exactly this. */
+    dismissedFromStatus: mysqlEnum("dismissedFromStatus", ["suggested", "confirmed"]),
     source: mysqlEnum("source", ITEM_SOURCES).notNull(),
     basedOnPillarHash: varchar("basedOnPillarHash", { length: 64 }).notNull(),
     createdAt: timestamp("createdAt").defaultNow().notNull(),
@@ -419,6 +422,41 @@ export const pillarSubtopics = mysqlTable(
     }).onDelete("restrict"),
     foreignKey({
       name: "fk_pillar_subtopics_pillar",
+      columns: [t.pillarItemId],
+      foreignColumns: [personalizationItems.id],
+    }).onDelete("restrict"),
+  ]
+);
+
+/**
+ * One durable generation job per pillar item (migration 0105). Generation runs
+ * only on an explicit user request; this row is what stops repeated paid calls.
+ */
+export const pillarSubtopicJobs = mysqlTable(
+  "pillar_subtopic_jobs",
+  {
+    id: varchar("id", { length: 36 }).primaryKey(),
+    workspaceId: varchar("workspaceId", { length: 36 }).notNull(),
+    socialProfileId: varchar("socialProfileId", { length: 36 }).notNull(),
+    pillarItemId: varchar("pillarItemId", { length: 36 }).notNull(),
+    status: mysqlEnum("status", ["running", "succeeded", "failed"]).notNull(),
+    attempts: tinyint("attempts").default(0).notNull(),
+    lastError: varchar("lastError", { length: 200 }),
+    lockedUntil: timestamp("lockedUntil"),
+    lastClaimedAt: timestamp("lastClaimedAt").defaultNow().notNull(),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  t => [
+    unique("uq_pillar_subtopic_jobs_pillar").on(t.pillarItemId),
+    index("idx_pillar_subtopic_jobs_profile_claimed").on(t.socialProfileId, t.lastClaimedAt),
+    foreignKey({
+      name: "fk_pillar_subtopic_jobs_profile",
+      columns: [t.socialProfileId, t.workspaceId],
+      foreignColumns: [socialProfiles.id, socialProfiles.workspaceId],
+    }).onDelete("restrict"),
+    foreignKey({
+      name: "fk_pillar_subtopic_jobs_pillar",
       columns: [t.pillarItemId],
       foreignColumns: [personalizationItems.id],
     }).onDelete("restrict"),

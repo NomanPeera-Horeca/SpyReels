@@ -6,6 +6,7 @@
  *        &platform=instagram|tiktok|youtube &error=not_found &selected=1
  *        &run=running|failed|succeeded   (analysis line on 3a/3b)
  *        &ai=idle|running|failed|clarify &empty=1 &saveFail=1  (step 4)
+ *        &topics=ready|never_generated|generating|failed|exhausted|all_dismissed|no_topics  (pillar topic state)
  */
 import { useState } from "react";
 import { useSearch } from "wouter";
@@ -38,6 +39,7 @@ import {
   PillarsStep,
   type AiState,
   type PillarSubtopicView,
+  type PillarTopicView,
   type StepItem,
 } from "@/components/onboarding-v2/step4";
 import type {
@@ -116,6 +118,7 @@ export default function DevOnboardingV2Preview() {
   // saveFail=1 simulates a server failure on every save (the editor must stay open).
   const saveFail = params.get("saveFail") === "1";
   const noopSave = async () => !saveFail;
+  const topicState = (params.get("topics") ?? "ready") as PillarTopicView["state"];
   const run = (params.get("run") ?? "running") as AnalysisRunStatus;
   const empty = params.get("empty") === "1";
   const aiParam = params.get("ai") ?? "idle";
@@ -210,7 +213,7 @@ export default function DevOnboardingV2Preview() {
     case "audience":
       return <AudienceStep common={common} audiences={empty ? [] : FAKE_AUDIENCES} onSave={noopSave} onRemove={noop} />;
     case "pillars":
-      return <PillarsStep common={common} pillars={empty ? [] : FAKE_PILLARS} subtopics={empty ? [] : FAKE_SUBTOPICS} onSave={noopSave} onRemove={noop} onRemoveSubtopic={noop} />;
+      return <PillarsStep common={common} pillars={empty ? [] : FAKE_PILLARS} subtopics={empty ? [] : FAKE_SUBTOPICS} topics={{ p1: { state: topicState, attempts: topicState === "exhausted" ? 3 : 1 } }} subtopicStoreReady onRequestTopics={noop} onSave={noopSave} onRemove={noop} onRemoveSubtopic={noop} />;
     case "niche":
       return (
         <GrowthNicheStep

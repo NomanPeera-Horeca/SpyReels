@@ -26,9 +26,9 @@ describe("parseMysqlVersion", () => {
 });
 
 describe("loadRepoMigrations", () => {
-  it("hashes every numbered drizzle/*.sql file; 0103 is the latest in the repo", () => {
+  it("hashes every numbered drizzle/*.sql file; 0105 is the latest in the repo", () => {
     expect(repoMigrations.length).toBeGreaterThan(100);
-    expect(repoMigrations.at(-1)?.prefix).toBe("0104");
+    expect(repoMigrations.at(-1)?.prefix).toBe("0105");
     expect(repoMigrations.every(m => /^[a-f0-9]{64}$/.test(m.sha256))).toBe(
       true
     );
@@ -48,7 +48,7 @@ describe("read-only guard", () => {
     await expect(
       runPersonalizationPreflight(fake, {
         repoMigrations,
-        expectedLatestPrefix: "0104",
+        expectedLatestPrefix: "0105",
       })
     ).rejects.toThrow("stop here");
     expect(
@@ -118,10 +118,10 @@ describe.skipIf(!url)(
     const preflight = () =>
       runPersonalizationPreflight(db, {
         repoMigrations,
-        expectedLatestPrefix: "0104",
+        expectedLatestPrefix: "0105",
       });
 
-    it("passes when 0104 is the latest, MySQL is 8.0.16+, collations match and no new table exists", async () => {
+    it("passes when 0105 is the latest, MySQL is 8.0.16+, collations match and no new table exists", async () => {
       const r = await preflight();
       expect(r.checks.map(c => [c.name, c.pass])).toEqual([
         ["latest_applied_migration", true],
@@ -131,7 +131,7 @@ describe.skipIf(!url)(
       ]);
       expect(r.pass).toBe(true);
       expect(r.latestAppliedRepoMigration).toBe(
-        "0104_pillar_subtopics.sql"
+        "0105_pillar_subtopic_recovery.sql"
       );
     });
 

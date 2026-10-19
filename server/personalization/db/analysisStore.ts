@@ -37,8 +37,8 @@ import {
   type RunSummaryWithKey,
 } from "../analysis/contract";
 import {
-  pillarsMissingSubtopics as listPillarsMissingSubtopics,
   saveGeneratedSubtopics,
+  SubtopicStoreError,
 } from "../subtopics";
 import type {
   GenerationProfile,
@@ -474,16 +474,6 @@ export function createRecommendationStore(db: Db): RecommendationStore {
       });
     },
 
-    async pillarsMissingSubtopics(profileId) {
-      const [owner] = await db
-        .select({ workspaceId: socialProfiles.workspaceId })
-        .from(socialProfiles)
-        .where(eq(socialProfiles.id, profileId))
-        .limit(1);
-      if (!owner) return [];
-      return listPillarsMissingSubtopics(db, profileId, owner.workspaceId);
-    },
-
     async saveSubtopics(profileId, groups) {
       const [owner] = await db
         .select({ workspaceId: socialProfiles.workspaceId })
@@ -491,11 +481,21 @@ export function createRecommendationStore(db: Db): RecommendationStore {
         .where(eq(socialProfiles.id, profileId))
         .limit(1);
       if (!owner) return;
-      await saveGeneratedSubtopics(db, {
-        workspaceId: owner.workspaceId,
-        socialProfileId: profileId,
-        groups,
-      });
+      try {
+        await saveGeneratedSubtopics(db, {
+          workspaceId: owner.workspaceId,
+          socialProfileId: profileId,
+          groups,
+        });
+      } catch (err) {
+        // The pillars are saved. Topics are not: the state reports the store as not ready
+        // and the user can ask again once migrations 0104 and 0105 are verified.
+        if (err instanceof SubtopicStoreError) {
+          console.warn("[personalization] topics not stored:", err.missing.join("; "));
+          return;
+        }
+        throw err;
+      }
     },
   };
 }

@@ -31,12 +31,29 @@ import {
   enqueueRecommendations,
   getRecommendationState,
 } from "../personalization/jobs";
-import { retryPillarSubtopics } from "../personalization/retrySubtopics";
+import { generatePillarTopics } from "../personalization/retrySubtopics";
+import { requestPillarSubtopics } from "../personalization/subtopicJobs";
 import {
   addPillarSubtopic,
   dismissPillarSubtopic,
   restorePillarSubtopic,
+  SubtopicStoreError,
 } from "../personalization/subtopics";
+
+/** Turns a missing migration (0104/0105) into an explicit error. Nothing is written in that case. */
+async function withSubtopicStore<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof SubtopicStoreError) {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "Topic ideas are not available yet. Please try again later.",
+      });
+    }
+    throw err;
+  }
+}
 import {
   addItem,
   completeOnboarding,
@@ -280,10 +297,7 @@ export const onboardingV2Router = router({
 
   complete: v2Procedure.mutation(async ({ ctx }) => completeOnboarding(await requireDb(), octx(ctx))),
 
-  /**
-   * Claude's editing UI: add a subtopic the user typed.
-   * A label they previously dismissed is not recreated.
-   */
+  /** Add a subtopic the user typed. A label they previously dismissed is not recreated. */
   addPillarSubtopic: v2Procedure
     .input(z.object({
       pillarItemId: z.string().uuid(),
@@ -293,68 +307,94 @@ export const onboardingV2Router = router({
       const db = await requireDb();
       const state = await loadOnboardingState(db, octx(ctx));
       if (!state.profile) throw new TRPCError({ code: "BAD_REQUEST", message: "No profile yet." });
-      const result = await addPillarSubtopic(db, {
-        workspaceId: ctx.workspaceId,
-        socialProfileId: state.profile.id,
-        pillarItemId: input.pillarItemId,
-        label: input.label,
-      });
+      const result = await withSubtopicStore(() =>
+        addPillarSubtopic(db, {
+          workspaceId: ctx.workspaceId,
+          socialProfileId: state.profile!.id,
+          pillarItemId: input.pillarItemId,
+          label: input.label,
+        })
+      );
       if (!result.ok && result.reason === "not_found") {
         throw new TRPCError({ code: "NOT_FOUND", message: "Pillar not found." });
+      }
+      if (!result.ok && (result.reason === "pillar_not_live" || result.reason === "conflict")) {
+        throw new TRPCError({ code: "CONFLICT", message: "This pillar changed. Reload to see the current version." });
       }
       return result;
     }),
 
-  /** Claude's editing UI: remove a subtopic. The row stays dismissed. */
+  /** Remove a subtopic. The row stays dismissed and remembers its prior status for Undo. */
   dismissPillarSubtopic: v2Procedure
     .input(z.object({ subtopicId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const db = await requireDb();
       const state = await loadOnboardingState(db, octx(ctx));
       if (!state.profile) throw new TRPCError({ code: "BAD_REQUEST", message: "No profile yet." });
-      const result = await dismissPillarSubtopic(db, {
-        workspaceId: ctx.workspaceId,
-        socialProfileId: state.profile.id,
-        subtopicId: input.subtopicId,
-      });
+      const result = await withSubtopicStore(() =>
+        dismissPillarSubtopic(db, {
+          workspaceId: ctx.workspaceId,
+          socialProfileId: state.profile!.id,
+          subtopicId: input.subtopicId,
+        })
+      );
       if (!result.ok && result.reason === "not_found") {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Subtopic not found." });
+        throw new TRPCError({ code: "NOT_FOUND", message: "Topic not found." });
+      }
+      if (!result.ok && (result.reason === "pillar_not_live" || result.reason === "conflict")) {
+        throw new TRPCError({ code: "CONFLICT", message: "This topic changed. Reload to see the current version." });
       }
       return result;
     }),
 
-  /** Undo of dismissPillarSubtopic. Only a dismissed row of a live pillar comes back. */
+  /** Undo of dismissPillarSubtopic. Returns the topic to exactly the status it had. */
   restorePillarSubtopic: v2Procedure
     .input(z.object({ subtopicId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const db = await requireDb();
       const state = await loadOnboardingState(db, octx(ctx));
       if (!state.profile) throw new TRPCError({ code: "BAD_REQUEST", message: "No profile yet." });
-      const result = await restorePillarSubtopic(db, {
-        workspaceId: ctx.workspaceId,
-        socialProfileId: state.profile.id,
-        subtopicId: input.subtopicId,
-      });
+      const result = await withSubtopicStore(() =>
+        restorePillarSubtopic(db, {
+          workspaceId: ctx.workspaceId,
+          socialProfileId: state.profile!.id,
+          subtopicId: input.subtopicId,
+        })
+      );
       if (!result.ok && result.reason === "not_found") {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Subtopic not found." });
+        throw new TRPCError({ code: "NOT_FOUND", message: "Topic not found." });
       }
-      if (!result.ok && (result.reason === "pillar_not_live" || result.reason === "duplicate")) {
+      if (!result.ok) {
         throw new TRPCError({ code: "CONFLICT", message: "This topic can no longer be restored. Reload to see the current version." });
       }
       return result;
     }),
 
-  /** Fill subtopics for one pillar after a failed or empty generation. */
-  retryPillarSubtopics: v2Procedure
+  /**
+   * Ask for topic ideas for one pillar. The only way topics are generated after a
+   * pillar is saved: never on load, never automatically. Limits are enforced by the
+   * durable job (see subtopicJobs.ts). Returns what happened, so the UI can say so.
+   */
+  requestPillarSubtopics: v2Procedure
     .input(z.object({ pillarItemId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const db = await requireDb();
       const state = await loadOnboardingState(db, octx(ctx));
       if (!state.profile) throw new TRPCError({ code: "BAD_REQUEST", message: "No profile yet." });
-      return retryPillarSubtopics(db, {
-        workspaceId: ctx.workspaceId,
-        socialProfileId: state.profile.id,
-        pillarItemId: input.pillarItemId,
-      });
+      const outcome = await withSubtopicStore(() =>
+        requestPillarSubtopics(
+          db,
+          { generate: input => generatePillarTopics(db, input) },
+          {
+            workspaceId: ctx.workspaceId,
+            socialProfileId: state.profile!.id,
+            pillarItemId: input.pillarItemId,
+          }
+        )
+      );
+      if (outcome.status === "not_found") {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Pillar not found." });
+      }
+      return outcome;
     }),
 });

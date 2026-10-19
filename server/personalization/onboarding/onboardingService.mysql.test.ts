@@ -35,10 +35,14 @@ import {
   switchActiveProfile,
 } from "./onboardingService";
 import {
+  addPillarSubtopic,
   dismissPillarSubtopic,
   restorePillarSubtopic,
   saveGeneratedSubtopics,
+  SubtopicStoreError,
+  verifyPillarSubtopicStore,
 } from "../subtopics";
+import { requestPillarSubtopics } from "../subtopicJobs";
 import { homeContextFromState } from "../home/homeService";
 
 const url = process.env.PERSONALIZATION_SCHEMA_TEST_DB;
@@ -107,6 +111,10 @@ const AUDIENCE_OUT = {
 describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
   let conn: mysql.Connection;
   let db: Db;
+  // Concurrency tests need separate connections (production uses a pool). One connection would
+  // serialize them and hide lock bugs.
+  let pool: mysql.Pool;
+  let poolDb: Db;
   const q = (sql: string, params: unknown[] = []) => conn.query(sql, params);
 
   beforeAll(async () => {
@@ -137,15 +145,26 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
     await q(readFileSync(path.join(root, "docs/architecture/drafts/onboarding_v2_personalization.sql"), "utf8"));
     await q(readFileSync(path.join(root, "drizzle/0104_pillar_subtopics.sql"), "utf8"));
     db = drizzle(conn) as unknown as Db;
+    pool = mysql.createPool({
+      host: u.hostname,
+      port: Number(u.port || 3306),
+      user: decodeURIComponent(u.username),
+      password: decodeURIComponent(u.password),
+      database: dbName,
+      connectionLimit: 4,
+    });
+    poolDb = drizzle(pool) as unknown as Db;
   });
 
   afterAll(async () => {
+    await pool?.end();
     await conn?.end();
   });
 
   beforeEach(async () => {
     await q("SET FOREIGN_KEY_CHECKS = 0");
     for (const t of [
+      "pillar_subtopic_jobs",
       "pillar_subtopics",
       "personalization_items",
       "personalization_progress",
@@ -320,78 +339,247 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
     expect((d as Array<{ status: string; dismissedAtVersion: number }>)[0]).toMatchObject({ status: "dismissed", dismissedAtVersion: 1 });
   });
 
-  const seedPillar = async () => {
+  const addPillar = async (title = "Dinners") => {
     const { profileId } = await confirmProfile(db, A, preview("test.kitchen"));
-    const { itemId } = await addItem(db, A, "pillar", {
-      title: "Dinners",
-      description: "",
-      viewSharePercent: null,
-    } as never);
+    const { itemId } = await addItem(db, A, "pillar", { title, description: "", viewSharePercent: null } as never);
+    return { profileId, pillarId: itemId };
+  };
+  const seedPillar = async () => {
+    const { profileId, pillarId } = await addPillar();
     await saveGeneratedSubtopics(db, {
       workspaceId: WS_A,
       socialProfileId: profileId,
       groups: [{ title: "Dinners", labels: ["One-pan meals", "Budget dinners"], pillarHash: "h1" }],
     });
-    return { profileId, pillarId: itemId };
+    return { profileId, pillarId };
   };
   const labelOf = (state: Awaited<ReturnType<typeof loadOnboardingState>>, label: string) =>
     state.pillarSubtopics.find(s => s.label === label)!;
+  const scopeOf = (profileId: string, pillarItemId: string) => ({ workspaceId: WS_A, socialProfileId: profileId, pillarItemId });
+  const fakeGen = (result: string[] | Error) => {
+    const calls = { n: 0 };
+    const generate = async () => {
+      calls.n++;
+      if (result instanceof Error) throw result;
+      return { title: "Dinners", labels: result };
+    };
+    return { generate, calls };
+  };
+  const backdateJob = (pillarItemId: string) =>
+    q("UPDATE pillar_subtopic_jobs SET lastClaimedAt = now() - INTERVAL 2 MINUTE WHERE pillarItemId = ?", [pillarItemId]);
 
-  it("pillar subtopics: a dismissal sticks; a same-title edit moves its topics to the new pillar id", async () => {
-    const { profileId, pillarId } = await seedPillar();
+  it("topic ideas are never generated on load or reload; one explicit request generates them once", async () => {
+    const { profileId, pillarId } = await addPillar();
+    const gen = fakeGen(["One-pan meals", "Budget dinners"]);
     let state = await loadOnboardingState(db, A);
-    expect(labelOf(state, "One-pan meals")).toMatchObject({ pillarItemId: pillarId, status: "suggested" });
+    expect(state.subtopicStore).toEqual({ ready: true, missing: [] });
+    expect(state.pillarTopics[pillarId]).toEqual({ state: "never_generated", attempts: 0 });
+    await loadOnboardingState(db, A);
+    expect(gen.calls.n).toBe(0);
 
-    const one = labelOf(state, "One-pan meals");
-    await expect(
-      dismissPillarSubtopic(db, { workspaceId: WS_A, socialProfileId: profileId, subtopicId: one.id })
-    ).resolves.toMatchObject({ ok: true });
+    const scope = scopeOf(profileId, pillarId);
+    expect(await requestPillarSubtopics(db, { generate: gen.generate }, scope)).toEqual({ status: "generated", inserted: 2 });
+    expect(gen.calls.n).toBe(1);
     state = await loadOnboardingState(db, A);
-    expect(labelOf(state, "One-pan meals").status).toBe("dismissed");
+    expect(state.pillarTopics[pillarId].state).toBe("ready");
+    expect(await requestPillarSubtopics(db, { generate: gen.generate }, scope)).toEqual({ status: "already_has_topics" });
+    expect(gen.calls.n).toBe(1);
+  });
 
-    // Same title: both topics (dismissal included) follow the pillar's new id.
-    const { itemId: editedId } = await editItem(db, A, pillarId, {
+  it("failed generation: no automatic retry, a cooldown, at most three attempts, then exhausted", async () => {
+    const { profileId, pillarId } = await addPillar();
+    const scope = scopeOf(profileId, pillarId);
+    const bad = fakeGen(new Error("model timeout"));
+    expect(await requestPillarSubtopics(db, { generate: bad.generate }, scope)).toEqual({ status: "failed" });
+    expect((await loadOnboardingState(db, A)).pillarTopics[pillarId]).toEqual({ state: "failed", attempts: 1 });
+    await loadOnboardingState(db, A);
+    expect(bad.calls.n).toBe(1);
+
+    expect(await requestPillarSubtopics(db, { generate: bad.generate }, scope)).toEqual({ status: "cooldown" });
+    expect(bad.calls.n).toBe(1);
+
+    await backdateJob(pillarId);
+    expect(await requestPillarSubtopics(db, { generate: bad.generate }, scope)).toEqual({ status: "failed" });
+    await backdateJob(pillarId);
+    expect(await requestPillarSubtopics(db, { generate: bad.generate }, scope)).toEqual({ status: "failed" });
+    expect(bad.calls.n).toBe(3);
+    expect((await loadOnboardingState(db, A)).pillarTopics[pillarId]).toEqual({ state: "exhausted", attempts: 3 });
+
+    await backdateJob(pillarId);
+    expect(await requestPillarSubtopics(db, { generate: bad.generate }, scope)).toEqual({ status: "exhausted" });
+    expect(bad.calls.n).toBe(3);
+  });
+
+  it("explicit states: all topics dismissed and an empty success are distinct from never generated", async () => {
+    const { profileId, pillarId } = await addPillar();
+    const scope = scopeOf(profileId, pillarId);
+    const ok = fakeGen(["Budget dinners"]);
+    await requestPillarSubtopics(db, { generate: ok.generate }, scope);
+    const topic = labelOf(await loadOnboardingState(db, A), "Budget dinners");
+    await dismissPillarSubtopic(db, { workspaceId: WS_A, socialProfileId: profileId, subtopicId: topic.id });
+    expect((await loadOnboardingState(db, A)).pillarTopics[pillarId].state).toBe("all_dismissed");
+    expect(await requestPillarSubtopics(db, { generate: ok.generate }, scope)).toEqual({ status: "already_generated" });
+    expect(ok.calls.n).toBe(1);
+
+    const { pillarId: emptyId } = await addPillar("Breakfast");
+    const empty = fakeGen([]);
+    expect(await requestPillarSubtopics(db, { generate: empty.generate }, scopeOf(profileId, emptyId))).toEqual({
+      status: "generated",
+      inserted: 0,
+    });
+    expect((await loadOnboardingState(db, A)).pillarTopics[emptyId].state).toBe("no_topics");
+    expect(await requestPillarSubtopics(db, { generate: empty.generate }, scopeOf(profileId, emptyId))).toEqual({
+      status: "already_generated",
+    });
+    expect(empty.calls.n).toBe(1);
+  });
+
+  it("hourly limit: at most ten pillars claimed per profile in an hour", async () => {
+    const gen = fakeGen(["Budget dinners"]);
+    let profileId = "";
+    for (let i = 0; i < 10; i++) {
+      const added = await addPillar(`Topic ${i}`);
+      profileId = added.profileId;
+      expect(await requestPillarSubtopics(db, { generate: gen.generate }, scopeOf(profileId, added.pillarId))).toMatchObject({
+        status: "generated",
+      });
+    }
+    const eleventh = await addPillar("Eleventh");
+    expect(await requestPillarSubtopics(db, { generate: gen.generate }, scopeOf(profileId, eleventh.pillarId))).toEqual({
+      status: "rate_limited",
+    });
+    expect(gen.calls.n).toBe(10);
+  });
+
+  it("two simultaneous requests for one pillar call the model once", async () => {
+    const { profileId, pillarId } = await addPillar();
+    const calls = { n: 0 };
+    const slow = {
+      generate: async () => {
+        calls.n++;
+        await new Promise(r => setTimeout(r, 150));
+        return { title: "Dinners", labels: ["Budget dinners"] };
+      },
+    };
+    const scope = scopeOf(profileId, pillarId);
+    const [a, b] = await Promise.all([
+      requestPillarSubtopics(poolDb, slow, scope),
+      requestPillarSubtopics(poolDb, slow, scope),
+    ]);
+    expect(calls.n).toBe(1);
+    expect([a.status, b.status].sort()).toEqual(["generated", "in_progress"]);
+  });
+
+  it("a missing migration column is an explicit error: nothing is shown, nothing is called or written", async () => {
+    const { profileId, pillarId } = await addPillar();
+    const scope = scopeOf(profileId, pillarId);
+    await q("ALTER TABLE pillar_subtopics DROP COLUMN dismissedFromStatus");
+    try {
+      const state = await loadOnboardingState(db, A);
+      expect(state.subtopicStore.ready).toBe(false);
+      expect(state.subtopicStore.missing.join(" ")).toMatch(/dismissedFromStatus/);
+      expect(state.pillarSubtopics).toEqual([]);
+      expect(state.pillarTopics).toEqual({});
+
+      const gen = fakeGen(["Budget dinners"]);
+      await expect(requestPillarSubtopics(db, { generate: gen.generate }, scope)).rejects.toThrow(SubtopicStoreError);
+      expect(gen.calls.n).toBe(0);
+      await expect(
+        saveGeneratedSubtopics(db, { workspaceId: WS_A, socialProfileId: profileId, groups: [{ title: "Dinners", labels: ["x y"], pillarHash: "h" }] })
+      ).rejects.toThrow(SubtopicStoreError);
+      await expect(
+        addPillarSubtopic(db, { workspaceId: WS_A, socialProfileId: profileId, pillarItemId: pillarId, label: "Lentil soup" })
+      ).rejects.toThrow(SubtopicStoreError);
+      // The pillar itself still saves (Cursor's requirement): edits are not blocked by the store.
+      await expect(
+        editItem(db, A, pillarId, { title: "Dinners", description: "Weeknights", viewSharePercent: null } as never)
+      ).resolves.toBeDefined();
+      expect((await verifyPillarSubtopicStore(db)).ready).toBe(false);
+    } finally {
+      await q("ALTER TABLE pillar_subtopics ADD COLUMN dismissedFromStatus enum('suggested','confirmed') NULL AFTER status");
+    }
+    expect(await verifyPillarSubtopicStore(db)).toEqual({ ready: true });
+  });
+
+  it("migration 0105 applies to a database that has 0104 only, and verifies", async () => {
+    await q("DROP TABLE pillar_subtopic_jobs");
+    await q("ALTER TABLE pillar_subtopics DROP COLUMN dismissedFromStatus");
+    const before = await verifyPillarSubtopicStore(db);
+    expect(before.ready === false && before.missing.join(" ")).toMatch(/migration 0105/);
+    await q(readFileSync(path.join(root, "drizzle/0105_pillar_subtopic_recovery.sql"), "utf8"));
+    expect(await verifyPillarSubtopicStore(db)).toEqual({ ready: true });
+  });
+
+  it("migrations: a missing 0104 table is reported by name; applying 0104 then 0105 restores readiness", async () => {
+    const { profileId, pillarId } = await addPillar();
+    await q("DROP TABLE pillar_subtopics");
+    try {
+      const check = await verifyPillarSubtopicStore(db);
+      expect(check.ready).toBe(false);
+      expect(check.ready === false && check.missing.join(" ")).toMatch(/migration 0104: table pillar_subtopics is missing/);
+      const state = await loadOnboardingState(db, A);
+      expect(state.subtopicStore.ready).toBe(false);
+      await expect(
+        requestPillarSubtopics(db, fakeGen(["Budget dinners"]), scopeOf(profileId, pillarId))
+      ).rejects.toThrow(SubtopicStoreError);
+    } finally {
+      await q(readFileSync(path.join(root, "drizzle/0104_pillar_subtopics.sql"), "utf8"));
+      await q("ALTER TABLE pillar_subtopics ADD COLUMN dismissedFromStatus enum('suggested','confirmed') NULL AFTER status");
+    }
+    expect(await verifyPillarSubtopicStore(db)).toEqual({ ready: true });
+    expect(await requestPillarSubtopics(db, fakeGen(["Budget dinners"]), scopeOf(profileId, pillarId))).toEqual({
+      status: "generated",
+      inserted: 1,
+    });
+  });
+
+  it("same-title edit: topics, dismissals and the generation job follow the pillar's new id", async () => {
+    const { profileId, pillarId } = await seedPillar();
+    await q(
+      "INSERT INTO pillar_subtopic_jobs (id, workspaceId, socialProfileId, pillarItemId, status, attempts, lastClaimedAt) VALUES (UUID(), ?, ?, ?, 'succeeded', 1, now())",
+      [WS_A, profileId, pillarId]
+    );
+    const one = labelOf(await loadOnboardingState(db, A), "One-pan meals");
+    await dismissPillarSubtopic(db, { workspaceId: WS_A, socialProfileId: profileId, subtopicId: one.id });
+
+    const { itemId: newId } = await editItem(db, A, pillarId, {
       title: "Dinners",
       description: "Weeknight dinners",
       viewSharePercent: null,
     } as never);
-    state = await loadOnboardingState(db, A);
-    expect(state.pillarSubtopics.filter(s => s.pillarItemId === editedId).map(s => s.label).sort()).toEqual([
-      "Budget dinners",
-      "One-pan meals",
-    ]);
-    expect(labelOf(state, "One-pan meals")).toMatchObject({ pillarItemId: editedId, status: "dismissed" });
-    expect(state.pillarSubtopics.filter(s => s.pillarItemId === pillarId)).toEqual([]);
-  });
-
-  it("pillar subtopics: a title change does not carry topics to the new title", async () => {
-    const { pillarId } = await seedPillar();
-    const { itemId: renamedId } = await editItem(db, A, pillarId, {
-      title: "Quick dinners",
-      description: "",
-      viewSharePercent: null,
-    } as never);
     const state = await loadOnboardingState(db, A);
-    expect(state.pillarSubtopics.some(s => s.pillarItemId === renamedId)).toBe(false);
-    expect(state.pillarSubtopics.length).toBe(2);
+    expect(state.pillarSubtopics.filter(s => s.pillarItemId === newId).map(s => [s.label, s.status]).sort()).toEqual([
+      ["Budget dinners", "suggested"],
+      ["One-pan meals", "dismissed"],
+    ]);
+    expect(state.pillarSubtopics.filter(s => s.pillarItemId === pillarId)).toEqual([]);
+    const [job] = (await q("SELECT pillarItemId FROM pillar_subtopic_jobs WHERE socialProfileId = ?", [profileId])) as unknown as [Array<{ pillarItemId: string }>];
+    expect(job.map(j => j.pillarItemId)).toEqual([newId]);
+    expect(state.pillarTopics[newId].state).toBe("ready");
   });
 
-  it("restorePillarSubtopic: brings a dismissed AI topic back as a suggestion, is a no-op on a live topic, and is workspace-scoped", async () => {
-    const { profileId } = await seedPillar();
+  it("changed-title edit: no topics move; history stays on the old pillar; an earlier dismissal still blocks that label under the old title", async () => {
+    const { profileId, pillarId } = await seedPillar();
     const one = labelOf(await loadOnboardingState(db, A), "One-pan meals");
     await dismissPillarSubtopic(db, { workspaceId: WS_A, socialProfileId: profileId, subtopicId: one.id });
 
-    await expect(
-      restorePillarSubtopic(db, { workspaceId: WS_A, socialProfileId: profileId, subtopicId: one.id })
-    ).resolves.toEqual({ ok: true, id: one.id });
-    expect(labelOf(await loadOnboardingState(db, A), "One-pan meals").status).toBe("suggested");
+    const { itemId: renamedId } = await editItem(db, A, pillarId, { title: "Quick dinners", description: "", viewSharePercent: null } as never);
+    let state = await loadOnboardingState(db, A);
+    expect(state.pillarSubtopics.some(s => s.pillarItemId === renamedId)).toBe(false);
+    expect(state.pillarTopics[renamedId]).toEqual({ state: "never_generated", attempts: 0 });
+    expect(await loadOnboardingState(db, A).then(s => s.pillarSubtopics.length)).toBe(0); // old pillar is not live
+    const [hist] = (await q("SELECT status, dismissedFromStatus FROM pillar_subtopics WHERE pillarItemId = ? AND label = 'One-pan meals'", [pillarId])) as unknown as [Array<{ status: string; dismissedFromStatus: string }>];
+    expect(hist[0]).toMatchObject({ status: "dismissed", dismissedFromStatus: "suggested" });
 
-    await expect(
-      restorePillarSubtopic(db, { workspaceId: WS_A, socialProfileId: profileId, subtopicId: one.id })
-    ).resolves.toEqual({ ok: true, id: one.id });
-    await expect(
-      restorePillarSubtopic(db, { workspaceId: WS_B, socialProfileId: profileId, subtopicId: one.id })
-    ).resolves.toEqual({ ok: false, reason: "not_found" });
+    // Renaming back to the old title: the earlier dismissal still applies to that title.
+    const { itemId: backId } = await editItem(db, A, renamedId, { title: "Dinners", description: "", viewSharePercent: null } as never);
+    const gen = fakeGen(["One-pan meals", "Lentil soup"]);
+    expect(await requestPillarSubtopics(db, { generate: gen.generate }, scopeOf(profileId, backId))).toEqual({
+      status: "generated",
+      inserted: 1,
+    });
+    state = await loadOnboardingState(db, A);
+    expect(state.pillarSubtopics.filter(s => s.pillarItemId === backId).map(s => s.label)).toEqual(["Lentil soup"]);
   });
 
   it("undo of a removed pillar brings its topics back on the restored pillar id; a dismissed topic is restored only while its pillar is live", async () => {
@@ -416,12 +604,60 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
 
     await expect(
       restorePillarSubtopic(db, { workspaceId: WS_A, socialProfileId: profileId, subtopicId: two.id })
-    ).resolves.toEqual({ ok: true, id: two.id });
+    ).resolves.toEqual({ ok: true, id: two.id, status: "suggested" });
     state = await loadOnboardingState(db, A);
     expect(labelOf(state, "Budget dinners")).toMatchObject({ pillarItemId: restoredId, status: "suggested" });
 
-    // A second undo of the same removal is refused, never a duplicate pillar.
     await expect(restoreItem(db, A, pillarId)).rejects.toThrow(/already restored|changed/);
+  });
+
+  it("exact undo: a dismissed topic returns to the status it had, not one inferred from its source", async () => {
+    const { profileId, pillarId } = await seedPillar();
+    const one = labelOf(await loadOnboardingState(db, A), "One-pan meals");
+    // An AI topic that the user had confirmed: source ai_suggested, status confirmed.
+    await q("UPDATE pillar_subtopics SET status = 'confirmed' WHERE id = ?", [one.id]);
+    await dismissPillarSubtopic(db, { workspaceId: WS_A, socialProfileId: profileId, subtopicId: one.id });
+    expect(labelOf(await loadOnboardingState(db, A), "One-pan meals")).toMatchObject({ status: "dismissed", dismissedFromStatus: "confirmed" });
+    await expect(
+      restorePillarSubtopic(db, { workspaceId: WS_A, socialProfileId: profileId, subtopicId: one.id })
+    ).resolves.toEqual({ ok: true, id: one.id, status: "confirmed" });
+    expect(labelOf(await loadOnboardingState(db, A), "One-pan meals")).toMatchObject({ status: "confirmed", dismissedFromStatus: null });
+    expect(pillarId).toBeTruthy();
+  });
+
+  it("exact undo refuses a dismissed topic with no recorded prior status, and another workspace cannot dismiss or restore it", async () => {
+    const { profileId } = await seedPillar();
+    const one = labelOf(await loadOnboardingState(db, A), "One-pan meals");
+    await dismissPillarSubtopic(db, { workspaceId: WS_A, socialProfileId: profileId, subtopicId: one.id });
+    await q("UPDATE pillar_subtopics SET dismissedFromStatus = NULL WHERE id = ?", [one.id]);
+    await expect(
+      restorePillarSubtopic(db, { workspaceId: WS_A, socialProfileId: profileId, subtopicId: one.id })
+    ).resolves.toEqual({ ok: false, reason: "unknown_prior_state" });
+
+    await q("UPDATE pillar_subtopics SET dismissedFromStatus = 'suggested' WHERE id = ?", [one.id]);
+    await expect(
+      restorePillarSubtopic(db, { workspaceId: WS_B, socialProfileId: profileId, subtopicId: one.id })
+    ).resolves.toEqual({ ok: false, reason: "not_found" });
+    const budget = labelOf(await loadOnboardingState(db, A), "Budget dinners");
+    await expect(
+      dismissPillarSubtopic(db, { workspaceId: WS_B, socialProfileId: profileId, subtopicId: budget.id })
+    ).resolves.toEqual({ ok: false, reason: "not_found" });
+    expect(labelOf(await loadOnboardingState(db, A), "Budget dinners").status).toBe("suggested");
+  });
+
+  it("concurrent undo and dismiss clicks end in one exact result", async () => {
+    const { profileId } = await seedPillar();
+    const one = labelOf(await loadOnboardingState(db, A), "One-pan meals");
+    const scope = { workspaceId: WS_A, socialProfileId: profileId, subtopicId: one.id };
+    const [d1, d2] = await Promise.all([dismissPillarSubtopic(poolDb, scope), dismissPillarSubtopic(poolDb, scope)]);
+    expect(d1.ok && d2.ok).toBe(true);
+    expect(labelOf(await loadOnboardingState(db, A), "One-pan meals")).toMatchObject({ status: "dismissed", dismissedFromStatus: "suggested" });
+    const [r1, r2] = await Promise.all([
+      restorePillarSubtopic(poolDb, { workspaceId: WS_A, socialProfileId: profileId, subtopicId: one.id }),
+      restorePillarSubtopic(poolDb, { workspaceId: WS_A, socialProfileId: profileId, subtopicId: one.id }),
+    ]);
+    expect(r1.ok && r2.ok).toBe(true);
+    expect(labelOf(await loadOnboardingState(db, A), "One-pan meals")).toMatchObject({ status: "suggested", dismissedFromStatus: null });
   });
 
   it("audience may have an empty outcome from the single-field editor", async () => {

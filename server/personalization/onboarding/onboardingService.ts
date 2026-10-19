@@ -54,7 +54,13 @@ import { users } from "../../../drizzle/schema";
 import type { Db } from "../db/analysisStore";
 import { pickBestPost, type BestPost } from "@shared/personalization/bestPost";
 import { toItemRecord } from "../db/rows";
-import { isSamePillarTitle, listProfileSubtopics, repointPillarSubtopics } from "../subtopics";
+import {
+  isSamePillarTitle,
+  listProfileSubtopics,
+  repointPillarSubtopics,
+  verifyPillarSubtopicStore,
+} from "../subtopics";
+import { loadTopicStates, type PillarTopicState } from "../subtopicJobs";
 
 export type OnboardingCtx = { userId: number; workspaceId: string };
 
@@ -121,8 +127,13 @@ export type OnboardingStateView = {
     pillarItemId: string;
     label: string;
     status: "suggested" | "confirmed" | "dismissed";
+    dismissedFromStatus: "suggested" | "confirmed" | null;
     source: "ai_suggested" | "user_entered" | "user_edited";
   }[];
+  /** Whether migrations 0104 and 0105 are verified. When false, no topics are shown or written. */
+  subtopicStore: { ready: boolean; missing: string[] };
+  /** Per live pillar: what the card should show (never generated, ready, failed, ...). */
+  pillarTopics: Record<string, { state: PillarTopicState; attempts: number }>;
   completedAt: Date | null;
 };
 
@@ -277,15 +288,7 @@ export async function loadOnboardingState(db: Db, ctx: OnboardingCtx): Promise<O
       source: i.source,
       evidence: i.evidence,
     })),
-    pillarSubtopics: profile
-      ? (await listProfileSubtopics(db, profile.id, ctx.workspaceId)).map(s => ({
-          id: s.id,
-          pillarItemId: s.pillarItemId,
-          label: s.label,
-          status: s.status,
-          source: s.source,
-        }))
-      : [],
+    ...(await subtopicView(db, ctx, profile?.id ?? null, items)),
     completedAt: progress?.completedAt ?? null,
   };
 }
@@ -566,8 +569,11 @@ export async function editItem(
       analysisRunId: plan.insert.analysisRunId,
       createdByUserId: ctx.userId,
     });
-    // A pillar edit that keeps the same title keeps its subtopics (they belong to the pillar).
-    // A title change does not: the new title gets its own subtopics.
+    // Subtopic rule for pillar edits (one rule, see docs/architecture/drafts/onboarding_v2_pillar_subtopics_contract.md):
+    // - same title (description or share changed): every topic row, its status and its
+    //   dismissals, and the generation job move to the new pillar item;
+    // - changed title: nothing moves. The old topics stay on the superseded pillar as history,
+    //   the new title starts with none, and an earlier dismissal still blocks that label under the old title.
     if (
       item.kind === "pillar" &&
       isSamePillarTitle(
@@ -575,7 +581,7 @@ export async function editItem(
         (plan.insert.payload as PillarPayload).title
       )
     ) {
-      await repointPillarSubtopics(tx as unknown as Db, { from: plan.supersedeItemId, to: newId });
+      await moveSubtopicsIfStoreReady(tx as unknown as Db, plan.supersedeItemId, newId);
     }
     if (plan.nextVersion !== progress.personalizationVersion) {
       await tx
@@ -640,6 +646,57 @@ export async function removeItem(db: Db, ctx: OnboardingCtx, itemId: string) {
       );
     });
   }
+}
+
+/**
+ * Moves a pillar's topics to its new item id. Only when the store is verified: with no
+ * store there are no topic rows to move, and the state reports the store as not ready.
+ */
+async function moveSubtopicsIfStoreReady(tx: Db, fromItemId: string, toItemId: string): Promise<void> {
+  const store = await verifyPillarSubtopicStore(tx);
+  if (!store.ready) return;
+  await repointPillarSubtopics(tx, { from: fromItemId, to: toItemId });
+}
+
+/**
+ * Topic view for getState. Only live pillars are listed; history stays in the table.
+ * With the store not ready, nothing is listed and no state is claimed.
+ */
+async function subtopicView(
+  db: Db,
+  ctx: OnboardingCtx,
+  profileId: string | null,
+  items: ItemRecord[]
+): Promise<Pick<OnboardingStateView, "pillarSubtopics" | "subtopicStore" | "pillarTopics">> {
+  const store = await verifyPillarSubtopicStore(db);
+  if (!profileId || !store.ready) {
+    return {
+      pillarSubtopics: [],
+      subtopicStore: { ready: store.ready, missing: store.ready ? [] : store.missing },
+      pillarTopics: {},
+    };
+  }
+  const livePillars = items.filter(i => i.kind === "pillar" && (i.status === "suggested" || i.status === "confirmed"));
+  const liveIds = new Set(livePillars.map(p => p.id));
+  const rows = await listProfileSubtopics(db, profileId, ctx.workspaceId);
+  return {
+    pillarSubtopics: rows
+      .filter(s => liveIds.has(s.pillarItemId))
+      .map(s => ({
+        id: s.id,
+        pillarItemId: s.pillarItemId,
+        label: s.label,
+        status: s.status,
+        dismissedFromStatus: s.dismissedFromStatus,
+        source: s.source,
+      })),
+    subtopicStore: { ready: true, missing: [] },
+    pillarTopics: await loadTopicStates(db, {
+      workspaceId: ctx.workspaceId,
+      socialProfileId: profileId,
+      pillarItemIds: [...liveIds],
+    }),
+  };
 }
 
 /** Every stored column of an item except the ones passed in `over` (used for tombstones and restores). */
@@ -721,7 +778,7 @@ export async function restoreItem(db: Db, ctx: OnboardingCtx, itemId: string): P
       })
     );
     // The removed pillar's subtopics come back with it, on the restored item.
-    await repointPillarSubtopics(tx as unknown as Db, { from: item.id, to: newId });
+    await moveSubtopicsIfStoreReady(tx as unknown as Db, item.id, newId);
   });
   return { itemId: newId };
 }
