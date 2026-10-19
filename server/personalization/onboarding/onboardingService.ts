@@ -24,6 +24,7 @@ import {
   type AttributionSource,
   type ItemPayloadByKind,
   type PersonalizationItemKind,
+  type PillarPayload,
   type PersonalizationStep,
   type PrimaryUseCase,
   type SocialPlatform,
@@ -52,6 +53,7 @@ import {
 import { users } from "../../../drizzle/schema";
 import type { Db } from "../db/analysisStore";
 import { pickBestPost, type BestPost } from "@shared/personalization/bestPost";
+import { withSubtopicRemoved } from "@shared/personalization/subtopics";
 import { toItemRecord } from "../db/rows";
 
 export type OnboardingCtx = { userId: number; workspaceId: string };
@@ -550,6 +552,26 @@ export async function editItem(
     }
   });
   return { itemId: newId };
+}
+
+/**
+ * Remove (or restore) one AI subtopic of a pillar. Stored inside the pillar's
+ * own payload, so it needs no migration; the pillar is superseded like any edit.
+ */
+export async function setPillarSubtopicRemoved(
+  db: Db,
+  ctx: OnboardingCtx,
+  itemId: string,
+  subtopicId: string,
+  removed: boolean
+): Promise<{ itemId: string }> {
+  const { item } = await itemOfActiveProfile(db, ctx, itemId);
+  if (item.kind !== "pillar") {
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Only pillars have subtopics." });
+  }
+  const next = withSubtopicRemoved(item.payload as PillarPayload, subtopicId, removed);
+  if (!next) notFound();
+  return editItem(db, ctx, itemId, next as never);
 }
 
 /** User types a new value (e.g. "+ Add an audience"). */

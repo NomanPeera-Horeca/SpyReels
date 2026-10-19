@@ -1,15 +1,29 @@
 /**
  * Step 4: Goal, Audience, Pillars. Approved Figma: Goal desktop 1080:3458,
  * Audience desktop 1216:178, Audience mobile 1413:4427, Pillars desktop
- * 1216:106. Mobile Goal (1080:4452) and mobile Pillars (1216:18669) are
- * REVIEW PENDING in Figma: they reflow this same structure.
+ * 1216:106. Edit / Add / Delete behaviour: review board 1676:420.
  *
  * Presentational. Values come from the server; nothing here invents a value
  * or a number. Every screen can be confirmed or skipped with the user's own
  * values, whatever the AI did. Edits go through the server, which supersedes
  * (never overwrites) a confirmed value.
+ *
+ * Editing is shared: every editor in this step registers with StepFrame. The
+ * step's Continue button first saves each open editor that has a valid change
+ * (see pendingEdits.ts), then advances. An editor closes only after the server
+ * confirms the save.
  */
-import { useId, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { toast } from "sonner";
 import type {
   AudiencePayload,
   GoalPayload,
@@ -20,13 +34,21 @@ import type {
   SocialPlatform,
 } from "@shared/personalization/model";
 import { nicheSlugFromLabel } from "@shared/personalization/growthNiches";
+import { visibleSubtopics } from "@shared/personalization/subtopics";
 import { AnalysisStatusLine } from "@/design-system/AnalysisStatus";
 import { FieldInput, PrimaryButton } from "@/design-system/core";
 import { GhostButton } from "@/design-system/GhostButton";
-import { IconPencil, IconPillar, IconTrash } from "@/design-system/icons";
+import {
+  IconAiSparkle,
+  IconClose,
+  IconPencil,
+  IconPillar,
+  IconTrash,
+} from "@/design-system/icons";
 import { OnboardingShell } from "@/design-system/OnboardingShell";
 import { PersonalizationStepper } from "@/design-system/PersonalizationStepper";
 import { COPY } from "./copy";
+import { decidePendingSave } from "./pendingEdits";
 import styles from "./step4.module.css";
 
 const P = COPY.personalization;
@@ -57,6 +79,17 @@ type Common = {
   onStepSelect: (step: PersonalizationStep) => void;
 };
 
+/* ---------- shared pending edits ---------- */
+
+/**
+ * Open editors register a flush function here. The step's Continue calls every
+ * registered flush in turn; a false result stops Continue.
+ */
+type PendingRegistry = {
+  register: (id: string, flush: () => Promise<boolean>) => () => void;
+};
+const PendingEditsContext = createContext<PendingRegistry>({ register: () => () => undefined });
+
 function ChevronLeft() {
   return (
     <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden focusable={false}>
@@ -82,15 +115,47 @@ function StepFrame({
   canConfirm: boolean;
   children: ReactNode;
 }) {
+  const pending = useRef(new Map<string, () => Promise<boolean>>());
+  const registry = useMemo<PendingRegistry>(
+    () => ({
+      register: (id, flush) => {
+        pending.current.set(id, flush);
+        return () => {
+          pending.current.delete(id);
+        };
+      },
+    }),
+    []
+  );
+  const [flushing, setFlushing] = useState(false);
+
+  // Continue saves open valid edits first. If one cannot be saved, the step does not advance.
+  const continueWithPending = async () => {
+    if (flushing || common.busy) return;
+    setFlushing(true);
+    let ok = true;
+    try {
+      for (const flush of [...pending.current.values()]) {
+        if (!(await flush())) {
+          ok = false;
+          break;
+        }
+      }
+    } finally {
+      setFlushing(false);
+    }
+    if (ok) common.onConfirm();
+  };
+
   const end = (
     <>
-      <GhostButton onClick={common.onSkip} disabled={common.busy} className={styles.skip}>
+      <GhostButton onClick={common.onSkip} disabled={common.busy || flushing} className={styles.skip}>
         {P.skip}
       </GhostButton>
       <PrimaryButton
-        onClick={common.onConfirm}
-        disabled={common.busy || !canConfirm}
-        aria-busy={common.busy}
+        onClick={() => void continueWithPending()}
+        disabled={common.busy || flushing || !canConfirm}
+        aria-busy={common.busy || flushing}
         className={styles.main}
       >
         {mainLabel}
@@ -98,38 +163,40 @@ function StepFrame({
     </>
   );
   return (
-    <OnboardingShell
-      onBack={common.onBack}
-      preview={common.preview}
-      contentWidth="wide"
-      actions={
-        <div className={styles.actionsRow}>
-          <GhostButton onClick={common.onBack} leadingIcon={<ChevronLeft />}>
-            {COPY.back}
-          </GhostButton>
-          <div className={styles.actionsEnd}>{end}</div>
+    <PendingEditsContext.Provider value={registry}>
+      <OnboardingShell
+        onBack={common.onBack}
+        preview={common.preview}
+        contentWidth="wide"
+        actions={
+          <div className={styles.actionsRow}>
+            <GhostButton onClick={common.onBack} leadingIcon={<ChevronLeft />}>
+              {COPY.back}
+            </GhostButton>
+            <div className={styles.actionsEnd}>{end}</div>
+          </div>
+        }
+        mobileActions={end}
+        testId={`onboarding-step-${step}`}
+      >
+        <PersonalizationStepper current={step} onSelect={common.onStepSelect} />
+        <div className={styles.header}>
+          <h1 className={["sr-text-product-heading-1", styles.title].join(" ")}>{title}</h1>
+          <p className={["sr-text-product-body-large", styles.subtitle].join(" ")}>{subtitle}</p>
         </div>
-      }
-      mobileActions={end}
-      testId={`onboarding-step-${step}`}
-    >
-      <PersonalizationStepper current={step} onSelect={common.onStepSelect} />
-      <div className={styles.header}>
-        <h1 className={["sr-text-product-heading-1", styles.title].join(" ")}>{title}</h1>
-        <p className={["sr-text-product-body-large", styles.subtitle].join(" ")}>{subtitle}</p>
-      </div>
-      <div className={styles.content}>
-        {common.ai.state === "running" ? (
-          <AnalysisStatusLine status="running" handle="" className={styles.aiLine} label={P.thinking} />
-        ) : null}
-        {common.ai.state === "failed" ? (
-          <p className={["sr-text-product-body-small", styles.muted].join(" ")} role="status">
-            {P.failed}
-          </p>
-        ) : null}
-        {children}
-      </div>
-    </OnboardingShell>
+        <div className={styles.content}>
+          {common.ai.state === "running" ? (
+            <AnalysisStatusLine status="running" handle="" className={styles.aiLine} label={P.thinking} />
+          ) : null}
+          {common.ai.state === "failed" ? (
+            <p className={["sr-text-product-body-small", styles.muted].join(" ")} role="status">
+              {P.failed}
+            </p>
+          ) : null}
+          {children}
+        </div>
+      </OnboardingShell>
+    </PendingEditsContext.Provider>
   );
 }
 
@@ -143,24 +210,40 @@ function InlineEditor({
   busy,
   onSave,
   onCancel,
-  onRemove,
-  removeLabel,
 }: {
   fields: FieldSpec[];
   initial: Record<string, string>;
   busy: boolean;
+  /** Resolves true only after the server confirmed the save. */
   onSave: (values: Record<string, string>) => Promise<boolean>;
   /** Omitted when there is nothing to go back to (no value yet). */
   onCancel?: () => void;
-  /** Group edit mode only: remove this value (never shown on a chip). */
-  onRemove?: () => void;
-  removeLabel?: string;
 }) {
   const base = useId();
+  const pending = useContext(PendingEditsContext);
   const [values, setValues] = useState(initial);
   const [saving, setSaving] = useState(false);
   const submitting = busy || saving;
   const valid = fields.every(f => !f.required || (values[f.key] ?? "").trim().length > 0);
+
+  // Continue on the step saves this editor's valid change first (see StepFrame).
+  const latest = useRef({ fields, initial, values, onSave });
+  latest.current = { fields, initial, values, onSave };
+  useEffect(
+    () =>
+      pending.register(base, async () => {
+        const cur = latest.current;
+        const decision = decidePendingSave(cur.fields, cur.initial, cur.values);
+        if (decision === "skip") return true;
+        if (decision === "block") {
+          toast.error(P.finishEdit);
+          return false;
+        }
+        return cur.onSave(cur.values);
+      }),
+    [pending, base]
+  );
+
   return (
     <form
       className={styles.editor}
@@ -168,7 +251,11 @@ function InlineEditor({
         e.preventDefault();
         if (!valid || submitting) return;
         setSaving(true);
-        try { await onSave(values); } finally { setSaving(false); }
+        try {
+          await onSave(values);
+        } finally {
+          setSaving(false);
+        }
       }}
     >
       {fields.map((f, i) => (
@@ -184,17 +271,6 @@ function InlineEditor({
         />
       ))}
       <div className={styles.editorActions}>
-        {onRemove ? (
-          <GhostButton
-            type="button"
-            onClick={onRemove}
-            disabled={submitting}
-            className={styles.editorRemove}
-            aria-label={removeLabel ? `${P.remove} ${removeLabel}` : P.remove}
-          >
-            {P.remove}
-          </GhostButton>
-        ) : null}
         {onCancel ? (
           <GhostButton type="button" onClick={onCancel} disabled={submitting}>
             {P.cancel}
@@ -269,6 +345,7 @@ function ChipGroup({
   /** Open the add form straight away (no value yet and the AI asked or failed). */
   autoOpenAdd?: boolean;
   onSave: (values: Record<string, string>, itemId: string | null) => Promise<boolean>;
+  /** Removes at once; the step shows Undo. */
   onRemove: (itemId: string) => void;
 }) {
   const [mode, setMode] = useState<"view" | "add" | "edit">("view");
@@ -290,15 +367,6 @@ function ChipGroup({
                   initial={item.initial}
                   busy={busy}
                   onCancel={() => setEditingId(null)}
-                  onRemove={
-                    canRemove
-                      ? () => {
-                          onRemove(item.id);
-                          setEditingId(null);
-                        }
-                      : undefined
-                  }
-                  removeLabel={item.label}
                   onSave={async v => {
                     const saved = await onSave(v, item.id);
                     if (saved) setEditingId(null);
@@ -310,6 +378,9 @@ function ChipGroup({
               <li key={item.id} className={[styles.editListItem, styles.editListRow].join(" ")}>
                 <span className={["sr-text-product-body-large", styles.editListText].join(" ")}>{item.label}</span>
                 <EditAction onClick={() => setEditingId(item.id)} label={item.label} disabled={busy} />
+                {canRemove ? (
+                  <TrashAction onClick={() => onRemove(item.id)} label={item.label} disabled={busy} />
+                ) : null}
               </li>
             )
           )}
@@ -540,12 +611,9 @@ export function AudienceStep({
   onSave: (payload: AudiencePayload, itemId: string | null) => Promise<boolean>;
   onRemove: (itemId: string) => void;
 }) {
-  // The chip shows who. The saved value keeps both parts (who, outcome), so
-  // the form still asks for both; the server requires them.
-  const fields: FieldSpec[] = [
-    { key: "who", label: P.audience.whoLabel, max: 120, required: true },
-    { key: "outcome", label: P.audience.outcomeLabel, max: 160, required: true },
-  ];
+  // One editable field: who. The stored outcome is kept as it was (never
+  // discarded by an edit), and a new audience starts with an empty outcome.
+  const fields: FieldSpec[] = [{ key: "who", label: P.audience.whoLabel, max: 120, required: true }];
   return (
     <StepFrame
       step="audience"
@@ -560,14 +628,17 @@ export function AudienceStep({
         items={audiences.map(a => ({
           id: a.id,
           label: a.payload.who,
-          initial: { who: a.payload.who, outcome: a.payload.outcome },
+          initial: { who: a.payload.who },
         }))}
         addLabel={P.audience.add}
         busy={common.busy}
         fields={fields}
-        emptyInitial={{ who: "", outcome: "" }}
+        emptyInitial={{ who: "" }}
         autoOpenAdd={common.ai.state === "failed" || common.ai.state === "clarify"}
-        onSave={(v, id) => onSave({ who: v.who.trim(), outcome: v.outcome.trim() }, id)}
+        onSave={(v, id) => {
+          const existing = id ? audiences.find(a => a.id === id)?.payload : undefined;
+          return onSave({ who: v.who.trim(), outcome: existing?.outcome ?? "" }, id);
+        }}
         onRemove={onRemove}
       />
     </StepFrame>
@@ -581,13 +652,18 @@ export function PillarsStep({
   pillars,
   onSave,
   onRemove,
+  onRemoveSubtopic,
 }: {
   common: Common;
   pillars: StepItem<PillarPayload>[];
-  onSave: (payload: Omit<PillarPayload, "viewSharePercent">, itemId: string | null) => Promise<boolean>;
+  onSave: (payload: Omit<PillarPayload, "viewSharePercent" | "subtopics">, itemId: string | null) => Promise<boolean>;
   onRemove: (itemId: string) => void;
+  onRemoveSubtopic: (pillarId: string, subtopicId: string) => void;
 }) {
+  const [mode, setMode] = useState<"view" | "edit">("view");
   const [editing, setEditing] = useState<string | "new" | null>(null);
+  // Touch: tapping a subtopic reveals its X (hover does this on desktop).
+  const [revealed, setRevealed] = useState<string | null>(null);
   const fields: FieldSpec[] = [
     { key: "title", label: P.pillars.titleLabel, max: 80, required: true },
     { key: "description", label: P.pillars.descriptionLabel, max: 200 },
@@ -601,41 +677,72 @@ export function PillarsStep({
       common={common}
       canConfirm
     >
-      {pillars.map(p =>
-        editing === p.id ? (
-          <section key={p.id} className={styles.card}>
-            <InlineEditor
-              fields={fields}
-              initial={{ title: p.payload.title, description: p.payload.description }}
-              busy={common.busy}
-              onCancel={() => setEditing(null)}
-              onSave={async v => {
-                const saved = await onSave({ title: v.title.trim(), description: v.description.trim() }, p.id);
-                if (saved) setEditing(null);
-                return saved;
-              }}
-            />
-          </section>
-        ) : (
-          <section key={p.id} className={[styles.card, styles.pillarCard].join(" ")}>
-            <span className={styles.pillarTile}>
-              <IconPillar size={24} />
-            </span>
-            <div className={styles.pillarText}>
-              <span className={["sr-text-product-card-title", styles.value].join(" ")}>{p.payload.title}</span>
-              {p.payload.description ? (
-                <span className={["sr-text-product-body-small", styles.muted, styles.clamp2].join(" ")}>
-                  {p.payload.description}
+      {pillars.map(p => {
+        const subtopics = visibleSubtopics(p.payload);
+        return (
+          <div key={p.id} className={styles.pillarGroup}>
+            {editing === p.id ? (
+              <section className={styles.card}>
+                <InlineEditor
+                  fields={fields}
+                  initial={{ title: p.payload.title, description: p.payload.description }}
+                  busy={common.busy}
+                  onCancel={() => setEditing(null)}
+                  onSave={async v => {
+                    const saved = await onSave({ title: v.title.trim(), description: v.description.trim() }, p.id);
+                    if (saved) setEditing(null);
+                    return saved;
+                  }}
+                />
+              </section>
+            ) : (
+              <section className={[styles.card, styles.pillarCard].join(" ")}>
+                <span className={styles.pillarTile}>
+                  <IconPillar size={24} />
                 </span>
-              ) : null}
-            </div>
-            <div className={styles.pillarActions}>
-              <EditAction onClick={() => setEditing(p.id)} label={p.payload.title} disabled={common.busy} />
-              <TrashAction onClick={() => onRemove(p.id)} label={p.payload.title} disabled={common.busy} />
-            </div>
-          </section>
-        )
-      )}
+                <div className={styles.pillarText}>
+                  <span className={["sr-text-product-card-title", styles.value].join(" ")}>{p.payload.title}</span>
+                  {p.payload.description ? (
+                    <span className={["sr-text-product-body-small", styles.muted, styles.clamp2].join(" ")}>
+                      {p.payload.description}
+                    </span>
+                  ) : null}
+                </div>
+                {mode === "edit" ? (
+                  <div className={styles.pillarActions}>
+                    <EditAction onClick={() => setEditing(p.id)} label={p.payload.title} disabled={common.busy} />
+                    <TrashAction onClick={() => onRemove(p.id)} label={p.payload.title} disabled={common.busy} />
+                  </div>
+                ) : null}
+              </section>
+            )}
+            {subtopics.length ? (
+              <ul className={styles.subtopics} aria-label={P.subtopicsLabel}>
+                {subtopics.map(s => (
+                  <li key={s.id} className={styles.subtopic} data-revealed={revealed === s.id ? "true" : "false"}>
+                    <span
+                      className={styles.subtopicText}
+                      onClick={() => setRevealed(r => (r === s.id ? null : s.id))}
+                    >
+                      <IconAiSparkle size={12} />
+                      <span>{s.text}</span>
+                    </span>
+                    <button
+                      type="button"
+                      className={styles.subtopicX}
+                      onClick={() => onRemoveSubtopic(p.id, s.id)}
+                      disabled={common.busy}
+                      aria-label={`${P.remove} ${s.text}`}
+                    >
+                      <IconClose size={10} />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        );
+      })}
       {editing === "new" ? (
         <section className={styles.card}>
           <InlineEditor
@@ -651,9 +758,26 @@ export function PillarsStep({
           />
         </section>
       ) : (
-        <button type="button" className={styles.addButton} onClick={() => setEditing("new")} disabled={common.busy}>
-          {P.pillars.add}
-        </button>
+        <div className={styles.groupActions}>
+          <button type="button" className={styles.addButton} onClick={() => setEditing("new")} disabled={common.busy}>
+            {P.pillars.add}
+          </button>
+          {pillars.length ? (
+            mode === "edit" ? (
+              <GhostButton
+                type="button"
+                onClick={() => {
+                  setEditing(null);
+                  setMode("view");
+                }}
+              >
+                {P.done}
+              </GhostButton>
+            ) : (
+              <EditAction onClick={() => setMode("edit")} label={P.pillars.title} disabled={common.busy} />
+            )
+          ) : null}
+        </div>
       )}
     </StepFrame>
   );

@@ -358,3 +358,79 @@
     margin-top: var(--sr-space-6);
   }
 }
+
+/* Pillar subtopics (AI, grey chips with the SpyReels sparkle). The X is tiny
+   by design: visible on hover or focus (desktop), or after a tap (mobile). */
+.pillarGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-space-2);
+}
+
+.subtopics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sr-space-2);
+  margin: 0;
+  padding: 0 0 var(--sr-space-2);
+  list-style: none;
+}
+
+.subtopic {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 4px 8px 4px 10px;
+  border-radius: var(--sr-radius-full, 999px);
+  background: var(--sr-color-surface-subtle, var(--sr-neutral-100));
+  color: var(--sr-color-text-secondary, var(--sr-neutral-700));
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.subtopicText {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.subtopicX {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sr-color-text-secondary, var(--sr-neutral-700));
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.subtopic:hover .subtopicX,
+.subtopic:focus-within .subtopicX {
+  opacity: 1;
+}
+
+.subtopicX:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--sr-color-focus-ring, var(--sr-purple-500));
+  outline-offset: 1px;
+}
+
+.subtopicX:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+/* Touch: a tap on the chip reveals the X (set by the step, data-revealed). */
+.subtopic[data-revealed="true"] .subtopicX {
+  opacity: 1;
+}

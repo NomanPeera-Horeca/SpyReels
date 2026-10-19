@@ -30,9 +30,12 @@ import {
   saveAttribution,
   saveUseCase,
   listWorkspaceProfiles,
+  setPillarSubtopicRemoved,
   startNotPostingYet,
   switchActiveProfile,
 } from "./onboardingService";
+import { visibleSubtopics } from "@shared/personalization/subtopics";
+import type { PillarPayload } from "@shared/personalization/model";
 import { homeContextFromState } from "../home/homeService";
 
 const url = process.env.PERSONALIZATION_SCHEMA_TEST_DB;
@@ -307,6 +310,54 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
     expect(audiences.find(a => a.id === itemId)).toMatchObject({ status: "confirmed", source: "user_entered" });
     const [d] = await q("SELECT status, dismissedAtVersion FROM personalization_items WHERE id = ?", [first.id]);
     expect((d as Array<{ status: string; dismissedAtVersion: number }>)[0]).toMatchObject({ status: "dismissed", dismissedAtVersion: 1 });
+  });
+
+  it("pillar subtopics: removal persists, survives a title edit, and restore brings it back; audience may have an empty outcome", async () => {
+    await confirmProfile(db, A, preview("test.kitchen"));
+    const subtopics = [
+      { id: "s1", text: "One-pan meals", removed: false },
+      { id: "s2", text: "Budget dinners", removed: false },
+    ];
+    const { itemId: first } = await addItem(db, A, "pillar", {
+      title: "Dinners",
+      description: "",
+      viewSharePercent: null,
+      subtopics,
+    } as never);
+
+    const { itemId: removedId } = await setPillarSubtopicRemoved(db, A, first, "s1", true);
+    let state = await loadOnboardingState(db, A);
+    let pillar = state.items.find(i => i.id === removedId)!;
+    expect(visibleSubtopics(pillar.payload as PillarPayload).map(s => s.id)).toEqual(["s2"]);
+
+    // A title edit must not bring the removed subtopic back.
+    const { itemId: editedId } = await editItem(db, A, removedId, {
+      title: "Quick dinners",
+      description: "",
+      viewSharePercent: null,
+    } as never);
+    state = await loadOnboardingState(db, A);
+    pillar = state.items.find(i => i.id === editedId)!;
+    expect(pillar.payload).toMatchObject({ title: "Quick dinners" });
+    expect((pillar.payload as PillarPayload).subtopics).toEqual([
+      { id: "s1", text: "One-pan meals", removed: true },
+      { id: "s2", text: "Budget dinners", removed: false },
+    ]);
+    const [oldRow] = await q("SELECT status FROM personalization_items WHERE id = ?", [first]);
+    expect((oldRow as Array<{ status: string }>)[0].status).toBe("superseded");
+
+    const { itemId: restoredId } = await setPillarSubtopicRemoved(db, A, editedId, "s1", false);
+    state = await loadOnboardingState(db, A);
+    pillar = state.items.find(i => i.id === restoredId)!;
+    expect(visibleSubtopics(pillar.payload as PillarPayload).map(s => s.id)).toEqual(["s1", "s2"]);
+
+    // An unknown subtopic is rejected, not silently ignored.
+    await expect(setPillarSubtopicRemoved(db, A, restoredId, "nope", true)).rejects.toThrow();
+
+    // Audience from the single-field editor: who only, outcome stored as "".
+    const { itemId: audienceId } = await addItem(db, A, "audience", { who: "Students", outcome: "" });
+    state = await loadOnboardingState(db, A);
+    expect(state.items.find(i => i.id === audienceId)?.payload).toMatchObject({ who: "Students", outcome: "" });
   });
 
   it("workspace isolation: another workspace cannot read, edit or remove these values", async () => {

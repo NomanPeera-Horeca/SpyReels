@@ -40,6 +40,7 @@ import {
   removeItem,
   resolveStep,
   saveAttribution,
+  setPillarSubtopicRemoved,
   saveUseCase,
   startNotPostingYet,
   type OnboardingCtx,
@@ -90,7 +91,9 @@ const itemPayload = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("goal"), payload: z.object({ text: text(300) }) }),
   z.object({
     kind: z.literal("audience"),
-    payload: z.object({ who: text(120), outcome: text(160) }),
+    // outcome is optional: the single-field editor saves who only. An existing
+    // outcome is kept by the client, never discarded.
+    payload: z.object({ who: text(120), outcome: z.string().trim().max(160) }),
   }),
   z.object({
     kind: z.literal("pillar"),
@@ -249,6 +252,13 @@ export const onboardingV2Router = router({
     .input(z.object({ itemId: z.string().uuid(), value: itemPayload }))
     .mutation(async ({ ctx, input }) =>
       editItem(await requireDb(), octx(ctx), input.itemId, normalizePayload(input.value) as never)
+    ),
+
+  /** Remove (removed: true) or restore (false) one AI subtopic of a pillar. */
+  setSubtopicRemoved: v2Procedure
+    .input(z.object({ itemId: z.string().uuid(), subtopicId: z.string().min(1).max(64), removed: z.boolean() }))
+    .mutation(async ({ ctx, input }) =>
+      setPillarSubtopicRemoved(await requireDb(), octx(ctx), input.itemId, input.subtopicId, input.removed)
     ),
 
   removeItem: v2Procedure

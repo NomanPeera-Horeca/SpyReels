@@ -42,6 +42,7 @@ import {
   type PlatformError,
 } from "./steps";
 import { AudienceStep, GoalStep, MAX_GOALS, PillarsStep, type AiState, type StepItem } from "./step4";
+import { COPY } from "./copy";
 import { WhatWorksStep } from "./step3c";
 
 /** Same breakpoint as OnboardingShell: below it there is no right panel. */
@@ -159,6 +160,7 @@ export default function OnboardingV2Flow() {
   const addItem = trpc.onboardingV2.addItem.useMutation();
   const editItem = trpc.onboardingV2.editItem.useMutation();
   const removeItem = trpc.onboardingV2.removeItem.useMutation();
+  const setSubtopicRemoved = trpc.onboardingV2.setSubtopicRemoved.useMutation();
   const resolveStep = trpc.onboardingV2.resolveStep.useMutation();
   const complete = trpc.onboardingV2.complete.useMutation();
   const retryAnalysis = trpc.onboardingV2.retryAnalysis.useMutation();
@@ -217,6 +219,7 @@ export default function OnboardingV2Flow() {
     addItem.isPending ||
     editItem.isPending ||
     removeItem.isPending ||
+    setSubtopicRemoved.isPending ||
     resolveStep.isPending ||
     retryAnalysis.isPending ||
     complete.isPending;
@@ -351,6 +354,51 @@ export default function OnboardingV2Flow() {
       track("edited", { kind });
       await refresh();
     }, kind);
+
+  // Remove now, with Undo. Undo adds the same value back as a new row.
+  const removeWithUndo = (itemId: string, step: string) =>
+    run(async () => {
+      const item = items.find(i => i.id === itemId);
+      await removeItem.mutateAsync({ itemId });
+      await refresh();
+      if (!item) return;
+      toast(COPY.personalization.removed, {
+        duration: 6000,
+        action: {
+          label: COPY.personalization.undo,
+          onClick: () =>
+            void run(async () => {
+              await addItem.mutateAsync({ kind: item.kind, payload: item.payload } as never);
+              await refresh();
+            }, step),
+        },
+      });
+    }, step);
+
+  // Remove one AI subtopic (or restore it). Editing a pillar makes a new row, so
+  // Undo looks up the pillar's current id from fresh state, never a stale one.
+  const setSubtopic = (pillarId: string, subtopicId: string, removed: boolean) =>
+    run(async () => {
+      await setSubtopicRemoved.mutateAsync({ itemId: pillarId, subtopicId, removed });
+      await refresh();
+      if (!removed) return;
+      toast(COPY.personalization.removed, {
+        duration: 6000,
+        action: {
+          label: COPY.personalization.undo,
+          onClick: () =>
+            void run(async () => {
+              const fresh = await utils.onboardingV2.getState.fetch();
+              const pillar = fresh.items.find(
+                i => i.kind === "pillar" && (i.payload as PillarPayload).subtopics?.some(x => x.id === subtopicId)
+              );
+              if (!pillar) return;
+              await setSubtopicRemoved.mutateAsync({ itemId: pillar.id, subtopicId, removed: false });
+              await refresh();
+            }, "pillars"),
+        },
+      });
+    }, "pillars");
 
   if (!state || !screen) return null;
 
@@ -529,10 +577,7 @@ export default function OnboardingV2Flow() {
           niche={of<NichePayload>("niche")[0] ?? null}
           language={of<LanguagePayload>("language")[0] ?? null}
           onSaveGoal={(p, id) => saveItem("goal", p, id)}
-          onRemoveGoal={id => void run(async () => {
-            await removeItem.mutateAsync({ itemId: id });
-            await refresh();
-          }, "goal")}
+          onRemoveGoal={id => void removeWithUndo(id, "goal")}
           onSaveNiche={(p, id) => saveItem("niche", p, id)}
           onSaveLanguage={(p, id) => saveItem("language", p, id)}
         />
@@ -543,10 +588,7 @@ export default function OnboardingV2Flow() {
           common={common("audience")}
           audiences={of<AudiencePayload>("audience")}
           onSave={(p, id) => saveItem("audience", p, id)}
-          onRemove={id => void run(async () => {
-            await removeItem.mutateAsync({ itemId: id });
-            await refresh();
-          }, "audience")}
+          onRemove={id => void removeWithUndo(id, "audience")}
         />
       );
     case "pillars":
@@ -555,10 +597,8 @@ export default function OnboardingV2Flow() {
           common={common("pillars")}
           pillars={of<PillarPayload>("pillar")}
           onSave={(p, id) => saveItem("pillar", p, id)}
-          onRemove={id => void run(async () => {
-            await removeItem.mutateAsync({ itemId: id });
-            await refresh();
-          }, "pillars")}
+          onRemove={id => void removeWithUndo(id, "pillars")}
+          onRemoveSubtopic={(pillarId, subtopicId) => void setSubtopic(pillarId, subtopicId, true)}
         />
       );
   }
