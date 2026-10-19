@@ -31,7 +31,6 @@ import type {
   SocialPlatform,
 } from "@shared/personalization/model";
 import { nicheSlugFromLabel } from "@shared/personalization/growthNiches";
-import { visibleSubtopics } from "@shared/personalization/subtopics";
 import { AnalysisStatusLine } from "@/design-system/AnalysisStatus";
 import { FieldInput, PrimaryButton } from "@/design-system/core";
 import { GhostButton } from "@/design-system/GhostButton";
@@ -731,9 +730,23 @@ export function AudienceStep({
 
 type PillarItem = StepItem<PillarPayload>;
 
+/** A subtopic row from getState.pillarSubtopics (Cursor's table). Dismissed rows are never shown. */
+export type PillarSubtopicView = {
+  id: string;
+  pillarItemId: string;
+  label: string;
+  status: "suggested" | "confirmed" | "dismissed";
+};
+
+const visibleFor = (all: PillarSubtopicView[], pillarItemId: string) =>
+  all
+    .filter(s => s.pillarItemId === pillarItemId && s.status !== "dismissed")
+    .map(s => ({ id: s.id, text: s.label }));
+
 /** One pillar card. Title only is editable; description and subtopics are kept as stored. */
 function PillarCard({
   pillar,
+  subtopics,
   busy,
   inEdit,
   onStartEdit,
@@ -741,13 +754,13 @@ function PillarCard({
   onRemoveSubtopic,
 }: {
   pillar: PillarItem;
+  subtopics: { id: string; text: string }[];
   busy: boolean;
   inEdit: boolean;
   onStartEdit: () => void;
   onRemove: () => void;
   onRemoveSubtopic: (subtopicId: string) => void;
 }) {
-  const subtopics = visibleSubtopics(pillar.payload);
   return (
     <div className={styles.pillarGroup}>
       <section className={[styles.card, styles.pillarCard].join(" ")}>
@@ -819,6 +832,7 @@ function SubtopicChips({
 /** The inline title editor that replaces a card while its title is being edited. */
 function PillarTitleEditor({
   pillar,
+  subtopics,
   busy,
   onSave,
   onCancel,
@@ -827,6 +841,7 @@ function PillarTitleEditor({
 }: {
   /** null = a new pillar. */
   pillar: PillarItem | null;
+  subtopics: { id: string; text: string }[];
   busy: boolean;
   onSave: (title: string, description: string, itemId: string | null) => Promise<boolean>;
   onCancel: () => void;
@@ -839,7 +854,6 @@ function PillarTitleEditor({
   const [title, setTitle] = useState(initial);
   const latest = useRef({ title, initial, pillar, onSave, busy });
   latest.current = { title, initial, pillar, onSave, busy };
-  const subtopics = pillar ? visibleSubtopics(pillar.payload) : [];
 
   useEffect(
     () =>
@@ -900,10 +914,12 @@ function PillarTitleEditor({
 export function PillarsStep(props: {
   common: Common;
   pillars: PillarItem[];
+  /** getState.pillarSubtopics: canonical subtopic rows, dismissed included. */
+  subtopics: PillarSubtopicView[];
   /** Title and description only; the server keeps subtopics. itemId null = new pillar. */
   onSave: (payload: { title: string; description: string }, itemId: string | null) => Promise<boolean>;
   onRemove: (itemId: string) => void;
-  onRemoveSubtopic: (pillarId: string, subtopicId: string) => void;
+  onRemoveSubtopic: (subtopicId: string) => void;
 }) {
   // The body must sit inside StepFrame so that it reads the step's pending-edit registry.
   return (
@@ -923,15 +939,17 @@ export function PillarsStep(props: {
 function PillarsBody({
   common,
   pillars,
+  subtopics,
   onSave,
   onRemove,
   onRemoveSubtopic,
 }: {
   common: Common;
   pillars: PillarItem[];
+  subtopics: PillarSubtopicView[];
   onSave: (payload: { title: string; description: string }, itemId: string | null) => Promise<boolean>;
   onRemove: (itemId: string) => void;
-  onRemoveSubtopic: (pillarId: string, subtopicId: string) => void;
+  onRemoveSubtopic: (subtopicId: string) => void;
 }) {
   const pending = useContext(PendingEditsContext);
   const [mode, setMode] = useState<"view" | "edit">("view");
@@ -953,9 +971,10 @@ function PillarsBody({
           <div key={p.id} className={styles.pillarGroup}>
             <PillarTitleEditor
               pillar={p}
+              subtopics={visibleFor(subtopics, p.id)}
               busy={common.busy}
               onRemove={() => onRemove(p.id)}
-              onRemoveSubtopic={sid => onRemoveSubtopic(p.id, sid)}
+              onRemoveSubtopic={onRemoveSubtopic}
               onCancel={() => setEditing(null)}
               onSave={async (title, description, id) => {
                 const saved = await onSave({ title, description }, id);
@@ -968,17 +987,19 @@ function PillarsBody({
           <PillarCard
             key={p.id}
             pillar={p}
+            subtopics={visibleFor(subtopics, p.id)}
             busy={common.busy}
             inEdit={mode === "edit"}
             onStartEdit={() => setEditing(p.id)}
             onRemove={() => onRemove(p.id)}
-            onRemoveSubtopic={sid => onRemoveSubtopic(p.id, sid)}
+            onRemoveSubtopic={onRemoveSubtopic}
           />
         )
       )}
       {editing === "new" ? (
         <PillarTitleEditor
           pillar={null}
+          subtopics={[]}
           busy={common.busy}
           onRemoveSubtopic={() => undefined}
           onCancel={() => setEditing(null)}

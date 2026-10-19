@@ -53,8 +53,8 @@ import {
 import { users } from "../../../drizzle/schema";
 import type { Db } from "../db/analysisStore";
 import { pickBestPost, type BestPost } from "@shared/personalization/bestPost";
-import { withSubtopicRemoved } from "@shared/personalization/subtopics";
 import { toItemRecord } from "../db/rows";
+import { isSamePillarTitle, listProfileSubtopics, repointPillarSubtopics } from "../subtopics";
 
 export type OnboardingCtx = { userId: number; workspaceId: string };
 
@@ -110,6 +110,19 @@ export type OnboardingStateView = {
   steps: Record<PersonalizationStep, StepStatus>;
   version: number;
   items: OnboardingItemView[];
+  /**
+   * Subtopics for the active profile, including dismissed rows.
+   * Render status "suggested" or "confirmed" only. Dismissed rows are
+   * returned so a client does not offer a topic the user already removed.
+   * Empty when the table is not migrated yet.
+   */
+  pillarSubtopics: {
+    id: string;
+    pillarItemId: string;
+    label: string;
+    status: "suggested" | "confirmed" | "dismissed";
+    source: "ai_suggested" | "user_entered" | "user_edited";
+  }[];
   completedAt: Date | null;
 };
 
@@ -264,6 +277,15 @@ export async function loadOnboardingState(db: Db, ctx: OnboardingCtx): Promise<O
       source: i.source,
       evidence: i.evidence,
     })),
+    pillarSubtopics: profile
+      ? (await listProfileSubtopics(db, profile.id, ctx.workspaceId)).map(s => ({
+          id: s.id,
+          pillarItemId: s.pillarItemId,
+          label: s.label,
+          status: s.status,
+          source: s.source,
+        }))
+      : [],
     completedAt: progress?.completedAt ?? null,
   };
 }
@@ -544,6 +566,17 @@ export async function editItem(
       analysisRunId: plan.insert.analysisRunId,
       createdByUserId: ctx.userId,
     });
+    // A pillar edit that keeps the same title keeps its subtopics (they belong to the pillar).
+    // A title change does not: the new title gets its own subtopics.
+    if (
+      item.kind === "pillar" &&
+      isSamePillarTitle(
+        (item.payload as PillarPayload).title,
+        (plan.insert.payload as PillarPayload).title
+      )
+    ) {
+      await repointPillarSubtopics(tx as unknown as Db, { from: plan.supersedeItemId, to: newId });
+    }
     if (plan.nextVersion !== progress.personalizationVersion) {
       await tx
         .update(personalizationProgress)
@@ -552,26 +585,6 @@ export async function editItem(
     }
   });
   return { itemId: newId };
-}
-
-/**
- * Remove (or restore) one AI subtopic of a pillar. Stored inside the pillar's
- * own payload, so it needs no migration; the pillar is superseded like any edit.
- */
-export async function setPillarSubtopicRemoved(
-  db: Db,
-  ctx: OnboardingCtx,
-  itemId: string,
-  subtopicId: string,
-  removed: boolean
-): Promise<{ itemId: string }> {
-  const { item } = await itemOfActiveProfile(db, ctx, itemId);
-  if (item.kind !== "pillar") {
-    throw new TRPCError({ code: "BAD_REQUEST", message: "Only pillars have subtopics." });
-  }
-  const next = withSubtopicRemoved(item.payload as PillarPayload, subtopicId, removed);
-  if (!next) notFound();
-  return editItem(db, ctx, itemId, next as never);
 }
 
 /** User types a new value (e.g. "+ Add an audience"). */
@@ -696,16 +709,20 @@ export async function restoreItem(db: Db, ctx: OnboardingCtx, itemId: string): P
   if (after.length) throw conflict("This value was already restored.");
 
   const newId = randomUUID();
-  await db.insert(personalizationItems).values(
-    copyOfItem(item, {
-      id: newId,
-      workspaceId: ctx.workspaceId,
-      socialProfileId: profile.id,
-      status: "confirmed",
-      supersedesItemId: tombstone.id,
-      createdByUserId: ctx.userId,
-    })
-  );
+  await db.transaction(async tx => {
+    await tx.insert(personalizationItems).values(
+      copyOfItem(item, {
+        id: newId,
+        workspaceId: ctx.workspaceId,
+        socialProfileId: profile.id,
+        status: "confirmed",
+        supersedesItemId: tombstone.id,
+        createdByUserId: ctx.userId,
+      })
+    );
+    // The removed pillar's subtopics come back with it, on the restored item.
+    await repointPillarSubtopics(tx as unknown as Db, { from: item.id, to: newId });
+  });
   return { itemId: newId };
 }
 

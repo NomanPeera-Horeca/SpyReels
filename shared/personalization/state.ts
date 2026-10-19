@@ -467,12 +467,9 @@ export function planItemEdit<K extends PersonalizationItemKind>(
     const keepMeasured =
       current.evidence === "performance_backed" &&
       after.viewSharePercent === before.viewSharePercent;
-    // Subtopics are never typed by the user, so an edit keeps the stored ones.
-    const subtopics = after.subtopics ?? before.subtopics;
     payload = {
       ...after,
       viewSharePercent: keepMeasured ? before.viewSharePercent : null,
-      ...(subtopics ? { subtopics } : {}),
     } as ItemPayloadByKind[K];
   }
   const invalidatedKinds = INVALIDATES_ON_EDIT[current.kind];

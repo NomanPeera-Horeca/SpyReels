@@ -133,17 +133,10 @@ export type AudiencePayload = { who: string; outcome: string };
  * viewSharePercent is the REAL share of the user's views, or null.
  * Only performance_backed pillars may carry a number (also enforced by a DB CHECK).
  */
-/**
- * AI-suggested subtopics of a pillar. `removed` is kept (never deleted) so a
- * removed subtopic stays removed until the pillar meaningfully changes.
- * Users never write subtopics by hand; the client only removes or restores them.
- */
-export type PillarSubtopic = { id: string; text: string; removed: boolean };
 export type PillarPayload = {
   title: string;
   description: string;
   viewSharePercent: number | null;
-  subtopics?: PillarSubtopic[];
 };
 export type NichePayload = { slug: string; label: string };
 export type LanguagePayload = { code: string; label: string };

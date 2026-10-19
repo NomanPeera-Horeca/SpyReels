@@ -37,6 +37,7 @@ import {
   GoalStep,
   PillarsStep,
   type AiState,
+  type PillarSubtopicView,
   type StepItem,
 } from "@/components/onboarding-v2/step4";
 import type {
@@ -84,8 +85,13 @@ const FAKE_AUDIENCES: StepItem<AudiencePayload>[] = [
   { id: "a1", status: "suggested", evidence: "profile_inferred", payload: { who: "busy parents", outcome: "cook dinner in 20 minutes" } },
   { id: "a2", status: "suggested", evidence: "profile_inferred", payload: { who: "new home cooks", outcome: "build confidence in the kitchen" } },
 ];
+const FAKE_SUBTOPICS: PillarSubtopicView[] = [
+  { id: "s1", pillarItemId: "p1", label: "Budget weeknight recipes", status: "suggested" },
+  { id: "s2", pillarItemId: "p1", label: "One-pan meals", status: "suggested" },
+];
+
 const FAKE_PILLARS: StepItem<PillarPayload>[] = [
-  { id: "p1", status: "suggested", evidence: "performance_backed", payload: { title: "20-minute dinners", description: "Fast recipes for weeknights.", viewSharePercent: 48, subtopics: [{ id: "s1", text: "Budget weeknight recipes", removed: false }, { id: "s2", text: "One-pan meals", removed: false }] } },
+  { id: "p1", status: "suggested", evidence: "performance_backed", payload: { title: "20-minute dinners", description: "Fast recipes for weeknights.", viewSharePercent: 48 } },
   { id: "p2", status: "suggested", evidence: "profile_inferred", payload: { title: "Kitchen basics", description: "Skills every new cook needs.", viewSharePercent: null } },
   { id: "p3", status: "suggested", evidence: "profile_inferred", payload: { title: "Grocery hacks", description: "Spend less, waste less.", viewSharePercent: null } },
 ];
@@ -204,7 +210,7 @@ export default function DevOnboardingV2Preview() {
     case "audience":
       return <AudienceStep common={common} audiences={empty ? [] : FAKE_AUDIENCES} onSave={noopSave} onRemove={noop} />;
     case "pillars":
-      return <PillarsStep common={common} pillars={empty ? [] : FAKE_PILLARS} onSave={noopSave} onRemove={noop} onRemoveSubtopic={noop} />;
+      return <PillarsStep common={common} pillars={empty ? [] : FAKE_PILLARS} subtopics={empty ? [] : FAKE_SUBTOPICS} onSave={noopSave} onRemove={noop} onRemoveSubtopic={noop} />;
     case "niche":
       return (
         <GrowthNicheStep

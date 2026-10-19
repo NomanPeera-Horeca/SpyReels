@@ -31,12 +31,14 @@ import {
   saveAttribution,
   saveUseCase,
   listWorkspaceProfiles,
-  setPillarSubtopicRemoved,
   startNotPostingYet,
   switchActiveProfile,
 } from "./onboardingService";
-import { visibleSubtopics } from "@shared/personalization/subtopics";
-import type { PillarPayload } from "@shared/personalization/model";
+import {
+  dismissPillarSubtopic,
+  restorePillarSubtopic,
+  saveGeneratedSubtopics,
+} from "../subtopics";
 import { homeContextFromState } from "../home/homeService";
 
 const url = process.env.PERSONALIZATION_SCHEMA_TEST_DB;
@@ -133,6 +135,7 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
     await q(pick("workspaces"));
     await q(pick("workspace_members"));
     await q(readFileSync(path.join(root, "docs/architecture/drafts/onboarding_v2_personalization.sql"), "utf8"));
+    await q(readFileSync(path.join(root, "drizzle/0104_pillar_subtopics.sql"), "utf8"));
     db = drizzle(conn) as unknown as Db;
   });
 
@@ -143,6 +146,7 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
   beforeEach(async () => {
     await q("SET FOREIGN_KEY_CHECKS = 0");
     for (const t of [
+      "pillar_subtopics",
       "personalization_items",
       "personalization_progress",
       "profile_analysis_stages",
@@ -263,7 +267,10 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
     expect(state.steps.goal).toBe("confirmed");
 
     // The engine never regenerates a confirmed goal.
-    expect((await generateRecommendations({ store, invoker }, { ctx: authCtx(A), socialProfileId: profileId, step: "goal" })).status).toBe("already_confirmed");
+    // Cursor's contract: unchanged inputs return "reused" pointing at the confirmed goal (no new suggestion).
+    const again = await generateRecommendations({ store, invoker }, { ctx: authCtx(A), socialProfileId: profileId, step: "goal" });
+    expect(["reused", "already_confirmed"]).toContain(again.status);
+    if (again.status === "reused") expect(again.liveSuggestionIds).toEqual([state.items.find(i => i.kind === "goal")!.id]);
 
     const aud = await generateRecommendations({ store, invoker }, { ctx: authCtx(A), socialProfileId: profileId, step: "audience" });
     expect(aud.status).toBe("generated");
@@ -313,85 +320,115 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
     expect((d as Array<{ status: string; dismissedAtVersion: number }>)[0]).toMatchObject({ status: "dismissed", dismissedAtVersion: 1 });
   });
 
-  it("pillar subtopics: removal persists, survives a title edit, and restore brings it back; audience may have an empty outcome", async () => {
-    await confirmProfile(db, A, preview("test.kitchen"));
-    const subtopics = [
-      { id: "s1", text: "One-pan meals", removed: false },
-      { id: "s2", text: "Budget dinners", removed: false },
-    ];
-    const { itemId: first } = await addItem(db, A, "pillar", {
+  const seedPillar = async () => {
+    const { profileId } = await confirmProfile(db, A, preview("test.kitchen"));
+    const { itemId } = await addItem(db, A, "pillar", {
       title: "Dinners",
       description: "",
       viewSharePercent: null,
-      subtopics,
     } as never);
+    await saveGeneratedSubtopics(db, {
+      workspaceId: WS_A,
+      socialProfileId: profileId,
+      groups: [{ title: "Dinners", labels: ["One-pan meals", "Budget dinners"], pillarHash: "h1" }],
+    });
+    return { profileId, pillarId: itemId };
+  };
+  const labelOf = (state: Awaited<ReturnType<typeof loadOnboardingState>>, label: string) =>
+    state.pillarSubtopics.find(s => s.label === label)!;
 
-    const { itemId: removedId } = await setPillarSubtopicRemoved(db, A, first, "s1", true);
+  it("pillar subtopics: a dismissal sticks; a same-title edit moves its topics to the new pillar id", async () => {
+    const { profileId, pillarId } = await seedPillar();
     let state = await loadOnboardingState(db, A);
-    let pillar = state.items.find(i => i.id === removedId)!;
-    expect(visibleSubtopics(pillar.payload as PillarPayload).map(s => s.id)).toEqual(["s2"]);
+    expect(labelOf(state, "One-pan meals")).toMatchObject({ pillarItemId: pillarId, status: "suggested" });
 
-    // A title edit must not bring the removed subtopic back.
-    const { itemId: editedId } = await editItem(db, A, removedId, {
+    const one = labelOf(state, "One-pan meals");
+    await expect(
+      dismissPillarSubtopic(db, { workspaceId: WS_A, socialProfileId: profileId, subtopicId: one.id })
+    ).resolves.toMatchObject({ ok: true });
+    state = await loadOnboardingState(db, A);
+    expect(labelOf(state, "One-pan meals").status).toBe("dismissed");
+
+    // Same title: both topics (dismissal included) follow the pillar's new id.
+    const { itemId: editedId } = await editItem(db, A, pillarId, {
+      title: "Dinners",
+      description: "Weeknight dinners",
+      viewSharePercent: null,
+    } as never);
+    state = await loadOnboardingState(db, A);
+    expect(state.pillarSubtopics.filter(s => s.pillarItemId === editedId).map(s => s.label).sort()).toEqual([
+      "Budget dinners",
+      "One-pan meals",
+    ]);
+    expect(labelOf(state, "One-pan meals")).toMatchObject({ pillarItemId: editedId, status: "dismissed" });
+    expect(state.pillarSubtopics.filter(s => s.pillarItemId === pillarId)).toEqual([]);
+  });
+
+  it("pillar subtopics: a title change does not carry topics to the new title", async () => {
+    const { pillarId } = await seedPillar();
+    const { itemId: renamedId } = await editItem(db, A, pillarId, {
       title: "Quick dinners",
       description: "",
       viewSharePercent: null,
     } as never);
-    state = await loadOnboardingState(db, A);
-    pillar = state.items.find(i => i.id === editedId)!;
-    expect(pillar.payload).toMatchObject({ title: "Quick dinners" });
-    expect((pillar.payload as PillarPayload).subtopics).toEqual([
-      { id: "s1", text: "One-pan meals", removed: true },
-      { id: "s2", text: "Budget dinners", removed: false },
-    ]);
-    const [oldRow] = await q("SELECT status FROM personalization_items WHERE id = ?", [first]);
-    expect((oldRow as Array<{ status: string }>)[0].status).toBe("superseded");
-
-    const { itemId: restoredId } = await setPillarSubtopicRemoved(db, A, editedId, "s1", false);
-    state = await loadOnboardingState(db, A);
-    pillar = state.items.find(i => i.id === restoredId)!;
-    expect(visibleSubtopics(pillar.payload as PillarPayload).map(s => s.id)).toEqual(["s1", "s2"]);
-
-    // An unknown subtopic is rejected, not silently ignored.
-    await expect(setPillarSubtopicRemoved(db, A, restoredId, "nope", true)).rejects.toThrow();
-
-    // Audience from the single-field editor: who only, outcome stored as "".
-    const { itemId: audienceId } = await addItem(db, A, "audience", { who: "Students", outcome: "" });
-    state = await loadOnboardingState(db, A);
-    expect(state.items.find(i => i.id === audienceId)?.payload).toMatchObject({ who: "Students", outcome: "" });
+    const state = await loadOnboardingState(db, A);
+    expect(state.pillarSubtopics.some(s => s.pillarItemId === renamedId)).toBe(false);
+    expect(state.pillarSubtopics.length).toBe(2);
   });
 
-  it("undo of a removed pillar restores the exact stored value (description, subtopics, removal states)", async () => {
-    await confirmProfile(db, A, preview("test.kitchen"));
-    const { itemId: pillarId } = await addItem(db, A, "pillar", {
-      title: "Dinners",
-      description: "Fast recipes for weeknights.",
-      viewSharePercent: null,
-      subtopics: [
-        { id: "s1", text: "One-pan meals", removed: true },
-        { id: "s2", text: "Budget dinners", removed: false },
-      ],
-    } as never);
+  it("restorePillarSubtopic: brings a dismissed AI topic back as a suggestion, is a no-op on a live topic, and is workspace-scoped", async () => {
+    const { profileId } = await seedPillar();
+    const one = labelOf(await loadOnboardingState(db, A), "One-pan meals");
+    await dismissPillarSubtopic(db, { workspaceId: WS_A, socialProfileId: profileId, subtopicId: one.id });
+
+    await expect(
+      restorePillarSubtopic(db, { workspaceId: WS_A, socialProfileId: profileId, subtopicId: one.id })
+    ).resolves.toEqual({ ok: true, id: one.id });
+    expect(labelOf(await loadOnboardingState(db, A), "One-pan meals").status).toBe("suggested");
+
+    await expect(
+      restorePillarSubtopic(db, { workspaceId: WS_A, socialProfileId: profileId, subtopicId: one.id })
+    ).resolves.toEqual({ ok: true, id: one.id });
+    await expect(
+      restorePillarSubtopic(db, { workspaceId: WS_B, socialProfileId: profileId, subtopicId: one.id })
+    ).resolves.toEqual({ ok: false, reason: "not_found" });
+  });
+
+  it("undo of a removed pillar brings its topics back on the restored pillar id; a dismissed topic is restored only while its pillar is live", async () => {
+    const { profileId, pillarId } = await seedPillar();
+    const two = labelOf(await loadOnboardingState(db, A), "Budget dinners");
+    await dismissPillarSubtopic(db, { workspaceId: WS_A, socialProfileId: profileId, subtopicId: two.id });
+
     await removeItem(db, A, pillarId);
-    let state = await loadOnboardingState(db, A);
-    expect(state.items.find(i => i.id === pillarId)).toBeUndefined();
+    expect((await loadOnboardingState(db, A)).items.find(i => i.id === pillarId)).toBeUndefined();
+    await expect(
+      restorePillarSubtopic(db, { workspaceId: WS_A, socialProfileId: profileId, subtopicId: two.id })
+    ).resolves.toEqual({ ok: false, reason: "pillar_not_live" });
 
     const { itemId: restoredId } = await restoreItem(db, A, pillarId);
-    state = await loadOnboardingState(db, A);
-    const restored = state.items.find(i => i.id === restoredId)!;
-    expect(restored).toMatchObject({ kind: "pillar", status: "confirmed", source: "user_entered" });
-    expect(restored.payload).toEqual({
-      title: "Dinners",
-      description: "Fast recipes for weeknights.",
-      viewSharePercent: null,
-      subtopics: [
-        { id: "s1", text: "One-pan meals", removed: true },
-        { id: "s2", text: "Budget dinners", removed: false },
-      ],
-    });
+    let state = await loadOnboardingState(db, A);
+    expect(state.items.find(i => i.id === restoredId)).toMatchObject({ kind: "pillar", status: "confirmed" });
+    expect(state.pillarSubtopics.filter(s => s.pillarItemId === restoredId).map(s => [s.label, s.status]).sort()).toEqual([
+      ["Budget dinners", "dismissed"],
+      ["One-pan meals", "suggested"],
+    ]);
+    expect(state.pillarSubtopics.filter(s => s.pillarItemId === pillarId)).toEqual([]);
 
-    // A second undo of the same removal is refused, never a duplicate.
+    await expect(
+      restorePillarSubtopic(db, { workspaceId: WS_A, socialProfileId: profileId, subtopicId: two.id })
+    ).resolves.toEqual({ ok: true, id: two.id });
+    state = await loadOnboardingState(db, A);
+    expect(labelOf(state, "Budget dinners")).toMatchObject({ pillarItemId: restoredId, status: "suggested" });
+
+    // A second undo of the same removal is refused, never a duplicate pillar.
     await expect(restoreItem(db, A, pillarId)).rejects.toThrow(/already restored|changed/);
+  });
+
+  it("audience may have an empty outcome from the single-field editor", async () => {
+    await confirmProfile(db, A, preview("test.kitchen"));
+    const { itemId: audienceId } = await addItem(db, A, "audience", { who: "Students", outcome: "" });
+    const state = await loadOnboardingState(db, A);
+    expect(state.items.find(i => i.id === audienceId)?.payload).toMatchObject({ who: "Students", outcome: "" });
   });
 
   it("undo refuses values that the system superseded (regenerated suggestions never come back)", async () => {

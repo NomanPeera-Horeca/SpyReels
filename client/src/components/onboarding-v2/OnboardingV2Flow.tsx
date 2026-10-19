@@ -138,7 +138,7 @@ export default function OnboardingV2Flow() {
   const [useCase, setUseCase] = useState<PrimaryUseCase | null>(null);
   const [source, setSource] = useState<AttributionSource | null>(null);
   const [niche, setNiche] = useState<string | null>(null);
-  const [requested, setRequested] = useState<Partial<Record<PersonalizationStep, number>>>({});
+  const [requested, setRequested] = useState<Partial<Record<PersonalizationStep, string>>>({});
   const completing = useRef(false);
   const noRightPanel = useNoRightPanel();
   const entry = useRef(readEntry()).current;
@@ -160,13 +160,21 @@ export default function OnboardingV2Flow() {
   const addItem = trpc.onboardingV2.addItem.useMutation();
   const editItem = trpc.onboardingV2.editItem.useMutation();
   const removeItem = trpc.onboardingV2.removeItem.useMutation();
-  const setSubtopicRemoved = trpc.onboardingV2.setSubtopicRemoved.useMutation();
+  const dismissSubtopic = trpc.onboardingV2.dismissPillarSubtopic.useMutation();
+  const restoreSubtopic = trpc.onboardingV2.restorePillarSubtopic.useMutation();
+  const retrySubtopics = trpc.onboardingV2.retryPillarSubtopics.useMutation();
   const restoreItem = trpc.onboardingV2.restoreItem.useMutation();
   const resolveStep = trpc.onboardingV2.resolveStep.useMutation();
   const complete = trpc.onboardingV2.complete.useMutation();
   const retryAnalysis = trpc.onboardingV2.retryAnalysis.useMutation();
 
-  const refresh = useCallback(() => utils.onboardingV2.getState.invalidate(), [utils]);
+  const refresh = useCallback(() => {
+    void utils.onboardingV2.getState.invalidate();
+    void utils.homeV2.context.invalidate();
+    void utils.homeV2.videos.invalidate();
+    void utils.homeV2.creators.invalidate();
+    void utils.onboarding.getState.invalidate();
+  }, [utils]);
 
   const finish = useCallback(async () => {
     if (completing.current) return;
@@ -220,7 +228,8 @@ export default function OnboardingV2Flow() {
     addItem.isPending ||
     editItem.isPending ||
     removeItem.isPending ||
-    setSubtopicRemoved.isPending ||
+    dismissSubtopic.isPending ||
+    restoreSubtopic.isPending ||
     restoreItem.isPending ||
     resolveStep.isPending ||
     retryAnalysis.isPending ||
@@ -239,11 +248,20 @@ export default function OnboardingV2Flow() {
   // Ask the engine for suggestions once per step and answers version, only when it can run.
   useEffect(() => {
     if (!step4 || !state) return;
-    const hasItems = items.some(i => i.kind === STEP_KIND[step4]);
+    const hasItems =
+      step4 === "goal"
+        ? items.some(i => i.kind === "goal") &&
+          items.some(i => i.kind === "niche") &&
+          items.some(i => i.kind === "language")
+        : items.some(i => i.kind === STEP_KIND[step4]);
+    const requestKey =
+      step4 === "goal"
+        ? `${state.version}:${items.some(i => i.kind === "goal")}:${items.some(i => i.kind === "niche")}:${items.some(i => i.kind === "language")}`
+        : String(state.version);
     const ready =
       step4 === "goal" ? true : step4 === "audience" ? confirmedGoal : confirmedGoal && confirmedAudience;
-    if (hasItems || !ready || requested[step4] === state.version) return;
-    setRequested(r => ({ ...r, [step4]: state.version }));
+    if (hasItems || !ready || requested[step4] === requestKey) return;
+    setRequested(r => ({ ...r, [step4]: requestKey }));
     requestRecs.mutate({ step: step4 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step4, state?.version, items.length, confirmedGoal, confirmedAudience]);
@@ -376,30 +394,39 @@ export default function OnboardingV2Flow() {
       });
     }, step);
 
-  // Remove one AI subtopic (or restore it). Editing a pillar makes a new row, so
-  // Undo looks up the pillar's current id from fresh state, never a stale one.
-  const setSubtopic = (pillarId: string, subtopicId: string, removed: boolean) =>
+  // Dismiss one AI subtopic, with Undo. Subtopic ids are stable across pillar edits,
+  // so Undo needs no lookup. The server only restores a dismissed row of a live pillar.
+  const dismissWithUndo = (subtopicId: string) =>
     run(async () => {
-      await setSubtopicRemoved.mutateAsync({ itemId: pillarId, subtopicId, removed });
+      await dismissSubtopic.mutateAsync({ subtopicId });
       await refresh();
-      if (!removed) return;
       toast(COPY.personalization.removed, {
         duration: 6000,
         action: {
           label: COPY.personalization.undo,
           onClick: () =>
             void run(async () => {
-              const fresh = await utils.onboardingV2.getState.fetch();
-              const pillar = fresh.items.find(
-                i => i.kind === "pillar" && (i.payload as PillarPayload).subtopics?.some(x => x.id === subtopicId)
-              );
-              if (!pillar) return;
-              await setSubtopicRemoved.mutateAsync({ itemId: pillar.id, subtopicId, removed: false });
+              await restoreSubtopic.mutateAsync({ subtopicId });
               await refresh();
             }, "pillars"),
         },
       });
     }, "pillars");
+
+  // Pillars with no subtopic rows at all (generation failed or came back empty) get one
+  // retry each per visit. Dismissed rows count as present, so a removed topic is never refilled.
+  const retriedPillars = useRef(new Set<string>());
+  useEffect(() => {
+    if (screen !== "pillars" || !state || ai.state === "running") return;
+    const pillarIds = items.filter(i => i.kind === "pillar").map(i => i.id);
+    const hasRows = new Set((state.pillarSubtopics ?? []).map(s => s.pillarItemId));
+    for (const id of pillarIds) {
+      if (hasRows.has(id) || retriedPillars.current.has(id)) continue;
+      retriedPillars.current.add(id);
+      void retrySubtopics.mutateAsync({ pillarItemId: id }).then(() => refresh(), () => undefined);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screen, state?.pillarSubtopics?.length, items.length, ai.state]);
 
   if (!state || !screen) return null;
 
@@ -599,7 +626,8 @@ export default function OnboardingV2Flow() {
           pillars={of<PillarPayload>("pillar")}
           onSave={(p, id) => saveItem("pillar", p, id)}
           onRemove={id => void removeWithUndo(id, "pillars")}
-          onRemoveSubtopic={(pillarId, subtopicId) => void setSubtopic(pillarId, subtopicId, true)}
+          subtopics={state.pillarSubtopics ?? []}
+          onRemoveSubtopic={subtopicId => void dismissWithUndo(subtopicId)}
         />
       );
   }

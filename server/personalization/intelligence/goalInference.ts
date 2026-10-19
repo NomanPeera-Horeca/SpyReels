@@ -16,6 +16,7 @@ import {
   type EvidenceSource,
 } from "./evidence";
 import {
+  copiesSourceText,
   inventsCommercialObjective,
   isSingleSentence,
   sanitizeCopy,
@@ -157,8 +158,10 @@ export function parseGoalOutput(
   }
   const goal = sanitizeCopy(o.goal).replace(/^"|"$/g, "");
   if (!goal) return { ok: false, reason: "goal was empty" };
-  if (wordCount(goal) > 22 || goal.length > 150)
+  if (wordCount(goal) > 18 || goal.length > 140)
     return { ok: false, reason: "goal is longer than one short sentence" };
+  if (copiesSourceText(goal, e.declaredText))
+    return { ok: false, reason: "goal copies the profile bio instead of stating a purpose" };
   if (!isSingleSentence(goal))
     return { ok: false, reason: "goal must be one sentence" };
   const nums = unsupportedNumbers(goal, e.corpus);
