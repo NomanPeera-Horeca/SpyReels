@@ -44,7 +44,7 @@ import {
   editItem,
   loadOnboardingState,
   removeItem,
-  restoreItem,
+  restorePersonalizationItem,
   resolveStep,
   saveAttribution,
   saveUseCase,
@@ -260,17 +260,19 @@ export const onboardingV2Router = router({
       editItem(await requireDb(), octx(ctx), input.itemId, normalizePayload(input.value) as never)
     ),
 
-  /** Undo of removeItem: rebuilds the removed value from its stored row. */
-  restoreItem: v2Procedure
-    .input(z.object({ itemId: z.string().uuid() }))
-    .mutation(async ({ ctx, input }) => restoreItem(await requireDb(), octx(ctx), input.itemId)),
-
   removeItem: v2Procedure
     .input(z.object({ itemId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       await removeItem(await requireDb(), octx(ctx), input.itemId);
       return { ok: true as const };
     }),
+
+  /** Undo a user delete of a goal, audience, pillar, niche or language. */
+  restorePersonalizationItem: v2Procedure
+    .input(z.object({ itemId: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) =>
+      restorePersonalizationItem(await requireDb(), octx(ctx), input.itemId)
+    ),
 
   resolveStep: v2Procedure
     .input(z.object({ step: z.enum(PERSONALIZATION_STEPS), action: z.enum(["confirm", "skip"]) }))
@@ -305,7 +307,7 @@ export const onboardingV2Router = router({
       return result;
     }),
 
-  /** Claude's editing UI: remove a subtopic. The row stays dismissed. */
+  /** Claude's editing UI: remove a subtopic. The row stays, with its previous status saved. */
   dismissPillarSubtopic: v2Procedure
     .input(z.object({ subtopicId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
@@ -323,7 +325,7 @@ export const onboardingV2Router = router({
       return result;
     }),
 
-  /** Undo of dismissPillarSubtopic. Only a dismissed row of a live pillar comes back. */
+  /** Undo one subtopic dismissal. Does not restore any other topic. */
   restorePillarSubtopic: v2Procedure
     .input(z.object({ subtopicId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
@@ -337,9 +339,6 @@ export const onboardingV2Router = router({
       });
       if (!result.ok && result.reason === "not_found") {
         throw new TRPCError({ code: "NOT_FOUND", message: "Subtopic not found." });
-      }
-      if (!result.ok && (result.reason === "pillar_not_live" || result.reason === "duplicate")) {
-        throw new TRPCError({ code: "CONFLICT", message: "This topic can no longer be restored. Reload to see the current version." });
       }
       return result;
     }),

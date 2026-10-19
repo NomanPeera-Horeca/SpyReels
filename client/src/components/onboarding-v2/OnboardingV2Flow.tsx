@@ -163,7 +163,7 @@ export default function OnboardingV2Flow() {
   const dismissSubtopic = trpc.onboardingV2.dismissPillarSubtopic.useMutation();
   const restoreSubtopic = trpc.onboardingV2.restorePillarSubtopic.useMutation();
   const retrySubtopics = trpc.onboardingV2.retryPillarSubtopics.useMutation();
-  const restoreItem = trpc.onboardingV2.restoreItem.useMutation();
+  const restoreItem = trpc.onboardingV2.restorePersonalizationItem.useMutation();
   const resolveStep = trpc.onboardingV2.resolveStep.useMutation();
   const complete = trpc.onboardingV2.complete.useMutation();
   const retryAnalysis = trpc.onboardingV2.retryAnalysis.useMutation();
@@ -375,8 +375,7 @@ export default function OnboardingV2Flow() {
       await refresh();
     }, kind);
 
-  // Remove now, with Undo. Undo restores the removed row itself (the server rebuilds
-  // the value from its stored row: description, subtopics, removal states, source).
+  // Remove now, with Undo. Undo restores that same item id. Subtopics stay on it.
   const removeWithUndo = (itemId: string, step: string) =>
     run(async () => {
       await removeItem.mutateAsync({ itemId });
@@ -394,8 +393,8 @@ export default function OnboardingV2Flow() {
       });
     }, step);
 
-  // Dismiss one AI subtopic, with Undo. Subtopic ids are stable across pillar edits,
-  // so Undo needs no lookup. The server only restores a dismissed row of a live pillar.
+  // Dismiss one AI subtopic, with Undo. Subtopic ids stay stable across pillar edits,
+  // including a title change, so Undo calls restore with that same id.
   const dismissWithUndo = (subtopicId: string) =>
     run(async () => {
       await dismissSubtopic.mutateAsync({ subtopicId });
