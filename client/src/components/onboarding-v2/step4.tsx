@@ -149,7 +149,7 @@ function InlineEditor({
   fields: FieldSpec[];
   initial: Record<string, string>;
   busy: boolean;
-  onSave: (values: Record<string, string>) => void;
+  onSave: (values: Record<string, string>) => Promise<boolean>;
   /** Omitted when there is nothing to go back to (no value yet). */
   onCancel?: () => void;
   /** Group edit mode only: remove this value (never shown on a chip). */
@@ -158,13 +158,17 @@ function InlineEditor({
 }) {
   const base = useId();
   const [values, setValues] = useState(initial);
+  const [saving, setSaving] = useState(false);
+  const submitting = busy || saving;
   const valid = fields.every(f => !f.required || (values[f.key] ?? "").trim().length > 0);
   return (
     <form
       className={styles.editor}
-      onSubmit={e => {
+      onSubmit={async e => {
         e.preventDefault();
-        if (valid && !busy) onSave(values);
+        if (!valid || submitting) return;
+        setSaving(true);
+        try { await onSave(values); } finally { setSaving(false); }
       }}
     >
       {fields.map((f, i) => (
@@ -184,7 +188,7 @@ function InlineEditor({
           <GhostButton
             type="button"
             onClick={onRemove}
-            disabled={busy}
+            disabled={submitting}
             className={styles.editorRemove}
             aria-label={removeLabel ? `${P.remove} ${removeLabel}` : P.remove}
           >
@@ -192,11 +196,11 @@ function InlineEditor({
           </GhostButton>
         ) : null}
         {onCancel ? (
-          <GhostButton type="button" onClick={onCancel} disabled={busy}>
+          <GhostButton type="button" onClick={onCancel} disabled={submitting}>
             {P.cancel}
           </GhostButton>
         ) : null}
-        <PrimaryButton type="submit" disabled={!valid || busy}>
+        <PrimaryButton type="submit" disabled={!valid || submitting}>
           {P.save}
         </PrimaryButton>
       </div>
@@ -264,7 +268,7 @@ function ChipGroup({
   emptyInitial: Record<string, string>;
   /** Open the add form straight away (no value yet and the AI asked or failed). */
   autoOpenAdd?: boolean;
-  onSave: (values: Record<string, string>, itemId: string | null) => void;
+  onSave: (values: Record<string, string>, itemId: string | null) => Promise<boolean>;
   onRemove: (itemId: string) => void;
 }) {
   const [mode, setMode] = useState<"view" | "add" | "edit">("view");
@@ -295,9 +299,10 @@ function ChipGroup({
                       : undefined
                   }
                   removeLabel={item.label}
-                  onSave={v => {
-                    onSave(v, item.id);
-                    setEditingId(null);
+                  onSave={async v => {
+                    const saved = await onSave(v, item.id);
+                    if (saved) setEditingId(null);
+                    return saved;
                   }}
                 />
               </li>
@@ -345,9 +350,10 @@ function ChipGroup({
           initial={emptyInitial}
           busy={busy}
           onCancel={items.length || mode === "add" ? () => setMode("view") : undefined}
-          onSave={v => {
-            onSave(v, null);
-            setMode("view");
+          onSave={async v => {
+            const saved = await onSave(v, null);
+            if (saved) setMode("view");
+            return saved;
           }}
         />
       ) : (
@@ -387,7 +393,7 @@ function ValueCard({
   className?: string;
   onEdit: () => void;
   onCancel: () => void;
-  onSave: (value: string) => void;
+  onSave: (value: string) => Promise<boolean>;
 }) {
   return (
     <section className={[styles.card, styles.valueCard, className ?? ""].join(" ")}>
@@ -438,10 +444,10 @@ export function GoalStep({
   goals: StepItem<GoalPayload>[];
   niche: StepItem<NichePayload> | null;
   language: StepItem<LanguagePayload> | null;
-  onSaveGoal: (payload: GoalPayload, itemId: string | null) => void;
+  onSaveGoal: (payload: GoalPayload, itemId: string | null) => Promise<boolean>;
   onRemoveGoal: (itemId: string) => void;
-  onSaveNiche: (payload: NichePayload, itemId: string | null) => void;
-  onSaveLanguage: (payload: LanguagePayload, itemId: string | null) => void;
+  onSaveNiche: (payload: NichePayload, itemId: string | null) => Promise<boolean>;
+  onSaveLanguage: (payload: LanguagePayload, itemId: string | null) => Promise<boolean>;
 }) {
   const [editing, setEditing] = useState<"niche" | "language" | null>(null);
   const clarify = common.ai.state === "clarify" ? common.ai.question : null;
@@ -478,9 +484,10 @@ export function GoalStep({
           max={60}
           onEdit={() => setEditing("niche")}
           onCancel={() => setEditing(null)}
-          onSave={label => {
-            onSaveNiche({ slug: nicheSlugFromLabel(label), label }, niche?.id ?? null);
-            setEditing(null);
+          onSave={async label => {
+            const saved = await onSaveNiche({ slug: nicheSlugFromLabel(label), label }, niche?.id ?? null);
+            if (saved) setEditing(null);
+            return saved;
           }}
         />
         <ValueCard
@@ -492,9 +499,10 @@ export function GoalStep({
           className={styles.languageCard}
           onEdit={() => setEditing("language")}
           onCancel={() => setEditing(null)}
-          onSave={label => {
-            onSaveLanguage({ code: languageCode(label), label }, language?.id ?? null);
-            setEditing(null);
+          onSave={async label => {
+            const saved = await onSaveLanguage({ code: languageCode(label), label }, language?.id ?? null);
+            if (saved) setEditing(null);
+            return saved;
           }}
         />
       </div>
@@ -529,7 +537,7 @@ export function AudienceStep({
 }: {
   common: Common;
   audiences: StepItem<AudiencePayload>[];
-  onSave: (payload: AudiencePayload, itemId: string | null) => void;
+  onSave: (payload: AudiencePayload, itemId: string | null) => Promise<boolean>;
   onRemove: (itemId: string) => void;
 }) {
   // The chip shows who. The saved value keeps both parts (who, outcome), so
@@ -576,7 +584,7 @@ export function PillarsStep({
 }: {
   common: Common;
   pillars: StepItem<PillarPayload>[];
-  onSave: (payload: Omit<PillarPayload, "viewSharePercent">, itemId: string | null) => void;
+  onSave: (payload: Omit<PillarPayload, "viewSharePercent">, itemId: string | null) => Promise<boolean>;
   onRemove: (itemId: string) => void;
 }) {
   const [editing, setEditing] = useState<string | "new" | null>(null);
@@ -601,9 +609,10 @@ export function PillarsStep({
               initial={{ title: p.payload.title, description: p.payload.description }}
               busy={common.busy}
               onCancel={() => setEditing(null)}
-              onSave={v => {
-                onSave({ title: v.title.trim(), description: v.description.trim() }, p.id);
-                setEditing(null);
+              onSave={async v => {
+                const saved = await onSave({ title: v.title.trim(), description: v.description.trim() }, p.id);
+                if (saved) setEditing(null);
+                return saved;
               }}
             />
           </section>
@@ -634,9 +643,10 @@ export function PillarsStep({
             initial={{ title: "", description: "" }}
             busy={common.busy}
             onCancel={() => setEditing(null)}
-            onSave={v => {
-              onSave({ title: v.title.trim(), description: v.description.trim() }, null);
-              setEditing(null);
+            onSave={async v => {
+              const saved = await onSave({ title: v.title.trim(), description: v.description.trim() }, null);
+              if (saved) setEditing(null);
+              return saved;
             }}
           />
         </section>
