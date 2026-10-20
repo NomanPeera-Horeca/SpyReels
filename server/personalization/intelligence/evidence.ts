@@ -6,6 +6,7 @@
  * Also scores how much evidence exists, so the engine can ask the user
  * instead of guessing when there is too little.
  */
+import { detectContentLanguage } from "@shared/personalization/contentLanguage";
 import type {
   AnalysisSourceSnapshot,
   ItemPayloadByKind,
@@ -174,9 +175,12 @@ export function buildCreatorEvidence(input: {
           : "strong";
 
   const language = live.find(i => i.kind === "language");
+  const detected = detectContentLanguage(
+    [name, bio, ...captions.slice(0, MAX_CAPTIONS)].filter(Boolean).join("\n")
+  );
   const outputLanguage = language
     ? (language.payload as ItemPayloadByKind["language"])
-    : { code: "en", label: "English" };
+    : (detected ?? { code: "und", label: "the same language as the evidence" });
 
   const corpus = snippets
     .map(s => s.text)

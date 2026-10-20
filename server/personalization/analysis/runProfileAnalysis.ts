@@ -19,7 +19,9 @@
 import {
   ANALYSIS_STAGES,
   type AnalysisStage,
+  type NormalizedPost,
 } from "@shared/personalization/model";
+import { buildPerformancePanels } from "@shared/personalization/performanceInsights";
 import {
   deriveRunStatus,
   idsToSupersedeOnRegeneration,
@@ -48,6 +50,10 @@ export type AnalysisOutcome =
     };
 
 const ANALYZABLE = new Set(["pending_confirmation", "confirmed"]);
+
+function logAnalysis(runId: string, stage: string, status: string, posts: number) {
+  console.info("[profile_analysis]", { runId, stage, status, posts });
+}
 const SUGGESTION_STAGES: AnalysisStage[] = [
   "hooks_and_topics",
   "niche_opportunities",
@@ -59,6 +65,8 @@ export async function runProfileAnalysis(
     store: AnalysisStore;
     source: ProfileDataSource;
     suggestions: SuggestionEngine | null;
+    /** Optional one-call caption classifier. Null or a throw leaves metrics-only insights. */
+    classify?: (posts: NormalizedPost[]) => Promise<NormalizedPost[] | null>;
     now: () => Date;
   }
 ): Promise<AnalysisOutcome> {
@@ -181,6 +189,7 @@ export async function runProfileAnalysis(
     }
   }
   await store.setStage(runId, "published_content", "done");
+  logAnalysis(runId, "published_content", "done", snapshot.posts.length);
 
   // No public posts: nothing measured, nothing invented. Personalization continues from profile info.
   if (snapshot.posts.length === 0) {
@@ -189,13 +198,42 @@ export async function runProfileAnalysis(
     return finish(null);
   }
 
-  // Stage 2: strongest performers. Pure ranking over the snapshot; nothing extra stored.
-  await store.setStage(runId, "strongest_performers", "done");
+  if (!snapshot.performancePanels) {
+    let posts = snapshot.posts;
+    if (deps.classify) {
+      await store.setStage(runId, "hooks_and_topics", "running");
+      try {
+        const labeled = await deps.classify(posts);
+        if (labeled) {
+          posts = labeled;
+          await store.setStage(runId, "hooks_and_topics", "done");
+          logAnalysis(runId, "hooks_and_topics", "done", posts.length);
+        } else {
+          await store.setStage(runId, "hooks_and_topics", "skipped");
+          logAnalysis(runId, "hooks_and_topics", "skipped", posts.length);
+        }
+      } catch {
+        await store.setStage(runId, "hooks_and_topics", "skipped");
+        logAnalysis(runId, "hooks_and_topics", "skipped", posts.length);
+      }
+    }
+    const performancePanels = buildPerformancePanels(posts, deps.now());
+    snapshot = { ...snapshot, posts, performancePanels };
+    await store.saveSnapshot(runId, snapshot);
+  }
 
-  // Stages 3 and 4: AI suggestions (optional until an engine is approved and wired).
+  // Stage 2: strongest performers. The comparison itself is stored on the snapshot.
+  await store.setStage(runId, "strongest_performers", "done");
+  logAnalysis(runId, "strongest_performers", "done", snapshot.posts.length);
+
+  // Stage 4 stays a separate suggestion engine. Classification above may already
+  // have finished hooks_and_topics, so a missing engine must not wipe that.
   if (!deps.suggestions) {
-    for (const s of SUGGESTION_STAGES)
-      await store.setStage(runId, s, "skipped");
+    const current = await store.loadRun(runId, workspaceId);
+    if (current?.stages.hooks_and_topics !== "done") {
+      await store.setStage(runId, "hooks_and_topics", "skipped");
+    }
+    await store.setStage(runId, "niche_opportunities", "skipped");
     return finish(null);
   }
   for (const s of SUGGESTION_STAGES) await store.setStage(runId, s, "running");

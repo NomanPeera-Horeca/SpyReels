@@ -53,6 +53,10 @@ import {
 import { users } from "../../../drizzle/schema";
 import type { Db } from "../db/analysisStore";
 import { pickBestPost, type BestPost } from "@shared/personalization/bestPost";
+import {
+  buildPerformancePanels,
+  type PerformancePanels,
+} from "@shared/personalization/performanceInsights";
 import { readOptional } from "./optionalRead";
 import { toItemRecord } from "../db/rows";
 import {
@@ -115,6 +119,8 @@ export type OnboardingStateView = {
     postsInWindow: number | null;
     /** Mobile 3c "Your best Reel". Real snapshot data only; null when not enough posts. */
     bestPost: BestPost | null;
+    /** Right-panel cards. Null until a snapshot exists. Qualitative when a comparison is not eligible. */
+    panels: PerformancePanels | null;
   } | null;
   steps: Record<PersonalizationStep, StepStatus>;
   version: number;
@@ -242,7 +248,21 @@ async function loadAnalysisView(
     errorCode: run.errorCode,
     postsInWindow: run.postsInWindow,
     bestPost: safeBestPost(run.status, run.sourceSnapshot),
+    panels: safePanels(run.sourceSnapshot, run.completedAt),
   };
+}
+
+function safePanels(
+  snapshot: { performancePanels?: PerformancePanels | null; posts?: Parameters<typeof buildPerformancePanels>[0] } | null,
+  completedAt: Date | null
+): PerformancePanels | null {
+  if (!snapshot) return null;
+  if (snapshot.performancePanels) return snapshot.performancePanels;
+  try {
+    return buildPerformancePanels(snapshot.posts ?? [], completedAt ?? new Date());
+  } catch {
+    return null;
+  }
 }
 
 export async function loadOnboardingState(db: Db, ctx: OnboardingCtx): Promise<OnboardingStateView> {

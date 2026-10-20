@@ -236,7 +236,12 @@ export const onboardingV2Router = router({
       const db = await requireDb();
       const state = await loadOnboardingState(db, octx(ctx));
       if (!state.profile) return null;
-      return getRecommendationState(state.profile.id, input.step, state.version);
+      return getRecommendationState(
+        state.profile.id,
+        ctx.workspaceId,
+        input.step,
+        state.version
+      );
     }),
 
   addItem: v2Procedure.input(itemPayload).mutation(async ({ ctx, input }) =>

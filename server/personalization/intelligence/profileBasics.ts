@@ -7,6 +7,10 @@
  */
 import { z } from "zod";
 import { inferNicheFromText } from "@shared/creatorContextInference";
+import {
+  detectContentLanguage,
+  type ContentLanguage,
+} from "@shared/personalization/contentLanguage";
 import type { CreatorEvidence } from "./evidence";
 import { UNTRUSTED_DATA_RULE } from "./evidence";
 import {
@@ -21,37 +25,10 @@ import {
   type LlmUsage,
 } from "./structuredLlm";
 
-export type LanguageSuggestion = { code: string; label: string };
+export type LanguageSuggestion = ContentLanguage;
 export type NicheSuggestion = { slug: string; label: string };
 
-const LANGUAGE_RULES: { code: string; label: string; pattern: RegExp }[] = [
-  { code: "pt", label: "Portuguese", pattern: /\b(não|voce|você|obrigado|restaurante)\b/gi },
-  { code: "es", label: "Spanish", pattern: /\b(el|los|las|para|restaurante|cocina|también)\b/gi },
-  { code: "fr", label: "French", pattern: /\b(les|des|une|pour|dans|avec|restaurant)\b/gi },
-  { code: "de", label: "German", pattern: /\b(und|der|die|das|nicht|für|restaurant)\b/gi },
-];
-
-/** Language of the profile text, or null when there is not enough text to tell. */
-export function detectContentLanguage(text: string): LanguageSuggestion | null {
-  const t = text.trim();
-  if (t.length < 12) return null;
-  if (/[\u0600-\u06FF]/.test(t)) return { code: "ar", label: "Arabic" };
-  if (/[\u0900-\u097F]/.test(t)) return { code: "hi", label: "Hindi" };
-  if (/[\u3040-\u30FF]/.test(t)) return { code: "ja", label: "Japanese" };
-  if (/[\uAC00-\uD7AF]/.test(t)) return { code: "ko", label: "Korean" };
-  let best: LanguageSuggestion | null = null;
-  let bestHits = 2;
-  for (const rule of LANGUAGE_RULES) {
-    const hits = t.match(rule.pattern)?.length ?? 0;
-    if (hits > bestHits) {
-      best = { code: rule.code, label: rule.label };
-      bestHits = hits;
-    }
-  }
-  if (best) return best;
-  if (/[a-z]/i.test(t)) return { code: "en", label: "English" };
-  return null;
-}
+export { detectContentLanguage };
 
 export function catalogNiche(text: string): NicheSuggestion | null {
   const hit = inferNicheFromText(text);

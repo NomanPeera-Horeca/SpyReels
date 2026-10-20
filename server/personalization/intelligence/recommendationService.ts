@@ -134,10 +134,6 @@ export interface RecommendationStore {
 }
 
 export type RecommendationResult =
-  | {
-      status: "blocked";
-      reason: "goal_not_confirmed" | "audience_not_confirmed";
-    }
   | { status: "already_confirmed" }
   | {
       status: "reused";
@@ -180,15 +176,63 @@ const confirmedOf = <K extends PersonalizationItemKind>(
     .filter(i => i.kind === kind && i.status === "confirmed")
     .map(i => i.payload as ItemPayloadByKind[K]);
 
-/** Inputs fingerprint for a step: evidence for the goal, confirmed upstream values for the others. */
+/**
+ * Cache key. Goal uses the evidence. Later steps also include confirmed
+ * upstream answers, so a finished analysis or a newly confirmed goal starts
+ * a new suggestion instead of reusing the biography-only one.
+ */
 export function stepInputsHash(
   step: RecommendationStep,
   items: ItemRecord[],
   evidence: CreatorEvidence
 ): string {
-  return step === "goal"
-    ? stableHash(`goal|${evidence.hash}`)
-    : upstreamInputsHash(STEP_KIND[step], items);
+  if (step === "goal") return stableHash(`goal|${evidence.hash}`);
+  // Keep the upstream hash as a prefix so an evidence refresh is not treated as an edit.
+  return `${upstreamInputsHash(STEP_KIND[step], items)}|${evidence.hash}`;
+}
+
+function snapshotFingerprint(snapshot: AnalysisSourceSnapshot | null): string {
+  if (!snapshot || snapshot.posts.length === 0) return "none";
+  const ids = snapshot.posts.map(post => post.postId).sort().join(",");
+  return stableHash(`${snapshot.posts.length}:${ids}`);
+}
+
+function lockedByUser(items: ItemRecord[], kind: PersonalizationItemKind): boolean {
+  return items.some(
+    item =>
+      item.kind === kind &&
+      item.status !== "superseded" &&
+      item.status !== "dismissed" &&
+      (item.status === "confirmed" || item.source !== "ai_suggested")
+  );
+}
+
+/** True when the live rows for this step were saved for the current evidence. */
+export function stepSuggestionsSaved(
+  items: ItemRecord[],
+  step: RecommendationStep,
+  evidence: CreatorEvidence
+): boolean {
+  return freshAiCovers(items, STEP_KIND[step], stepInputsHash(step, items, evidence));
+}
+
+function freshAiCovers(
+  items: ItemRecord[],
+  kind: PersonalizationItemKind,
+  inputsHash: string
+): boolean {
+  const live = items.filter(
+    item => item.kind === kind && item.status !== "superseded" && item.status !== "dismissed"
+  );
+  return (
+    live.length > 0 &&
+    live.every(
+      item =>
+        item.source === "ai_suggested" &&
+        item.basedOnInputsHash === inputsHash &&
+        (item.status === "suggested" || item.status === "confirmed")
+    )
+  );
 }
 
 export async function generateRecommendations(
@@ -216,12 +260,9 @@ export async function generateRecommendations(
 
   const goals = confirmedOf(items, "goal");
   const audiences = confirmedOf(items, "audience");
-  if (input.step !== "goal" && goals.length === 0)
-    return { status: "blocked", reason: "goal_not_confirmed" };
-  if (input.step === "pillars" && audiences.length === 0)
-    return { status: "blocked", reason: "audience_not_confirmed" };
 
   const snapshot = await deps.store.loadLatestSnapshot(profile.id);
+  const fingerprintAtStart = snapshotFingerprint(snapshot);
   const evidence = buildCreatorEvidence({
     platform: profile.platform,
     displayName: profile.displayName,
@@ -231,9 +272,6 @@ export async function generateRecommendations(
   });
   const inputsHash = stepInputsHash(input.step, items, evidence);
   const versionAtStart = await deps.store.loadPersonalizationVersion(profile.id);
-
-  const settled = (k: PersonalizationItemKind) =>
-    items.some(i => i.kind === k && i.status !== "superseded");
 
   if (input.step === "goal") {
     return runGoalStep({
@@ -246,9 +284,11 @@ export async function generateRecommendations(
       profileText: [profile.displayName, profile.bio, ...evidence.topCaptions]
         .filter((s): s is string => Boolean(s && s.trim()))
         .join("\n"),
-      needGoal: !settled("goal"),
-      needNiche: !settled("niche"),
-      needLanguage: !settled("language"),
+      needGoal: !lockedByUser(items, "goal") && !freshAiCovers(items, "goal", inputsHash),
+      needNiche: !lockedByUser(items, "niche") && !freshAiCovers(items, "niche", inputsHash),
+      needLanguage:
+        !lockedByUser(items, "language") && !freshAiCovers(items, "language", inputsHash),
+      fingerprintAtStart,
       timeoutMs: deps.timeoutMs,
     });
   }
@@ -339,6 +379,10 @@ export async function generateRecommendations(
   const versionNow = await deps.store.loadPersonalizationVersion(profile.id);
   if (versionNow !== versionAtStart)
     return { status: "stale_discarded", usage };
+  const snapshotNow = await deps.store.loadLatestSnapshot(profile.id);
+  if (snapshotFingerprint(snapshotNow) !== fingerprintAtStart)
+    return { status: "stale_discarded", usage };
+  const upstream = upstreamInputsHash(kind, items);
   const plan = planAiSuggestionMerge(
     items,
     suggestions.map(s => ({ ...s, basedOnInputsHash: inputsHash, confidence })),
@@ -353,7 +397,7 @@ export async function generateRecommendations(
   });
   const applied = await deps.store.applyGeneratedSuggestions(profile.id, {
     kind,
-    guard: { type: "inputs_unchanged", expected: inputsHash },
+    guard: { type: "inputs_unchanged", expected: upstream },
     expectedVersion: versionAtStart,
     supersedeIds,
     inserts: plan.insert.map(i => ({ ...i, generationMeta: meta })),
@@ -459,9 +503,14 @@ async function runGoalStep(input: {
   needGoal: boolean;
   needNiche: boolean;
   needLanguage: boolean;
+  fingerprintAtStart: string;
   timeoutMs?: number;
 }): Promise<RecommendationResult> {
   const { deps, evidence } = input;
+  const postsChanged = async () => {
+    const snap = await deps.store.loadLatestSnapshot(input.profileId);
+    return snapshotFingerprint(snap) !== input.fingerprintAtStart;
+  };
   if (!input.needGoal && !input.needNiche && !input.needLanguage) {
     const same = input.items.filter(
       i =>
@@ -536,6 +585,7 @@ async function runGoalStep(input: {
     : (basics.usage ?? goalError?.usage ?? EMPTY_USAGE);
 
   let inserted = 0;
+  if (await postsChanged()) return { status: "stale_discarded", usage };
   if (goalResult && goalResult.status === "suggested") {
     const wrote = await commitSuggestions(deps.store, {
       profileId: input.profileId,
