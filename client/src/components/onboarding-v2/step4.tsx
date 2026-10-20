@@ -752,6 +752,8 @@ function PillarCard({
   onStartEdit,
   onRemove,
   onRemoveSubtopic,
+  topicState,
+  onRequestTopics,
 }: {
   pillar: PillarItem;
   subtopics: { id: string; text: string }[];
@@ -760,6 +762,8 @@ function PillarCard({
   onStartEdit: () => void;
   onRemove: () => void;
   onRemoveSubtopic: (subtopicId: string) => void;
+  topicState: string | undefined;
+  onRequestTopics: () => void;
 }) {
   return (
     <div className={styles.pillarGroup}>
@@ -788,6 +792,44 @@ function PillarCard({
         ) : null}
       </section>
       <SubtopicChips subtopics={subtopics} busy={busy} onRemove={onRemoveSubtopic} label={pillar.payload.title} />
+      <TopicIdeasAction state={topicState} busy={busy} onRequest={onRequestTopics} />
+    </div>
+  );
+}
+
+const TOPIC_NOTE: Record<string, string> = {
+  generating: "Finding topic ideas…",
+  all_dismissed: "All topic ideas removed.",
+  no_topics: "No topic ideas came back for this pillar.",
+  failed: "Topic ideas didn't load.",
+  exhausted: "Topic ideas couldn't load. Try again later.",
+};
+
+/**
+ * Topic ideas are requested by the user only. The button is the one place that
+ * starts a model call; nothing else on the page does.
+ */
+function TopicIdeasAction({
+  state,
+  busy,
+  onRequest,
+}: {
+  state: string | undefined;
+  busy: boolean;
+  onRequest: () => void;
+}) {
+  if (!state || state === "ready") return null;
+  const canAsk = state === "never_generated" || state === "failed";
+  const note = TOPIC_NOTE[state];
+  if (!note && !canAsk) return null;
+  return (
+    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+      {note ? <span className={["sr-text-product-body-small", styles.muted].join(" ")}>{note}</span> : null}
+      {canAsk ? (
+        <GhostButton type="button" onClick={onRequest} disabled={busy}>
+          {state === "failed" ? "Try again" : "Find topic ideas"}
+        </GhostButton>
+      ) : null}
     </div>
   );
 }
@@ -920,6 +962,12 @@ export function PillarsStep(props: {
   onSave: (payload: { title: string; description: string }, itemId: string | null) => Promise<boolean>;
   onRemove: (itemId: string) => void;
   onRemoveSubtopic: (subtopicId: string) => void;
+  /** getState.pillarTopics: topic-idea state per pillar item. */
+  topics: Record<string, { state: string; attempts: number }>;
+  /** The user asks for topic ideas for one pillar. The only generation path. */
+  onRequestTopics: (pillarItemId: string) => void;
+  /** False when getState.subtopicStore is not ready. Pillars still show; topic actions do not. */
+  topicStoreReady: boolean;
 }) {
   // The body must sit inside StepFrame so that it reads the step's pending-edit registry.
   return (
@@ -943,6 +991,9 @@ function PillarsBody({
   onSave,
   onRemove,
   onRemoveSubtopic,
+  topics,
+  onRequestTopics,
+  topicStoreReady,
 }: {
   common: Common;
   pillars: PillarItem[];
@@ -950,6 +1001,9 @@ function PillarsBody({
   onSave: (payload: { title: string; description: string }, itemId: string | null) => Promise<boolean>;
   onRemove: (itemId: string) => void;
   onRemoveSubtopic: (subtopicId: string) => void;
+  topics: Record<string, { state: string; attempts: number }>;
+  onRequestTopics: (pillarItemId: string) => void;
+  topicStoreReady: boolean;
 }) {
   const pending = useContext(PendingEditsContext);
   const [mode, setMode] = useState<"view" | "edit">("view");
@@ -966,6 +1020,11 @@ function PillarsBody({
 
   return (
     <>
+      {!topicStoreReady && pillars.length > 0 ? (
+        <p className={["sr-text-product-body-small", styles.muted].join(" ")} role="status">
+          Your pillars are saved. Topic ideas can't be shown right now, and nothing you saved has been lost.
+        </p>
+      ) : null}
       {pillars.map(p =>
         editing === p.id ? (
           <div key={p.id} className={styles.pillarGroup}>
@@ -993,6 +1052,8 @@ function PillarsBody({
             onStartEdit={() => setEditing(p.id)}
             onRemove={() => onRemove(p.id)}
             onRemoveSubtopic={onRemoveSubtopic}
+            topicState={topics[p.id]?.state}
+            onRequestTopics={() => onRequestTopics(p.id)}
           />
         )
       )}

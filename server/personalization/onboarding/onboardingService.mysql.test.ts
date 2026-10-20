@@ -147,6 +147,7 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
   beforeEach(async () => {
     await q("SET FOREIGN_KEY_CHECKS = 0");
     for (const t of [
+      "pillar_subtopic_jobs",
       "pillar_subtopics",
       "personalization_items",
       "personalization_progress",
@@ -445,13 +446,14 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
       subtopicId: food.id,
     })).ok).toBe(true);
 
+    // Same title, new description: topics move with their ids and statuses.
     const renamed = await editItem(db, A, itemId, {
-      title: "Plate pricing",
+      title: "Menu engineering",
       description: "How to price plates",
       viewSharePercent: null,
     });
     const described = await editItem(db, A, renamed.itemId, {
-      title: "Plate pricing",
+      title: "Menu engineering",
       description: "What to charge for each plate",
       viewSharePercent: null,
     });
@@ -464,7 +466,7 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
     expect(await saveGeneratedSubtopics(db, {
       workspaceId: WS_A,
       socialProfileId: profileId,
-      groups: [{ title: "Plate pricing", labels: ["Food cost", "Menu pricing"], pillarHash: "retry" }],
+      groups: [{ title: "Menu engineering", labels: ["Food cost", "Menu pricing"], pillarHash: "retry" }],
     })).toBe(0);
     expect((await addPillarSubtopic(db, {
       workspaceId: WS_A,
@@ -513,6 +515,54 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
     const finalTopics = state.pillarSubtopics.filter(t => t.pillarItemId === described.itemId);
     expect(finalTopics.find(t => t.id === specials.id)?.status).toBe("dismissed");
     expect(finalTopics.find(t => t.id === food.id)?.status).toBe("suggested");
+  });
+
+  it("a changed pillar title keeps old topics as history, lets the new title generate, and keeps dismissals for the old title", async () => {
+    const { profileId } = await confirmProfile(db, A, preview("test.kitchen"));
+    const { itemId } = await addItem(db, A, "pillar", {
+      title: "Menu engineering",
+      description: "Costs",
+      viewSharePercent: null,
+    });
+    const save = (title: string, labels: string[], pillarHash: string) =>
+      saveGeneratedSubtopics(db, {
+        workspaceId: WS_A,
+        socialProfileId: profileId,
+        groups: [{ title, labels, pillarHash }],
+      });
+    expect(await save("Menu engineering", ["Food cost", "Menu pricing"], "h1")).toBe(2);
+    let state = await loadOnboardingState(db, A);
+    const oldTopics = state.pillarSubtopics.filter(t => t.pillarItemId === itemId);
+    const food = oldTopics.find(t => t.label === "Food cost")!;
+    expect((await dismissPillarSubtopic(db, {
+      workspaceId: WS_A,
+      socialProfileId: profileId,
+      subtopicId: food.id,
+    })).ok).toBe(true);
+
+    const renamed = await editItem(db, A, itemId, {
+      title: "Plate pricing",
+      description: "Costs",
+      viewSharePercent: null,
+    });
+    state = await loadOnboardingState(db, A);
+    expect(state.pillarSubtopics.filter(t => t.pillarItemId === renamed.itemId)).toEqual([]);
+    const history = state.pillarSubtopics.filter(t => t.pillarItemId === itemId);
+    expect(history.map(t => t.id).sort()).toEqual(oldTopics.map(t => t.id).sort());
+    expect(history.find(t => t.id === food.id)?.status).toBe("dismissed");
+
+    // The dismissal was for the old title only, so the new title may generate its own topics.
+    expect(await save("Plate pricing", ["Food cost", "Plate sizes"], "h2")).toBe(2);
+
+    // Renaming back: the dismissed label stays blocked under the old title.
+    const back = await editItem(db, A, renamed.itemId, {
+      title: "Menu engineering",
+      description: "Costs",
+      viewSharePercent: null,
+    });
+    expect(await save("Menu engineering", ["Food cost"], "h3")).toBe(0);
+    state = await loadOnboardingState(db, A);
+    expect(state.pillarSubtopics.filter(t => t.pillarItemId === back.itemId)).toEqual([]);
   });
 
   it("subtopic writes are isolated by workspace and collapse concurrent duplicates", async () => {

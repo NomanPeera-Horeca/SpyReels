@@ -55,7 +55,6 @@ import { GOAL_PROMPT_VERSION, inferGoal } from "./goalInference";
 import {
   PILLAR_PROMPT_VERSION,
   recommendPillars,
-  recommendSubtopics,
 } from "./pillarRecommendations";
 import {
   catalogNiche,
@@ -128,10 +127,6 @@ export interface RecommendationStore {
       inserts: GeneratedInsert[];
     }
   ): Promise<"applied" | "stale">;
-  /** Pillars that have no live subtopic yet. Optional so tests can omit it. */
-  pillarsMissingSubtopics?(
-    profileId: string
-  ): Promise<{ title: string; description: string }[]>;
   saveSubtopics?(
     profileId: string,
     groups: { title: string; labels: string[]; pillarHash: string }[]
@@ -266,15 +261,6 @@ export async function generateRecommendations(
       i.basedOnInputsHash === inputsHash
   );
   if (sameInputs.length > 0) {
-    if (input.step === "pillars") {
-      await fillMissingSubtopics(deps, {
-        profileId: profile.id,
-        evidence,
-        goal: goals.map(g => g.text).join(" "),
-        inputsHash,
-        timeoutMs: deps.timeoutMs,
-      });
-    }
     const live = sameInputs.filter(
       i => i.status === "suggested" || i.status === "confirmed"
     );
@@ -374,10 +360,20 @@ export async function generateRecommendations(
   });
   if (applied === "stale") return { status: "stale_discarded", usage };
   if (input.step === "pillars" && subtopicGroups.length) {
-    await deps.store.saveSubtopics?.(
-      profile.id,
-      subtopicGroups.map(g => ({ ...g, pillarHash: inputsHash }))
-    );
+    // The pillars are already saved. A failed topic save must not fail the pillar
+    // step or be retried here: the pillar card offers "Find topic ideas" instead.
+    // Only the error code is logged, never message text.
+    try {
+      await deps.store.saveSubtopics?.(
+        profile.id,
+        subtopicGroups.map(g => ({ ...g, pillarHash: inputsHash }))
+      );
+    } catch (err) {
+      const code = (err as { code?: unknown })?.code;
+      console.warn("[personalization] pillar topics not saved; pillars kept", {
+        code: typeof code === "string" ? code.slice(0, 60) : "error",
+      });
+    }
   }
   return {
     status: "generated",
@@ -648,40 +644,3 @@ async function runGoalStep(input: {
   };
 }
 
-async function fillMissingSubtopics(
-  deps: {
-    store: RecommendationStore;
-    invoker?: LlmInvoker;
-    onRejected?: (reason: string) => void;
-  },
-  input: {
-    profileId: string;
-    evidence: CreatorEvidence;
-    goal: string;
-    inputsHash: string;
-    timeoutMs?: number;
-  }
-): Promise<void> {
-  if (!deps.store.pillarsMissingSubtopics || !deps.store.saveSubtopics) return;
-  const missing = await deps.store.pillarsMissingSubtopics(input.profileId);
-  if (missing.length === 0) return;
-  try {
-    const extra = await recommendSubtopics({
-      evidence: input.evidence,
-      confirmedGoal: input.goal,
-      pillars: missing,
-      invoker: deps.invoker,
-      timeoutMs: Math.min(input.timeoutMs ?? 12_000, 12_000),
-    });
-    await deps.store.saveSubtopics(
-      input.profileId,
-      extra.groups.map(g => ({
-        title: g.title,
-        labels: g.labels,
-        pillarHash: input.inputsHash,
-      }))
-    );
-  } catch {
-    // The pillars are already saved. A later retry can fill subtopics.
-  }
-}

@@ -31,6 +31,7 @@ describe("personalization schema: Drizzle and SQL draft match", () => {
     expect(tables.map(t => getTableConfig(t).name).sort()).toEqual([
       "personalization_items",
       "personalization_progress",
+      "pillar_subtopic_jobs",
       "pillar_subtopics",
       "profile_analysis_runs",
       "profile_analysis_stages",
@@ -47,7 +48,7 @@ describe("personalization schema: Drizzle and SQL draft match", () => {
       expect(block, `missing CREATE TABLE for ${cfg.name}`).not.toBe("");
       const sqlColumns = [
         ...block.matchAll(
-          /^\s+`([A-Za-z]+)`\s+(?:varchar|int|bigint|enum|json|text|timestamp)\b/gm
+          /^\s+`([A-Za-z]+)`\s+(?:varchar|int|tinyint|bigint|enum|json|text|timestamp)\b/gm
         ),
       ].map(m => m[1]);
       expect(sqlColumns.sort()).toEqual(cfg.columns.map(c => c.name).sort());

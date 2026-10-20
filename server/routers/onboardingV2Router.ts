@@ -31,7 +31,9 @@ import {
   enqueueRecommendations,
   getRecommendationState,
 } from "../personalization/jobs";
-import { retryPillarSubtopics } from "../personalization/retrySubtopics";
+import { requestPillarSubtopics } from "../personalization/subtopicJobs";
+import { createPillarTopicGenerator } from "../personalization/pillarTopicGenerator";
+import { SubtopicStoreError } from "../personalization/subtopics";
 import {
   addPillarSubtopic,
   dismissPillarSubtopic,
@@ -74,6 +76,18 @@ function octx(ctx: { user: { id: number }; workspaceId: string }): OnboardingCtx
  * me" saves exactly what the provider returned (the client cannot change
  * the public facts). Per instance; a miss simply looks the profile up again.
  */
+/** A topic write against a database missing 0104/0105 fails with a named error, never silently. */
+async function withTopicStore<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (err instanceof SubtopicStoreError) {
+      throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Topic storage is not ready. Run the pending migration." });
+    }
+    throw err;
+  }
+}
+
 const LOOKUP_TTL_MS = 30 * 60 * 1000;
 const lookupCache = new Map<string, { preview: PublicProfilePreview; at: number }>();
 const cacheKey = (userId: number, platform: SocialPlatform, handle: string) =>
@@ -295,12 +309,12 @@ export const onboardingV2Router = router({
       const db = await requireDb();
       const state = await loadOnboardingState(db, octx(ctx));
       if (!state.profile) throw new TRPCError({ code: "BAD_REQUEST", message: "No profile yet." });
-      const result = await addPillarSubtopic(db, {
+      const result = await withTopicStore(() => addPillarSubtopic(db, {
         workspaceId: ctx.workspaceId,
-        socialProfileId: state.profile.id,
+        socialProfileId: state.profile!.id,
         pillarItemId: input.pillarItemId,
         label: input.label,
-      });
+      }));
       if (!result.ok && result.reason === "not_found") {
         throw new TRPCError({ code: "NOT_FOUND", message: "Pillar not found." });
       }
@@ -314,11 +328,11 @@ export const onboardingV2Router = router({
       const db = await requireDb();
       const state = await loadOnboardingState(db, octx(ctx));
       if (!state.profile) throw new TRPCError({ code: "BAD_REQUEST", message: "No profile yet." });
-      const result = await dismissPillarSubtopic(db, {
+      const result = await withTopicStore(() => dismissPillarSubtopic(db, {
         workspaceId: ctx.workspaceId,
-        socialProfileId: state.profile.id,
+        socialProfileId: state.profile!.id,
         subtopicId: input.subtopicId,
-      });
+      }));
       if (!result.ok && result.reason === "not_found") {
         throw new TRPCError({ code: "NOT_FOUND", message: "Subtopic not found." });
       }
@@ -332,28 +346,41 @@ export const onboardingV2Router = router({
       const db = await requireDb();
       const state = await loadOnboardingState(db, octx(ctx));
       if (!state.profile) throw new TRPCError({ code: "BAD_REQUEST", message: "No profile yet." });
-      const result = await restorePillarSubtopic(db, {
+      const result = await withTopicStore(() => restorePillarSubtopic(db, {
         workspaceId: ctx.workspaceId,
-        socialProfileId: state.profile.id,
+        socialProfileId: state.profile!.id,
         subtopicId: input.subtopicId,
-      });
+      }));
       if (!result.ok && result.reason === "not_found") {
         throw new TRPCError({ code: "NOT_FOUND", message: "Subtopic not found." });
+      }
+      if (!result.ok) {
+        // Refused, never guessed: the topic keeps its state and Undo says why.
+        throw new TRPCError({ code: "CONFLICT", message: "This topic cannot be restored." });
       }
       return result;
     }),
 
-  /** Fill subtopics for one pillar after a failed or empty generation. */
-  retryPillarSubtopics: v2Procedure
+  /**
+   * The only way topic ideas are generated: the user asks for one pillar.
+   * Bounded by attempts, cooldown and a per-profile hourly limit (see subtopicJobs.ts).
+   */
+  requestPillarSubtopics: v2Procedure
     .input(z.object({ pillarItemId: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const db = await requireDb();
       const state = await loadOnboardingState(db, octx(ctx));
       if (!state.profile) throw new TRPCError({ code: "BAD_REQUEST", message: "No profile yet." });
-      return retryPillarSubtopics(db, {
-        workspaceId: ctx.workspaceId,
-        socialProfileId: state.profile.id,
-        pillarItemId: input.pillarItemId,
-      });
+      return withTopicStore(() =>
+        requestPillarSubtopics(
+          db,
+          { generate: createPillarTopicGenerator(db) },
+          {
+            workspaceId: ctx.workspaceId,
+            socialProfileId: state.profile!.id,
+            pillarItemId: input.pillarItemId,
+          }
+        )
+      );
     }),
 });

@@ -763,6 +763,34 @@ describe("generateRecommendations: Goal -> Audience -> Pillars", () => {
     expect(llm.calls).toHaveLength(0);
   });
 
+  it("pillars stay saved and the step succeeds when the topic save fails", async () => {
+    const store = new MemoryRecoStore();
+    store.items.push(
+      item("goal", { text: "Help restaurant owners choose the right equipment." })
+    );
+    store.items.push({
+      ...item("audience", { who: "Restaurant owners", outcome: "save money" }),
+      status: "confirmed",
+    } as ItemRecord);
+    const llm = fakeLlm({
+      ...pillarOut,
+      pillars: pillarOut.pillars.map((p, i) => ({
+        ...p,
+        subtopics: i === 0 ? ["Food cost", "Menu pricing", "Plate sizes"] : [],
+      })),
+    });
+    (store as unknown as { saveSubtopics: () => Promise<void> }).saveSubtopics = async () => {
+      throw Object.assign(new Error("Topic storage is not ready"), { code: "PRECONDITION_FAILED" });
+    };
+    const r = await generateRecommendations(
+      { store, invoker: llm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "pillars" }
+    );
+    expect(r).toMatchObject({ status: "generated" });
+    const pillars = store.items.filter(i => i.kind === "pillar" && i.status === "suggested");
+    expect(pillars).toHaveLength(3);
+  });
+
   it("never regenerates over a confirmed goal", async () => {
     const store = new MemoryRecoStore();
     store.items.push(item("goal", { text: "My own goal." }));
