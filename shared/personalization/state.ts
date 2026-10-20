@@ -519,6 +519,11 @@ export function planDismiss(
  * current personalizationVersion and its kind depends on edited answers.
  * Confirmed and user-written items are never stale.
  */
+/** True when a stored hash is the current upstream hash, with or without an evidence suffix. */
+export function inputsHashMatches(stored: string, current: string): boolean {
+  return stored === current || stored.startsWith(`${current}|`);
+}
+
 export function isStaleSuggestion(
   item: ItemRecord,
   currentVersion: number,
@@ -529,7 +534,9 @@ export function isStaleSuggestion(
     return false;
   const current = currentInputsHash?.[item.kind];
   if (item.basedOnInputsHash && current !== undefined) {
-    return item.basedOnInputsHash !== current;
+    // Later steps append the analysis evidence after the upstream hash so a
+    // finished analysis can refresh suggestions without looking like an edit.
+    return !inputsHashMatches(item.basedOnInputsHash, current);
   }
   const dependsOnAnswers = Object.values(INVALIDATES_ON_EDIT).some(kinds =>
     kinds.includes(item.kind)
@@ -919,7 +926,7 @@ export function recommendationReview(
       !item.basedOnInputsHash
     )
       continue;
-    if (item.basedOnInputsHash === now) continue;
+    if (inputsHashMatches(item.basedOnInputsHash, now)) continue;
     if (item.status === "suggested") {
       staleSuggestionIds.push(item.id);
       regenerate.add(item.kind);

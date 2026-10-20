@@ -16,6 +16,11 @@ type ReelDialogVideoProps = {
    */
   platform?: "instagram" | "tiktok" | "youtube";
   className?: string;
+  /** Onboarding phone preview plays inline. Other callers keep controls and stay paused. */
+  autoPlay?: boolean;
+  muted?: boolean;
+  controls?: boolean;
+  loop?: boolean;
 };
 
 /** Inline video for reel workflow dialogs with refresh on expired CDN URLs. */
@@ -26,6 +31,10 @@ export function ReelDialogVideo({
   thumbnailUrl,
   platform,
   className,
+  autoPlay = false,
+  muted = false,
+  controls = true,
+  loop = false,
 }: ReelDialogVideoProps) {
   const [resolvedSrc, setResolvedSrc] = useState(() => (videoUrl ?? "").trim());
   const [videoFailed, setVideoFailed] = useState(false);
@@ -134,12 +143,14 @@ export function ReelDialogVideo({
         key={reelId ?? code ?? resolvedSrc}
         src={resolvedSrc}
         poster={thumb || undefined}
-            controls
-            playsInline
-            controlsList="nofullscreen"
-            disablePictureInPicture
-            loop={false}
-            preload="metadata"
+        controls={controls}
+        autoPlay={autoPlay}
+        muted={muted || autoPlay}
+        playsInline
+        controlsList="nofullscreen"
+        disablePictureInPicture
+        loop={loop || autoPlay}
+        preload="metadata"
             className={className}
         onError={() => setVideoFailed(true)}
         onEnded={() => {

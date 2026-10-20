@@ -81,7 +81,7 @@ export function buildAudiencePrompt(
   const system = [
     "You recommend who a short-form video creator should try to reach.",
     UNTRUSTED_DATA_RULE,
-    "Recommend INTENDED audiences who help the creator achieve their confirmed goal. Do not assume their current viewers are the right audience.",
+    "Recommend INTENDED audiences who help the creator achieve their confirmed goal when one exists. When no goal is confirmed, use the profile evidence. Do not assume their current viewers are the right audience.",
     "Rules:",
     `- Between 1 and ${MAX_AUDIENCES} distinct segments. Fewer, more useful segments beat many.`,
     "- who: a short noun phrase (max 8 words). outcome: what this audience wants to achieve (max 10 words). why: one short sentence on how this audience serves the goal.",
@@ -91,7 +91,9 @@ export function buildAudiencePrompt(
     `- Write in ${e.outputLanguage.label}.`,
   ].join("\n");
   const user = [
-    `Confirmed goal (written by the user, trusted): ${JSON.stringify(goal)}`,
+    goal.trim()
+      ? `Confirmed goal (written by the user, trusted): ${JSON.stringify(goal)}`
+      : "No goal is confirmed yet. Use the profile evidence. Do not invent a business objective.",
     `Already confirmed audiences: ${JSON.stringify(keep.map(a => a.who))}`,
     evidenceBlock(e),
     "Return the JSON object.",

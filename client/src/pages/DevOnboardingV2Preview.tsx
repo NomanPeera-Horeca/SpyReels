@@ -16,6 +16,7 @@ import type {
   SocialPlatform,
 } from "@shared/personalization/model";
 import type { PublicProfilePreview } from "@shared/personalization/publicProfilePreview";
+import { InsightPhonePreview } from "@/components/onboarding-v2/InsightPhonePreview";
 import {
   AnalysisPreview,
   ProfileMobilePreview,
@@ -127,7 +128,28 @@ export default function DevOnboardingV2Preview() {
         : { state: "idle" };
   const common = {
     busy: false,
-    preview: <ProfilePhonePreview profile={profile} />,
+    preview: (
+      <InsightPhonePreview
+        platform={platform}
+        pending={false}
+        panel={
+          params.get("insight") === "empty"
+            ? null
+            : {
+                postId: "sample",
+                url: null,
+                thumbnailUrl: null,
+                videoUrl: null,
+                views: 128400,
+                headline: "Videos starting with a question average 2.4x more views.",
+                support: "Compared with 8 other videos that have this metric. This describes a pattern in the posts.",
+                figure: "2.4x",
+                confidence: "eligible",
+                comparison: null,
+              }
+        }
+      />
+    ),
     fromPosts: !empty,
     ai,
     onBack: noop,

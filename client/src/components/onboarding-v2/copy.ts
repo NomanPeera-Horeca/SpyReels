@@ -53,6 +53,14 @@ export const COPY = {
   niche: {
     title: "What do you want to grow in?",
   },
+  insight: {
+    label: "Performance insight from your videos",
+    pending: "Reading your public videos",
+    pendingSupport: "You can keep going. This updates when the videos are in.",
+    emptyTitle: "Not enough videos to compare yet",
+    emptySupport: "A pattern shows here once more public videos have view counts.",
+    views: "views",
+  },
   whatWorks: {
     title: "What works for you",
     subtitle: "We studied your last 6 months of posts.",
@@ -107,6 +115,7 @@ export const COPY = {
     subtopicsLabel: "Suggested subtopics",
     thinking: "Writing suggestions from your profile",
     failed: "We couldn't write a suggestion. Add your own.",
+    retry: "Try again",
   },
   back: "Back",
   continue: "Continue",

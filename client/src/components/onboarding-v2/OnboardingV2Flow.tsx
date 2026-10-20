@@ -43,6 +43,8 @@ import {
 } from "./steps";
 import { AudienceStep, GoalStep, MAX_GOALS, PillarsStep, type AiState, type StepItem } from "./step4";
 import { COPY } from "./copy";
+import { InsightPhonePreview } from "./InsightPhonePreview";
+import { suggestionRequestKey } from "@shared/personalization/suggestionRequest";
 import { WhatWorksStep } from "./step3c";
 
 /** Same breakpoint as OnboardingShell: below it there is no right panel. */
@@ -139,6 +141,7 @@ export default function OnboardingV2Flow() {
   const [source, setSource] = useState<AttributionSource | null>(null);
   const [niche, setNiche] = useState<string | null>(null);
   const [requested, setRequested] = useState<Partial<Record<PersonalizationStep, string>>>({});
+  const [suggestionRetry, setSuggestionRetry] = useState(0);
   const completing = useRef(false);
   const noRightPanel = useNoRightPanel();
   const entry = useRef(readEntry()).current;
@@ -246,26 +249,36 @@ export default function OnboardingV2Flow() {
   const isStep4 = screen === "goal" || screen === "audience" || screen === "pillars";
   const step4 = isStep4 ? (screen as PersonalizationStep) : null;
 
-  // Ask the engine for suggestions once per step and answers version, only when it can run.
+  // Ask once per evidence phase. A later analysis snapshot or a confirmed goal
+  // changes the key, so biography-only suggestions are replaced. A missing goal
+  // does not block Audience or Pillars.
   useEffect(() => {
-    if (!step4 || !state) return;
-    const hasItems =
-      step4 === "goal"
-        ? items.some(i => i.kind === "goal") &&
-          items.some(i => i.kind === "niche") &&
-          items.some(i => i.kind === "language")
-        : items.some(i => i.kind === STEP_KIND[step4]);
-    const requestKey =
-      step4 === "goal"
-        ? `${state.version}:${items.some(i => i.kind === "goal")}:${items.some(i => i.kind === "niche")}:${items.some(i => i.kind === "language")}`
-        : String(state.version);
-    const ready =
-      step4 === "goal" ? true : step4 === "audience" ? confirmedGoal : confirmedGoal && confirmedAudience;
-    if (hasItems || !ready || requested[step4] === requestKey) return;
+    if (!step4 || !state?.profile) return;
+    const requestKey = suggestionRequestKey({
+      step: step4,
+      version: state.version,
+      analysisRunId: state.analysis?.runId ?? null,
+      analysisStatus: state.analysis?.status ?? null,
+      postsInWindow: state.analysis?.postsInWindow ?? null,
+      confirmedGoal,
+      confirmedAudience,
+      retry: suggestionRetry,
+    });
+    if (requested[step4] === requestKey) return;
     setRequested(r => ({ ...r, [step4]: requestKey }));
     requestRecs.mutate({ step: step4 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step4, state?.version, items.length, confirmedGoal, confirmedAudience]);
+  }, [
+    step4,
+    state?.version,
+    state?.profile?.id,
+    state?.analysis?.runId,
+    state?.analysis?.status,
+    state?.analysis?.postsInWindow,
+    confirmedGoal,
+    confirmedAudience,
+    suggestionRetry,
+  ]);
 
   const recStatus = trpc.onboardingV2.recommendationStatus.useQuery(
     { step: step4 ?? "goal" },
@@ -326,8 +339,16 @@ export default function OnboardingV2Flow() {
     ) : (
       <ViralStackPreview />
     );
-  // Step 4 right panel: Figma fallback "insight not ready yet" (visitor view, no insight card).
-  const step4Panel = profilePreview ? <ProfilePhonePreview profile={profilePreview} /> : <ViralStackPreview />;
+  const insightScreen = step4 ?? "goal";
+  const step4Panel = (
+    <InsightPhonePreview
+      platform={profilePreview?.platform ?? state?.profile?.platform ?? "instagram"}
+      panel={state?.analysis?.panels?.[insightScreen] ?? null}
+      pending={
+        state?.analysis?.status === "queued" || state?.analysis?.status === "running"
+      }
+    />
+  );
 
   /* ---------- actions ---------- */
 
@@ -436,6 +457,7 @@ export default function OnboardingV2Flow() {
     onSkip: () => void goStep4(step, "skip"),
     onConfirm: () => void goStep4(step, "confirm"),
     onStepSelect: (s: PersonalizationStep) => setScreen(s),
+    onRetryAi: () => setSuggestionRetry(n => n + 1),
   });
 
   switch (screen) {

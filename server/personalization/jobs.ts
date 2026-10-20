@@ -12,6 +12,7 @@
  * exactly like dispatchPilotJob does for the other job types. Both paths
  * are idempotent, so a repeated request never pays twice.
  */
+import { stableHash } from "@shared/personalization/state";
 import { enqueueDurableJob } from "../durableJobs/queue";
 import { isPilotQueueEnabled } from "../durableJobs/dispatch";
 import { registerDurableJobHandler } from "../durableJobs/handlers";
@@ -23,6 +24,7 @@ import {
   type DurableEnqueue,
   type ProfileAnalysisPayload,
 } from "./analysis/contract";
+import { createPostClassifier } from "./analysis/classifyPosts";
 import { createExistingProviderSource } from "./analysis/existingProviderSource";
 import { runProfileAnalysis } from "./analysis/runProfileAnalysis";
 import {
@@ -53,6 +55,7 @@ async function runAnalysisJob(payload: ProfileAnalysisPayload, attempt: number, 
     {
       store: createAnalysisStore(db),
       source: createExistingProviderSource(),
+      classify: createPostClassifier(),
       // Goal / Audience / Pillars run as their own job once the user reaches step 4.
       suggestions: null,
       now: () => new Date(),
@@ -99,8 +102,25 @@ function rememberState(key: string, state: RecommendationJobState) {
   }
 }
 
-export function recommendationJobKeyFor(profileId: string, step: RecommendationStep, version: number) {
-  return `personalization_recommendations:${profileId}:${step}:v${version}`;
+/**
+ * Changes when stored posts change, so a suggestion built from the biography
+ * is not reused after the analysis snapshot arrives. No handle or caption is hashed.
+ */
+export async function recommendationEvidenceKey(profileId: string): Promise<string> {
+  const db = await requireDb();
+  const snapshot = await createRecommendationStore(db).loadLatestSnapshot(profileId);
+  if (!snapshot || snapshot.posts.length === 0) return "profile";
+  const ids = snapshot.posts.map(post => post.postId).sort().join(",");
+  return stableHash(`${snapshot.posts.length}:${ids}`).slice(0, 16);
+}
+
+export async function recommendationJobKeyFor(
+  profileId: string,
+  step: RecommendationStep,
+  version: number
+) {
+  const evidence = await recommendationEvidenceKey(profileId);
+  return `personalization_recommendations:${profileId}:${step}:v${version}:${evidence}`;
 }
 
 function stateFromResult(r: RecommendationResult): RecommendationJobState {
@@ -115,7 +135,7 @@ export async function getRecommendationState(
   step: RecommendationStep,
   version: number
 ): Promise<RecommendationJobState | null> {
-  const key = recommendationJobKeyFor(profileId, step, version);
+  const key = await recommendationJobKeyFor(profileId, step, version);
   const known = recommendationStates.get(key);
   if (known) return known;
   if (!isPilotQueueEnabled("personalization_recommendations")) return null;
@@ -170,7 +190,7 @@ export async function enqueueRecommendations(
   payload: RecommendationPayload,
   version: number
 ): Promise<"durable" | "inline"> {
-  const key = recommendationJobKeyFor(payload.socialProfileId, payload.step, version);
+  const key = await recommendationJobKeyFor(payload.socialProfileId, payload.step, version);
   if (isPilotQueueEnabled("personalization_recommendations")) {
     await enqueueDurableJob({
       jobType: "personalization_recommendations",
@@ -187,7 +207,15 @@ export async function enqueueRecommendations(
   if (!inlineRunning.has(key)) rememberState(key, { state: "running" });
   runInlineOnce(key, async () => {
     try {
-      rememberState(key, stateFromResult(await runRecommendationJob(payload)));
+      const result = await runRecommendationJob(payload);
+      if (result.status === "failed") {
+        console.warn("[personalization] recommendations_failed", {
+          step: payload.step,
+          kind: result.kind,
+          profileId: payload.socialProfileId,
+        });
+      }
+      rememberState(key, stateFromResult(result));
     } catch (err) {
       rememberState(key, { state: "failed" });
       throw err;
@@ -207,7 +235,15 @@ export function registerPersonalizationJobHandlers(): void {
     await runAnalysisJob(payload, job.attempt, Math.min(job.maxAttempts, PROFILE_ANALYSIS_MAX_ATTEMPTS));
   });
   registerDurableJobHandler("personalization_recommendations", async (job: ClaimedJob) => {
-    const result = await runRecommendationJob(job.payload as RecommendationPayload);
+    const payload = job.payload as RecommendationPayload;
+    const result = await runRecommendationJob(payload);
+    if (result.status === "failed") {
+      console.warn("[personalization] recommendations_failed", {
+        step: payload.step,
+        kind: result.kind,
+        profileId: payload.socialProfileId,
+      });
+    }
     // Model timeouts / outages: let the durable queue retry the same job.
     if (result.status === "failed" && result.kind !== "invalid_output") {
       throw new Error(`recommendations_${result.kind}`);

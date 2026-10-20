@@ -73,6 +73,7 @@ type Common = {
   onSkip: () => void;
   onConfirm: () => void;
   onStepSelect: (step: PersonalizationStep) => void;
+  onRetryAi?: () => void;
 };
 
 /* ---------- pending edits (shared by every editor in the step) ---------- */
@@ -215,7 +216,12 @@ function StepFrame({
           ) : null}
           {common.ai.state === "failed" ? (
             <p className={["sr-text-product-body-small", styles.muted].join(" ")} role="status">
-              {P.failed}
+              {P.failed}{" "}
+              {common.onRetryAi ? (
+                <button type="button" className={styles.retry} onClick={common.onRetryAi}>
+                  {P.retry}
+                </button>
+              ) : null}
             </p>
           ) : null}
           {children}
