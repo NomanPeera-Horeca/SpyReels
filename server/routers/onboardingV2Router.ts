@@ -16,10 +16,8 @@ import {
   PERSONALIZATION_STEPS,
   PRIMARY_USE_CASES,
   SOCIAL_PLATFORMS,
-  type SocialPlatform,
 } from "@shared/personalization/model";
 import { GROWTH_NICHE_OPTIONS } from "@shared/personalization/growthNiches";
-import type { PublicProfilePreview } from "@shared/personalization/publicProfilePreview";
 import { parseSocialHandle } from "@shared/personalization/state";
 import { router, protectedProcedure } from "../_core/trpc";
 import { getDb } from "../db";
@@ -53,7 +51,7 @@ import {
   startNotPostingYet,
   type OnboardingCtx,
 } from "../personalization/onboarding/onboardingService";
-import { lookupPublicProfile } from "../personalization/onboarding/profileLookup";
+import { lookupPublicProfile, recallCachedPublicProfile } from "../personalization/onboarding/profileLookup";
 import { productionLookupDeps } from "../personalization/onboarding/profileLookupDeps";
 
 const v2Procedure = protectedProcedure.use(async ({ ctx, next }) => {
@@ -71,11 +69,6 @@ function octx(ctx: { user: { id: number }; workspaceId: string }): OnboardingCtx
   return { userId: ctx.user.id, workspaceId: ctx.workspaceId };
 }
 
-/**
- * The profile the user saw on "Is this you?", kept server side so "That's
- * me" saves exactly what the provider returned (the client cannot change
- * the public facts). Per instance; a miss simply looks the profile up again.
- */
 /** A topic write against a database missing 0104/0105 fails with a named error, never silently. */
 async function withTopicStore<T>(fn: () => Promise<T>): Promise<T> {
   try {
@@ -86,24 +79,6 @@ async function withTopicStore<T>(fn: () => Promise<T>): Promise<T> {
     }
     throw err;
   }
-}
-
-const LOOKUP_TTL_MS = 30 * 60 * 1000;
-const lookupCache = new Map<string, { preview: PublicProfilePreview; at: number }>();
-const cacheKey = (userId: number, platform: SocialPlatform, handle: string) =>
-  `${userId}:${platform}:${handle}`;
-
-function remember(userId: number, preview: PublicProfilePreview) {
-  lookupCache.set(cacheKey(userId, preview.platform, preview.handle), { preview, at: Date.now() });
-  if (lookupCache.size > 5000) {
-    const oldest = lookupCache.keys().next().value;
-    if (oldest) lookupCache.delete(oldest);
-  }
-}
-
-function recall(userId: number, platform: SocialPlatform, handle: string) {
-  const hit = lookupCache.get(cacheKey(userId, platform, handle));
-  return hit && Date.now() - hit.at < LOOKUP_TTL_MS ? hit.preview : null;
 }
 
 const text = (max: number) => z.string().trim().min(1).max(max);
@@ -175,9 +150,9 @@ export const onboardingV2Router = router({
         platform: parsed.platform,
         handle: parsed.handle,
         deps: productionLookupDeps(),
+        warmMedia: true,
       });
       if (!result.ok) return { ok: false as const, reason: result.reason };
-      remember(ctx.user.id, result.profile);
       return { ok: true as const, profile: result.profile, typedHandle: parsed.handle };
     }),
 
@@ -186,7 +161,7 @@ export const onboardingV2Router = router({
     .input(z.object({ platform: z.enum(SOCIAL_PLATFORMS), handle: z.string().min(1).max(64) }))
     .mutation(async ({ ctx, input }) => {
       const db = await requireDb();
-      let preview = recall(ctx.user.id, input.platform, input.handle);
+      let preview = recallCachedPublicProfile(input.platform, input.handle);
       if (!preview) {
         const again = await lookupPublicProfile({
           userId: ctx.user.id,
@@ -261,7 +236,12 @@ export const onboardingV2Router = router({
       const db = await requireDb();
       const state = await loadOnboardingState(db, octx(ctx));
       if (!state.profile) return null;
-      return getRecommendationState(state.profile.id, input.step, state.version);
+      return getRecommendationState(
+        state.profile.id,
+        ctx.workspaceId,
+        input.step,
+        state.version
+      );
     }),
 
   addItem: v2Procedure.input(itemPayload).mutation(async ({ ctx, input }) =>

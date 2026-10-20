@@ -48,6 +48,7 @@ type Fetchers = {
       commentCount: number;
       reelUrl: string;
       thumbnailUrl?: string;
+      videoUrl?: string;
       duration: number;
       postedAt: Date;
       outsideSpyWindow?: boolean;
@@ -67,6 +68,7 @@ type Fetchers = {
       commentCount: number;
       videoPageUrl: string;
       thumbnailUrl?: string;
+      videoUrl?: string;
       durationSec: number;
       postedAt: Date;
     }>;
@@ -169,6 +171,7 @@ export function createExistingProviderSource(
                 durationSec: num(x.duration),
                 caption: x.caption || null,
                 thumbnailUrl: x.thumbnailUrl || null,
+                videoUrl: x.videoUrl || null,
               })),
           };
         }
@@ -191,6 +194,7 @@ export function createExistingProviderSource(
                 durationSec: num(x.durationSec),
                 caption: x.caption || null,
                 thumbnailUrl: x.thumbnailUrl || null,
+                videoUrl: x.videoUrl || null,
               })),
           };
         }

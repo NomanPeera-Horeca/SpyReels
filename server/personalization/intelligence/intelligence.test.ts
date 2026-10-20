@@ -740,27 +740,23 @@ const pillarOut = {
 };
 
 describe("generateRecommendations: Goal -> Audience -> Pillars", () => {
-  it("enforces the order: audiences need a confirmed goal, pillars need a confirmed audience", async () => {
+  it("still suggests audience and pillars when the goal has not been confirmed", async () => {
     const store = new MemoryRecoStore();
-    const llm = fakeLlm();
-    expect(
-      await generateRecommendations(
-        { store, invoker: llm.invoker },
-        { ctx, socialProfileId: "prof-1", step: "audience" }
-      )
-    ).toEqual({ status: "blocked", reason: "goal_not_confirmed" });
-    store.items.push(
-      item("goal", {
-        text: "Help restaurant owners choose the right equipment.",
-      })
+    const llm = fakeLlm(audienceOut, pillarOut);
+    const audience = await generateRecommendations(
+      { store, invoker: llm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "audience" }
     );
-    expect(
-      await generateRecommendations(
-        { store, invoker: llm.invoker },
-        { ctx, socialProfileId: "prof-1", step: "pillars" }
-      )
-    ).toEqual({ status: "blocked", reason: "audience_not_confirmed" });
-    expect(llm.calls).toHaveLength(0);
+    expect(audience.status).toBe("generated");
+    expect(store.items.some(i => i.kind === "audience" && i.status === "suggested")).toBe(true);
+    const pillars = await generateRecommendations(
+      { store, invoker: llm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "pillars" }
+    );
+    expect(pillars.status).toBe("generated");
+    expect(store.items.some(i => i.kind === "pillar" && i.status === "suggested")).toBe(true);
+    expect(store.items.some(i => i.kind === "goal" && i.status === "confirmed")).toBe(false);
+    expect(llm.calls).toHaveLength(2);
   });
 
   it("pillars stay saved and the step succeeds when the topic save fails", async () => {

@@ -92,7 +92,7 @@ export function buildPillarPrompt(
   const system = [
     "You design strategic content pillars for a short-form video creator.",
     UNTRUSTED_DATA_RULE,
-    "A pillar is a recurring theme the creator should make videos about BECAUSE it serves their confirmed goal and audience.",
+    "A pillar is a recurring theme the creator should make videos about. Use the confirmed goal and audience when they exist. When they do not, use the profile evidence and do not invent a goal.",
     "Past posting topics are context only. Do not just relabel what they posted before.",
     "Rules:",
     `- Between ${MIN_PILLARS} and ${MAX_PILLARS} distinct pillars, not counting pillars the user already confirmed.`,
@@ -103,8 +103,12 @@ export function buildPillarPrompt(
     `- Write in ${e.outputLanguage.label}.`,
   ].join("\n");
   const user = [
-    `Confirmed goal (trusted): ${JSON.stringify(goal)}`,
-    `Confirmed audiences (trusted): ${JSON.stringify(audiences.map(a => (a.outcome ? `${a.who}, who want to ${a.outcome}` : a.who)))}`,
+    goal.trim()
+      ? `Confirmed goal (trusted): ${JSON.stringify(goal)}`
+      : "No goal is confirmed yet.",
+    audiences.length
+      ? `Confirmed audiences (trusted): ${JSON.stringify(audiences.map(a => (a.outcome ? `${a.who}, who want to ${a.outcome}` : a.who)))}`
+      : "No audience is confirmed yet.",
     `Already confirmed pillars: ${JSON.stringify(keep.map(p => p.title))}`,
     e.topCaptions.length
       ? `Topics of their strongest past posts (context only, untrusted):\n<creator_evidence>${JSON.stringify(e.topCaptions)}</creator_evidence>`

@@ -16,6 +16,17 @@ type ReelDialogVideoProps = {
    */
   platform?: "instagram" | "tiktok" | "youtube";
   className?: string;
+  /** Onboarding phone preview plays inline. Other callers keep controls and stay paused. */
+  autoPlay?: boolean;
+  muted?: boolean;
+  controls?: boolean;
+  loop?: boolean;
+  /**
+   * Onboarding phone: if the file cannot play, keep the real thumbnail.
+   * Does not toast or cover the image. Other callers keep the retry control.
+   */
+  posterFallback?: boolean;
+  onPlaybackFailed?: () => void;
 };
 
 /** Inline video for reel workflow dialogs with refresh on expired CDN URLs. */
@@ -26,6 +37,12 @@ export function ReelDialogVideo({
   thumbnailUrl,
   platform,
   className,
+  autoPlay = false,
+  muted = false,
+  controls = true,
+  loop = false,
+  posterFallback = false,
+  onPlaybackFailed,
 }: ReelDialogVideoProps) {
   const [resolvedSrc, setResolvedSrc] = useState(() => (videoUrl ?? "").trim());
   const [videoFailed, setVideoFailed] = useState(false);
@@ -68,8 +85,10 @@ export function ReelDialogVideo({
       });
       return result.videoUrl.trim() || null;
     } catch (err) {
-      const message = formatVideoPreviewError(err);
-      toast.error("Video preview unavailable", { description: message });
+      if (!posterFallback) {
+        const message = formatVideoPreviewError(err);
+        toast.error("Video preview unavailable", { description: message });
+      }
       return null;
     }
   }, [
@@ -78,6 +97,7 @@ export function ReelDialogVideo({
     reelId,
     canRefresh,
     platformKind,
+    posterFallback,
     igMutateAsync,
     ttMutateAsync,
   ]);
@@ -119,6 +139,14 @@ export function ReelDialogVideo({
     canRefresh &&
     (platformKind === "tiktok" ? reelId != null : Boolean(code));
 
+  useEffect(() => {
+    if (posterFallback && videoFailed && !thumb) onPlaybackFailed?.();
+  }, [posterFallback, videoFailed, thumb, onPlaybackFailed]);
+
+  if (posterFallback && thumb && (!resolvedSrc || videoFailed || isPreparing)) {
+    return <img src={thumb} alt="" className={className} />;
+  }
+
   if (isPreparing || refreshPending) {
     return (
       <div className={`flex items-center justify-center bg-muted ${className ?? ""}`}>
@@ -134,12 +162,14 @@ export function ReelDialogVideo({
         key={reelId ?? code ?? resolvedSrc}
         src={resolvedSrc}
         poster={thumb || undefined}
-            controls
-            playsInline
-            controlsList="nofullscreen"
-            disablePictureInPicture
-            loop={false}
-            preload="metadata"
+        controls={controls}
+        autoPlay={autoPlay}
+        muted={muted || autoPlay}
+        playsInline
+        controlsList="nofullscreen"
+        disablePictureInPicture
+        loop={loop || autoPlay}
+        preload="metadata"
             className={className}
         onError={() => setVideoFailed(true)}
         onEnded={() => {

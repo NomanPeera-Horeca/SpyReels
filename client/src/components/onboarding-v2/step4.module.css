@@ -56,6 +56,15 @@
   color: var(--sr-color-text-secondary);
 }
 
+.retry {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sr-color-text-primary);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 /* Figma 1080:3458: Niche fills, Language 190 wide, 12 gap. */
 .twoUp {
   display: flex;

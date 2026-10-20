@@ -1,0 +1,45 @@
+/* Insight card inside the approved phone frame. Tokens only. */
+.phone {
+  margin: 0;
+}
+
+.stage {
+  position: relative;
+  height: 100%;
+  background: var(--sr-neutral-950);
+}
+
+.video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: var(--sr-neutral-950);
+}
+
+.card {
+  position: absolute;
+  left: var(--sr-space-4);
+  right: var(--sr-space-4);
+  bottom: var(--sr-space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-space-2);
+  padding: var(--sr-space-4);
+  border-radius: var(--sr-radius-16);
+  background: var(--sr-color-surface-default);
+  box-shadow: var(--sr-elevation-surface-raised);
+}
+
+.figure,
+.headline {
+  margin: 0;
+  color: var(--sr-color-text-primary);
+}
+
+.support,
+.views {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+}

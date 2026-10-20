@@ -15,6 +15,13 @@ import { usePostHog } from "@posthog/react";
 import "@/design-system/tokens.css";
 import { trpc } from "@/lib/trpc";
 import { useExperienceAccess } from "@/lib/experienceAccess";
+import { AppRecoveryScreen } from "@/components/recovery/AppRecoveryScreen";
+import {
+  classifyServerQuery,
+  isUnauthorizedError,
+} from "@/lib/recovery/classifyServerQuery";
+import { createSubmitLock, pollWhileActive, retryRead, shouldApplyServerSnapshot } from "@/lib/recovery/guards";
+import { useRecoveryBound } from "@/lib/recovery/useRecoveryBound";
 import type {
   AttributionSource,
   AudiencePayload,
@@ -27,6 +34,7 @@ import type {
   SocialPlatform,
 } from "@shared/personalization/model";
 import type { PublicProfilePreview } from "@shared/personalization/publicProfilePreview";
+import { PROFILE_LOOKUP_SLOW_AFTER_MS } from "@shared/personalization/profileLookup";
 import {
   AnalysisPreview,
   ProfileMobilePreview,
@@ -43,7 +51,15 @@ import {
 } from "./steps";
 import { AudienceStep, GoalStep, MAX_GOALS, PillarsStep, type AiState, type StepItem } from "./step4";
 import { COPY } from "./copy";
+import { suggestionRequestKey } from "@shared/personalization/suggestionRequest";
+import { InsightPhonePreview } from "./InsightPhonePreview";
+import { step4RightPanel } from "./insightPanel";
+import {
+  isCurrentProfileLookup,
+  type ProfileLookupSession,
+} from "./profileLookupSession";
 import { WhatWorksStep } from "./step3c";
+import { screenFromResume } from "./resumeScreen";
 
 /** Same breakpoint as OnboardingShell: below it there is no right panel. */
 const NO_PANEL_QUERY = "(max-width: 900px)";
@@ -75,7 +91,8 @@ const STEP_KIND = { goal: "goal", audience: "audience", pillars: "pillar" } as c
 
 /**
  * Entry points from Home v2 (read once on load):
- * - ?step=goal|audience|pillars  "Finish setup": open that strategy step.
+ * - ?step=goal|audience|pillars  explicit deep link to that strategy step.
+ *   Home "Finish setup" does not pass a step, so the server resume step wins.
  * - ?add=instagram|tiktok|youtube "Add profile": add another account, then
  *   personalize it (use case and attribution are already answered).
  */
@@ -90,26 +107,10 @@ function readEntry(): { step: PersonalizationStep | null; add: SocialPlatform | 
   };
 }
 
-function screenFromResume(step: string): Screen | "done" {
-  switch (step) {
-    case "platform":
-    case "profile_confirm":
-      return "platform";
-    case "use_case":
-    case "attribution":
-    case "goal":
-    case "audience":
-    case "pillars":
-      return step;
-    default:
-      return "done";
-  }
-}
-
 /** Redirects once after render (never set state during render). */
 function ProfileLost({ onReset }: { onReset: () => void }) {
   useEffect(() => onReset(), [onReset]);
-  return null;
+  return <AppRecoveryScreen view={{ kind: "loading" }} />;
 }
 
 export default function OnboardingV2Flow() {
@@ -120,14 +121,34 @@ export default function OnboardingV2Flow() {
 
   const stateQuery = trpc.onboardingV2.getState.useQuery(undefined, {
     refetchOnWindowFocus: false,
-    refetchInterval: q => {
-      const s = q.state.data;
-      return s?.analysis && (s.analysis.status === "queued" || s.analysis.status === "running")
-        ? 2000
-        : false;
-    },
+    retry: (failureCount, error) => !isUnauthorizedError(error) && failureCount < 2,
+    refetchInterval: pollWhileActive(
+      data =>
+        Boolean(
+          data?.analysis &&
+            (data.analysis.status === "queued" || data.analysis.status === "running")
+        ),
+      2000
+    ),
   });
-  const state = stateQuery.data;
+  const readAttempt = useRef(0);
+  const appliedVersion = useRef<number | null>(null);
+  const acceptedState = useRef(stateQuery.data ?? null);
+  if (stateQuery.data) {
+    const snap = stateQuery.data;
+    if (
+      shouldApplyServerSnapshot({
+        requestId: readAttempt.current,
+        currentId: readAttempt.current,
+        snapshotVersion: snap.version,
+        appliedVersion: appliedVersion.current,
+      })
+    ) {
+      appliedVersion.current = snap.version;
+      acceptedState.current = snap;
+    }
+  }
+  const state = acceptedState.current ?? undefined;
 
   const [screen, setScreen] = useState<Screen | null>(null);
   const [platform, setPlatform] = useState<SocialPlatform | null>("instagram");
@@ -139,9 +160,26 @@ export default function OnboardingV2Flow() {
   const [source, setSource] = useState<AttributionSource | null>(null);
   const [niche, setNiche] = useState<string | null>(null);
   const [requested, setRequested] = useState<Partial<Record<PersonalizationStep, string>>>({});
+  const [suggestionRetry, setSuggestionRetry] = useState(0);
+  const [recWaitExpired, setRecWaitExpired] = useState(false);
+  const recRequestedAt = useRef<number | null>(null);
+  const recSeenAt = useRef<number | null>(null);
+  const latestRecAt = useRef<number | null>(null);
   const completing = useRef(false);
+  const submissions = useRef(createSubmitLock()).current;
+  const recommendationRequests = useRef(new Set<string>());
+  const [resumeError, setResumeError] = useState(false);
+  const [stateRetryKey, setStateRetryKey] = useState(0);
+  const lookupSeq = useRef(0);
+  const lookupSession = useRef<ProfileLookupSession | null>(null);
+  const slowTimer = useRef<number | null>(null);
+  const [lookupActive, setLookupActive] = useState(false);
+  const [lookupSlow, setLookupSlow] = useState(false);
   const noRightPanel = useNoRightPanel();
   const entry = useRef(readEntry()).current;
+  const stateMissing = !state;
+  const statePending = stateMissing && (stateQuery.isLoading || stateQuery.isFetching);
+  const stateTimedOut = useRecoveryBound(statePending, stateRetryKey);
 
   const track = useCallback(
     (event: string, props?: Record<string, unknown>) => {
@@ -169,6 +207,8 @@ export default function OnboardingV2Flow() {
   const retryAnalysis = trpc.onboardingV2.retryAnalysis.useMutation();
 
   const refresh = useCallback(() => {
+    readAttempt.current += 1;
+    void utils.onboardingV2.getState.cancel();
     void utils.onboardingV2.getState.invalidate();
     void utils.homeV2.context.invalidate();
     void utils.homeV2.videos.invalidate();
@@ -176,9 +216,10 @@ export default function OnboardingV2Flow() {
     void utils.onboarding.getState.invalidate();
   }, [utils]);
 
-  const finish = useCallback(async () => {
+  const finish = useCallback(async (reason: "resume" | "step" = "step") => {
     if (completing.current) return;
     completing.current = true;
+    setResumeError(false);
     try {
       await complete.mutateAsync();
       track("completed");
@@ -186,11 +227,12 @@ export default function OnboardingV2Flow() {
       navigate("/", { replace: true });
     } catch {
       completing.current = false;
-      toast.error("Something went wrong. Try again.");
+      if (reason === "resume") setResumeError(true);
+      else toast.error("Something went wrong. Try again.");
     }
   }, [complete, navigate, track, utils]);
 
-  // First load: resume where the user left off.
+  // First load: resume where the user left off. A late older snapshot is ignored.
   useEffect(() => {
     if (!state || screen !== null) return;
     if (entry.add) {
@@ -206,7 +248,7 @@ export default function OnboardingV2Flow() {
     }
     const s = screenFromResume(state.resumeStep);
     if (s === "done") {
-      void finish();
+      void finish("resume");
       return;
     }
     setUseCase(state.answers.primaryUseCase);
@@ -219,8 +261,64 @@ export default function OnboardingV2Flow() {
     if (screen) track("step_viewed", { step: screen });
   }, [screen, track]);
 
+  const clearSlowTimer = useCallback(() => {
+    if (slowTimer.current != null) {
+      window.clearTimeout(slowTimer.current);
+      slowTimer.current = null;
+    }
+  }, []);
+
+  const cancelLookup = useCallback(() => {
+    lookupSeq.current += 1;
+    lookupSession.current = null;
+    setLookupActive(false);
+    setLookupSlow(false);
+    clearSlowTimer();
+  }, [clearSlowTimer]);
+
+  useEffect(() => clearSlowTimer, [clearSlowTimer]);
+
+  const beginLookup = useCallback(async () => {
+    if (!platform || lookupSession.current) return;
+    const submitted: ProfileLookupSession = {
+      id: ++lookupSeq.current,
+      platform,
+      handle: handleInput,
+    };
+    lookupSession.current = submitted;
+    setLookupActive(true);
+    setLookupSlow(false);
+    setPlatformError(null);
+    clearSlowTimer();
+    slowTimer.current = window.setTimeout(() => {
+      if (lookupSession.current?.id === submitted.id) setLookupSlow(true);
+    }, PROFILE_LOOKUP_SLOW_AFTER_MS);
+    try {
+      const res = await lookup.mutateAsync({ platform: submitted.platform, input: submitted.handle });
+      if (!isCurrentProfileLookup(lookupSession.current, submitted)) return;
+      if (!res.ok) {
+        setPlatformError(res.reason as PlatformError);
+        track("error", { step: "platform", reason: res.reason });
+        return;
+      }
+      setPreview(res.profile);
+      setTypedHandle(res.typedHandle);
+      setScreen("profile");
+    } catch {
+      if (!isCurrentProfileLookup(lookupSession.current, submitted)) return;
+      setPlatformError("error");
+      track("error", { step: "platform", reason: "error" });
+    } finally {
+      if (lookupSession.current?.id === submitted.id) {
+        lookupSession.current = null;
+        setLookupActive(false);
+        setLookupSlow(false);
+        clearSlowTimer();
+      }
+    }
+  }, [clearSlowTimer, handleInput, lookup, platform, track]);
+
   const mutating =
-    lookup.isPending ||
     confirm.isPending ||
     notPosting.isPending ||
     saveUseCase.isPending ||
@@ -246,47 +344,89 @@ export default function OnboardingV2Flow() {
   const isStep4 = screen === "goal" || screen === "audience" || screen === "pillars";
   const step4 = isStep4 ? (screen as PersonalizationStep) : null;
 
-  // Ask the engine for suggestions once per step and answers version, only when it can run.
+  // Ask once per evidence phase. A later analysis snapshot or a confirmed goal
+  // changes the key, so biography-only suggestions are replaced. A missing goal
+  // does not block Audience or Pillars.
   useEffect(() => {
-    if (!step4 || !state) return;
-    const hasItems =
-      step4 === "goal"
-        ? items.some(i => i.kind === "goal") &&
-          items.some(i => i.kind === "niche") &&
-          items.some(i => i.kind === "language")
-        : items.some(i => i.kind === STEP_KIND[step4]);
-    const requestKey =
-      step4 === "goal"
-        ? `${state.version}:${items.some(i => i.kind === "goal")}:${items.some(i => i.kind === "niche")}:${items.some(i => i.kind === "language")}`
-        : String(state.version);
-    const ready =
-      step4 === "goal" ? true : step4 === "audience" ? confirmedGoal : confirmedGoal && confirmedAudience;
-    if (hasItems || !ready || requested[step4] === requestKey) return;
+    if (!step4 || !state?.profile) return;
+    const requestKey = suggestionRequestKey({
+      step: step4,
+      version: state.version,
+      analysisRunId: state.analysis?.runId ?? null,
+      analysisStatus: state.analysis?.status ?? null,
+      postsInWindow: state.analysis?.postsInWindow ?? null,
+      confirmedGoal,
+      confirmedAudience,
+      retry: suggestionRetry,
+    });
+    if (requested[step4] === requestKey) return;
+    const once = `${step4}:${requestKey}`;
+    if (recommendationRequests.current.has(once)) return;
+    recommendationRequests.current.add(once);
+    recRequestedAt.current = Date.now();
+    recSeenAt.current = latestRecAt.current;
+    setRecWaitExpired(false);
     setRequested(r => ({ ...r, [step4]: requestKey }));
     requestRecs.mutate({ step: step4 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step4, state?.version, items.length, confirmedGoal, confirmedAudience]);
+  }, [
+    step4,
+    state?.version,
+    state?.profile?.id,
+    state?.analysis?.runId,
+    state?.analysis?.status,
+    state?.analysis?.postsInWindow,
+    confirmedGoal,
+    confirmedAudience,
+    suggestionRetry,
+  ]);
 
   const recStatus = trpc.onboardingV2.recommendationStatus.useQuery(
     { step: step4 ?? "goal" },
     {
       enabled: Boolean(step4 && requested[step4] !== undefined),
-      refetchInterval: q => (q.state.data?.state === "running" ? 2000 : false),
+      // `at` is the stored outcome time. An earlier run keeps its old `at`,
+      // so a reply from any instance is fresh only when that time changes.
+      // The wait is bounded so a stuck job becomes a retry, not a second model call.
+      refetchInterval: q => {
+        const started = recRequestedAt.current;
+        if (started == null) return false;
+        if (Date.now() - started > 120_000) {
+          setRecWaitExpired(true);
+          return false;
+        }
+        const data = q.state.data;
+        const seen = recSeenAt.current;
+        const fresh =
+          data != null &&
+          data.state !== "running" &&
+          typeof data.at === "number" &&
+          data.at !== seen;
+        return fresh ? false : 2000;
+      },
     }
   );
   useEffect(() => {
-    if (recStatus.data && recStatus.data.state !== "running") void refresh();
-  }, [recStatus.data, refresh]);
+    if (typeof recStatus.data?.at === "number") latestRecAt.current = recStatus.data.at;
+  }, [recStatus.data]);
+  const recFresh =
+    recStatus.data != null &&
+    recStatus.data.state !== "running" &&
+    typeof recStatus.data.at === "number" &&
+    recStatus.data.at !== recSeenAt.current;
+  useEffect(() => {
+    if (recFresh) void refresh();
+  }, [recFresh, recStatus.data, refresh]);
 
   const ai: AiState = useMemo(() => {
     if (!step4 || requested[step4] === undefined) return { state: "idle" };
     const s = recStatus.data;
-    if (!s) return requestRecs.isPending ? { state: "running" } : { state: "idle" };
-    if (s.state === "running") return { state: "running" };
+    if (recWaitExpired && !recFresh) return { state: "failed" };
+    if (!s || !recFresh) return { state: "running" };
     if (s.state === "failed") return { state: "failed" };
     if (s.state === "clarify") return { state: "clarify", question: s.question };
     return { state: "idle" };
-  }, [step4, requested, recStatus.data, requestRecs.isPending]);
+  }, [step4, requested, recStatus.data, recWaitExpired, recFresh]);
 
   /* ---------- previews ---------- */
 
@@ -326,12 +466,30 @@ export default function OnboardingV2Flow() {
     ) : (
       <ViralStackPreview />
     );
-  // Step 4 right panel: Figma fallback "insight not ready yet" (visitor view, no insight card).
-  const step4Panel = profilePreview ? <ProfilePhonePreview profile={profilePreview} /> : <ViralStackPreview />;
+  const insightScreen = step4 ?? "goal";
+  const insightPanel = state?.analysis?.panels?.[insightScreen] ?? null;
+  const insightChoice = step4RightPanel({
+    status: state?.analysis?.status ?? null,
+    panel: insightPanel,
+  });
+  const step4Panel =
+    insightChoice.mode === "insight" && insightPanel ? (
+      <InsightPhonePreview
+        platform={profilePreview?.platform ?? state?.profile?.platform ?? "instagram"}
+        panel={insightPanel}
+        showCard={insightChoice.showCard}
+        profile={profilePreview}
+      />
+    ) : profilePreview ? (
+      <ProfilePhonePreview profile={profilePreview} />
+    ) : (
+      <ViralStackPreview />
+    );
 
   /* ---------- actions ---------- */
 
   const run = async (fn: () => Promise<unknown>, step: string) => {
+    if (!submissions.tryAcquire()) return false;
     try {
       await fn();
       return true;
@@ -339,6 +497,8 @@ export default function OnboardingV2Flow() {
       track("error", { step });
       toast.error("Something went wrong. Try again.");
       return false;
+    } finally {
+      submissions.release();
     }
   };
 
@@ -360,7 +520,7 @@ export default function OnboardingV2Flow() {
       await refresh();
       const next = STEP_ORDER[STEP_ORDER.indexOf(from) + 1];
       if (next) setScreen(next);
-      else await finish();
+      else await finish("step");
     }, from);
 
   const saveItem = (
@@ -421,7 +581,42 @@ export default function OnboardingV2Flow() {
     }, "pillars");
 
 
-  if (!state || !screen) return null;
+  if (!state) {
+    const view = classifyServerQuery({
+      pending: statePending,
+      error: stateQuery.error,
+      hasData: false,
+      timedOut: stateTimedOut,
+    });
+    return (
+      <AppRecoveryScreen
+        view={view.kind === "ready" ? { kind: "loading" } : view}
+        onRetry={() => {
+          const attempt = ++readAttempt.current;
+          setStateRetryKey(key => key + 1);
+          void retryRead({
+            cancel: () => utils.onboardingV2.getState.cancel(),
+            refetch: () => stateQuery.refetch(),
+            isCurrent: () => readAttempt.current === attempt,
+          });
+        }}
+      />
+    );
+  }
+
+  if (!screen) {
+    if (resumeError) {
+      return (
+        <AppRecoveryScreen
+          view={{ kind: "error" }}
+          onRetry={() => {
+            void finish("resume");
+          }}
+        />
+      );
+    }
+    return <AppRecoveryScreen view={{ kind: "loading" }} />;
+  }
 
   const common = (step: PersonalizationStep) => ({
     busy: mutating,
@@ -436,6 +631,7 @@ export default function OnboardingV2Flow() {
     onSkip: () => void goStep4(step, "skip"),
     onConfirm: () => void goStep4(step, "confirm"),
     onStepSelect: (s: PersonalizationStep) => setScreen(s),
+    onRetryAi: () => setSuggestionRetry(n => n + 1),
   });
 
   switch (screen) {
@@ -446,33 +642,26 @@ export default function OnboardingV2Flow() {
           handleInput={handleInput}
           error={platformError}
           busy={mutating}
+          looking={lookupActive}
+          slow={lookupSlow}
           preview={<ViralStackPreview />}
           onPlatform={p => {
+            if (p === platform) return;
             setPlatform(p);
             setPlatformError(null);
+            if (lookupSession.current) cancelLookup();
           }}
           onHandleInput={v => {
             setHandleInput(v);
             setPlatformError(null);
+            if (lookupSession.current && v !== lookupSession.current.handle) cancelLookup();
           }}
-          onNoPost={() => setScreen("niche")}
-          onContinue={async () => {
-            if (!platform) return;
-            try {
-              const res = await lookup.mutateAsync({ platform, input: handleInput });
-              if (!res.ok) {
-                setPlatformError(res.reason as PlatformError);
-                track("error", { step: "platform", reason: res.reason });
-                return;
-              }
-              setPreview(res.profile);
-              setTypedHandle(res.typedHandle);
-              setScreen("profile");
-            } catch {
-              setPlatformError("error");
-              track("error", { step: "platform", reason: "error" });
-            }
+          onNoPost={() => {
+            cancelLookup();
+            setScreen("niche");
           }}
+          onCancel={cancelLookup}
+          onContinue={() => void beginLookup()}
         />
       );
     case "profile":

@@ -5,6 +5,7 @@
  *        |what_works|goal|audience|pillars
  *        &platform=instagram|tiktok|youtube &error=not_found &selected=1
  *        &run=running|failed|succeeded   (analysis line on 3a/3b)
+ *        &insight=pending|empty|failed   (step 4 right panel)
  *        &ai=idle|running|failed|clarify &empty=1 &saveFail=1  (step 4)
  */
 import { useState } from "react";
@@ -16,6 +17,8 @@ import type {
   SocialPlatform,
 } from "@shared/personalization/model";
 import type { PublicProfilePreview } from "@shared/personalization/publicProfilePreview";
+import { InsightPhonePreview } from "@/components/onboarding-v2/InsightPhonePreview";
+import { step4RightPanel } from "@/components/onboarding-v2/insightPanel";
 import {
   AnalysisPreview,
   ProfileMobilePreview,
@@ -101,6 +104,7 @@ export default function DevOnboardingV2Preview() {
   const screen = params.get("screen") ?? "platform";
   const platform = (params.get("platform") ?? "instagram") as SocialPlatform;
   const error = (params.get("error") as PlatformError | null) ?? null;
+  const lookup = params.get("lookup");
   const preselect = params.get("selected") === "1";
   const profile = { ...FAKE, platform };
   const [useCase, setUseCase] = useState<PrimaryUseCase | null>(
@@ -125,9 +129,42 @@ export default function DevOnboardingV2Preview() {
       : aiParam === "running" || aiParam === "failed"
         ? { state: aiParam }
         : { state: "idle" };
+  const insightParam = params.get("insight");
+  const insightStatus: AnalysisRunStatus =
+    insightParam === "pending" ? "running" : insightParam === "failed" ? "failed" : "succeeded";
+  const insightPanel = {
+    postId: "sample",
+    url: null,
+    thumbnailUrl: "/marketing/2d6477ed3f11.jpg",
+    videoUrl: null,
+    views: insightParam === "empty" ? null : 128400,
+    headline:
+      insightParam === "empty"
+        ? "One of your public videos"
+        : "Videos starting with a question average 2.4x more views.",
+    support:
+      insightParam === "empty"
+        ? "There are not enough similar videos with view counts to compare a pattern yet."
+        : "Compared with 8 other videos that have this metric. This describes a pattern in the posts.",
+    figure: insightParam === "empty" ? null : "2.4x",
+    confidence: insightParam === "empty" ? ("qualitative" as const) : ("eligible" as const),
+    comparison: null,
+  };
+  const insightChoice = step4RightPanel({ status: insightStatus, panel: insightPanel });
+  const step4Preview =
+    insightChoice.mode === "insight" ? (
+      <InsightPhonePreview
+        platform={platform}
+        panel={insightPanel}
+        showCard={insightChoice.showCard}
+        profile={profile}
+      />
+    ) : (
+      <ProfilePhonePreview profile={profile} />
+    );
   const common = {
     busy: false,
-    preview: <ProfilePhonePreview profile={profile} />,
+    preview: step4Preview,
     fromPosts: !empty,
     ai,
     onBack: noop,
@@ -226,13 +263,16 @@ export default function DevOnboardingV2Preview() {
       return (
         <PlatformStep
           platform={p}
-          handleInput={handle}
-          error={error}
+          handleInput={handle || (lookup ? "@sample.creator" : "")}
+          error={lookup === "timeout" ? "timeout" : error}
           busy={false}
+          looking={lookup === "looking" || lookup === "slow"}
+          slow={lookup === "slow"}
           preview={<ViralStackPreview />}
           onPlatform={setP}
           onHandleInput={setHandle}
           onContinue={noop}
+          onCancel={noop}
           onNoPost={noop}
         />
       );

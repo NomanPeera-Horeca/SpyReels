@@ -10,6 +10,14 @@ import {
 import { MIN_SPY_DISPLAY_REELS } from "@shared/spyReelsLimits";
 import { normalizeInstagramHandle } from "@shared/instagramHandle";
 import { parseInstagramReelShortcode } from "./instagramUrl";
+import {
+  attemptTimeoutMs,
+  budgetExpiredOrTight,
+  createLookupBudget,
+  linkAbortSignal,
+  type LookupBudget,
+  type LookupBudgetOptions,
+} from "./providerLookupBudget";
 
 const API_BASE = "https://api.scrapecreators.com";
 
@@ -107,7 +115,7 @@ function discoveryScFuseTripped(
 async function scGet(
   path: string,
   query: Record<string, string | undefined>,
-  opts?: { timeoutMs?: number }
+  opts?: { timeoutMs?: number; signal?: AbortSignal }
 ): Promise<{ status: number; data: any }> {
   const tracker = activeDiscoveryScCallTracker;
   if (tracker && discoveryScFuseTripped(tracker)) {
@@ -123,6 +131,9 @@ async function scGet(
       logDiscoveryFuseIfNeeded(tracker);
     }
   }
+  if (opts?.signal?.aborted) {
+    return { status: 408, data: { error: "scrapecreators_request_timeout" } };
+  }
   const metered = meterScrapeCreatorsRequest();
   if (metered) return metered;
 
@@ -134,6 +145,7 @@ async function scGet(
   }
   const timeoutMs = opts?.timeoutMs ?? SCRAPECREATORS_FETCH_MS;
   const controller = new AbortController();
+  const unlink = linkAbortSignal(controller, opts?.signal);
   const t = setTimeout(() => controller.abort(), timeoutMs);
   let res: Response;
   try {
@@ -149,6 +161,7 @@ async function scGet(
     throw e;
   } finally {
     clearTimeout(t);
+    unlink();
   }
   let data: any = null;
   const text = await res.text();
@@ -299,6 +312,12 @@ export interface InstagramIdentity extends ProfileInfo {
   fallbackUsed: boolean;
   /** True only when profile/basic-profile has positive gating/restriction evidence. */
   mediaRestricted: boolean;
+  /**
+   * False only for the search-snippet fallback, where follower and post
+   * counts were not returned by a profile payload. Omitted means the counts
+   * came from the provider.
+   */
+  countsKnown?: boolean;
 }
 
 export const INSTAGRAM_RESTRICTED_MEDIA_MESSAGE =
@@ -322,6 +341,7 @@ export class InstagramHandleNotFoundError extends Error {
 export class InstagramProviderError extends Error {
   readonly failureClass = "provider_resolution_failed" as const;
   readonly httpStatus: number | null;
+  readonly detail: string;
   constructor(
     handle: string,
     opts?: { httpStatus?: number | null; detail?: string }
@@ -331,6 +351,7 @@ export class InstagramProviderError extends Error {
     );
     this.name = "InstagramProviderError";
     this.httpStatus = opts?.httpStatus ?? null;
+    this.detail = opts?.detail ?? "";
   }
 }
 
@@ -554,19 +575,32 @@ function extractNativeSearchUsers(data: unknown): Array<{
  * 404 / vendor not_found is returned as `not_found` so callers can run the
  * native-search recovery path. Rate limits and generic vendor flakes retry.
  */
+function deadlineMiss(): ProfileLookupResult {
+  return { ok: false, kind: "provider", httpStatus: 408, detail: "deadline" };
+}
+
 async function lookupProfileByHandle(
-  handle: string
+  handle: string,
+  budget?: LookupBudget
 ): Promise<ProfileLookupResult> {
   const cleanHandle = handle.replace(/^@/, "").trim();
-  const MAX_TRIES = 5;
+  const MAX_TRIES = budget?.maxAttempts ?? 5;
   const BACKOFF_MS = 600;
   let lastStatus = 0;
   let lastDetail = "";
 
   for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
-    const { status, data } = await scGet("/v1/instagram/profile", {
-      handle: cleanHandle,
-    });
+    if (budgetExpiredOrTight(budget)) return deadlineMiss();
+    const { status, data } = await scGet(
+      "/v1/instagram/profile",
+      { handle: cleanHandle },
+      budget
+        ? {
+            timeoutMs: attemptTimeoutMs(budget, SCRAPECREATORS_FETCH_MS),
+            signal: budget.signal,
+          }
+        : undefined
+    );
     lastStatus = status;
 
     if (status === 404) {
@@ -577,9 +611,19 @@ async function lookupProfileByHandle(
         detail: "http_404",
       };
     }
+    if (status === 408 || data?.error === "scrapecreators_request_timeout") {
+      lastDetail = "timeout";
+      if (attempt < MAX_TRIES && !budgetExpiredOrTight(budget)) {
+        if (budget) await budget.sleep(400);
+        else await sleep(1000 * attempt);
+        continue;
+      }
+      return { ok: false, kind: "provider", httpStatus: 408, detail: "timeout" };
+    }
     if (status === 429) {
-      if (attempt < MAX_TRIES) {
-        await sleep(2000 * attempt);
+      if (attempt < MAX_TRIES && !budgetExpiredOrTight(budget)) {
+        if (budget) await budget.sleep(400);
+        else await sleep(2000 * attempt);
         continue;
       }
       return {
@@ -591,8 +635,9 @@ async function lookupProfileByHandle(
     }
     if (status !== 200 || !data) {
       lastDetail = `http_${status}`;
-      if (attempt < MAX_TRIES) {
-        await sleep(1000 * attempt);
+      if (attempt < MAX_TRIES && !budgetExpiredOrTight(budget)) {
+        if (budget) await budget.sleep(400);
+        else await sleep(1000 * attempt);
         continue;
       }
       return {
@@ -633,12 +678,18 @@ async function lookupProfileByHandle(
         detail: lastDetail || "private",
       };
     }
-    if (failureKind && shouldRetryVendorFailure(failureKind) && attempt < MAX_TRIES) {
+    if (
+      failureKind &&
+      shouldRetryVendorFailure(failureKind) &&
+      attempt < MAX_TRIES &&
+      !budgetExpiredOrTight(budget)
+    ) {
       console.warn(
         `[Instagram] Vendor ${failureKind} envelope for @${cleanHandle} ` +
           `(attempt ${attempt}/${MAX_TRIES}): ${lastDetail}`
       );
-      await sleep(BACKOFF_MS * attempt);
+      if (budget) await budget.sleep(400);
+      else await sleep(BACKOFF_MS * attempt);
       continue;
     }
     if (failureKind === "rate_limit") {
@@ -665,7 +716,11 @@ async function lookupProfileByHandle(
   };
 }
 
-async function searchInstagramUsersNative(query: string): Promise<
+async function searchInstagramUsersNative(
+  query: string,
+  budget?: LookupBudget,
+  maxAttempts = 3
+): Promise<
   | {
       ok: true;
       users: ReturnType<typeof extractNativeSearchUsers>;
@@ -678,16 +733,37 @@ async function searchInstagramUsersNative(query: string): Promise<
       detail: string;
     }
 > {
-  const MAX_TRIES = 3;
+  const MAX_TRIES = maxAttempts;
   let lastStatus = 0;
 
   for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
-    const { status, data } = await scGet("/v1/instagram/search", { query });
+    if (budgetExpiredOrTight(budget)) {
+      return { ok: false, kind: "provider", httpStatus: 408, detail: "deadline" };
+    }
+    const { status, data } = await scGet(
+      "/v1/instagram/search",
+      { query },
+      budget
+        ? {
+            timeoutMs: attemptTimeoutMs(budget, SCRAPECREATORS_FETCH_MS),
+            signal: budget.signal,
+          }
+        : undefined
+    );
     lastStatus = status;
 
+    if (status === 408 || data?.error === "scrapecreators_request_timeout") {
+      if (attempt < MAX_TRIES && !budgetExpiredOrTight(budget)) {
+        if (budget) await budget.sleep(400);
+        else await sleep(1000 * attempt);
+        continue;
+      }
+      return { ok: false, kind: "provider", httpStatus: 408, detail: "timeout" };
+    }
     if (status === 429) {
-      if (attempt < MAX_TRIES) {
-        await sleep(2000 * attempt);
+      if (attempt < MAX_TRIES && !budgetExpiredOrTight(budget)) {
+        if (budget) await budget.sleep(400);
+        else await sleep(2000 * attempt);
         continue;
       }
       return {
@@ -698,8 +774,9 @@ async function searchInstagramUsersNative(query: string): Promise<
       };
     }
     if (status !== 200 || !data) {
-      if (attempt < MAX_TRIES) {
-        await sleep(1000 * attempt);
+      if (attempt < MAX_TRIES && !budgetExpiredOrTight(budget)) {
+        if (budget) await budget.sleep(400);
+        else await sleep(1000 * attempt);
         continue;
       }
       return {
@@ -727,11 +804,20 @@ async function searchInstagramUsersNative(query: string): Promise<
 
 async function fetchProfileByUserId(
   userId: string,
-  fallbackHandle: string
+  fallbackHandle: string,
+  budget?: LookupBudget
 ): Promise<ProfileLookupResult> {
-  const { status, data } = await scGet("/v1/instagram/basic-profile", {
-    userId,
-  });
+  if (budgetExpiredOrTight(budget)) return deadlineMiss();
+  const { status, data } = await scGet(
+    "/v1/instagram/basic-profile",
+    { userId },
+    budget
+      ? {
+          timeoutMs: attemptTimeoutMs(budget, SCRAPECREATORS_FETCH_MS),
+          signal: budget.signal,
+        }
+      : undefined
+  );
 
   if (status === 404) {
     return {
@@ -800,10 +886,23 @@ function logIdentityResolution(args: {
  * Exact normalized username match required. Never guesses similar names.
  */
 export async function resolveInstagramIdentity(
-  handle: string
+  handle: string,
+  options?: LookupBudgetOptions
 ): Promise<InstagramIdentity> {
   const requestedHandle = normalizeInstagramHandle(handle);
-  const direct = await lookupProfileByHandle(requestedHandle);
+  const budget = options ? createLookupBudget(options) : undefined;
+  try {
+  return await resolveInstagramIdentityBudgeted(requestedHandle, budget);
+  } finally {
+    budget?.stop();
+  }
+}
+
+async function resolveInstagramIdentityBudgeted(
+  requestedHandle: string,
+  budget: LookupBudget | undefined
+): Promise<InstagramIdentity> {
+  const direct = await lookupProfileByHandle(requestedHandle, budget);
 
   if (direct.ok) {
     logIdentityResolution({
@@ -848,7 +947,18 @@ export async function resolveInstagramIdentity(
     });
   }
 
-  const search = await searchInstagramUsersNative(requestedHandle);
+  if (budgetExpiredOrTight(budget)) {
+    throw new InstagramProviderError(requestedHandle, {
+      httpStatus: 408,
+      detail: "deadline",
+    });
+  }
+
+  const search = await searchInstagramUsersNative(
+    requestedHandle,
+    budget,
+    budget ? 1 : 3
+  );
   if (!search.ok) {
     logIdentityResolution({
       requestedHandle,
@@ -877,7 +987,20 @@ export async function resolveInstagramIdentity(
     throw new InstagramHandleNotFoundError(requestedHandle);
   }
 
-  const byId = await fetchProfileByUserId(exact.id, exact.username);
+  if (budgetExpiredOrTight(budget)) {
+    throw new InstagramProviderError(requestedHandle, {
+      httpStatus: 408,
+      detail: "deadline",
+    });
+  }
+
+  const byId = await fetchProfileByUserId(exact.id, exact.username, budget);
+  if (!byId.ok && budget && (byId.httpStatus === 408 || byId.detail === "deadline" || byId.detail === "timeout")) {
+    throw new InstagramProviderError(requestedHandle, {
+      httpStatus: 408,
+      detail: byId.detail || "timeout",
+    });
+  }
   if (byId.ok) {
     logIdentityResolution({
       requestedHandle,
@@ -936,6 +1059,7 @@ export async function resolveInstagramIdentity(
     resolutionMethod: "native_search",
     fallbackUsed: true,
     mediaRestricted: false,
+    countsKnown: false,
   };
 }
 
