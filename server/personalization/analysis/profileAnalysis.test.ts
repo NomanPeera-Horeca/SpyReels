@@ -403,6 +403,8 @@ describe("initial analysis: idempotent, no duplicate provider work", () => {
       niche_opportunities: "skipped",
     });
     expect(run.postsInWindow).toBe(12);
+    expect(run.snapshot?.performancePanels?.goal?.confidence).toBe("qualitative");
+    expect(run.snapshot?.performancePanels?.goal?.figure).toBeNull();
     expect(t.provider.calls).toBe(1);
   });
 

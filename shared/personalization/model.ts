@@ -12,6 +12,8 @@
  * history changes WHERE suggestions come from, never WHETHER a step is shown.
  */
 
+import type { PerformancePanels } from "./performanceInsights";
+
 export const SOCIAL_PLATFORMS = ["instagram", "tiktok", "youtube"] as const;
 export type SocialPlatform = (typeof SOCIAL_PLATFORMS)[number];
 
@@ -294,6 +296,11 @@ export type NormalizedPost = {
   caption: string | null;
   /** Provider thumbnail (may expire). Optional: older v1 snapshots lack it. */
   thumbnailUrl?: string | null;
+  /** Direct playable URL when the provider returned one. Page links are not stored here. */
+  videoUrl?: string | null;
+  /** Optional classifier label. Absent until classification runs. */
+  formatLabel?: string | null;
+  topicLabel?: string | null;
 };
 
 /** Stored on profile_analysis_runs.sourceSnapshot after stage 1. */
@@ -306,6 +313,8 @@ export type AnalysisSourceSnapshot = {
   windowStart: string;
   windowEnd: string;
   posts: NormalizedPost[];
+  /** Calculated after posts are saved. Older snapshots omit it and are derived on read. */
+  performancePanels?: PerformancePanels | null;
 };
 
 /**

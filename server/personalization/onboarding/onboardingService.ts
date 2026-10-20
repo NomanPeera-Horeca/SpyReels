@@ -53,6 +53,10 @@ import {
 import { users } from "../../../drizzle/schema";
 import type { Db } from "../db/analysisStore";
 import { pickBestPost, type BestPost } from "@shared/personalization/bestPost";
+import {
+  buildPerformancePanels,
+  type PerformancePanels,
+} from "@shared/personalization/performanceInsights";
 import { toItemRecord } from "../db/rows";
 import {
   listProfileSubtopics,
@@ -114,6 +118,8 @@ export type OnboardingStateView = {
     postsInWindow: number | null;
     /** Mobile 3c "Your best Reel". Real snapshot data only; null when not enough posts. */
     bestPost: BestPost | null;
+    /** Right-panel cards. Null until a snapshot exists. Qualitative when a comparison is not eligible. */
+    panels: PerformancePanels | null;
   } | null;
   steps: Record<PersonalizationStep, StepStatus>;
   version: number;
@@ -248,6 +254,10 @@ export async function loadOnboardingState(db: Db, ctx: OnboardingCtx): Promise<O
           run.status === "succeeded" || run.status === "partial"
             ? pickBestPost(run.sourceSnapshot)
             : null,
+        panels: run.sourceSnapshot
+          ? (run.sourceSnapshot.performancePanels ??
+            buildPerformancePanels(run.sourceSnapshot.posts, run.completedAt ?? new Date()))
+          : null,
       };
     }
   }

@@ -90,6 +90,12 @@ describe("suggestion guards", () => {
         ?.code
     ).toBe("es");
     expect(detectContentLanguage("hi")).toBeNull();
+    expect(detectContentLanguage("Restaurant")).toBeNull();
+    expect(
+      detectContentLanguage(
+        "Commercial kitchen equipment for restaurants. Order online or DM for a quote."
+      )?.code
+    ).toBe("en");
   });
 });
 

@@ -44,6 +44,9 @@ import {
 } from "./steps";
 import { AudienceStep, GoalStep, MAX_GOALS, PillarsStep, type AiState, type StepItem } from "./step4";
 import { COPY } from "./copy";
+import { suggestionRequestKey } from "@shared/personalization/suggestionRequest";
+import { InsightPhonePreview } from "./InsightPhonePreview";
+import { step4RightPanel } from "./insightPanel";
 import {
   isCurrentProfileLookup,
   type ProfileLookupSession,
@@ -144,6 +147,11 @@ export default function OnboardingV2Flow() {
   const [source, setSource] = useState<AttributionSource | null>(null);
   const [niche, setNiche] = useState<string | null>(null);
   const [requested, setRequested] = useState<Partial<Record<PersonalizationStep, string>>>({});
+  const [suggestionRetry, setSuggestionRetry] = useState(0);
+  const [recWaitExpired, setRecWaitExpired] = useState(false);
+  const recRequestedAt = useRef<number | null>(null);
+  const recSeenAt = useRef<number | null>(null);
+  const latestRecAt = useRef<number | null>(null);
   const completing = useRef(false);
   const lookupSeq = useRef(0);
   const lookupSession = useRef<ProfileLookupSession | null>(null);
@@ -312,47 +320,85 @@ export default function OnboardingV2Flow() {
   const isStep4 = screen === "goal" || screen === "audience" || screen === "pillars";
   const step4 = isStep4 ? (screen as PersonalizationStep) : null;
 
-  // Ask the engine for suggestions once per step and answers version, only when it can run.
+  // Ask once per evidence phase. A later analysis snapshot or a confirmed goal
+  // changes the key, so biography-only suggestions are replaced. A missing goal
+  // does not block Audience or Pillars.
   useEffect(() => {
-    if (!step4 || !state) return;
-    const hasItems =
-      step4 === "goal"
-        ? items.some(i => i.kind === "goal") &&
-          items.some(i => i.kind === "niche") &&
-          items.some(i => i.kind === "language")
-        : items.some(i => i.kind === STEP_KIND[step4]);
-    const requestKey =
-      step4 === "goal"
-        ? `${state.version}:${items.some(i => i.kind === "goal")}:${items.some(i => i.kind === "niche")}:${items.some(i => i.kind === "language")}`
-        : String(state.version);
-    const ready =
-      step4 === "goal" ? true : step4 === "audience" ? confirmedGoal : confirmedGoal && confirmedAudience;
-    if (hasItems || !ready || requested[step4] === requestKey) return;
+    if (!step4 || !state?.profile) return;
+    const requestKey = suggestionRequestKey({
+      step: step4,
+      version: state.version,
+      analysisRunId: state.analysis?.runId ?? null,
+      analysisStatus: state.analysis?.status ?? null,
+      postsInWindow: state.analysis?.postsInWindow ?? null,
+      confirmedGoal,
+      confirmedAudience,
+      retry: suggestionRetry,
+    });
+    if (requested[step4] === requestKey) return;
+    recRequestedAt.current = Date.now();
+    recSeenAt.current = latestRecAt.current;
+    setRecWaitExpired(false);
     setRequested(r => ({ ...r, [step4]: requestKey }));
     requestRecs.mutate({ step: step4 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step4, state?.version, items.length, confirmedGoal, confirmedAudience]);
+  }, [
+    step4,
+    state?.version,
+    state?.profile?.id,
+    state?.analysis?.runId,
+    state?.analysis?.status,
+    state?.analysis?.postsInWindow,
+    confirmedGoal,
+    confirmedAudience,
+    suggestionRetry,
+  ]);
 
   const recStatus = trpc.onboardingV2.recommendationStatus.useQuery(
     { step: step4 ?? "goal" },
     {
       enabled: Boolean(step4 && requested[step4] !== undefined),
-      refetchInterval: q => (q.state.data?.state === "running" ? 2000 : false),
+      // `at` is the stored outcome time. An earlier run keeps its old `at`,
+      // so a reply from any instance is fresh only when that time changes.
+      refetchInterval: q => {
+        const started = recRequestedAt.current;
+        if (started == null) return false;
+        if (Date.now() - started > 120_000) {
+          setRecWaitExpired(true);
+          return false;
+        }
+        const data = q.state.data;
+        const seen = recSeenAt.current;
+        const fresh =
+          data != null &&
+          data.state !== "running" &&
+          typeof data.at === "number" &&
+          data.at !== seen;
+        return fresh ? false : 2000;
+      },
     }
   );
   useEffect(() => {
-    if (recStatus.data && recStatus.data.state !== "running") void refresh();
-  }, [recStatus.data, refresh]);
+    if (typeof recStatus.data?.at === "number") latestRecAt.current = recStatus.data.at;
+  }, [recStatus.data]);
+  const recFresh =
+    recStatus.data != null &&
+    recStatus.data.state !== "running" &&
+    typeof recStatus.data.at === "number" &&
+    recStatus.data.at !== recSeenAt.current;
+  useEffect(() => {
+    if (recFresh) void refresh();
+  }, [recFresh, recStatus.data, refresh]);
 
   const ai: AiState = useMemo(() => {
     if (!step4 || requested[step4] === undefined) return { state: "idle" };
     const s = recStatus.data;
-    if (!s) return requestRecs.isPending ? { state: "running" } : { state: "idle" };
-    if (s.state === "running") return { state: "running" };
+    if (recWaitExpired && !recFresh) return { state: "failed" };
+    if (!s || !recFresh) return { state: "running" };
     if (s.state === "failed") return { state: "failed" };
     if (s.state === "clarify") return { state: "clarify", question: s.question };
     return { state: "idle" };
-  }, [step4, requested, recStatus.data, requestRecs.isPending]);
+  }, [step4, requested, recStatus.data, recWaitExpired, recFresh]);
 
   /* ---------- previews ---------- */
 
@@ -392,8 +438,25 @@ export default function OnboardingV2Flow() {
     ) : (
       <ViralStackPreview />
     );
-  // Step 4 right panel: Figma fallback "insight not ready yet" (visitor view, no insight card).
-  const step4Panel = profilePreview ? <ProfilePhonePreview profile={profilePreview} /> : <ViralStackPreview />;
+  const insightScreen = step4 ?? "goal";
+  const insightPanel = state?.analysis?.panels?.[insightScreen] ?? null;
+  const insightChoice = step4RightPanel({
+    status: state?.analysis?.status ?? null,
+    panel: insightPanel,
+  });
+  const step4Panel =
+    insightChoice.mode === "insight" && insightPanel ? (
+      <InsightPhonePreview
+        platform={profilePreview?.platform ?? state?.profile?.platform ?? "instagram"}
+        panel={insightPanel}
+        showCard={insightChoice.showCard}
+        profile={profilePreview}
+      />
+    ) : profilePreview ? (
+      <ProfilePhonePreview profile={profilePreview} />
+    ) : (
+      <ViralStackPreview />
+    );
 
   /* ---------- actions ---------- */
 
@@ -502,6 +565,7 @@ export default function OnboardingV2Flow() {
     onSkip: () => void goStep4(step, "skip"),
     onConfirm: () => void goStep4(step, "confirm"),
     onStepSelect: (s: PersonalizationStep) => setScreen(s),
+    onRetryAi: () => setSuggestionRetry(n => n + 1),
   });
 
   switch (screen) {
