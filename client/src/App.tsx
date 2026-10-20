@@ -7,6 +7,7 @@ import { Route, Switch, Redirect, useLocation, useSearch } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { isAdminPanelClient } from "@/admin/isAdminClient";
 import { isDiscoveryV1Enabled } from "@/lib/featureFlags";
+import { AppRecoveryScreen } from "@/components/recovery/AppRecoveryScreen";
 import { useExperienceAccess } from "@/lib/experienceAccess";
 import { hasResearchPendingHandle } from "@/lib/researchPendingHandle";
 import {
@@ -200,8 +201,10 @@ function OnboardingRoute() {
  * Everyone else gets the existing layouts and the current onboarding.
  */
 function OnboardingEntry() {
-  const { ready, access } = useExperienceAccess();
-  if (!ready) return null;
+  const { ready, access, retry } = useExperienceAccess();
+  if (!ready) {
+    return <AppRecoveryScreen view={{ kind: "loading" }} onRetry={retry} />;
+  }
   const variant = resolveOnboardingVariant({
     onboardingV2Enabled: access.onboarding === "v2",
   });
