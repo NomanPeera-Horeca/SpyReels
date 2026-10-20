@@ -14,18 +14,29 @@ const STACK_PLATFORM_LABEL: Record<OnboardingStackPlatform, string> = {
 const YOUTUBE_PLAYING = 1;
 const AUTOPLAY_WAIT_MS = 8000;
 
-function Thumbnail({ url }: { url: string }) {
-  const [failed, setFailed] = useState(false);
-  if (!url || failed) return null;
+function Thumbnail({ primary, fallback }: { primary: string | null; fallback: string }) {
+  const [primaryFailed, setPrimaryFailed] = useState(false);
+  const showPrimary = Boolean(primary) && primary !== fallback && !primaryFailed;
   return (
-    <img
-      className={styles.stackMedia}
-      src={url}
-      alt=""
-      decoding="async"
-      fetchPriority="low"
-      onError={() => setFailed(true)}
-    />
+    <>
+      <img
+        className={styles.stackMedia}
+        src={fallback}
+        alt=""
+        decoding="async"
+        fetchPriority="low"
+      />
+      {showPrimary ? (
+        <img
+          className={styles.stackMedia}
+          src={primary ?? undefined}
+          alt=""
+          decoding="async"
+          fetchPriority="low"
+          onError={() => setPrimaryFailed(true)}
+        />
+      ) : null}
+    </>
   );
 }
 
@@ -244,10 +255,12 @@ function AmbientYouTube({
 export function AmbientStackCard({
   platform,
   attempts,
+  fallbackThumbnail,
   active,
 }: {
   platform: OnboardingStackPlatform;
   attempts: OnboardingStackAttempt[];
+  fallbackThumbnail: string;
   active: boolean;
 }) {
   const [index, setIndex] = useState(0);
@@ -280,9 +293,9 @@ export function AmbientStackCard({
     <div
       className={styles.stackFrame}
       data-platform={platform}
-      data-playback={playing ? "playing" : attempt?.thumbnailUrl ? "thumbnail" : "empty"}
+      data-playback={playing ? "playing" : "thumbnail"}
     >
-      {attempt?.thumbnailUrl ? <Thumbnail url={attempt.thumbnailUrl} /> : null}
+      <Thumbnail primary={attempt?.thumbnailUrl ?? null} fallback={fallbackThumbnail} />
       {fileUrl ? (
         <AmbientFile
           key={fileUrl}
