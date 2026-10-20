@@ -67,6 +67,12 @@ export const users = mysqlTable("users", {
   instagramHandle: varchar("instagramHandle", { length: 64 }),
   onboardingCompletedAt: datetime("onboardingCompletedAt", { mode: "date" }),
   onboardingSkippedAt: datetime("onboardingSkippedAt", { mode: "date" }),
+  /**
+   * First time this account opened onboarding. Null means setup was never
+   * started. With the completed and skipped timestamps, this is the server
+   * record of first signup, interrupted, completed, or skipped.
+   */
+  onboardingEnteredAt: datetime("onboardingEnteredAt", { mode: "date" }),
   /** First-touch marketing attribution (set once on signup). */
   utmSource: varchar("utmSource", { length: 255 }),
   utmMedium: varchar("utmMedium", { length: 255 }),

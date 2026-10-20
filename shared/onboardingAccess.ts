@@ -1,19 +1,50 @@
 /**
  * Who may be guided into onboarding, and who must be left on the product.
  *
- * First signup can land on onboarding. A customer who already saved progress,
- * already left onboarding, or opens Home or another product route is not sent
- * back. Marketing paths are never taken over.
+ * A first signup is guided from the default app entry (`/`, `/research`,
+ * Home aliases). Someone who already opened onboarding, saved progress,
+ * finished, or skipped is left on the product and can resume from Finish setup.
+ * Marketing paths and specific feature deep links are never taken over.
+ *
+ * The four states come from the server: nothing recorded yet (first signup),
+ * entered or saved progress (interrupted), completed, or skipped. Account age
+ * and browser storage are not evidence.
  */
 
-/** This browser has already been on onboarding, so later visits are not forced. */
-export const ONBOARDING_RELEASED_KEY = "spyreels.onboarding.released";
+/** Post-auth landings that are the app itself, not a feature deep link. */
+const DEFAULT_APP_ENTRIES = new Set(["/", "/research", "/dashboard", "/plan"]);
 
-/** How long after account creation a first visit to Home may open onboarding. */
-export const FIRST_SIGNUP_GUIDE_MS = 30 * 60 * 1000;
+export type OnboardingLifecycle =
+  | "first_signup"
+  | "interrupted"
+  | "completed"
+  | "skipped";
+
+export function resolveOnboardingLifecycle(input: {
+  completed: boolean;
+  skipped: boolean;
+  hasSavedProgress: boolean;
+  /** `users.onboardingEnteredAt` is set. This is not browser storage. */
+  entered: boolean;
+}): OnboardingLifecycle {
+  if (input.completed) return "completed";
+  if (input.skipped) return "skipped";
+  if (input.entered || input.hasSavedProgress) return "interrupted";
+  return "first_signup";
+}
+
+export function isDefaultAppEntry(pathname: string): boolean {
+  const path = normalizePath(pathname);
+  return DEFAULT_APP_ENTRIES.has(path);
+}
+
+function normalizePath(pathname: string): string {
+  const path = (pathname.split("?")[0] || "/").replace(/\/+$/, "") || "/";
+  return path;
+}
 
 export function isMarketingPath(pathname: string): boolean {
-  const path = pathname.split("?")[0] || "/";
+  const path = normalizePath(pathname);
   if (
     path === "/pricing" ||
     path === "/blog" ||
@@ -38,30 +69,23 @@ export type OnboardingAccessInput = {
   completed: boolean;
   skipped: boolean;
   hasSavedProgress: boolean;
-  /** This browser already opened onboarding, or the customer left it. */
-  released: boolean;
+  /** Server stamp from opening onboarding. */
+  entered: boolean;
   /** The progress read failed or timed out. Do not trap the customer. */
   progressUnreadable: boolean;
   pathname: string;
-  accountAgeMs: number | null;
 };
 
 export type OnboardingAccess = "guide" | "allow";
 
 export function decideOnboardingAccess(input: OnboardingAccessInput): OnboardingAccess {
-  if (!input.isPostLaunchUser || input.completed || input.skipped) return "allow";
+  if (!input.isPostLaunchUser) return "allow";
   if (isMarketingPath(input.pathname)) return "allow";
-  const path = input.pathname.split("?")[0] || "/";
+  const path = normalizePath(input.pathname);
   if (path === "/onboarding") return "allow";
-  if (input.hasSavedProgress || input.released || input.progressUnreadable) return "allow";
-  if (path !== "/") return "allow";
-  if (
-    input.accountAgeMs == null ||
-    input.accountAgeMs < 0 ||
-    input.accountAgeMs > FIRST_SIGNUP_GUIDE_MS
-  ) {
-    return "allow";
-  }
+  if (input.progressUnreadable) return "allow";
+  if (resolveOnboardingLifecycle(input) !== "first_signup") return "allow";
+  if (!isDefaultAppEntry(path)) return "allow";
   return "guide";
 }
 

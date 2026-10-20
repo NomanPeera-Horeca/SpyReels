@@ -188,7 +188,8 @@ export async function getUserById(id: number) {
 /**
  * All 8 onboarding fields in one call: the 5 first-run flags/timestamps
  * (4 booleans + `demoSeededAt`) plus the Section 3 onboarding-flow
- * fields (`selectedNicheSlugs`, `onboardingCompletedAt`, `onboardingSkippedAt`).
+ * fields (`selectedNicheSlugs`, `onboardingCompletedAt`, `onboardingSkippedAt`,
+ * `onboardingEnteredAt`).
  * Bundled so the OnboardingGate + dashboard demo banner can decide
  * visibility in a single network round-trip.
  */
@@ -208,6 +209,7 @@ export async function getOnboardingState(userId: number) {
       targetAudience: users.targetAudience,
       onboardingCompletedAt: users.onboardingCompletedAt,
       onboardingSkippedAt: users.onboardingSkippedAt,
+      onboardingEnteredAt: users.onboardingEnteredAt,
     })
     .from(users)
     .where(eq(users.id, userId))
@@ -581,6 +583,19 @@ export async function markOnboardingComplete(
     updates.demoSeededAt = demoSeededAt;
   }
   await db.update(users).set(updates).where(eq(users.id, userId));
+}
+
+/**
+ * Records that this account opened onboarding. Idempotent: the first
+ * timestamp is kept so a later visit does not look like a new signup.
+ */
+export async function markOnboardingEntered(userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db
+    .update(users)
+    .set({ onboardingEnteredAt: new Date() })
+    .where(and(eq(users.id, userId), isNull(users.onboardingEnteredAt)));
 }
 
 /**

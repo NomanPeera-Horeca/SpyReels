@@ -43,6 +43,7 @@ async function main() {
     `UPDATE users SET
       onboardingCompletedAt = NULL,
       onboardingSkippedAt = NULL,
+      onboardingEnteredAt = NULL,
       selectedNicheSlugs = NULL,
       selectedCreatorHandles = NULL,
       demoSeededAt = NULL,
