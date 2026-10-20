@@ -147,6 +147,10 @@ export default function OnboardingV2Flow() {
   const [niche, setNiche] = useState<string | null>(null);
   const [requested, setRequested] = useState<Partial<Record<PersonalizationStep, string>>>({});
   const [suggestionRetry, setSuggestionRetry] = useState(0);
+  const [recWaitExpired, setRecWaitExpired] = useState(false);
+  const recRequestedAt = useRef<number | null>(null);
+  const recSeenAt = useRef<number | null>(null);
+  const latestRecAt = useRef<number | null>(null);
   const completing = useRef(false);
   const lookupSeq = useRef(0);
   const lookupSession = useRef<ProfileLookupSession | null>(null);
@@ -331,6 +335,9 @@ export default function OnboardingV2Flow() {
       retry: suggestionRetry,
     });
     if (requested[step4] === requestKey) return;
+    recRequestedAt.current = Date.now();
+    recSeenAt.current = latestRecAt.current;
+    setRecWaitExpired(false);
     setRequested(r => ({ ...r, [step4]: requestKey }));
     requestRecs.mutate({ step: step4 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -350,22 +357,47 @@ export default function OnboardingV2Flow() {
     { step: step4 ?? "goal" },
     {
       enabled: Boolean(step4 && requested[step4] !== undefined),
-      refetchInterval: q => (q.state.data?.state === "running" ? 2000 : false),
+      // `at` is the stored outcome time. An earlier run keeps its old `at`,
+      // so a reply from any instance is fresh only when that time changes.
+      refetchInterval: q => {
+        const started = recRequestedAt.current;
+        if (started == null) return false;
+        if (Date.now() - started > 120_000) {
+          setRecWaitExpired(true);
+          return false;
+        }
+        const data = q.state.data;
+        const seen = recSeenAt.current;
+        const fresh =
+          data != null &&
+          data.state !== "running" &&
+          typeof data.at === "number" &&
+          data.at !== seen;
+        return fresh ? false : 2000;
+      },
     }
   );
   useEffect(() => {
-    if (recStatus.data && recStatus.data.state !== "running") void refresh();
-  }, [recStatus.data, refresh]);
+    if (typeof recStatus.data?.at === "number") latestRecAt.current = recStatus.data.at;
+  }, [recStatus.data]);
+  const recFresh =
+    recStatus.data != null &&
+    recStatus.data.state !== "running" &&
+    typeof recStatus.data.at === "number" &&
+    recStatus.data.at !== recSeenAt.current;
+  useEffect(() => {
+    if (recFresh) void refresh();
+  }, [recFresh, recStatus.data, refresh]);
 
   const ai: AiState = useMemo(() => {
     if (!step4 || requested[step4] === undefined) return { state: "idle" };
     const s = recStatus.data;
-    if (!s) return requestRecs.isPending ? { state: "running" } : { state: "idle" };
-    if (s.state === "running") return { state: "running" };
+    if (recWaitExpired && !recFresh) return { state: "failed" };
+    if (!s || !recFresh) return { state: "running" };
     if (s.state === "failed") return { state: "failed" };
     if (s.state === "clarify") return { state: "clarify", question: s.question };
     return { state: "idle" };
-  }, [step4, requested, recStatus.data, requestRecs.isPending]);
+  }, [step4, requested, recStatus.data, recWaitExpired, recFresh]);
 
   /* ---------- previews ---------- */
 

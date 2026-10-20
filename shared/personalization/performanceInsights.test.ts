@@ -148,6 +148,21 @@ describe("performance insights", () => {
     expect(new Set(ids).size).toBe(3);
   });
 
+  it("does not claim an engagement rate when likes or comments are missing or zero", () => {
+    const posts: InsightPost[] = [
+      post({ postId: "q1", views: 1000, likes: 400, comments: null, caption: "Why waste food?" }),
+      post({ postId: "q2", views: 1000, likes: 400, comments: 0, caption: "What should you prep?" }),
+      post({ postId: "q3", views: 1000, likes: null, comments: 40, caption: "How do you price a menu?" }),
+      post({ postId: "a1", views: 1000, likes: 20, comments: 2, caption: "Sunday specials" }),
+      post({ postId: "a2", views: 1000, likes: 20, comments: 2, caption: "New fryer" }),
+      post({ postId: "a3", views: 1000, likes: 20, comments: 2, caption: "Team photo" }),
+    ];
+    const panels = buildPerformancePanels(posts, NOW);
+    const headlines = [panels.goal?.headline, panels.audience?.headline, panels.pillars?.headline];
+    expect(headlines.some(line => line?.includes("higher engagement"))).toBe(false);
+    expect(panels.audience?.comparison?.metric).not.toBe("engagement_rate");
+  });
+
   it("returns an empty qualitative state when nothing was posted", () => {
     expect(buildPerformancePanels([], NOW)).toEqual({
       goal: null,

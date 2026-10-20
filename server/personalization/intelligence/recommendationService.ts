@@ -207,6 +207,15 @@ function lockedByUser(items: ItemRecord[], kind: PersonalizationItemKind): boole
   );
 }
 
+/** True when the live rows for this step were saved for the current evidence. */
+export function stepSuggestionsSaved(
+  items: ItemRecord[],
+  step: RecommendationStep,
+  evidence: CreatorEvidence
+): boolean {
+  return freshAiCovers(items, STEP_KIND[step], stepInputsHash(step, items, evidence));
+}
+
 function freshAiCovers(
   items: ItemRecord[],
   kind: PersonalizationItemKind,

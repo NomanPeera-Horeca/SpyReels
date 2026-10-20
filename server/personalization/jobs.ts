@@ -27,8 +27,10 @@ import {
 import { createPostClassifier } from "./analysis/classifyPosts";
 import { createExistingProviderSource } from "./analysis/existingProviderSource";
 import { runProfileAnalysis } from "./analysis/runProfileAnalysis";
+import { buildCreatorEvidence } from "./intelligence/evidence";
 import {
   generateRecommendations,
+  stepSuggestionsSaved,
   type RecommendationResult,
   type RecommendationStep,
 } from "./intelligence/recommendationService";
@@ -85,10 +87,10 @@ export async function runRecommendationJob(
 const inlineRunning = new Set<string>();
 
 export type RecommendationJobState =
-  | { state: "running" }
-  | { state: "done" }
-  | { state: "failed" }
-  | { state: "clarify"; question: string };
+  | { state: "running"; at?: number }
+  | { state: "done"; at?: number }
+  | { state: "failed"; at?: number }
+  | { state: "clarify"; question: string; at?: number };
 
 /** Last known state per job key (inline path; bounded, newest wins). */
 const recommendationStates = new Map<string, RecommendationJobState>();
@@ -129,27 +131,164 @@ function stateFromResult(r: RecommendationResult): RecommendationJobState {
   return { state: "done" };
 }
 
+type RecommendationOutcome = {
+  state: "done" | "failed" | "clarify";
+  question?: string;
+};
+
+function outcomeFromResult(result: RecommendationResult): RecommendationOutcome {
+  if (result.status === "failed") return { state: "failed" };
+  if (result.status === "needs_clarification") return { state: "clarify", question: result.question };
+  return { state: "done" };
+}
+
+function readOutcome(payload: unknown): RecommendationOutcome | null {
+  const value =
+    typeof payload === "string"
+      ? (() => {
+          try {
+            return JSON.parse(payload) as unknown;
+          } catch {
+            return null;
+          }
+        })()
+      : payload;
+  if (!value || typeof value !== "object" || !("outcome" in value)) return null;
+  const outcome = (value as { outcome?: unknown }).outcome;
+  if (!outcome || typeof outcome !== "object") return null;
+  const state = (outcome as { state?: unknown }).state;
+  const question = (outcome as { question?: unknown }).question;
+  if (state === "clarify" && typeof question === "string" && question.trim()) {
+    return { state: "clarify", question };
+  }
+  if (state === "failed") return { state: "failed" };
+  if (state === "done") return { state: "done" };
+  return null;
+}
+
+/**
+ * Terminal state comes from the database. Process memory only covers the
+ * moment before that write, on the instance that is running the job.
+ */
+export function recommendationStateFromSources(input: {
+  job: { status: string; payload: unknown; at: number | null } | null;
+  memory: RecommendationJobState | null;
+  suggestionsSaved: boolean;
+}): RecommendationJobState | null {
+  // This process just started the job. An older finished row must not hide that.
+  if (input.memory?.state === "running") return { state: "running", at: Date.now() };
+  const job = input.job;
+  const at = job?.at ?? undefined;
+  if (job && (job.status === "failed" || job.status === "dead")) return { state: "failed", at };
+  if (job && job.status === "succeeded") {
+    const outcome = readOutcome(job.payload);
+    if (outcome?.state === "clarify" && outcome.question) {
+      return { state: "clarify", question: outcome.question, at };
+    }
+    if (outcome?.state === "failed") return { state: "failed", at };
+    return { state: "done", at };
+  }
+  if (input.suggestionsSaved) return { state: "done", at: at ?? 1 };
+  if (job && (job.status === "queued" || job.status === "running")) return { state: "running", at };
+  if (input.memory) return input.memory;
+  return null;
+}
+
+function jobUpdatedAt(value: unknown): number | null {
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === "string" || typeof value === "number") {
+    const parsed = new Date(value).getTime();
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+async function loadJobRow(
+  key: string
+): Promise<{ status: string; payload: unknown; at: number | null } | null> {
+  const db = await requireDb();
+  const { sql } = await import("drizzle-orm");
+  const res = await db.execute(
+    sql`SELECT status, payload, updatedAt FROM durable_jobs WHERE idempotencyKey = ${key} LIMIT 1`
+  );
+  const rows =
+    (res as unknown as [Array<{ status: string; payload: unknown; updatedAt: unknown }>])[0] ?? [];
+  const row = rows[0];
+  if (!row) return null;
+  return { status: row.status, payload: row.payload, at: jobUpdatedAt(row.updatedAt) };
+}
+
+/**
+ * Writes the outcome where every web instance can read it.
+ * Inline inserts a finished row. It never inserts `queued`, so a worker that
+ * does not yet know this job type cannot claim it.
+ * The durable handler only updates payload. The worker still owns status,
+ * retries, and the lease.
+ */
+async function persistRecommendationOutcome(
+  key: string,
+  payload: RecommendationPayload,
+  result: RecommendationResult,
+  mode: "inline" | "attached"
+): Promise<void> {
+  const db = await requireDb();
+  const { sql } = await import("drizzle-orm");
+  const body = JSON.stringify({ ...payload, outcome: outcomeFromResult(result) });
+  if (mode === "attached") {
+    await db.execute(sql`UPDATE durable_jobs SET payload = ${body} WHERE idempotencyKey = ${key}`);
+    return;
+  }
+  const status = result.status === "failed" ? "failed" : "succeeded";
+  const lastError = result.status === "failed" ? `recommendations_${result.kind}` : null;
+  await db.execute(sql`
+    INSERT INTO durable_jobs
+      (jobType, idempotencyKey, payload, status, attempt, maxAttempts, completedAt, lastError)
+    VALUES
+      ('personalization_recommendations', ${key}, ${body}, ${status}, 1, ${RECOMMENDATION_MAX_ATTEMPTS}, NOW(3), ${lastError})
+    ON DUPLICATE KEY UPDATE
+      payload = VALUES(payload),
+      lastError = IF(status IN ('queued', 'running'), lastError, VALUES(lastError)),
+      completedAt = IF(status IN ('queued', 'running'), completedAt, NOW(3)),
+      status = IF(status IN ('queued', 'running'), status, VALUES(status))
+  `);
+}
+
+async function suggestionsSavedFor(
+  profileId: string,
+  workspaceId: string,
+  step: RecommendationStep
+): Promise<boolean> {
+  const db = await requireDb();
+  const store = createRecommendationStore(db);
+  const profile = await store.loadProfile(profileId, workspaceId);
+  if (!profile || profile.deletedAt) return false;
+  const items = await store.loadItems(profileId);
+  const snapshot = await store.loadLatestSnapshot(profileId);
+  const evidence = buildCreatorEvidence({
+    platform: profile.platform,
+    displayName: profile.displayName,
+    bio: profile.bio,
+    snapshot,
+    items,
+  });
+  return stepSuggestionsSaved(items, step, evidence);
+}
+
 /** What the UI shows while it waits: running, done, failed, or a clarifying question. */
 export async function getRecommendationState(
   profileId: string,
+  workspaceId: string,
   step: RecommendationStep,
   version: number
 ): Promise<RecommendationJobState | null> {
   const key = await recommendationJobKeyFor(profileId, step, version);
-  const known = recommendationStates.get(key);
-  if (known) return known;
-  if (!isPilotQueueEnabled("personalization_recommendations")) return null;
-  const db = await requireDb();
-  const { sql } = await import("drizzle-orm");
-  const res = await db.execute(
-    sql`SELECT status FROM durable_jobs WHERE idempotencyKey = ${key} LIMIT 1`
-  );
-  const rows = (res as unknown as [Array<{ status: string }>])[0] ?? [];
-  const status = rows[0]?.status;
-  if (!status) return null;
-  if (status === "queued" || status === "running") return { state: "running" };
-  if (status === "succeeded") return { state: "done" };
-  return { state: "failed" };
+  const job = await loadJobRow(key).catch(() => null);
+  const suggestionsSaved = await suggestionsSavedFor(profileId, workspaceId, step).catch(() => false);
+  return recommendationStateFromSources({
+    job,
+    memory: recommendationStates.get(key) ?? null,
+    suggestionsSaved,
+  });
 }
 
 function runInlineOnce(key: string, task: () => Promise<unknown>) {
@@ -215,6 +354,7 @@ export async function enqueueRecommendations(
           profileId: payload.socialProfileId,
         });
       }
+      await persistRecommendationOutcome(key, payload, result, "inline");
       rememberState(key, stateFromResult(result));
     } catch (err) {
       rememberState(key, { state: "failed" });
@@ -244,6 +384,7 @@ export function registerPersonalizationJobHandlers(): void {
         profileId: payload.socialProfileId,
       });
     }
+    await persistRecommendationOutcome(job.idempotencyKey, payload, result, "attached");
     // Model timeouts / outages: let the durable queue retry the same job.
     if (result.status === "failed" && result.kind !== "invalid_output") {
       throw new Error(`recommendations_${result.kind}`);

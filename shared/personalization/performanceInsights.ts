@@ -102,12 +102,23 @@ function viewsOf(post: InsightPost): number | null {
     : null;
 }
 
+/**
+ * A count is usable only when the provider returned a real positive number.
+ * Null is missing. Zero is not usable either: the scrapers coerce a missing
+ * count to 0, so a 0 is not proof that the video had no likes or comments.
+ */
+function reliableCount(value: number | null): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return null;
+  return value;
+}
+
 function engagementOf(post: InsightPost): number | null {
   const views = viewsOf(post);
   if (views === null) return null;
-  const likes = typeof post.likes === "number" && post.likes > 0 ? post.likes : 0;
-  const comments = typeof post.comments === "number" && post.comments > 0 ? post.comments : 0;
-  if (likes + comments === 0) return null;
+  const likes = reliableCount(post.likes);
+  const comments = reliableCount(post.comments);
+  // Both counts are required. A missing side is not filled in as zero.
+  if (likes === null || comments === null) return null;
   return (likes + comments) / views;
 }
 
@@ -185,7 +196,7 @@ function compareGroup(input: {
   const definition =
     input.metric === "views"
       ? "Mean views of the group divided by mean views of the other videos. Views come from the provider. Posts younger than 2 days are left out."
-      : "Mean (likes + comments) / views, only where the provider returned likes or comments. Compared with the other videos. This is not watch time.";
+      : "Mean (likes + comments) / views. A post is included only when views, likes, and comments are all present and greater than zero. This is not watch time.";
   const members = [...group]
     .sort((a, b) => b.value - a.value)
     .map(row => row.post);
