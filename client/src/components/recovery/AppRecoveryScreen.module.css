@@ -1,0 +1,39 @@
+.stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sr-space-3);
+}
+
+.spin {
+  color: var(--sr-color-text-secondary);
+  animation: sr-recovery-spin 1s linear infinite;
+}
+
+.title {
+  margin: 0;
+  color: var(--sr-color-text-primary);
+}
+
+.detail {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+}
+
+@keyframes sr-recovery-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
