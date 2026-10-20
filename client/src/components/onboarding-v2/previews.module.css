@@ -37,6 +37,14 @@
   pointer-events: none;
 }
 
+.stackMediaPending {
+  opacity: 0;
+}
+
+.platformBadge {
+  z-index: 2;
+}
+
 .phone {
   margin: 0;
 }

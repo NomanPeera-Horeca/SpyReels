@@ -46,6 +46,16 @@ export type OnboardingViralStack = {
 };
 
 const YOUTUBE_ID = /^[A-Za-z0-9_-]{6,}$/;
+const PREVIEW_ASSET =
+  /^\/onboarding-previews\/(?:instagram|tiktok)\/[A-Za-z0-9_-]+\.(?:mp4|jpg)$/;
+
+/** Same-origin preview loops and posters, or an https finder URL. */
+export function onboardingStackAssetUrl(raw: string | null | undefined): string | null {
+  const value = (raw ?? "").trim();
+  if (!value || value.includes("..") || value.includes("\\")) return null;
+  if (PREVIEW_ASSET.test(value)) return value;
+  return httpsUrl(value);
+}
 
 function isCompact(row: OnboardingStackCandidate): boolean {
   const cap = row.platform === "youtube" ? 60 : 90;
@@ -65,14 +75,15 @@ function httpsUrl(raw: string | null | undefined): string | null {
 }
 
 export function isPlayableStackCandidate(row: OnboardingStackCandidate): boolean {
-  const thumb = httpsUrl(row.thumbnailUrl);
+  const thumb = onboardingStackAssetUrl(row.thumbnailUrl);
   if (!thumb) return false;
   if (row.platform === "youtube") {
     const id = (row.youtubeVideoId ?? "").trim();
     return YOUTUBE_ID.test(id);
   }
-  const video = httpsUrl(row.videoUrl);
-  if (!video) return false;
+  const video = onboardingStackAssetUrl(row.videoUrl);
+  if (!video || !video.endsWith(".mp4")) return false;
+  if (video.startsWith("/onboarding-previews/")) return true;
   return !needsVideoUrlRefresh(video);
 }
 
@@ -120,10 +131,35 @@ function takeQuota(
 function toAttempt(row: OnboardingStackCandidate): OnboardingStackAttempt {
   return {
     id: row.id,
-    thumbnailUrl: httpsUrl(row.thumbnailUrl) ?? "",
-    videoUrl: row.platform === "youtube" ? null : httpsUrl(row.videoUrl),
+    thumbnailUrl: onboardingStackAssetUrl(row.thumbnailUrl) ?? "",
+    videoUrl: row.platform === "youtube" ? null : onboardingStackAssetUrl(row.videoUrl),
     youtubeVideoId: row.platform === "youtube" ? (row.youtubeVideoId ?? "").trim() : null,
   };
+}
+
+/**
+ * Always five positions in Figma order. A missing platform stays an empty
+ * slot so the cards beside it do not shift into its place.
+ */
+export function alignOnboardingStackSlots(
+  slots: OnboardingStackSlot[]
+): Array<OnboardingStackSlot | null> {
+  const queues: Record<OnboardingStackPlatform, OnboardingStackSlot[]> = {
+    instagram: [],
+    tiktok: [],
+    youtube: [],
+  };
+  for (const slot of slots) queues[slot.platform].push(slot);
+  const cursor: Record<OnboardingStackPlatform, number> = {
+    instagram: 0,
+    tiktok: 0,
+    youtube: 0,
+  };
+  return ONBOARDING_STACK_ORDER.map((platform) => {
+    const slot = queues[platform][cursor[platform]] ?? null;
+    cursor[platform] += 1;
+    return slot;
+  });
 }
 
 /**

@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { onboardingPreviewMedia } from "./onboardingPreviewMedia";
 import {
+  alignOnboardingStackSlots,
   selectOnboardingViralStack,
   type OnboardingStackCandidate,
 } from "./onboardingViralStack";
@@ -87,5 +89,43 @@ describe("selectOnboardingViralStack", () => {
       row({ platform: "tiktok", id: "t2", creatorKey: "only", videoUrl: `${R2}/tiktok-videos/t2.mp4`, views: 4 }),
     ]);
     expect(stack.slots.map((slot) => slot.attempts[0]?.id)).toEqual(["t1", "t2"]);
+  });
+
+  it("keeps a same-origin preview loop and its poster", () => {
+    const media = onboardingPreviewMedia("instagram", "DbZX-NDMfpK");
+    expect(media?.videoUrl).toBe("/onboarding-previews/instagram/DbZX-NDMfpK.mp4");
+    expect(media?.posterUrl).toBe("/onboarding-previews/instagram/DbZX-NDMfpK.jpg");
+    expect(onboardingPreviewMedia("tiktok", "not-a-preview")).toBeNull();
+
+    const stack = selectOnboardingViralStack([
+      row({
+        platform: "instagram",
+        id: "DbZX-NDMfpK",
+        creatorKey: "garyvee",
+        thumbnailUrl: media?.posterUrl,
+        videoUrl: media?.videoUrl,
+        views: 10,
+      }),
+    ]);
+
+    expect(stack.slots[0]?.attempts[0]?.videoUrl).toBe(media?.videoUrl);
+    expect(stack.slots[0]?.attempts[0]?.thumbnailUrl).toBe(media?.posterUrl);
+  });
+
+  it("keeps the YouTube position empty when that slot is missing", () => {
+    const aligned = alignOnboardingStackSlots([
+      { platform: "instagram", attempts: [{ id: "ig-1", thumbnailUrl: `${R2}/a.jpg`, videoUrl: `${R2}/a.mp4`, youtubeVideoId: null }] },
+      { platform: "tiktok", attempts: [{ id: "tt-1", thumbnailUrl: `${R2}/b.jpg`, videoUrl: `${R2}/b.mp4`, youtubeVideoId: null }] },
+      { platform: "instagram", attempts: [{ id: "ig-2", thumbnailUrl: `${R2}/c.jpg`, videoUrl: `${R2}/c.mp4`, youtubeVideoId: null }] },
+      { platform: "tiktok", attempts: [{ id: "tt-2", thumbnailUrl: `${R2}/d.jpg`, videoUrl: `${R2}/d.mp4`, youtubeVideoId: null }] },
+    ]);
+    expect(aligned.map((slot) => slot?.platform ?? null)).toEqual([
+      "instagram",
+      "tiktok",
+      null,
+      "instagram",
+      "tiktok",
+    ]);
+    expect(aligned[3]?.attempts[0]?.id).toBe("ig-2");
   });
 });
