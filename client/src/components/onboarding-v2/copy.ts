@@ -68,10 +68,6 @@ export const COPY = {
   },
   insight: {
     label: "Performance insight from your videos",
-    pending: "Reading your public videos",
-    pendingSupport: "You can keep going. This updates when the videos are in.",
-    emptyTitle: "Not enough videos to compare yet",
-    emptySupport: "A pattern shows here once more public videos have view counts.",
     views: "views",
   },
   whatWorks: {

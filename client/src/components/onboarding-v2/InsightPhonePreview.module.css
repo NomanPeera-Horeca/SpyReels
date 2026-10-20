@@ -9,8 +9,7 @@
   background: var(--sr-neutral-950);
 }
 
-.video,
-.emptyStage {
+.video {
   position: absolute;
   inset: 0;
   width: 100%;

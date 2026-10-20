@@ -46,6 +46,7 @@ import { AudienceStep, GoalStep, MAX_GOALS, PillarsStep, type AiState, type Step
 import { COPY } from "./copy";
 import { suggestionRequestKey } from "@shared/personalization/suggestionRequest";
 import { InsightPhonePreview } from "./InsightPhonePreview";
+import { step4RightPanel } from "./insightPanel";
 import {
   isCurrentProfileLookup,
   type ProfileLookupSession,
@@ -438,15 +439,24 @@ export default function OnboardingV2Flow() {
       <ViralStackPreview />
     );
   const insightScreen = step4 ?? "goal";
-  const step4Panel = (
-    <InsightPhonePreview
-      platform={profilePreview?.platform ?? state?.profile?.platform ?? "instagram"}
-      panel={state?.analysis?.panels?.[insightScreen] ?? null}
-      pending={
-        state?.analysis?.status === "queued" || state?.analysis?.status === "running"
-      }
-    />
-  );
+  const insightPanel = state?.analysis?.panels?.[insightScreen] ?? null;
+  const insightChoice = step4RightPanel({
+    status: state?.analysis?.status ?? null,
+    panel: insightPanel,
+  });
+  const step4Panel =
+    insightChoice.mode === "insight" && insightPanel ? (
+      <InsightPhonePreview
+        platform={profilePreview?.platform ?? state?.profile?.platform ?? "instagram"}
+        panel={insightPanel}
+        showCard={insightChoice.showCard}
+        profile={profilePreview}
+      />
+    ) : profilePreview ? (
+      <ProfilePhonePreview profile={profilePreview} />
+    ) : (
+      <ViralStackPreview />
+    );
 
   /* ---------- actions ---------- */
 

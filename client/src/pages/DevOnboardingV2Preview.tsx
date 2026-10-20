@@ -5,6 +5,7 @@
  *        |what_works|goal|audience|pillars
  *        &platform=instagram|tiktok|youtube &error=not_found &selected=1
  *        &run=running|failed|succeeded   (analysis line on 3a/3b)
+ *        &insight=pending|empty|failed   (step 4 right panel)
  *        &ai=idle|running|failed|clarify &empty=1 &saveFail=1  (step 4)
  */
 import { useState } from "react";
@@ -17,6 +18,7 @@ import type {
 } from "@shared/personalization/model";
 import type { PublicProfilePreview } from "@shared/personalization/publicProfilePreview";
 import { InsightPhonePreview } from "@/components/onboarding-v2/InsightPhonePreview";
+import { step4RightPanel } from "@/components/onboarding-v2/insightPanel";
 import {
   AnalysisPreview,
   ProfileMobilePreview,
@@ -127,30 +129,42 @@ export default function DevOnboardingV2Preview() {
       : aiParam === "running" || aiParam === "failed"
         ? { state: aiParam }
         : { state: "idle" };
-  const common = {
-    busy: false,
-    preview: (
+  const insightParam = params.get("insight");
+  const insightStatus: AnalysisRunStatus =
+    insightParam === "pending" ? "running" : insightParam === "failed" ? "failed" : "succeeded";
+  const insightPanel = {
+    postId: "sample",
+    url: null,
+    thumbnailUrl: "/marketing/2d6477ed3f11.jpg",
+    videoUrl: null,
+    views: insightParam === "empty" ? null : 128400,
+    headline:
+      insightParam === "empty"
+        ? "One of your public videos"
+        : "Videos starting with a question average 2.4x more views.",
+    support:
+      insightParam === "empty"
+        ? "There are not enough similar videos with view counts to compare a pattern yet."
+        : "Compared with 8 other videos that have this metric. This describes a pattern in the posts.",
+    figure: insightParam === "empty" ? null : "2.4x",
+    confidence: insightParam === "empty" ? ("qualitative" as const) : ("eligible" as const),
+    comparison: null,
+  };
+  const insightChoice = step4RightPanel({ status: insightStatus, panel: insightPanel });
+  const step4Preview =
+    insightChoice.mode === "insight" ? (
       <InsightPhonePreview
         platform={platform}
-        pending={false}
-        panel={
-          params.get("insight") === "empty"
-            ? null
-            : {
-                postId: "sample",
-                url: null,
-                thumbnailUrl: null,
-                videoUrl: null,
-                views: 128400,
-                headline: "Videos starting with a question average 2.4x more views.",
-                support: "Compared with 8 other videos that have this metric. This describes a pattern in the posts.",
-                figure: "2.4x",
-                confidence: "eligible",
-                comparison: null,
-              }
-        }
+        panel={insightPanel}
+        showCard={insightChoice.showCard}
+        profile={profile}
       />
-    ),
+    ) : (
+      <ProfilePhonePreview profile={profile} />
+    );
+  const common = {
+    busy: false,
+    preview: step4Preview,
     fromPosts: !empty,
     ai,
     onBack: noop,
