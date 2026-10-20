@@ -8,6 +8,14 @@ import {
   meterScrapeCreatorsResponse,
 } from "./scrapeCreatorsMeter";
 import { MIN_SPY_DISPLAY_REELS } from "@shared/spyReelsLimits";
+import {
+  attemptTimeoutMs,
+  budgetExpiredOrTight,
+  createLookupBudget,
+  linkAbortSignal,
+  type LookupBudget,
+  type LookupBudgetOptions,
+} from "./providerLookupBudget";
 
 const API_BASE = "https://api.scrapecreators.com";
 const SCRAPECREATORS_FETCH_MS = 30_000;
@@ -26,8 +34,11 @@ function requireApiKey(): string {
 async function scGet(
   path: string,
   query: Record<string, string | undefined>,
-  opts?: { timeoutMs?: number }
+  opts?: { timeoutMs?: number; signal?: AbortSignal }
 ): Promise<{ status: number; data: any }> {
+  if (opts?.signal?.aborted) {
+    return { status: 408, data: { error: "scrapecreators_request_timeout" } };
+  }
   const metered = meterScrapeCreatorsRequest();
   if (metered) return metered;
   const url = new URL(`${API_BASE}${path}`);
@@ -39,6 +50,7 @@ async function scGet(
 
   const timeoutMs = opts?.timeoutMs ?? SCRAPECREATORS_FETCH_MS;
   const controller = new AbortController();
+  const unlink = linkAbortSignal(controller, opts?.signal);
   const timeout = setTimeout(
     () => controller.abort(),
     timeoutMs
@@ -61,6 +73,7 @@ async function scGet(
     throw error;
   } finally {
     clearTimeout(timeout);
+    unlink();
   }
 
   let data: any = null;
@@ -390,15 +403,47 @@ export async function fetchTikTokVideoDetails(
 }
 
 export async function fetchTikTokProfile(
-  handle: string
+  handle: string,
+  options?: LookupBudgetOptions
 ): Promise<TikTokProfileInfo> {
   const cleanHandle = cleanTikTokHandle(handle);
-  const maxTries = 5;
+  const budget = options ? createLookupBudget(options) : undefined;
+  const maxTries = budget?.maxAttempts ?? 5;
+  try {
+  return await fetchTikTokProfileBudgeted(cleanHandle, budget, maxTries);
+  } finally {
+    budget?.stop();
+  }
+}
 
+async function fetchTikTokProfileBudgeted(
+  cleanHandle: string,
+  budget: LookupBudget | undefined,
+  maxTries: number
+): Promise<TikTokProfileInfo> {
   for (let attempt = 1; attempt <= maxTries; attempt++) {
-    const { status, data } = await scGet("/v1/tiktok/profile", {
-      handle: cleanHandle,
-    });
+    if (budgetExpiredOrTight(budget)) {
+      throw new Error("scrapecreators_request_timeout");
+    }
+    const { status, data } = await scGet(
+      "/v1/tiktok/profile",
+      { handle: cleanHandle },
+      budget
+        ? {
+            timeoutMs: attemptTimeoutMs(budget, SCRAPECREATORS_FETCH_MS),
+            signal: budget.signal,
+          }
+        : undefined
+    );
+
+    if (status === 408 || data?.error === "scrapecreators_request_timeout") {
+      if (attempt < maxTries && !budgetExpiredOrTight(budget)) {
+        if (budget) await budget.sleep(400);
+        else await sleep(1000 * attempt);
+        continue;
+      }
+      throw new Error("scrapecreators_request_timeout");
+    }
 
     if (responseLooksNotFound(status, data)) {
       throw new Error(
@@ -407,8 +452,9 @@ export async function fetchTikTokProfile(
     }
 
     if (status === 429) {
-      if (attempt < maxTries) {
-        await sleep(2000 * attempt);
+      if (attempt < maxTries && !budgetExpiredOrTight(budget)) {
+        if (budget) await budget.sleep(400);
+        else await sleep(2000 * attempt);
         continue;
       }
       throw new Error(
@@ -417,8 +463,9 @@ export async function fetchTikTokProfile(
     }
 
     if (status !== 200 || !data || typeof data !== "object") {
-      if (attempt < maxTries) {
-        await sleep(1000 * attempt);
+      if (attempt < maxTries && !budgetExpiredOrTight(budget)) {
+        if (budget) await budget.sleep(400);
+        else await sleep(1000 * attempt);
         continue;
       }
       throw new Error(
@@ -431,12 +478,13 @@ export async function fetchTikTokProfile(
 
     if (!user || !stats) {
       const vendorMessage = readErrorMessage(data);
-      if (attempt < maxTries && !responseLooksNotFound(status, data)) {
+      if (attempt < maxTries && !budgetExpiredOrTight(budget) && !responseLooksNotFound(status, data)) {
         console.warn(
           `[TikTok] Invalid profile response for @${cleanHandle} ` +
             `(attempt ${attempt}/${maxTries})${vendorMessage ? `: ${vendorMessage}` : ""}`
         );
-        await sleep(600 * attempt);
+        if (budget) await budget.sleep(400);
+        else await sleep(600 * attempt);
         continue;
       }
       throw new Error(

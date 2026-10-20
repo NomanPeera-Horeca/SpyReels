@@ -29,6 +29,13 @@
   margin-bottom: var(--sr-space-8);
 }
 
+.lookupStatus {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sr-space-2);
+}
+
 .stack {
   display: flex;
   flex-direction: column;

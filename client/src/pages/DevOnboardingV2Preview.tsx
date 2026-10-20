@@ -101,6 +101,7 @@ export default function DevOnboardingV2Preview() {
   const screen = params.get("screen") ?? "platform";
   const platform = (params.get("platform") ?? "instagram") as SocialPlatform;
   const error = (params.get("error") as PlatformError | null) ?? null;
+  const lookup = params.get("lookup");
   const preselect = params.get("selected") === "1";
   const profile = { ...FAKE, platform };
   const [useCase, setUseCase] = useState<PrimaryUseCase | null>(
@@ -226,13 +227,16 @@ export default function DevOnboardingV2Preview() {
       return (
         <PlatformStep
           platform={p}
-          handleInput={handle}
-          error={error}
+          handleInput={handle || (lookup ? "@sample.creator" : "")}
+          error={lookup === "timeout" ? "timeout" : error}
           busy={false}
+          looking={lookup === "looking" || lookup === "slow"}
+          slow={lookup === "slow"}
           preview={<ViralStackPreview />}
           onPlatform={setP}
           onHandleInput={setHandle}
           onContinue={noop}
+          onCancel={noop}
           onNoPost={noop}
         />
       );

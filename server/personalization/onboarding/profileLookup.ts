@@ -1,55 +1,80 @@
 /**
- * Step 2 "Is this you?" profile lookup (REUSE of the existing provider
- * integrations, no new provider).
+ * Step 2 "Is this you?" profile lookup.
  *
- * - Instagram: resolveInstagramIdentity (same as scrape.profilePreview).
- *   Recent post thumbnails come from the SAME profile response.
- * - TikTok: fetchTikTokProfile (same as tiktokScrape.publicProfilePreview).
- * - YouTube: fetchYouTubeChannel (the existing channel call used by scraping).
+ * This identifies the public profile. It does not run AI analysis, recommendations,
+ * or viral-video discovery. Those start later, after the customer confirms,
+ * through the existing durable analysis job.
  *
- * Cost protection: every lookup runs inside the ScrapeCreators meter with a
- * small request budget, and each user has a per-hour lookup limit. Nothing
- * here touches research credits.
- *
- * Data rule: only provider values are returned. Missing values stay null.
+ * Recent posts are included only when they already arrived in the profile
+ * payload. Avatar and thumbnail mirroring never blocks the response.
  */
 import type { SocialPlatform } from "@shared/personalization/model";
 import type { PublicProfilePreview } from "@shared/personalization/publicProfilePreview";
-import { withScrapeCreatorsMeter, type ScrapeCreatorsMeterReport } from "../../scrapeCreatorsMeter";
+import {
+  PROFILE_LOOKUP_ATTEMPT_TIMEOUT_MS,
+  PROFILE_LOOKUP_CACHE_TTL_MS,
+  PROFILE_LOOKUP_DEADLINE_MS,
+  PROFILE_LOOKUP_MAX_ATTEMPTS,
+} from "@shared/personalization/profileLookup";
+import {
+  withScrapeCreatorsMeter,
+  type ScrapeCreatorsMeterReport,
+} from "../../scrapeCreatorsMeter";
+import type { LookupBudgetOptions } from "../../providerLookupBudget";
 
 /** Provider requests allowed for one lookup (IG may need search + by-id). */
 export const PROFILE_LOOKUP_REQUEST_BUDGET = 8;
 /** Lookups per user per rolling hour. */
 export const PROFILE_LOOKUPS_PER_HOUR = 20;
 
-export type ProfileLookupFailure = "not_found" | "private" | "error" | "rate_limited";
+export type ProfileLookupFailure =
+  | "not_found"
+  | "private"
+  | "error"
+  | "rate_limited"
+  | "timeout";
 
 export type ProfileLookupResult =
   | { ok: true; profile: PublicProfilePreview; meter: ScrapeCreatorsMeterReport }
   | { ok: false; reason: ProfileLookupFailure; meter: ScrapeCreatorsMeterReport | null };
 
-export type ProfileLookupDeps = {
-  instagram: (handle: string) => Promise<{
-    username: string;
-    fullName: string;
-    biography: string;
-    profilePicUrl: string;
-    followerCount: number;
-    followingCount: number;
-    postCount: number;
-    isVerified: boolean;
-    isPrivate: boolean;
-    category: string;
-    externalUrl: string;
-    userId: string;
-    recentMedia?: Array<{
-      shortcode: string;
-      thumbnailUrl: string;
-      viewCount: number | null;
-      isPinned: boolean;
-    }>;
+export class ProfileLookupDeadlineError extends Error {
+  constructor() {
+    super("profile_lookup_deadline");
+    this.name = "ProfileLookupDeadlineError";
+  }
+}
+
+export type ProfileLookupCall = LookupBudgetOptions & { signal: AbortSignal };
+
+type InstagramLookup = {
+  username: string;
+  fullName: string;
+  biography: string;
+  profilePicUrl: string;
+  followerCount: number;
+  followingCount: number;
+  postCount: number;
+  isVerified: boolean;
+  isPrivate: boolean;
+  category: string;
+  externalUrl: string;
+  userId: string;
+  countsKnown?: boolean;
+  recentMedia?: Array<{
+    shortcode: string;
+    thumbnailUrl: string;
+    viewCount: number | null;
+    isPinned: boolean;
   }>;
-  tiktok: (handle: string) => Promise<{
+};
+
+export type ProfileLookupDeps = {
+  instagram: (handle: string, call?: ProfileLookupCall) => Promise<InstagramLookup>;
+  tiktok: (
+    handle: string,
+    call?: ProfileLookupCall
+  ) => Promise<{
     userId: string;
     uniqueId: string;
     nickname: string;
@@ -62,7 +87,10 @@ export type ProfileLookupDeps = {
     avatarUrl: string;
     isVerified?: boolean;
   }>;
-  youtube: (handle: string) => Promise<{
+  youtube: (
+    handle: string,
+    call?: ProfileLookupCall
+  ) => Promise<{
     channelId: string;
     handle: string;
     name: string;
@@ -76,7 +104,7 @@ export type ProfileLookupDeps = {
     items: Array<{ shortcode: string; thumbnailUrl: string }>
   ) => Promise<Map<string, string>>;
   /** Classifies a thrown provider error. */
-  classify: (err: unknown) => "not_found" | "private" | "error";
+  classify: (err: unknown) => ProfileLookupFailure;
 };
 
 const textOrNull = (v: string | null | undefined) => {
@@ -107,19 +135,69 @@ export function resetLookupLimiterForTests(): void {
   lookupLog.clear();
 }
 
+type CacheEntry = { profile: PublicProfilePreview; at: number; generation: number };
+
+const successCache = new Map<string, CacheEntry>();
+const inflight = new Map<string, Promise<ProfileLookupResult>>();
+
+export function publicProfileCacheKey(platform: SocialPlatform, handle: string): string {
+  return `${platform}:${handle.trim().toLowerCase()}`;
+}
+
+export function recallCachedPublicProfile(
+  platform: SocialPlatform,
+  handle: string,
+  now = Date.now()
+): PublicProfilePreview | null {
+  const hit = successCache.get(publicProfileCacheKey(platform, handle));
+  if (!hit || now - hit.at >= PROFILE_LOOKUP_CACHE_TTL_MS) return null;
+  return hit.profile;
+}
+
+export function resetProfileLookupCacheForTests(): void {
+  successCache.clear();
+  inflight.clear();
+}
+
+function emptyMeter(): ScrapeCreatorsMeterReport {
+  return {
+    requests: 0,
+    blockedByBudget: 0,
+    byStatus: {},
+    budget: PROFILE_LOOKUP_REQUEST_BUDGET,
+    estimatedUsd: 0,
+  };
+}
+
+function remember(
+  key: string,
+  profile: PublicProfilePreview,
+  at: number
+): number {
+  const generation = (successCache.get(key)?.generation ?? 0) + 1;
+  const entry = { profile, at, generation };
+  successCache.set(key, entry);
+  const canonical = publicProfileCacheKey(profile.platform, profile.handle);
+  if (canonical !== key) successCache.set(canonical, { ...entry });
+  while (successCache.size > 5000) {
+    const oldest = successCache.keys().next().value;
+    if (!oldest) break;
+    successCache.delete(oldest);
+  }
+  return generation;
+}
+
 async function fetchPreview(
   platform: SocialPlatform,
   handle: string,
-  deps: ProfileLookupDeps
+  deps: ProfileLookupDeps,
+  call: ProfileLookupCall
 ): Promise<PublicProfilePreview> {
   if (platform === "instagram") {
-    const p = await deps.instagram(handle);
+    const p = await deps.instagram(handle, call);
     const canonical = p.username.toLowerCase();
+    const countsKnown = p.countsKnown !== false;
     const media = (p.recentMedia ?? []).slice(0, 6);
-    const [avatar, thumbs] = await Promise.all([
-      p.profilePicUrl ? deps.mirrorAvatar(canonical, p.profilePicUrl, "instagram") : Promise.resolve(""),
-      media.length ? deps.mirrorThumbnails(media) : Promise.resolve(new Map<string, string>()),
-    ]);
     return {
       platform,
       handle: canonical,
@@ -127,27 +205,26 @@ async function fetchPreview(
       bio: textOrNull(p.biography),
       category: textOrNull(p.category),
       externalUrl: textOrNull(p.externalUrl),
-      avatarUrl: textOrNull(avatar),
+      avatarUrl: textOrNull(p.profilePicUrl),
       bannerUrl: null,
       isVerified: p.isVerified,
       isPrivate: p.isPrivate,
-      postCount: countOrNull(p.postCount),
-      followerCount: countOrNull(p.followerCount),
-      followingCount: countOrNull(p.followingCount),
+      postCount: countsKnown ? countOrNull(p.postCount) : null,
+      followerCount: countsKnown ? countOrNull(p.followerCount) : null,
+      followingCount: countsKnown ? countOrNull(p.followingCount) : null,
       likeCount: null,
       videoCount: null,
       recentPosts: media.map(m => ({
         id: m.shortcode,
-        thumbnailUrl: textOrNull(thumbs.get(m.shortcode) ?? m.thumbnailUrl),
+        thumbnailUrl: textOrNull(m.thumbnailUrl),
         viewCount: countOrNull(m.viewCount),
         isPinned: m.isPinned,
       })),
     };
   }
   if (platform === "tiktok") {
-    const p = await deps.tiktok(handle);
+    const p = await deps.tiktok(handle, call);
     const canonical = (p.uniqueId || handle).toLowerCase();
-    const avatar = p.avatarUrl ? await deps.mirrorAvatar(canonical, p.avatarUrl, "tiktok") : "";
     return {
       platform,
       handle: canonical,
@@ -155,7 +232,7 @@ async function fetchPreview(
       bio: textOrNull(p.biography),
       category: null,
       externalUrl: null,
-      avatarUrl: textOrNull(avatar),
+      avatarUrl: textOrNull(p.avatarUrl),
       bannerUrl: null,
       isVerified: Boolean(p.isVerified),
       isPrivate: p.isPrivate,
@@ -167,9 +244,8 @@ async function fetchPreview(
       recentPosts: [],
     };
   }
-  const c = await deps.youtube(handle);
+  const c = await deps.youtube(handle, call);
   const canonical = (c.handle || handle).toLowerCase();
-  const avatar = c.avatarUrl ? await deps.mirrorAvatar(canonical, c.avatarUrl, "youtube") : "";
   return {
     platform,
     handle: canonical,
@@ -177,7 +253,7 @@ async function fetchPreview(
     bio: textOrNull(c.description),
     category: null,
     externalUrl: null,
-    avatarUrl: textOrNull(avatar),
+    avatarUrl: textOrNull(c.avatarUrl),
     bannerUrl: null,
     isVerified: c.isVerified,
     isPrivate: false,
@@ -190,24 +266,164 @@ async function fetchPreview(
   };
 }
 
+/**
+ * Resolves on the deadline without leaving a late provider rejection unhandled.
+ * Aborting the signal is how the provider attempt actually stops.
+ */
+async function withLookupDeadline<T>(
+  deadlineMs: number,
+  run: (signal: AbortSignal) => Promise<T>
+): Promise<T> {
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<{ ok: false; error: ProfileLookupDeadlineError }>(resolve => {
+    timer = setTimeout(() => {
+      controller.abort();
+      resolve({ ok: false, error: new ProfileLookupDeadlineError() });
+    }, deadlineMs);
+  });
+  const work = run(controller.signal).then(
+    value => ({ ok: true as const, value }),
+    (error: unknown) => ({
+      ok: false as const,
+      error: controller.signal.aborted ? new ProfileLookupDeadlineError() : error,
+    })
+  );
+  try {
+    const outcome = await Promise.race([work, deadline]);
+    if (!outcome.ok) throw outcome.error;
+    return outcome.value;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+const WARM_MEDIA_MS = 3_000;
+
+function firstSettled<T>(run: Promise<T>, fallback: T, ms: number): Promise<T> {
+  return new Promise(resolve => {
+    const timer = setTimeout(() => resolve(fallback), ms);
+    run.then(
+      value => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      () => {
+        clearTimeout(timer);
+        resolve(fallback);
+      }
+    );
+  });
+}
+
+function warmMedia(
+  key: string,
+  generation: number,
+  profile: PublicProfilePreview,
+  deps: ProfileLookupDeps
+): void {
+  void (async () => {
+    const avatar = profile.avatarUrl
+      ? await firstSettled(
+          deps.mirrorAvatar(profile.handle, profile.avatarUrl, profile.platform).catch(() => profile.avatarUrl),
+          profile.avatarUrl,
+          WARM_MEDIA_MS
+        )
+      : profile.avatarUrl;
+    const sources = profile.recentPosts
+      .filter(post => post.thumbnailUrl)
+      .map(post => ({ shortcode: post.id, thumbnailUrl: post.thumbnailUrl ?? "" }));
+    const thumbs = sources.length
+      ? await firstSettled(
+          deps.mirrorThumbnails(sources).catch(() => new Map<string, string>()),
+          new Map<string, string>(),
+          WARM_MEDIA_MS
+        )
+      : new Map<string, string>();
+    const current = successCache.get(key);
+    if (!current || current.generation !== generation) return;
+    const updated: PublicProfilePreview = {
+      ...current.profile,
+      avatarUrl: textOrNull(avatar) ?? current.profile.avatarUrl,
+      recentPosts: current.profile.recentPosts.map(post => ({
+        ...post,
+        thumbnailUrl: textOrNull(thumbs.get(post.id) ?? post.thumbnailUrl),
+      })),
+    };
+    const write = (cacheKey: string) => {
+      const entry = successCache.get(cacheKey);
+      if (!entry || entry.generation !== generation) return;
+      successCache.set(cacheKey, { ...entry, profile: updated });
+    };
+    write(key);
+    write(publicProfileCacheKey(profile.platform, profile.handle));
+  })();
+}
+
 export async function lookupPublicProfile(input: {
   userId: number;
   platform: SocialPlatform;
   handle: string;
   deps: ProfileLookupDeps;
   now?: number;
+  /** Test override. Production uses PROFILE_LOOKUP_DEADLINE_MS. */
+  deadlineMs?: number;
+  /** Copy provider media to stable storage after the response is ready. */
+  warmMedia?: boolean;
 }): Promise<ProfileLookupResult> {
-  if (!takeLookupSlot(input.userId, input.now)) {
+  const now = input.now ?? Date.now();
+  const key = publicProfileCacheKey(input.platform, input.handle);
+  const cached = recallCachedPublicProfile(input.platform, input.handle, now);
+  if (cached) return { ok: true, profile: cached, meter: emptyMeter() };
+
+  const pending = inflight.get(key);
+  if (pending) return pending;
+
+  if (!takeLookupSlot(input.userId, now)) {
     return { ok: false, reason: "rate_limited", meter: null };
   }
-  const metered = await withScrapeCreatorsMeter(PROFILE_LOOKUP_REQUEST_BUDGET, () =>
-    fetchPreview(input.platform, input.handle, input.deps)
-  );
-  if ("error" in metered) {
-    return { ok: false, reason: input.deps.classify(metered.error), meter: metered.report };
+
+  const deadlineMs = input.deadlineMs ?? PROFILE_LOOKUP_DEADLINE_MS;
+  const started = Date.now();
+  const work = (async (): Promise<ProfileLookupResult> => {
+    const metered = await withScrapeCreatorsMeter(PROFILE_LOOKUP_REQUEST_BUDGET, () =>
+      withLookupDeadline(deadlineMs, signal =>
+        fetchPreview(input.platform, input.handle, input.deps, {
+          timeoutMs: Math.min(PROFILE_LOOKUP_ATTEMPT_TIMEOUT_MS, deadlineMs),
+          maxAttempts: PROFILE_LOOKUP_MAX_ATTEMPTS,
+          deadlineMs,
+          signal,
+        })
+      )
+    );
+    if ("error" in metered) {
+      const reason =
+        metered.error instanceof ProfileLookupDeadlineError
+          ? "timeout"
+          : input.deps.classify(metered.error);
+      console.log(
+        `[onboarding.lookup] platform=${input.platform} ms=${Date.now() - started} ok=false reason=${reason}`
+      );
+      return { ok: false, reason, meter: metered.report };
+    }
+    if (metered.result.isPrivate) {
+      console.log(
+        `[onboarding.lookup] platform=${input.platform} ms=${Date.now() - started} ok=false reason=private`
+      );
+      return { ok: false, reason: "private", meter: metered.report };
+    }
+    const generation = remember(key, metered.result, now);
+    if (input.warmMedia) warmMedia(key, generation, metered.result, input.deps);
+    console.log(
+      `[onboarding.lookup] platform=${input.platform} ms=${Date.now() - started} ok=true requests=${metered.report.requests}`
+    );
+    return { ok: true, profile: metered.result, meter: metered.report };
+  })();
+
+  inflight.set(key, work);
+  try {
+    return await work;
+  } finally {
+    if (inflight.get(key) === work) inflight.delete(key);
   }
-  if (metered.result.isPrivate) {
-    return { ok: false, reason: "private", meter: metered.report };
-  }
-  return { ok: true, profile: metered.result, meter: metered.report };
 }

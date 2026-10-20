@@ -85,37 +85,65 @@ function ChevronLeft() {
 
 /* ---------- Step 1: Where do you post? ---------- */
 
+const RETRYABLE_PLATFORM_ERRORS = new Set<PlatformError>(["timeout", "error", "rate_limited"]);
+
+function shownHandle(value: string): string {
+  const handle = value.trim().replace(/^@+/, "");
+  return handle ? `@${handle}` : "";
+}
+
 export function PlatformStep({
   platform,
   handleInput,
   error,
   busy,
+  looking = false,
+  slow = false,
   preview,
   onPlatform,
   onHandleInput,
   onContinue,
+  onCancel,
   onNoPost,
 }: {
   platform: SocialPlatform | null;
   handleInput: string;
   error: PlatformError | null;
   busy: boolean;
+  /** The profile request is in flight. The form stays usable enough to cancel or edit. */
+  looking?: boolean;
+  /** True only while that same request is still open after the slow threshold. */
+  slow?: boolean;
   preview: ReactNode;
   onPlatform: (p: SocialPlatform) => void;
   onHandleInput: (v: string) => void;
   onContinue: () => void;
+  onCancel?: () => void;
   onNoPost: () => void;
 }) {
   const inputId = useId();
-  const canContinue = Boolean(platform) && handleInput.trim().length > 0 && !busy;
+  const canContinue = Boolean(platform) && handleInput.trim().length > 0 && !busy && !looking;
+  const retryable = Boolean(error && RETRYABLE_PLATFORM_ERRORS.has(error));
+  const errorText =
+    error === "timeout" && platform
+      ? COPY.platform.slow[platform]
+      : error
+        ? COPY.platform.errors[error]
+        : undefined;
   const actions = (
     <div className={styles.actionsRow}>
       <GhostButton onClick={onNoPost} disabled={busy} className={styles.ghostStart}>
         {COPY.platform.noPost}
       </GhostButton>
-      <PrimaryButton onClick={onContinue} disabled={!canContinue} aria-busy={busy}>
-        {COPY.platform.continue}
-      </PrimaryButton>
+      {looking ? (
+        <SecondaryButton type="button" onClick={onCancel}>
+          {COPY.platform.cancel}
+        </SecondaryButton>
+      ) : (
+        <PrimaryButton onClick={onContinue} disabled={!canContinue} aria-busy={busy}>
+          {retryable ? COPY.platform.retry : COPY.platform.continue}
+        </PrimaryButton>
+      )}
     </div>
   );
   return (
@@ -159,9 +187,23 @@ export function PlatformStep({
             autoCapitalize="none"
             spellCheck={false}
             inputMode="text"
-            error={error ? COPY.platform.errors[error] : undefined}
+            error={errorText}
             disabled={busy}
           />
+          {looking && platform ? (
+            <div className={styles.lookupStatus}>
+              <AnalysisStatusLine
+                status="running"
+                label={COPY.platform.finding[platform]}
+                handle={shownHandle(handleInput)}
+              />
+              {slow ? (
+                <p className={["sr-text-product-body-small", styles.subtitle].join(" ")}>
+                  {COPY.platform.slow[platform]}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
           <button type="submit" className={styles.srOnly} tabIndex={-1} aria-hidden>
             {COPY.platform.continue}
           </button>
