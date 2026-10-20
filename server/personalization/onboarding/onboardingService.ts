@@ -53,6 +53,7 @@ import {
 import { users } from "../../../drizzle/schema";
 import type { Db } from "../db/analysisStore";
 import { pickBestPost, type BestPost } from "@shared/personalization/bestPost";
+import { readOptional } from "./optionalRead";
 import { toItemRecord } from "../db/rows";
 import {
   listProfileSubtopics,
@@ -198,6 +199,52 @@ async function loadItems(db: Db, profileId: string): Promise<ItemRecord[]> {
   return rows.map(toItemRecord);
 }
 
+function safeBestPost(
+  status: AnalysisRunStatus,
+  snapshot: Parameters<typeof pickBestPost>[0]
+): BestPost | null {
+  if (status !== "succeeded" && status !== "partial") return null;
+  try {
+    return pickBestPost(snapshot);
+  } catch {
+    return null;
+  }
+}
+
+/** Latest analysis for this profile. A bad snapshot or a failed read does not throw. */
+async function loadAnalysisView(
+  db: Db,
+  profileId: string,
+  workspaceId: string
+): Promise<OnboardingStateView["analysis"]> {
+  const [run] = await db
+    .select()
+    .from(profileAnalysisRuns)
+    .where(
+      and(
+        eq(profileAnalysisRuns.socialProfileId, profileId),
+        eq(profileAnalysisRuns.workspaceId, workspaceId)
+      )
+    )
+    .orderBy(desc(profileAnalysisRuns.createdAt))
+    .limit(1);
+  if (!run) return null;
+  const stageRows = await db
+    .select()
+    .from(profileAnalysisStages)
+    .where(eq(profileAnalysisStages.runId, run.id));
+  const stages: Partial<Record<AnalysisStage, AnalysisStageStatus>> = {};
+  for (const s of stageRows) stages[s.stage] = s.status;
+  return {
+    runId: run.id,
+    status: run.status,
+    stages,
+    errorCode: run.errorCode,
+    postsInWindow: run.postsInWindow,
+    bestPost: safeBestPost(run.status, run.sourceSnapshot),
+  };
+}
+
 export async function loadOnboardingState(db: Db, ctx: OnboardingCtx): Promise<OnboardingStateView> {
   const [answersRow] = await db
     .select()
@@ -207,50 +254,37 @@ export async function loadOnboardingState(db: Db, ctx: OnboardingCtx): Promise<O
   const profile = await activeProfileRow(db, ctx);
   const progress = profile ? await ensureProgress(db, profile.id, ctx.workspaceId) : null;
   const items = profile ? liveItems(await loadItems(db, profile.id)) : [];
-  // Topics are read only when the store is verified. Nothing is generated here.
+  // Topics and analysis are optional. A failure here still returns the saved step.
+  // Nothing is generated on this read.
   const store: SubtopicStoreCheck = profile
-    ? await verifyPillarSubtopicStore(db)
+    ? await readOptional("subtopic store check", () => verifyPillarSubtopicStore(db), {
+        ready: false,
+        missing: ["subtopic store could not be read"],
+      })
     : { ready: true };
   const storeReady = store.ready;
   const pillarIds = items.filter(i => i.kind === "pillar").map(i => i.id);
   const topicStates: Record<string, { state: PillarTopicState; attempts: number }> =
     profile && storeReady
-      ? await loadTopicStates(db, { workspaceId: ctx.workspaceId, socialProfileId: profile.id, pillarItemIds: pillarIds })
+      ? await readOptional(
+          "pillar topic state",
+          () =>
+            loadTopicStates(db, {
+              workspaceId: ctx.workspaceId,
+              socialProfileId: profile.id,
+              pillarItemIds: pillarIds,
+            }),
+          {}
+        )
       : {};
 
-  let analysis: OnboardingStateView["analysis"] = null;
-  if (profile) {
-    const [run] = await db
-      .select()
-      .from(profileAnalysisRuns)
-      .where(
-        and(
-          eq(profileAnalysisRuns.socialProfileId, profile.id),
-          eq(profileAnalysisRuns.workspaceId, ctx.workspaceId)
-        )
+  const analysis = profile
+    ? await readOptional(
+        "profile analysis",
+        () => loadAnalysisView(db, profile.id, ctx.workspaceId),
+        null
       )
-      .orderBy(desc(profileAnalysisRuns.createdAt))
-      .limit(1);
-    if (run) {
-      const stageRows = await db
-        .select()
-        .from(profileAnalysisStages)
-        .where(eq(profileAnalysisStages.runId, run.id));
-      const stages: Partial<Record<AnalysisStage, AnalysisStageStatus>> = {};
-      for (const s of stageRows) stages[s.stage] = s.status;
-      analysis = {
-        runId: run.id,
-        status: run.status,
-        stages,
-        errorCode: run.errorCode,
-        postsInWindow: run.postsInWindow,
-        bestPost:
-          run.status === "succeeded" || run.status === "partial"
-            ? pickBestPost(run.sourceSnapshot)
-            : null,
-      };
-    }
-  }
+    : null;
 
   const steps: Record<PersonalizationStep, StepStatus> = {
     goal: progress?.goalStatus ?? "pending",
@@ -302,15 +336,21 @@ export async function loadOnboardingState(db: Db, ctx: OnboardingCtx): Promise<O
     })),
     subtopicStore: { ready: storeReady, missing: store.ready ? [] : store.missing },
     pillarTopics: topicStates,
-    pillarSubtopics: profile && storeReady
-      ? (await listProfileSubtopics(db, profile.id, ctx.workspaceId)).map(s => ({
-          id: s.id,
-          pillarItemId: s.pillarItemId,
-          label: s.label,
-          status: s.status,
-          source: s.source,
-        }))
-      : [],
+    pillarSubtopics:
+      profile && storeReady
+        ? await readOptional(
+            "pillar subtopics",
+            async () =>
+              (await listProfileSubtopics(db, profile.id, ctx.workspaceId)).map(s => ({
+                id: s.id,
+                pillarItemId: s.pillarItemId,
+                label: s.label,
+                status: s.status,
+                source: s.source,
+              })),
+            []
+          )
+        : [],
     completedAt: progress?.completedAt ?? null,
   };
 }

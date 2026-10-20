@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import { AppRecoveryScreen } from "@/components/recovery/AppRecoveryScreen";
 import { PENDING_INVITATION_KEY } from "@/pages/AcceptInvitation";
 import { FEATURE_LAUNCH_DATE_ISO } from "@/data/onboardingNiches";
 import { trpc } from "@/lib/trpc";
@@ -38,7 +39,7 @@ export default function OnboardingGate({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, loading } = useAuth();
+  const { user, loading, refresh } = useAuth();
   const [location, setLocation] = useLocation();
   const [showTimeoutFallback, setShowTimeoutFallback] = useState(false);
 
@@ -107,6 +108,19 @@ export default function OnboardingGate({
     if (intent) stashResearchHandleForAfterAuth(intent.handle, intent.autostart, intent.platform);
     setLocation("/onboarding", { replace: true });
   }, [location, setLocation, shouldRedirectToOnboarding]);
+
+  const gatePending = loading || (isPostLaunchUser && onboardingStateQuery.isLoading);
+  if (location === "/onboarding" && gatePending) {
+    return (
+      <AppRecoveryScreen
+        view={{ kind: "loading" }}
+        onRetry={() => {
+          void refresh();
+          void onboardingStateQuery.refetch();
+        }}
+      />
+    );
+  }
 
   if (loading) {
     return showTimeoutFallback ? <GateTimeoutFallback /> : null;

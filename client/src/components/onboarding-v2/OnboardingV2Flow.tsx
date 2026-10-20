@@ -15,6 +15,12 @@ import { usePostHog } from "@posthog/react";
 import "@/design-system/tokens.css";
 import { trpc } from "@/lib/trpc";
 import { useExperienceAccess } from "@/lib/experienceAccess";
+import { AppRecoveryScreen } from "@/components/recovery/AppRecoveryScreen";
+import {
+  classifyServerQuery,
+  isUnauthorizedError,
+} from "@/lib/recovery/classifyServerQuery";
+import { createSubmitLock, pollWhileActive } from "@/lib/recovery/guards";
 import type {
   AttributionSource,
   AudiencePayload,
@@ -49,6 +55,7 @@ import {
   type ProfileLookupSession,
 } from "./profileLookupSession";
 import { WhatWorksStep } from "./step3c";
+import { screenFromResume } from "./resumeScreen";
 
 /** Same breakpoint as OnboardingShell: below it there is no right panel. */
 const NO_PANEL_QUERY = "(max-width: 900px)";
@@ -95,26 +102,10 @@ function readEntry(): { step: PersonalizationStep | null; add: SocialPlatform | 
   };
 }
 
-function screenFromResume(step: string): Screen | "done" {
-  switch (step) {
-    case "platform":
-    case "profile_confirm":
-      return "platform";
-    case "use_case":
-    case "attribution":
-    case "goal":
-    case "audience":
-    case "pillars":
-      return step;
-    default:
-      return "done";
-  }
-}
-
 /** Redirects once after render (never set state during render). */
 function ProfileLost({ onReset }: { onReset: () => void }) {
   useEffect(() => onReset(), [onReset]);
-  return null;
+  return <AppRecoveryScreen view={{ kind: "loading" }} />;
 }
 
 export default function OnboardingV2Flow() {
@@ -125,12 +116,15 @@ export default function OnboardingV2Flow() {
 
   const stateQuery = trpc.onboardingV2.getState.useQuery(undefined, {
     refetchOnWindowFocus: false,
-    refetchInterval: q => {
-      const s = q.state.data;
-      return s?.analysis && (s.analysis.status === "queued" || s.analysis.status === "running")
-        ? 2000
-        : false;
-    },
+    retry: (failureCount, error) => !isUnauthorizedError(error) && failureCount < 2,
+    refetchInterval: pollWhileActive(
+      data =>
+        Boolean(
+          data?.analysis &&
+            (data.analysis.status === "queued" || data.analysis.status === "running")
+        ),
+      2000
+    ),
   });
   const state = stateQuery.data;
 
@@ -145,6 +139,9 @@ export default function OnboardingV2Flow() {
   const [niche, setNiche] = useState<string | null>(null);
   const [requested, setRequested] = useState<Partial<Record<PersonalizationStep, string>>>({});
   const completing = useRef(false);
+  const submissions = useRef(createSubmitLock()).current;
+  const recommendationRequests = useRef(new Set<string>());
+  const [resumeError, setResumeError] = useState(false);
   const lookupSeq = useRef(0);
   const lookupSession = useRef<ProfileLookupSession | null>(null);
   const slowTimer = useRef<number | null>(null);
@@ -186,9 +183,10 @@ export default function OnboardingV2Flow() {
     void utils.onboarding.getState.invalidate();
   }, [utils]);
 
-  const finish = useCallback(async () => {
+  const finish = useCallback(async (reason: "resume" | "step" = "step") => {
     if (completing.current) return;
     completing.current = true;
+    setResumeError(false);
     try {
       await complete.mutateAsync();
       track("completed");
@@ -196,7 +194,8 @@ export default function OnboardingV2Flow() {
       navigate("/", { replace: true });
     } catch {
       completing.current = false;
-      toast.error("Something went wrong. Try again.");
+      if (reason === "resume") setResumeError(true);
+      else toast.error("Something went wrong. Try again.");
     }
   }, [complete, navigate, track, utils]);
 
@@ -216,7 +215,7 @@ export default function OnboardingV2Flow() {
     }
     const s = screenFromResume(state.resumeStep);
     if (s === "done") {
-      void finish();
+      void finish("resume");
       return;
     }
     setUseCase(state.answers.primaryUseCase);
@@ -328,6 +327,9 @@ export default function OnboardingV2Flow() {
     const ready =
       step4 === "goal" ? true : step4 === "audience" ? confirmedGoal : confirmedGoal && confirmedAudience;
     if (hasItems || !ready || requested[step4] === requestKey) return;
+    const once = `${step4}:${requestKey}`;
+    if (recommendationRequests.current.has(once)) return;
+    recommendationRequests.current.add(once);
     setRequested(r => ({ ...r, [step4]: requestKey }));
     requestRecs.mutate({ step: step4 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -337,7 +339,10 @@ export default function OnboardingV2Flow() {
     { step: step4 ?? "goal" },
     {
       enabled: Boolean(step4 && requested[step4] !== undefined),
-      refetchInterval: q => (q.state.data?.state === "running" ? 2000 : false),
+      refetchInterval: pollWhileActive(
+        (data: { state: string } | null | undefined) => data?.state === "running",
+        2000
+      ),
     }
   );
   useEffect(() => {
@@ -398,6 +403,7 @@ export default function OnboardingV2Flow() {
   /* ---------- actions ---------- */
 
   const run = async (fn: () => Promise<unknown>, step: string) => {
+    if (!submissions.tryAcquire()) return false;
     try {
       await fn();
       return true;
@@ -405,6 +411,8 @@ export default function OnboardingV2Flow() {
       track("error", { step });
       toast.error("Something went wrong. Try again.");
       return false;
+    } finally {
+      submissions.release();
     }
   };
 
@@ -426,7 +434,7 @@ export default function OnboardingV2Flow() {
       await refresh();
       const next = STEP_ORDER[STEP_ORDER.indexOf(from) + 1];
       if (next) setScreen(next);
-      else await finish();
+      else await finish("step");
     }, from);
 
   const saveItem = (
@@ -487,7 +495,35 @@ export default function OnboardingV2Flow() {
     }, "pillars");
 
 
-  if (!state || !screen) return null;
+  if (!state) {
+    const view = classifyServerQuery({
+      pending: stateQuery.isLoading || stateQuery.isFetching,
+      error: stateQuery.error,
+      hasData: false,
+    });
+    return (
+      <AppRecoveryScreen
+        view={view.kind === "ready" ? { kind: "loading" } : view}
+        onRetry={() => {
+          void stateQuery.refetch();
+        }}
+      />
+    );
+  }
+
+  if (!screen) {
+    if (resumeError) {
+      return (
+        <AppRecoveryScreen
+          view={{ kind: "error" }}
+          onRetry={() => {
+            void finish("resume");
+          }}
+        />
+      );
+    }
+    return <AppRecoveryScreen view={{ kind: "loading" }} />;
+  }
 
   const common = (step: PersonalizationStep) => ({
     busy: mutating,
