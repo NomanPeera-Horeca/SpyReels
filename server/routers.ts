@@ -29,6 +29,7 @@ import { brandCoachRouter } from "./routers/brandCoachRouter";
 import { extractHookTextFromSegments, runFeaturedReelTranscription, runTranscription } from "./routers/_shared";
 import { scrapeRouter } from "./routers/scrapeRouter";
 import { featuredRouter } from "./routers/featuredRouter";
+import { onboardingPreviewRouter } from "./routers/onboardingPreviewRouter";
 import { transcribeRouter } from "./routers/transcribeRouter";
 import { recreateRouter } from "./routers/recreateRouter";
 import { collectedRouter } from "./routers/collectedRouter";
@@ -835,6 +836,8 @@ export const appRouter = router({
 
   // ── Featured Accounts (pre-scraped catalog browsed by niche) ──
   featured: featuredRouter,
+
+  onboardingPreview: onboardingPreviewRouter,
 
   // ── Transcription ──
   transcribe: transcribeRouter,

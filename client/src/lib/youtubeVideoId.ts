@@ -38,3 +38,27 @@ export function youtubeEmbedSrc(videoId: string, autoplay = true): string {
   });
   return `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?${params.toString()}`;
 }
+
+/**
+ * Decorative onboarding embed. Muted autoplay and loop are explicit.
+ * YouTube only loops a single video when `playlist` repeats that id.
+ * Does not change the interactive embed used by Viral Finder playback.
+ */
+export function youtubeAmbientEmbedSrc(videoId: string, origin?: string | null): string {
+  const params = new URLSearchParams({
+    autoplay: "1",
+    mute: "1",
+    playsinline: "1",
+    loop: "1",
+    playlist: videoId,
+    controls: "0",
+    rel: "0",
+    modestbranding: "1",
+    disablekb: "1",
+    fs: "0",
+    enablejsapi: "1",
+  });
+  const safeOrigin = (origin ?? "").trim();
+  if (safeOrigin) params.set("origin", safeOrigin);
+  return `https://www.youtube.com/embed/${encodeURIComponent(videoId)}?${params.toString()}`;
+}

@@ -20,31 +20,21 @@
   transform-origin: center;
 }
 
-.tierBadge {
+.stackFrame {
   position: absolute;
-  top: var(--sr-space-3);
-  left: var(--sr-space-3);
-  padding: var(--sr-space-2) var(--sr-space-3);
-  border-radius: var(--sr-radius-full);
-  background: var(--sr-color-status-success-background);
-  color: var(--sr-color-status-success-foreground);
-  white-space: nowrap;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
 }
 
-.play {
+.stackMedia {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  width: 44px;
-  height: 44px;
-  border: var(--sr-shape-border-default-width) solid var(--sr-color-border-default);
-  border-radius: var(--sr-radius-full);
-  background: var(--sr-color-surface-default);
-  transform: translate(-50%, -50%);
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  object-fit: cover;
+  pointer-events: none;
 }
 
 .phone {
