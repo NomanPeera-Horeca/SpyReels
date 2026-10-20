@@ -966,6 +966,8 @@ export function PillarsStep(props: {
   topics: Record<string, { state: string; attempts: number }>;
   /** The user asks for topic ideas for one pillar. The only generation path. */
   onRequestTopics: (pillarItemId: string) => void;
+  /** False when getState.subtopicStore is not ready. Pillars still show; topic actions do not. */
+  topicStoreReady: boolean;
 }) {
   // The body must sit inside StepFrame so that it reads the step's pending-edit registry.
   return (
@@ -991,6 +993,7 @@ function PillarsBody({
   onRemoveSubtopic,
   topics,
   onRequestTopics,
+  topicStoreReady,
 }: {
   common: Common;
   pillars: PillarItem[];
@@ -1000,6 +1003,7 @@ function PillarsBody({
   onRemoveSubtopic: (subtopicId: string) => void;
   topics: Record<string, { state: string; attempts: number }>;
   onRequestTopics: (pillarItemId: string) => void;
+  topicStoreReady: boolean;
 }) {
   const pending = useContext(PendingEditsContext);
   const [mode, setMode] = useState<"view" | "edit">("view");
@@ -1016,6 +1020,11 @@ function PillarsBody({
 
   return (
     <>
+      {!topicStoreReady && pillars.length > 0 ? (
+        <p className={["sr-text-product-body-small", styles.muted].join(" ")} role="status">
+          Your pillars are saved. Topic ideas can't be shown right now, and nothing you saved has been lost.
+        </p>
+      ) : null}
       {pillars.map(p =>
         editing === p.id ? (
           <div key={p.id} className={styles.pillarGroup}>

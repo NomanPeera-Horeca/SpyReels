@@ -623,6 +623,7 @@ export default function OnboardingV2Flow() {
           onRemoveSubtopic={subtopicId => void dismissWithUndo(subtopicId)}
           topics={state.pillarTopics ?? {}}
           onRequestTopics={askForTopics}
+          topicStoreReady={state.subtopicStore?.ready !== false}
         />
       );
   }

@@ -154,6 +154,26 @@ describe.skipIf(!url)("pillar topic jobs and exact Undo on real MySQL", () => {
     expect((await verifyPillarSubtopicStore(db)).ready).toBe(true);
   });
 
+  it("with topic storage missing, the pillar stays and state reports it; no topic action is offered", async () => {
+    const { scope, pillarItemId } = await setup();
+    await q("DROP TABLE pillar_subtopic_jobs");
+    try {
+      const state = await loadOnboardingState(db, A);
+      expect(state.items.find(i => i.id === pillarItemId)).toMatchObject({ kind: "pillar", status: "confirmed" });
+      expect(state.subtopicStore.ready).toBe(false);
+      expect(state.subtopicStore.missing.join(" ")).toContain("pillar_subtopic_jobs");
+      expect(state.pillarTopics).toEqual({});
+      expect(state.pillarSubtopics).toEqual([]);
+      const { calls, gen } = counter();
+      await expect(requestPillarSubtopics(db, { generate: gen(["Food cost"]) }, { ...scope, pillarItemId })).rejects.toBeInstanceOf(
+        SubtopicStoreError
+      );
+      expect(calls.n).toBe(0);
+    } finally {
+      await q(readFileSync(path.join(root, "drizzle/0105_pillar_subtopic_jobs.sql"), "utf8"));
+    }
+  });
+
   it("a pillar gets one successful attempt; a succeeded job is never called again, even with no topics", async () => {
     const { scope, pillarItemId } = await setup();
     const { calls, gen } = counter();

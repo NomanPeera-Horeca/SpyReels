@@ -360,10 +360,20 @@ export async function generateRecommendations(
   });
   if (applied === "stale") return { status: "stale_discarded", usage };
   if (input.step === "pillars" && subtopicGroups.length) {
-    await deps.store.saveSubtopics?.(
-      profile.id,
-      subtopicGroups.map(g => ({ ...g, pillarHash: inputsHash }))
-    );
+    // The pillars are already saved. A failed topic save must not fail the pillar
+    // step or be retried here: the pillar card offers "Find topic ideas" instead.
+    // Only the error code is logged, never message text.
+    try {
+      await deps.store.saveSubtopics?.(
+        profile.id,
+        subtopicGroups.map(g => ({ ...g, pillarHash: inputsHash }))
+      );
+    } catch (err) {
+      const code = (err as { code?: unknown })?.code;
+      console.warn("[personalization] pillar topics not saved; pillars kept", {
+        code: typeof code === "string" ? code.slice(0, 60) : "error",
+      });
+    }
   }
   return {
     status: "generated",
