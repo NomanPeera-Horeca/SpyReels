@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   resolveYouTubeVideoId,
+  youtubeAmbientEmbedSrc,
   youtubeEmbedSrc,
 } from "./youtubeVideoId";
 
@@ -34,5 +35,17 @@ describe("youtubeEmbedSrc", () => {
       "https://www.youtube.com/embed/uFXEyfa8YwQ?"
     );
     expect(youtubeEmbedSrc("uFXEyfa8YwQ")).toContain("autoplay=1");
+    expect(youtubeEmbedSrc("uFXEyfa8YwQ")).not.toContain("mute=1");
+  });
+
+  it("builds a muted looping inline embed for the onboarding stack", () => {
+    const src = youtubeAmbientEmbedSrc("uFXEyfa8YwQ", "http://127.0.0.1:3022");
+    expect(src).toContain("mute=1");
+    expect(src).toContain("autoplay=1");
+    expect(src).toContain("loop=1");
+    expect(src).toContain("playsinline=1");
+    expect(src).toContain("playlist=uFXEyfa8YwQ");
+    expect(src).toContain("enablejsapi=1");
+    expect(src).toContain("origin=http%3A%2F%2F127.0.0.1%3A3022");
   });
 });
