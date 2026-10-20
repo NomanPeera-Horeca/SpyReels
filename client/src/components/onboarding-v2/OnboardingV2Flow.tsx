@@ -27,6 +27,7 @@ import type {
   SocialPlatform,
 } from "@shared/personalization/model";
 import type { PublicProfilePreview } from "@shared/personalization/publicProfilePreview";
+import { PROFILE_LOOKUP_SLOW_AFTER_MS } from "@shared/personalization/profileLookup";
 import {
   AnalysisPreview,
   ProfileMobilePreview,
@@ -43,6 +44,10 @@ import {
 } from "./steps";
 import { AudienceStep, GoalStep, MAX_GOALS, PillarsStep, type AiState, type StepItem } from "./step4";
 import { COPY } from "./copy";
+import {
+  isCurrentProfileLookup,
+  type ProfileLookupSession,
+} from "./profileLookupSession";
 import { WhatWorksStep } from "./step3c";
 
 /** Same breakpoint as OnboardingShell: below it there is no right panel. */
@@ -140,6 +145,11 @@ export default function OnboardingV2Flow() {
   const [niche, setNiche] = useState<string | null>(null);
   const [requested, setRequested] = useState<Partial<Record<PersonalizationStep, string>>>({});
   const completing = useRef(false);
+  const lookupSeq = useRef(0);
+  const lookupSession = useRef<ProfileLookupSession | null>(null);
+  const slowTimer = useRef<number | null>(null);
+  const [lookupActive, setLookupActive] = useState(false);
+  const [lookupSlow, setLookupSlow] = useState(false);
   const noRightPanel = useNoRightPanel();
   const entry = useRef(readEntry()).current;
 
@@ -219,8 +229,64 @@ export default function OnboardingV2Flow() {
     if (screen) track("step_viewed", { step: screen });
   }, [screen, track]);
 
+  const clearSlowTimer = useCallback(() => {
+    if (slowTimer.current != null) {
+      window.clearTimeout(slowTimer.current);
+      slowTimer.current = null;
+    }
+  }, []);
+
+  const cancelLookup = useCallback(() => {
+    lookupSeq.current += 1;
+    lookupSession.current = null;
+    setLookupActive(false);
+    setLookupSlow(false);
+    clearSlowTimer();
+  }, [clearSlowTimer]);
+
+  useEffect(() => clearSlowTimer, [clearSlowTimer]);
+
+  const beginLookup = useCallback(async () => {
+    if (!platform || lookupSession.current) return;
+    const submitted: ProfileLookupSession = {
+      id: ++lookupSeq.current,
+      platform,
+      handle: handleInput,
+    };
+    lookupSession.current = submitted;
+    setLookupActive(true);
+    setLookupSlow(false);
+    setPlatformError(null);
+    clearSlowTimer();
+    slowTimer.current = window.setTimeout(() => {
+      if (lookupSession.current?.id === submitted.id) setLookupSlow(true);
+    }, PROFILE_LOOKUP_SLOW_AFTER_MS);
+    try {
+      const res = await lookup.mutateAsync({ platform: submitted.platform, input: submitted.handle });
+      if (!isCurrentProfileLookup(lookupSession.current, submitted)) return;
+      if (!res.ok) {
+        setPlatformError(res.reason as PlatformError);
+        track("error", { step: "platform", reason: res.reason });
+        return;
+      }
+      setPreview(res.profile);
+      setTypedHandle(res.typedHandle);
+      setScreen("profile");
+    } catch {
+      if (!isCurrentProfileLookup(lookupSession.current, submitted)) return;
+      setPlatformError("error");
+      track("error", { step: "platform", reason: "error" });
+    } finally {
+      if (lookupSession.current?.id === submitted.id) {
+        lookupSession.current = null;
+        setLookupActive(false);
+        setLookupSlow(false);
+        clearSlowTimer();
+      }
+    }
+  }, [clearSlowTimer, handleInput, lookup, platform, track]);
+
   const mutating =
-    lookup.isPending ||
     confirm.isPending ||
     notPosting.isPending ||
     saveUseCase.isPending ||
@@ -446,33 +512,26 @@ export default function OnboardingV2Flow() {
           handleInput={handleInput}
           error={platformError}
           busy={mutating}
+          looking={lookupActive}
+          slow={lookupSlow}
           preview={<ViralStackPreview />}
           onPlatform={p => {
+            if (p === platform) return;
             setPlatform(p);
             setPlatformError(null);
+            if (lookupSession.current) cancelLookup();
           }}
           onHandleInput={v => {
             setHandleInput(v);
             setPlatformError(null);
+            if (lookupSession.current && v !== lookupSession.current.handle) cancelLookup();
           }}
-          onNoPost={() => setScreen("niche")}
-          onContinue={async () => {
-            if (!platform) return;
-            try {
-              const res = await lookup.mutateAsync({ platform, input: handleInput });
-              if (!res.ok) {
-                setPlatformError(res.reason as PlatformError);
-                track("error", { step: "platform", reason: res.reason });
-                return;
-              }
-              setPreview(res.profile);
-              setTypedHandle(res.typedHandle);
-              setScreen("profile");
-            } catch {
-              setPlatformError("error");
-              track("error", { step: "platform", reason: "error" });
-            }
+          onNoPost={() => {
+            cancelLookup();
+            setScreen("niche");
           }}
+          onCancel={cancelLookup}
+          onContinue={() => void beginLookup()}
         />
       );
     case "profile":

@@ -25,6 +25,18 @@ export const COPY = {
     placeholder: "@handle",
     noPost: "I don't post yet",
     continue: "Continue",
+    cancel: "Cancel",
+    retry: "Retry",
+    finding: {
+      instagram: "Finding your Instagram profile",
+      tiktok: "Finding your TikTok profile",
+      youtube: "Finding your YouTube channel",
+    },
+    slow: {
+      instagram: "Instagram is taking longer than expected.",
+      tiktok: "TikTok is taking longer than expected.",
+      youtube: "YouTube is taking longer than expected.",
+    },
     errors: {
       not_found: "Handle not found. Try another handle.",
       private: "This account is private. Try another handle.",
@@ -33,6 +45,7 @@ export const COPY = {
       unsupported_link: "Use a profile link, not a post link.",
       error: "Something went wrong. Try again.",
       rate_limited: "Too many lookups. Try again in a few minutes.",
+      timeout: "This is taking longer than expected.",
     },
   },
   profile: {
