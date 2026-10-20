@@ -19,6 +19,10 @@ import { useEffect, useState } from "react";
 import { AnalysisStatusChecklist } from "@/design-system/AnalysisStatus";
 import { DevicePhoneFrame } from "@/design-system/DevicePhoneFrame";
 import { trpc } from "@/lib/trpc";
+import {
+  alignOnboardingStackSlots,
+  ONBOARDING_STACK_ORDER,
+} from "@shared/onboardingViralStack";
 import { ANALYSIS_STAGE_COPY, COPY } from "./copy";
 import { AmbientStackCard } from "./ambientViralMedia";
 import { MobileProfileCard } from "./MobileProfileCard";
@@ -79,18 +83,19 @@ export function ViralStackPreview() {
     refetchOnWindowFocus: false,
     retry: false,
   });
-  const slots = stack.data?.slots ?? [];
-  if (!wide || slots.length === 0) return null;
+  if (!wide) return null;
+  const aligned = alignOnboardingStackSlots(stack.data?.slots ?? []);
 
   return (
-    <div className={styles.stack} aria-hidden>
-      {slots.map((slot, index) => {
+    <div className={styles.stack} data-stack-state={stack.data ? "ready" : "pending"} aria-hidden>
+      {ONBOARDING_STACK_ORDER.map((platform, index) => {
         const place = STACK[index];
-        if (!place) return null;
+        const slot = aligned[index];
         return (
           <div
-            key={`${slot.platform}-${slot.attempts[0]?.id ?? index}`}
+            key={`${platform}-${index}`}
             className={styles.stackCard}
+            data-stack-slot={platform}
             style={{
               left: place.left,
               top: place.top,
@@ -98,8 +103,8 @@ export function ViralStackPreview() {
             }}
           >
             <AmbientStackCard
-              platform={slot.platform}
-              attempts={slot.attempts}
+              platform={platform}
+              attempts={slot?.attempts ?? []}
               active={pageVisible}
             />
           </div>

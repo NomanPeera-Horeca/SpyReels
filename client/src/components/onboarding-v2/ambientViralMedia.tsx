@@ -1,7 +1,15 @@
 import { useEffect, useRef, useState } from "react";
+import { PlatformFullColorMark } from "@/design-system/platformMarks";
+import cardStyles from "@/design-system/ResultCard.module.css";
 import { youtubeAmbientEmbedSrc } from "@/lib/youtubeVideoId";
 import type { OnboardingStackAttempt, OnboardingStackPlatform } from "@shared/onboardingViralStack";
 import styles from "./previews.module.css";
+
+const STACK_PLATFORM_LABEL: Record<OnboardingStackPlatform, string> = {
+  instagram: "Reels",
+  tiktok: "TikTok",
+  youtube: "Shorts",
+};
 
 const YOUTUBE_PLAYING = 1;
 const AUTOPLAY_WAIT_MS = 8000;
@@ -14,6 +22,8 @@ function Thumbnail({ url }: { url: string }) {
       className={styles.stackMedia}
       src={url}
       alt=""
+      decoding="async"
+      fetchPriority="low"
       onError={() => setFailed(true)}
     />
   );
@@ -31,10 +41,15 @@ function AmbientFile({
   onUnavailable: () => void;
 }) {
   const ref = useRef<HTMLVideoElement>(null);
+  const [shown, setShown] = useState(false);
   const onPlayingRef = useRef(onPlaying);
   const onUnavailableRef = useRef(onUnavailable);
   onPlayingRef.current = onPlaying;
   onUnavailableRef.current = onUnavailable;
+
+  useEffect(() => {
+    setShown(false);
+  }, [url]);
 
   useEffect(() => {
     const video = ref.current;
@@ -44,6 +59,7 @@ function AmbientFile({
       video.pause();
       return;
     }
+    if (!video.getAttribute("src")) video.src = url;
     const pending = video.play();
     void pending?.catch(() => {
       if (document.hidden) return;
@@ -64,15 +80,16 @@ function AmbientFile({
   return (
     <video
       ref={ref}
-      className={styles.stackMedia}
-      src={url}
+      className={[styles.stackMedia, shown ? "" : styles.stackMediaPending].filter(Boolean).join(" ")}
       muted
       loop
       playsInline
-      autoPlay
-      preload="metadata"
+      preload="none"
       disablePictureInPicture
-      onPlaying={() => onPlayingRef.current()}
+      onPlaying={() => {
+        setShown(true);
+        onPlayingRef.current();
+      }}
       onError={() => onUnavailableRef.current()}
     />
   );
@@ -90,6 +107,8 @@ function AmbientYouTube({
   onUnavailable: () => void;
 }) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [mountEmbed, setMountEmbed] = useState(false);
+  const [shown, setShown] = useState(false);
   const playingRef = useRef(false);
   const onPlayingRef = useRef(onPlaying);
   const onUnavailableRef = useRef(onUnavailable);
@@ -111,7 +130,14 @@ function AmbientYouTube({
   };
 
   useEffect(() => {
+    if (!active) return;
+    const frame = window.requestAnimationFrame(() => setMountEmbed(true));
+    return () => window.cancelAnimationFrame(frame);
+  }, [active]);
+
+  useEffect(() => {
     playingRef.current = false;
+    setShown(false);
     const onMessage = (event: MessageEvent) => {
       if (event.source !== iframeRef.current?.contentWindow) return;
       if (event.origin !== "https://www.youtube.com") return;
@@ -145,6 +171,7 @@ function AmbientYouTube({
           return;
         }
         playingRef.current = true;
+        setShown(true);
         onPlayingRef.current();
       }
       if (data.event === "onError") onUnavailableRef.current();
@@ -165,10 +192,12 @@ function AmbientYouTube({
     return () => window.clearTimeout(timer);
   }, [active, videoId]);
 
+  if (!mountEmbed) return null;
+
   return (
     <iframe
       ref={iframeRef}
-      className={styles.stackMedia}
+      className={[styles.stackMedia, shown ? "" : styles.stackMediaPending].filter(Boolean).join(" ")}
       title="YouTube Short preview"
       src={src}
       allow="autoplay; encrypted-media; picture-in-picture"
@@ -247,13 +276,11 @@ export function AmbientStackCard({
     setIndex((current) => current + 1);
   };
 
-  if (!attempt?.thumbnailUrl && !fileUrl && !youtubeId) return null;
-
   return (
     <div
       className={styles.stackFrame}
       data-platform={platform}
-      data-playback={playing ? "playing" : "thumbnail"}
+      data-playback={playing ? "playing" : attempt?.thumbnailUrl ? "thumbnail" : "empty"}
     >
       {attempt?.thumbnailUrl ? <Thumbnail url={attempt.thumbnailUrl} /> : null}
       {fileUrl ? (
@@ -274,6 +301,10 @@ export function AmbientStackCard({
           onUnavailable={giveUp}
         />
       ) : null}
+      <span className={[cardStyles.platformBadge, styles.platformBadge].join(" ")}>
+        <PlatformFullColorMark platform={platform} size={16} />
+        {STACK_PLATFORM_LABEL[platform]}
+      </span>
     </div>
   );
 }

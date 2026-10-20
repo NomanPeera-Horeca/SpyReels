@@ -6,7 +6,7 @@ import {
   featuredReels,
 } from "../../drizzle/schema";
 import { FEATURED_DEMO_HANDLES } from "../../shared/featuredDemoCatalog";
-import { isStableSpyreelsMediaUrl, needsVideoUrlRefresh } from "../../shared/mediaUrl";
+import { onboardingPreviewMedia } from "../../shared/onboardingPreviewMedia";
 import {
   selectOnboardingViralStack,
   type OnboardingStackCandidate,
@@ -14,14 +14,10 @@ import {
 } from "../../shared/onboardingViralStack";
 import { PUBLIC_DEMO_HANDLES } from "../../shared/publicDemoAccounts";
 import { getDb } from "../db";
-import { isDurableReelVideoUrl, reelVideoR2Key } from "../reelVideoR2";
-import { isDurableTiktokVideoUrl, tiktokVideoR2Key } from "../tiktokVideoR2";
 
 const CACHE_MS = 10 * 60 * 1000;
 const EMPTY_CACHE_MS = 60 * 1000;
 const SCAN_LIMIT = 16;
-const MAX_MIRROR_BYTES = 12 * 1024 * 1024;
-const HEAD_TIMEOUT_MS = 4000;
 
 const EMPTY: OnboardingViralStack = { slots: [] };
 
@@ -29,10 +25,6 @@ let cache: { expiresAt: number; payload: OnboardingViralStack } | null = null;
 
 export function resetOnboardingViralStackCacheForTests(): void {
   cache = null;
-}
-
-function r2PublicBase(): string {
-  return (process.env.CLOUDFLARE_R2_PUBLIC_URL ?? "").replace(/\/+$/, "");
 }
 
 function httpsUrl(raw: string | null | undefined): string | null {
@@ -47,68 +39,6 @@ function httpsUrl(raw: string | null | undefined): string | null {
   }
 }
 
-export function mirrorVideoUrl(
-  platform: "instagram" | "tiktok",
-  externalId: string,
-  publicBase: string
-): string | null {
-  const base = publicBase.replace(/\/+$/, "");
-  const safe = externalId.replace(/[^a-zA-Z0-9_-]/g, "");
-  if (!base || !safe) return null;
-  const key = platform === "instagram" ? reelVideoR2Key(safe) : tiktokVideoR2Key(safe);
-  return `${base}/${key}`;
-}
-
-function durableFileUrl(
-  platform: "instagram" | "tiktok",
-  stored: string | null | undefined,
-  externalId: string
-): string | null {
-  const existing = httpsUrl(stored);
-  if (existing) {
-    const durable =
-      platform === "instagram"
-        ? isDurableReelVideoUrl(existing)
-        : isDurableTiktokVideoUrl(existing);
-    if (durable || isStableSpyreelsMediaUrl(existing)) return existing;
-    if (!needsVideoUrlRefresh(existing) && /\.r2\.dev\//i.test(existing)) return existing;
-  }
-  return mirrorVideoUrl(platform, externalId, r2PublicBase());
-}
-
-type HeadResult = { ok: boolean; bytes: number | null };
-
-async function headVideo(url: string): Promise<HeadResult> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), HEAD_TIMEOUT_MS);
-  try {
-    const response = await fetch(url, { method: "HEAD", signal: controller.signal });
-    if (!response.ok) return { ok: false, bytes: null };
-    const type = response.headers.get("content-type") ?? "";
-    if (!type.toLowerCase().startsWith("video/")) return { ok: false, bytes: null };
-    const length = Number(response.headers.get("content-length") ?? "");
-    const bytes = Number.isFinite(length) && length > 0 ? length : null;
-    if (bytes != null && bytes > MAX_MIRROR_BYTES) return { ok: false, bytes };
-    return { ok: true, bytes };
-  } catch {
-    return { ok: false, bytes: null };
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-async function confirmFile(
-  url: string | null,
-  confirmed: Map<string, boolean>
-): Promise<boolean> {
-  if (!url) return false;
-  const known = confirmed.get(url);
-  if (known != null) return known;
-  const result = await headVideo(url);
-  confirmed.set(url, result.ok);
-  return result.ok;
-}
-
 function youtubeId(externalId: string, pageUrl: string | null): string | null {
   const id = externalId.trim();
   if (/^[A-Za-z0-9_-]{6,}$/.test(id)) return id;
@@ -121,6 +51,32 @@ function youtubeId(externalId: string, pageUrl: string | null): string | null {
   return match;
 }
 
+function fileCandidate(input: {
+  platform: "instagram" | "tiktok";
+  id: string;
+  creatorKey: string;
+  durationSec: number | null;
+  views: number;
+}): OnboardingStackCandidate | null {
+  const media = onboardingPreviewMedia(input.platform, input.id);
+  if (!media) return null;
+  return {
+    platform: input.platform,
+    id: input.id,
+    creatorKey: input.creatorKey,
+    thumbnailUrl: media.posterUrl,
+    videoUrl: media.videoUrl,
+    youtubeVideoId: null,
+    durationSec: input.durationSec,
+    views: input.views,
+  };
+}
+
+/**
+ * Read the finder catalogs and return five slots. File playback uses the
+ * shipped preview loops only, so this request never HEADs or downloads the
+ * original R2 videos.
+ */
 async function loadCandidates(): Promise<OnboardingStackCandidate[]> {
   const db = await getDb();
   if (!db) return [];
@@ -137,25 +93,15 @@ async function loadCandidates(): Promise<OnboardingStackCandidate[]> {
       )
     );
 
-  const igRows: Array<{
-    id: number;
-    shortcode: string;
-    thumbnailUrl: string | null;
-    videoUrl: string | null;
-    viewCount: number;
-    duration: number | null;
-    accountId: number;
-  }> = [];
+  const candidates: OnboardingStackCandidate[] = [];
+  const igPerCreator = new Map<string, number>();
+
   for (const account of igAccounts) {
     const rows = await db
       .select({
-        id: featuredReels.id,
         shortcode: featuredReels.reelShortcode,
-        thumbnailUrl: featuredReels.thumbnailUrl,
-        videoUrl: featuredReels.videoUrl,
-        viewCount: featuredReels.viewCount,
         duration: featuredReels.duration,
-        accountId: featuredReels.featuredAccountId,
+        viewCount: featuredReels.viewCount,
       })
       .from(featuredReels)
       .where(
@@ -165,36 +111,20 @@ async function loadCandidates(): Promise<OnboardingStackCandidate[]> {
         )
       )
       .orderBy(desc(featuredReels.viewCount))
-      .limit(4);
-    igRows.push(...rows);
-  }
-
-  const handleByAccount = new Map(igAccounts.map((account) => [account.id, account.handle]));
-  const confirmed = new Map<string, boolean>();
-  const candidates: OnboardingStackCandidate[] = [];
-  const igPerCreator = new Map<string, number>();
-  let igHeads = 0;
-
-  for (const row of igRows) {
-    if (igHeads >= 12) break;
-    const creator = handleByAccount.get(row.accountId) ?? row.shortcode;
-    if ((igPerCreator.get(creator) ?? 0) >= 3) continue;
-    const thumb = httpsUrl(row.thumbnailUrl);
-    if (!thumb) continue;
-    const videoUrl = durableFileUrl("instagram", row.videoUrl, row.shortcode);
-    igHeads += 1;
-    if (!(await confirmFile(videoUrl, confirmed))) continue;
-    igPerCreator.set(creator, (igPerCreator.get(creator) ?? 0) + 1);
-    candidates.push({
-      platform: "instagram",
-      id: row.shortcode,
-      creatorKey: handleByAccount.get(row.accountId) ?? row.shortcode,
-      thumbnailUrl: thumb,
-      videoUrl,
-      youtubeVideoId: null,
-      durationSec: row.duration,
-      views: row.viewCount,
-    });
+      .limit(SCAN_LIMIT);
+    for (const row of rows) {
+      if ((igPerCreator.get(account.handle) ?? 0) >= 3) break;
+      const candidate = fileCandidate({
+        platform: "instagram",
+        id: row.shortcode,
+        creatorKey: account.handle,
+        durationSec: row.duration,
+        views: row.viewCount,
+      });
+      if (!candidate) continue;
+      igPerCreator.set(account.handle, (igPerCreator.get(account.handle) ?? 0) + 1);
+      candidates.push(candidate);
+    }
   }
 
   const demoAccounts = await db
@@ -213,60 +143,49 @@ async function loadCandidates(): Promise<OnboardingStackCandidate[]> {
   const demoAllowed = demoAccounts.filter((account) =>
     allowed.has(`${account.platform}:${account.handle}`)
   );
-
-  if (demoAllowed.length === 0) return candidates;
-
-  const items = await db
-    .select({
-      externalId: featuredDemoItems.externalId,
-      thumbnailUrl: featuredDemoItems.thumbnailUrl,
-      videoPageUrl: featuredDemoItems.videoPageUrl,
-      viewCount: featuredDemoItems.viewCount,
-      durationSec: featuredDemoItems.durationSec,
-      accountId: featuredDemoItems.accountId,
-    })
-    .from(featuredDemoItems)
-    .where(
-      inArray(
-        featuredDemoItems.accountId,
-        demoAllowed.map((account) => account.id)
-      )
-    )
-    .orderBy(desc(featuredDemoItems.viewCount))
-    .limit(SCAN_LIMIT * 2);
-
   const demoById = new Map(demoAllowed.map((account) => [account.id, account]));
-  let tiktokConfirmed = 0;
-  let youtubeKept = 0;
 
-  for (const item of items) {
-    const account = demoById.get(item.accountId);
-    if (!account) continue;
-    const thumb = httpsUrl(item.thumbnailUrl);
-    if (!thumb) continue;
+  async function loadDemo(platform: "tiktok" | "youtube"): Promise<void> {
+    const accounts = demoAllowed.filter((account) => account.platform === platform);
+    if (accounts.length === 0) return;
+    const items = await db!
+      .select({
+        externalId: featuredDemoItems.externalId,
+        thumbnailUrl: featuredDemoItems.thumbnailUrl,
+        videoPageUrl: featuredDemoItems.videoPageUrl,
+        viewCount: featuredDemoItems.viewCount,
+        durationSec: featuredDemoItems.durationSec,
+        accountId: featuredDemoItems.accountId,
+      })
+      .from(featuredDemoItems)
+      .where(
+        inArray(
+          featuredDemoItems.accountId,
+          accounts.map((account) => account.id)
+        )
+      )
+      .orderBy(desc(featuredDemoItems.viewCount))
+      .limit(SCAN_LIMIT);
 
-    if (account.platform === "tiktok") {
-      if (tiktokConfirmed >= 6) continue;
-      const videoUrl = durableFileUrl("tiktok", null, item.externalId);
-      if (!(await confirmFile(videoUrl, confirmed))) continue;
-      tiktokConfirmed += 1;
-      candidates.push({
-        platform: "tiktok",
-        id: item.externalId,
-        creatorKey: account.handle,
-        thumbnailUrl: thumb,
-        videoUrl,
-        youtubeVideoId: null,
-        durationSec: item.durationSec,
-        views: item.viewCount,
-      });
-      continue;
-    }
-
-    if (account.platform === "youtube") {
+    let youtubeKept = 0;
+    for (const item of items) {
+      const account = demoById.get(item.accountId);
+      if (!account) continue;
+      if (platform === "tiktok") {
+        const candidate = fileCandidate({
+          platform: "tiktok",
+          id: item.externalId,
+          creatorKey: account.handle,
+          durationSec: item.durationSec,
+          views: item.viewCount,
+        });
+        if (candidate) candidates.push(candidate);
+        continue;
+      }
       if (youtubeKept >= 4) continue;
+      const thumb = httpsUrl(item.thumbnailUrl);
       const id = youtubeId(item.externalId, item.videoPageUrl);
-      if (!id) continue;
+      if (!thumb || !id) continue;
       youtubeKept += 1;
       candidates.push({
         platform: "youtube",
@@ -281,6 +200,8 @@ async function loadCandidates(): Promise<OnboardingStackCandidate[]> {
     }
   }
 
+  await loadDemo("tiktok");
+  await loadDemo("youtube");
   return candidates;
 }
 
