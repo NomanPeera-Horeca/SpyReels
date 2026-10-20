@@ -35,4 +35,13 @@ describe("classifyServerQuery", () => {
       kind: "ready",
     });
   });
+
+  it("turns a wait that passed the bound into retry when nothing is on screen", () => {
+    expect(
+      classifyServerQuery({ pending: true, error: null, hasData: false, timedOut: true })
+    ).toEqual({ kind: "error" });
+    expect(
+      classifyServerQuery({ pending: true, error: null, hasData: true, timedOut: true })
+    ).toEqual({ kind: "ready" });
+  });
 });

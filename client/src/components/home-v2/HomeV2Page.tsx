@@ -339,7 +339,7 @@ export default function HomeV2Page() {
                 compact={compact}
                 onFinish={() => {
                   track("finish_setup");
-                  navigate(`/onboarding?step=${ctx?.nextStep ?? "goal"}`);
+                  navigate("/onboarding");
                 }}
                 onDismiss={() => {
                   writeFlag(BANNER_KEY);

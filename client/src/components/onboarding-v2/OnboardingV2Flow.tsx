@@ -20,7 +20,8 @@ import {
   classifyServerQuery,
   isUnauthorizedError,
 } from "@/lib/recovery/classifyServerQuery";
-import { createSubmitLock, pollWhileActive } from "@/lib/recovery/guards";
+import { createSubmitLock, pollWhileActive, retryRead, shouldApplyServerSnapshot } from "@/lib/recovery/guards";
+import { useRecoveryBound } from "@/lib/recovery/useRecoveryBound";
 import type {
   AttributionSource,
   AudiencePayload,
@@ -90,7 +91,8 @@ const STEP_KIND = { goal: "goal", audience: "audience", pillars: "pillar" } as c
 
 /**
  * Entry points from Home v2 (read once on load):
- * - ?step=goal|audience|pillars  "Finish setup": open that strategy step.
+ * - ?step=goal|audience|pillars  explicit deep link to that strategy step.
+ *   Home "Finish setup" does not pass a step, so the server resume step wins.
  * - ?add=instagram|tiktok|youtube "Add profile": add another account, then
  *   personalize it (use case and attribution are already answered).
  */
@@ -129,7 +131,24 @@ export default function OnboardingV2Flow() {
       2000
     ),
   });
-  const state = stateQuery.data;
+  const readAttempt = useRef(0);
+  const appliedVersion = useRef<number | null>(null);
+  const acceptedState = useRef(stateQuery.data ?? null);
+  if (stateQuery.data) {
+    const snap = stateQuery.data;
+    if (
+      shouldApplyServerSnapshot({
+        requestId: readAttempt.current,
+        currentId: readAttempt.current,
+        snapshotVersion: snap.version,
+        appliedVersion: appliedVersion.current,
+      })
+    ) {
+      appliedVersion.current = snap.version;
+      acceptedState.current = snap;
+    }
+  }
+  const state = acceptedState.current ?? undefined;
 
   const [screen, setScreen] = useState<Screen | null>(null);
   const [platform, setPlatform] = useState<SocialPlatform | null>("instagram");
@@ -150,6 +169,7 @@ export default function OnboardingV2Flow() {
   const submissions = useRef(createSubmitLock()).current;
   const recommendationRequests = useRef(new Set<string>());
   const [resumeError, setResumeError] = useState(false);
+  const [stateRetryKey, setStateRetryKey] = useState(0);
   const lookupSeq = useRef(0);
   const lookupSession = useRef<ProfileLookupSession | null>(null);
   const slowTimer = useRef<number | null>(null);
@@ -157,6 +177,9 @@ export default function OnboardingV2Flow() {
   const [lookupSlow, setLookupSlow] = useState(false);
   const noRightPanel = useNoRightPanel();
   const entry = useRef(readEntry()).current;
+  const stateMissing = !state;
+  const statePending = stateMissing && (stateQuery.isLoading || stateQuery.isFetching);
+  const stateTimedOut = useRecoveryBound(statePending, stateRetryKey);
 
   const track = useCallback(
     (event: string, props?: Record<string, unknown>) => {
@@ -184,6 +207,8 @@ export default function OnboardingV2Flow() {
   const retryAnalysis = trpc.onboardingV2.retryAnalysis.useMutation();
 
   const refresh = useCallback(() => {
+    readAttempt.current += 1;
+    void utils.onboardingV2.getState.cancel();
     void utils.onboardingV2.getState.invalidate();
     void utils.homeV2.context.invalidate();
     void utils.homeV2.videos.invalidate();
@@ -207,7 +232,7 @@ export default function OnboardingV2Flow() {
     }
   }, [complete, navigate, track, utils]);
 
-  // First load: resume where the user left off.
+  // First load: resume where the user left off. A late older snapshot is ignored.
   useEffect(() => {
     if (!state || screen !== null) return;
     if (entry.add) {
@@ -558,15 +583,22 @@ export default function OnboardingV2Flow() {
 
   if (!state) {
     const view = classifyServerQuery({
-      pending: stateQuery.isLoading || stateQuery.isFetching,
+      pending: statePending,
       error: stateQuery.error,
       hasData: false,
+      timedOut: stateTimedOut,
     });
     return (
       <AppRecoveryScreen
         view={view.kind === "ready" ? { kind: "loading" } : view}
         onRetry={() => {
-          void stateQuery.refetch();
+          const attempt = ++readAttempt.current;
+          setStateRetryKey(key => key + 1);
+          void retryRead({
+            cancel: () => utils.onboardingV2.getState.cancel(),
+            refetch: () => stateQuery.refetch(),
+            isCurrent: () => readAttempt.current === attempt,
+          });
         }}
       />
     );

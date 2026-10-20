@@ -7,6 +7,9 @@ export type RecoveryView =
   | { kind: "error" }
   | { kind: "ready" };
 
+/** A state read that has not settled by this time becomes Retry, not an endless wait. */
+export const RECOVERY_BOUND_MS = 8000;
+
 /** Session is gone. A retry will not bring the saved data back. */
 export function isUnauthorizedError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
@@ -24,8 +27,11 @@ export function classifyServerQuery(input: {
   pending: boolean;
   error: unknown;
   hasData: boolean;
+  /** The wait exceeded RECOVERY_BOUND_MS and nothing saved is on screen yet. */
+  timedOut?: boolean;
 }): RecoveryView {
   if (input.hasData) return { kind: "ready" };
+  if (input.timedOut) return { kind: "error" };
   if (input.pending) return { kind: "loading" };
   if (isUnauthorizedError(input.error)) return { kind: "unauthorized" };
   if (input.error) return { kind: "error" };

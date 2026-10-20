@@ -1,5 +1,11 @@
-import { describe, expect, it } from "vitest";
-import { createGenerationGuard, createSubmitLock, pollWhileActive } from "./guards";
+import { describe, expect, it, vi } from "vitest";
+import {
+  createGenerationGuard,
+  createSubmitLock,
+  pollWhileActive,
+  retryRead,
+  shouldApplyServerSnapshot,
+} from "./guards";
 
 describe("recovery guards", () => {
   it("blocks a second submit until the first one releases", () => {
@@ -26,5 +32,47 @@ describe("recovery guards", () => {
     expect(poll({ state: { data: { status: "running" } } })).toBe(2000);
     expect(poll({ state: { data: { status: "succeeded" } } })).toBe(false);
     expect(poll({ state: {} })).toBe(false);
+  });
+
+  it("drops a snapshot from an older request or an older version", () => {
+    expect(
+      shouldApplyServerSnapshot({
+        requestId: 1,
+        currentId: 2,
+        snapshotVersion: 3,
+        appliedVersion: null,
+      })
+    ).toBe(false);
+    expect(
+      shouldApplyServerSnapshot({
+        requestId: 2,
+        currentId: 2,
+        snapshotVersion: 1,
+        appliedVersion: 2,
+      })
+    ).toBe(false);
+    expect(
+      shouldApplyServerSnapshot({
+        requestId: 2,
+        currentId: 2,
+        snapshotVersion: 2,
+        appliedVersion: 2,
+      })
+    ).toBe(true);
+  });
+
+  it("retries by cancelling the previous read and ignoring a stale result", async () => {
+    const cancel = vi.fn(async () => undefined);
+    const refetch = vi.fn(async () => "saved");
+    await expect(
+      retryRead({ cancel, refetch, isCurrent: () => false })
+    ).resolves.toBeNull();
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(refetch).not.toHaveBeenCalled();
+
+    await expect(
+      retryRead({ cancel, refetch, isCurrent: () => true })
+    ).resolves.toBe("saved");
+    expect(refetch).toHaveBeenCalledOnce();
   });
 });

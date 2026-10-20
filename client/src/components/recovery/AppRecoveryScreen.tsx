@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { getLoginUrl } from "@/const";
 import { IconSpinner } from "@/design-system/icons";
 import { OnboardingShell } from "@/design-system/OnboardingShell";
@@ -6,8 +5,6 @@ import { PrimaryButton } from "@/design-system/core";
 import "@/design-system/tokens.css";
 import type { RecoveryView } from "@/lib/recovery/classifyServerQuery";
 import styles from "./AppRecoveryScreen.module.css";
-
-const SLOW_AFTER_MS = 8000;
 
 function signIn() {
   const returnTo = `${window.location.pathname}${window.location.search}${window.location.hash}`;
@@ -24,23 +21,10 @@ function signIn() {
 export function AppRecoveryScreen({
   view,
   onRetry,
-  slowAfterMs = SLOW_AFTER_MS,
 }: {
   view: RecoveryView;
   onRetry?: () => void;
-  slowAfterMs?: number;
 }) {
-  const [slow, setSlow] = useState(false);
-
-  useEffect(() => {
-    if (view.kind !== "loading") {
-      setSlow(false);
-      return;
-    }
-    const timer = window.setTimeout(() => setSlow(true), slowAfterMs);
-    return () => window.clearTimeout(timer);
-  }, [slowAfterMs, view.kind]);
-
   const title =
     view.kind === "unauthorized"
       ? "Your session expired"
@@ -52,15 +36,12 @@ export function AppRecoveryScreen({
       ? "Sign in to continue where you left off. Your answers stay saved."
       : view.kind === "error"
         ? "Your answers are still saved. Try again."
-        : slow
-          ? "This is taking longer than expected."
-          : "Your saved answers will appear in a moment.";
+        : "Your saved answers will appear in a moment.";
 
-  const showRetry = view.kind === "error" || (view.kind === "loading" && slow);
   const action =
     view.kind === "unauthorized" ? (
       <PrimaryButton onClick={signIn}>Sign in</PrimaryButton>
-    ) : showRetry && onRetry ? (
+    ) : view.kind === "error" && onRetry ? (
       <PrimaryButton onClick={onRetry}>Try again</PrimaryButton>
     ) : null;
 
