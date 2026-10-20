@@ -384,6 +384,31 @@ describe("Instagram identity resolution", () => {
     await vi.runAllTimersAsync();
     await expectation;
   });
+
+  it("bounds a hung profile lookup instead of retrying for minutes", async () => {
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        const fail = () => reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+        if (init?.signal?.aborted) {
+          fail();
+          return;
+        }
+        init?.signal?.addEventListener("abort", fail, { once: true });
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const started = Date.now();
+    await expect(
+      resolveInstagramIdentity("sista.media_", {
+        timeoutMs: 50,
+        maxAttempts: 2,
+        deadlineMs: 400,
+      })
+    ).rejects.toMatchObject({ httpStatus: 408 });
+    expect(Date.now() - started).toBeLessThan(1_000);
+    expect(fetchMock.mock.calls.length).toBeGreaterThan(0);
+    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(2);
+  });
 });
 
 describe("hasInstagramMediaRestriction", () => {

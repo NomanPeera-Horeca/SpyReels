@@ -8,6 +8,14 @@ import {
   meterScrapeCreatorsResponse,
 } from "./scrapeCreatorsMeter";
 import { MIN_SPY_DISPLAY_REELS } from "@shared/spyReelsLimits";
+import {
+  attemptTimeoutMs,
+  budgetExpiredOrTight,
+  createLookupBudget,
+  linkAbortSignal,
+  type LookupBudget,
+  type LookupBudgetOptions,
+} from "./providerLookupBudget";
 
 const API_BASE = "https://api.scrapecreators.com";
 const SCRAPECREATORS_FETCH_MS = 30_000;
@@ -22,8 +30,12 @@ function requireApiKey(): string {
 
 async function scGet(
   path: string,
-  query: Record<string, string | undefined>
+  query: Record<string, string | undefined>,
+  opts?: { timeoutMs?: number; signal?: AbortSignal }
 ): Promise<{ status: number; data: any }> {
+  if (opts?.signal?.aborted) {
+    return { status: 408, data: { error: "scrapecreators_request_timeout" } };
+  }
   const metered = meterScrapeCreatorsRequest();
   if (metered) return metered;
   const url = new URL(`${API_BASE}${path}`);
@@ -34,9 +46,10 @@ async function scGet(
   }
 
   const controller = new AbortController();
+  const unlink = linkAbortSignal(controller, opts?.signal);
   const timeout = setTimeout(
     () => controller.abort(),
-    SCRAPECREATORS_FETCH_MS
+    opts?.timeoutMs ?? SCRAPECREATORS_FETCH_MS
   );
   let response: Response;
 
@@ -56,6 +69,7 @@ async function scGet(
     throw error;
   } finally {
     clearTimeout(timeout);
+    unlink();
   }
 
   let data: any = null;
@@ -154,14 +168,48 @@ export interface YouTubeTranscriptResult {
   segments: Array<{ start: number; end: number; text: string }>;
 }
 
-export async function fetchYouTubeChannel(handle: string): Promise<YouTubeChannelInfo> {
+export async function fetchYouTubeChannel(
+  handle: string,
+  options?: LookupBudgetOptions
+): Promise<YouTubeChannelInfo> {
   const cleanHandle = cleanYouTubeHandle(handle);
-  const maxTries = 5;
+  const budget = options ? createLookupBudget(options) : undefined;
+  const maxTries = budget?.maxAttempts ?? 5;
+  try {
+    return await fetchYouTubeChannelBudgeted(cleanHandle, budget, maxTries);
+  } finally {
+    budget?.stop();
+  }
+}
 
+async function fetchYouTubeChannelBudgeted(
+  cleanHandle: string,
+  budget: LookupBudget | undefined,
+  maxTries: number
+): Promise<YouTubeChannelInfo> {
   for (let attempt = 1; attempt <= maxTries; attempt++) {
-    const { status, data } = await scGet("/v1/youtube/channel", {
-      handle: cleanHandle,
-    });
+    if (budgetExpiredOrTight(budget)) {
+      throw new Error("scrapecreators_request_timeout");
+    }
+    const { status, data } = await scGet(
+      "/v1/youtube/channel",
+      { handle: cleanHandle },
+      budget
+        ? {
+            timeoutMs: attemptTimeoutMs(budget, SCRAPECREATORS_FETCH_MS),
+            signal: budget.signal,
+          }
+        : undefined
+    );
+
+    if (status === 408 || data?.error === "scrapecreators_request_timeout") {
+      if (attempt < maxTries && !budgetExpiredOrTight(budget)) {
+        if (budget) await budget.sleep(400);
+        else await sleep(1000 * attempt);
+        continue;
+      }
+      throw new Error("scrapecreators_request_timeout");
+    }
 
     if (responseLooksNotFound(status, data)) {
       throw new Error(
@@ -170,8 +218,9 @@ export async function fetchYouTubeChannel(handle: string): Promise<YouTubeChanne
     }
 
     if (status === 429) {
-      if (attempt < maxTries) {
-        await sleep(2000 * attempt);
+      if (attempt < maxTries && !budgetExpiredOrTight(budget)) {
+        if (budget) await budget.sleep(400);
+        else await sleep(2000 * attempt);
         continue;
       }
       throw new Error(
@@ -185,8 +234,9 @@ export async function fetchYouTubeChannel(handle: string): Promise<YouTubeChanne
       typeof data !== "object" ||
       (data as any).success === false
     ) {
-      if (attempt < maxTries) {
-        await sleep(1000 * attempt);
+      if (attempt < maxTries && !budgetExpiredOrTight(budget)) {
+        if (budget) await budget.sleep(400);
+        else await sleep(1000 * attempt);
         continue;
       }
       const vendorMessage = readErrorMessage(data);
@@ -200,12 +250,13 @@ export async function fetchYouTubeChannel(handle: string): Promise<YouTubeChanne
     const channelId = String((data as any).channelId ?? "");
     if (!channelId) {
       const vendorMessage = readErrorMessage(data);
-      if (attempt < maxTries) {
+      if (attempt < maxTries && !budgetExpiredOrTight(budget)) {
         console.warn(
           `[YouTube] Invalid channel response for @${cleanHandle} ` +
             `(attempt ${attempt}/${maxTries})${vendorMessage ? `: ${vendorMessage}` : ""}`
         );
-        await sleep(600 * attempt);
+        if (budget) await budget.sleep(400);
+        else await sleep(600 * attempt);
         continue;
       }
       throw new Error(
