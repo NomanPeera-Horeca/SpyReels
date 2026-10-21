@@ -96,6 +96,15 @@ describe("suggestion guards", () => {
         "Commercial kitchen equipment for restaurants. Order online or DM for a quote."
       )?.code
     ).toBe("en");
+    expect(
+      detectContentLanguage(
+        "Daily strategies to grow your restaurant. Shop our catalog and supplies."
+      )?.code
+    ).toBe("en");
+    expect(detectContentLanguage("Restaurant supplies")).toBeNull();
+    expect(
+      detectContentLanguage("para el restaurante and your menu today")?.code
+    ).not.toBe("en");
   });
 });
 

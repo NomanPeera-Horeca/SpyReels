@@ -1095,6 +1095,85 @@ describe("generateRecommendations: Goal -> Audience -> Pillars", () => {
     expect(JSON.stringify(store.items)).toBe(before);
   });
 
+  it("saves profile niche and language when the goal model fails, without a second niche write", async () => {
+    const store = new MemoryRecoStore();
+    store.snapshot = null;
+    const llm = fakeLlm(
+      new Error("credit balance is too low"),
+      new Error("credit balance is too low")
+    );
+    const first = await generateRecommendations(
+      { store, invoker: llm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "goal" }
+    );
+    expect(first).toMatchObject({ status: "failed", kind: "llm_unavailable" });
+    expect(store.items.filter(i => i.kind === "goal")).toEqual([]);
+    expect(store.items.find(i => i.kind === "niche")?.payload).toMatchObject({
+      slug: "business-entrepreneurship",
+    });
+    expect(store.items.find(i => i.kind === "language")?.payload).toMatchObject({
+      code: "en",
+    });
+
+    const again = await generateRecommendations(
+      { store, invoker: llm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "goal" }
+    );
+    expect(again).toMatchObject({ status: "failed", kind: "llm_unavailable" });
+    expect(store.items.filter(i => i.kind === "niche")).toHaveLength(1);
+    expect(llm.calls).toHaveLength(2);
+  });
+
+  it("asks the goal question even after a profile niche was saved", async () => {
+    const store = new MemoryRecoStore();
+    store.snapshot = null;
+    const llm = fakeLlm({
+      decision: "clarify",
+      goal: "",
+      confidence: "low",
+      evidence_basis: ["bio"],
+      clarifying_question: "What should these videos help your customers do?",
+      offer_quote: "",
+    });
+    const result = await generateRecommendations(
+      { store, invoker: llm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "goal" }
+    );
+    expect(result.status).toBe("needs_clarification");
+    expect(store.items.some(i => i.kind === "niche")).toBe(true);
+    expect(store.items.some(i => i.kind === "goal")).toBe(false);
+  });
+
+  it("keeps confirmed niche and language when a later post analysis retries the goal", async () => {
+    const store = new MemoryRecoStore();
+    store.snapshot = null;
+    const llm = fakeLlm(
+      new Error("deadline exceeded"),
+      new Error("deadline exceeded")
+    );
+    await generateRecommendations(
+      { store, invoker: llm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "goal" }
+    );
+    for (const row of store.items) {
+      if (row.kind === "niche" || row.kind === "language") row.status = "confirmed";
+    }
+    store.snapshot = snap(
+      Array.from({ length: 8 }, (_, i) => `Tip ${i} for your restaurant team`)
+    );
+    const enriched = await generateRecommendations(
+      { store, invoker: llm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "goal" }
+    );
+    expect(enriched).toMatchObject({ status: "failed", kind: "timeout" });
+    expect(store.items.filter(i => i.kind === "niche" && i.status === "confirmed")).toHaveLength(1);
+    expect(
+      store.items.filter(i => i.kind === "language" && i.status === "confirmed")
+    ).toHaveLength(1);
+    expect(store.items.filter(i => i.kind === "goal")).toEqual([]);
+    expect(llm.calls).toHaveLength(2);
+  });
+
   it("insufficient evidence: asks to clarify, no model call, nothing stored", async () => {
     const store = new MemoryRecoStore();
     store.profile = {

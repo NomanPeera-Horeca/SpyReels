@@ -201,7 +201,10 @@ function compareGroup(input: {
     .sort((a, b) => b.value - a.value)
     .map(row => row.post);
   const video = members[0]!;
-  const support = `Compared with ${baseline.length} other videos that have this metric. This describes a pattern in the posts.`;
+  const support =
+    input.metric === "views"
+      ? `Group average across ${group.length} videos, compared with ${baseline.length} others. The view count is this video only.`
+      : `Group average across ${group.length} videos, compared with ${baseline.length} others. This percentage is not this video's own engagement. The view count is this video only.`;
   return {
     kind: input.kind,
     metric: input.metric,

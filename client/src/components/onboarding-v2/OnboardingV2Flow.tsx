@@ -49,7 +49,8 @@ import {
   UseCaseStep,
   type PlatformError,
 } from "./steps";
-import { AudienceStep, GoalStep, MAX_GOALS, PillarsStep, type AiState, type StepItem } from "./step4";
+import { recommendationWaitState } from "./recommendationWait";
+import { AudienceStep, GoalStep, MAX_GOALS, PillarsStep, type StepItem } from "./step4";
 import { COPY } from "./copy";
 import { suggestionRequestKey } from "@shared/personalization/suggestionRequest";
 import { InsightPhonePreview } from "./InsightPhonePreview";
@@ -418,15 +419,18 @@ export default function OnboardingV2Flow() {
     if (recFresh) void refresh();
   }, [recFresh, recStatus.data, refresh]);
 
-  const ai: AiState = useMemo(() => {
-    if (!step4 || requested[step4] === undefined) return { state: "idle" };
-    const s = recStatus.data;
-    if (recWaitExpired && !recFresh) return { state: "failed" };
-    if (!s || !recFresh) return { state: "running" };
-    if (s.state === "failed") return { state: "failed" };
-    if (s.state === "clarify") return { state: "clarify", question: s.question };
-    return { state: "idle" };
-  }, [step4, requested, recStatus.data, recWaitExpired, recFresh]);
+  const ai = useMemo(
+    () =>
+      recommendationWaitState({
+        requested: Boolean(step4 && requested[step4] !== undefined),
+        status: recStatus.data ?? null,
+        seenAt: recSeenAt.current,
+        waitExpired: recWaitExpired,
+        requestFailed: requestRecs.isError,
+        statusUnreadable: recStatus.isError,
+      }),
+    [step4, requested, recStatus.data, recStatus.isError, recWaitExpired, requestRecs.isError]
+  );
 
   /* ---------- previews ---------- */
 

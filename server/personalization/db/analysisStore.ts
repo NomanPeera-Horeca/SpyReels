@@ -103,7 +103,10 @@ function toRun(
 
 /** Same account identity check as requestProfileAnalysis's key derivation. */
 function runMatchesIdentity(
-  run: typeof profileAnalysisRuns.$inferSelect,
+  run: Pick<
+    typeof profileAnalysisRuns.$inferSelect,
+    "requestKind" | "refreshSequence" | "inputHash"
+  >,
   profile: AnalysisProfile
 ): boolean {
   if (!profile.platform || !profile.normalizedHandle) return false;
@@ -176,8 +179,19 @@ export function createAnalysisStore(db: Db): AnalysisStore {
     },
 
     async listRunSummaries(profile): Promise<RunSummaryWithKey[]> {
+      // Identity lookup only. Leave sourceSnapshot out so MySQL does not sort the JSON.
       const rows = await db
-        .select()
+        .select({
+          id: profileAnalysisRuns.id,
+          idempotencyKey: profileAnalysisRuns.idempotencyKey,
+          requestKind: profileAnalysisRuns.requestKind,
+          refreshSequence: profileAnalysisRuns.refreshSequence,
+          inputHash: profileAnalysisRuns.inputHash,
+          status: profileAnalysisRuns.status,
+          providerAttempts: profileAnalysisRuns.providerAttempts,
+          createdAt: profileAnalysisRuns.createdAt,
+          completedAt: profileAnalysisRuns.completedAt,
+        })
         .from(profileAnalysisRuns)
         .where(
           and(
@@ -385,8 +399,10 @@ export function createRecommendationStore(db: Db): RecommendationStore {
     },
 
     async loadLatestSnapshot(profileId) {
-      const rows = await db
-        .select({ snapshot: profileAnalysisRuns.sourceSnapshot })
+      // Sort the indexed id only. Sorting sourceSnapshot itself runs out of sort memory
+      // once a profile has a full post window, and then suggestions cannot be read or enriched.
+      const [latest] = await db
+        .select({ id: profileAnalysisRuns.id })
         .from(profileAnalysisRuns)
         .where(
           and(
@@ -394,9 +410,15 @@ export function createRecommendationStore(db: Db): RecommendationStore {
             inArray(profileAnalysisRuns.status, ["succeeded", "partial"])
           )
         )
-        .orderBy(desc(profileAnalysisRuns.completedAt))
+        .orderBy(desc(profileAnalysisRuns.completedAt), desc(profileAnalysisRuns.createdAt))
         .limit(1);
-      return rows[0]?.snapshot ?? null;
+      if (!latest) return null;
+      const [row] = await db
+        .select({ snapshot: profileAnalysisRuns.sourceSnapshot })
+        .from(profileAnalysisRuns)
+        .where(eq(profileAnalysisRuns.id, latest.id))
+        .limit(1);
+      return row?.snapshot ?? null;
     },
 
     async loadItems(profileId) {

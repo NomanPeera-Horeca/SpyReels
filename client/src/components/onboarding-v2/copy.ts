@@ -68,7 +68,7 @@ export const COPY = {
   },
   insight: {
     label: "Performance insight from your videos",
-    views: "views",
+    views: "views on this video",
   },
   whatWorks: {
     title: "What works for you",

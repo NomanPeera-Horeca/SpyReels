@@ -38,6 +38,10 @@ describe("performance insights", () => {
     expect(panels.goal?.headline).toBe(
       "Videos starting with a question average 4.8x more views."
     );
+    expect(panels.goal?.postId).toBe("q1");
+    expect(panels.goal?.views).toBe(5000);
+    expect(panels.goal?.support).toContain("Group average");
+    expect(panels.goal?.support).toContain("this video only");
     expect(panels.goal?.comparison).toMatchObject({
       metric: "views",
       groupCount: MIN_COMPARISON_GROUP,
@@ -141,6 +145,10 @@ describe("performance insights", () => {
     ];
     const panels = buildPerformancePanels(posts, NOW);
     expect(panels.audience?.comparison?.metric).toBe("engagement_rate");
+    expect(panels.audience?.views).toBe(
+      posts.find(post => post.postId === panels.audience?.postId)?.views
+    );
+    expect(panels.audience?.support).toContain("not this video's own engagement");
     expect(panels.audience?.headline).toContain("higher engagement");
     expect(panels.audience?.headline.toLowerCase()).not.toContain("watch");
     expect(panels.pillars?.headline).toContain("about food waste");

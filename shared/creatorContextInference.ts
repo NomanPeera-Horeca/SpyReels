@@ -34,6 +34,30 @@ const NICHE_RULES: Array<{ pattern: RegExp; slug: string; label: string }> = [
   },
 ];
 
+const OWNS_VENUE_RE =
+  /\b(?:my|our)\s+(?:restaurant|cafe|café|bar|diner|venue|hotel)\b/i;
+
+const BUSINESS = {
+  slug: "business-entrepreneurship",
+  label: "Business & Entrepreneurship",
+} as const;
+
+/**
+ * A supplier, consultant, or other business talking about restaurants as customers.
+ * Owning the venue ("my restaurant", "our cafe") stays a venue niche.
+ */
+function servesHospitalityCustomers(text: string): boolean {
+  if (OWNS_VENUE_RE.test(text)) return false;
+  if (!/\b(?:restaurants?|cafes?|cafés?|hospitality)\b/i.test(text)) return false;
+  return (
+    /\b(?:suppliers?|supplies|supply|catalog|catalogue|wholesale|distributor|equipment|software|platform|consultant|consulting|agency|horeca)\b/i.test(
+      text
+    ) ||
+    /\b(?:restaurant|cafe|café|hospitality)\s+owners?\b/i.test(text) ||
+    /\bgrow your (?:restaurant|cafe|café)\b/i.test(text)
+  );
+}
+
 const HOSPITALITY_RE =
   /\b(guest|hotel|resort|hospitality|check-in|checkout|restaurant|cafe|diner|venue|airbnb|bnb|stay|lodging|traveler|traveller|tourist)\b/i;
 
@@ -53,6 +77,7 @@ export type InferredAudience = {
 export function inferNicheFromText(text: string): InferredNiche | null {
   const t = text.trim();
   if (!t) return null;
+  if (servesHospitalityCustomers(t)) return BUSINESS;
   for (const rule of NICHE_RULES) {
     if (rule.pattern.test(t)) return { slug: rule.slug, label: rule.label };
   }
