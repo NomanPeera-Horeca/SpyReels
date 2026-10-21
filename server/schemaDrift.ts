@@ -42,6 +42,11 @@ export const CRITICAL_SCHEMA_EXPECTATIONS: ReadonlyArray<{
     column: "sourceId",
     feature: "Viral Posts feed",
   },
+  {
+    table: "personalization_items",
+    column: "dismissedFromStatus",
+    feature: "Onboarding suggestions",
+  },
 ];
 
 export type SchemaDriftFinding = {

@@ -170,18 +170,32 @@ describe("personalization schema: Drizzle and SQL draft match", () => {
 });
 
 describe("migration gate: drafts cannot reach a database by accident", () => {
-  it("no numbered migration exists for these tables", () => {
+  it("no numbered migration creates these tables", () => {
     const sqlFiles = execSync("ls drizzle", { cwd: root })
       .toString()
       .split("\n")
       .filter(f => f.endsWith(".sql"));
-    expect(
-      sqlFiles.filter(f =>
-        /onboarding_v2|social_profiles|personalization_(items|progress)/i.test(
-          f
-        )
-      )
-    ).toEqual([]);
+    const touching = sqlFiles.filter(f =>
+      /onboarding_v2|social_profiles|personalization_(items|progress)/i.test(f)
+    );
+    // 0106 only adds the undo column. It must not become a way to create the tables.
+    expect(touching).toEqual([
+      "0106_personalization_items_dismiss_memory.sql",
+    ]);
+    const code = readFileSync(
+      path.join(root, "drizzle", touching[0]),
+      "utf8"
+    )
+      .split("\n")
+      .filter(l => !l.trim().startsWith("--"))
+      .join("\n");
+    expect(code).toContain("ADD COLUMN");
+    expect(code).toContain("dismissedFromStatus");
+    expect(code).not.toMatch(/\bCREATE\s+TABLE\b/i);
+    expect(code).not.toMatch(/\bDROP\b/i);
+    expect(code).not.toMatch(
+      /\bTRUNCATE\b|^\s*DELETE\s+FROM\b|^\s*UPDATE\s+`/im
+    );
   });
 
   it("drizzle.config.ts does not include the draft schema", () => {
