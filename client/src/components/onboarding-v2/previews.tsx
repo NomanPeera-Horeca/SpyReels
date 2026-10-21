@@ -20,6 +20,10 @@ import { AnalysisStatusChecklist } from "@/design-system/AnalysisStatus";
 import { DevicePhoneFrame } from "@/design-system/DevicePhoneFrame";
 import { trpc } from "@/lib/trpc";
 import {
+  attemptsForStackSlot,
+  ONBOARDING_VERIFIED_POSTERS,
+} from "@shared/onboardingPreviewMedia";
+import {
   alignOnboardingStackSlots,
   ONBOARDING_STACK_ORDER,
 } from "@shared/onboardingViralStack";
@@ -90,6 +94,8 @@ export function ViralStackPreview() {
     <div className={styles.stack} data-stack-state={stack.data ? "ready" : "pending"} aria-hidden>
       {ONBOARDING_STACK_ORDER.map((platform, index) => {
         const place = STACK[index];
+        const fallback = ONBOARDING_VERIFIED_POSTERS[index];
+        if (!place || !fallback) return null;
         const slot = aligned[index];
         return (
           <div
@@ -104,7 +110,8 @@ export function ViralStackPreview() {
           >
             <AmbientStackCard
               platform={platform}
-              attempts={slot?.attempts ?? []}
+              attempts={attemptsForStackSlot(slot, index)}
+              fallbackThumbnail={fallback.thumbnailUrl}
               active={pageVisible}
             />
           </div>

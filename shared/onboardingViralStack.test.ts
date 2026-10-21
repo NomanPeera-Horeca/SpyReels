@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { onboardingPreviewMedia } from "./onboardingPreviewMedia";
+import { attemptsForStackSlot, onboardingPreviewMedia, ONBOARDING_VERIFIED_POSTERS } from "./onboardingPreviewMedia";
 import {
   alignOnboardingStackSlots,
+  ONBOARDING_STACK_ORDER,
   selectOnboardingViralStack,
   type OnboardingStackCandidate,
 } from "./onboardingViralStack";
@@ -127,5 +128,30 @@ describe("selectOnboardingViralStack", () => {
       "tiktok",
     ]);
     expect(aligned[3]?.attempts[0]?.id).toBe("ig-2");
+  });
+
+  it("paints a verified thumbnail in every position before the catalog responds", () => {
+    expect(ONBOARDING_VERIFIED_POSTERS).toHaveLength(5);
+    const posters = ONBOARDING_STACK_ORDER.map((_, index) => attemptsForStackSlot(null, index)[0]);
+    expect(posters.map((attempt) => attempt?.thumbnailUrl)).toEqual(
+      ONBOARDING_VERIFIED_POSTERS.map((attempt) => attempt.thumbnailUrl)
+    );
+    expect(posters.every((attempt) => (attempt?.thumbnailUrl ?? "").startsWith("/onboarding-previews/"))).toBe(true);
+    const youtube = attemptsForStackSlot(null, 2)[0];
+    expect(youtube?.youtubeVideoId).toBe("f7y2XikE7sY");
+    expect(youtube?.thumbnailUrl).toBe("/onboarding-previews/youtube/f7y2XikE7sY.jpg");
+    expect(youtube?.videoUrl).toBeNull();
+  });
+
+  it("keeps the verified YouTube poster when the catalog slot has no thumbnail", () => {
+    const attempts = attemptsForStackSlot(
+      {
+        platform: "youtube",
+        attempts: [{ id: "missing", thumbnailUrl: "", videoUrl: null, youtubeVideoId: "missing1" }],
+      },
+      2
+    );
+    expect(attempts[0]?.thumbnailUrl).toBe("/onboarding-previews/youtube/f7y2XikE7sY.jpg");
+    expect(attempts[0]?.youtubeVideoId).toBe("f7y2XikE7sY");
   });
 });
