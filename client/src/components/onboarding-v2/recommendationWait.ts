@@ -1,7 +1,7 @@
 /**
  * What the suggestion step shows while a recommendation job is in flight.
- * A failed, unreadable, or expired job leaves the loading line. Saved profile
- * suggestions stay on the form underneath.
+ * An empty status is not a running job. Saved suggestions stay on the form
+ * while a later evidence key is still open.
  */
 import type { AiState } from "./step4";
 
@@ -11,6 +11,21 @@ export type RecommendationStatus = {
   question?: string;
 };
 
+const DISPLAY_KINDS = {
+  goal: ["goal", "niche", "language"],
+  audience: ["audience"],
+  pillars: ["pillar"],
+} as const;
+
+export function stepHasDisplaySuggestions(
+  step: keyof typeof DISPLAY_KINDS | null,
+  items: readonly { kind: string }[]
+): boolean {
+  if (!step) return false;
+  const kinds: readonly string[] = DISPLAY_KINDS[step];
+  return items.some(item => kinds.includes(item.kind));
+}
+
 export function recommendationWaitState(input: {
   requested: boolean;
   status: RecommendationStatus | null;
@@ -18,18 +33,21 @@ export function recommendationWaitState(input: {
   waitExpired: boolean;
   requestFailed: boolean;
   statusUnreadable: boolean;
+  hasSavedSuggestions: boolean;
 }): AiState {
   if (!input.requested) return { state: "idle" };
-  if (input.requestFailed) return { state: "failed" };
+  if (input.requestFailed && !input.hasSavedSuggestions) return { state: "failed" };
   const status = input.status;
-  const fresh =
-    status != null &&
-    status.state !== "running" &&
-    typeof status.at === "number" &&
-    status.at !== input.seenAt;
-  if (input.statusUnreadable && !fresh) return { state: "failed" };
-  if (input.waitExpired && !fresh) return { state: "failed" };
-  if (!status || !fresh) return { state: "running" };
+  if (input.statusUnreadable && !status && !input.hasSavedSuggestions) return { state: "failed" };
+  if (!status) {
+    if (input.waitExpired && !input.hasSavedSuggestions) return { state: "failed" };
+    return { state: "idle" };
+  }
+  if (status.state === "running") {
+    if (input.hasSavedSuggestions) return { state: "idle" };
+    if (input.waitExpired) return { state: "failed" };
+    return { state: "running" };
+  }
   if (status.state === "failed") return { state: "failed" };
   if (status.state === "clarify" && status.question) {
     return { state: "clarify", question: status.question };

@@ -49,7 +49,8 @@ import {
   UseCaseStep,
   type PlatformError,
 } from "./steps";
-import { recommendationWaitState } from "./recommendationWait";
+import { preferOnboardingSnapshot } from "./onboardingSnapshot";
+import { recommendationWaitState, stepHasDisplaySuggestions } from "./recommendationWait";
 import { AudienceStep, GoalStep, MAX_GOALS, PillarsStep, type StepItem } from "./step4";
 import { COPY } from "./copy";
 import { suggestionRequestKey } from "@shared/personalization/suggestionRequest";
@@ -137,7 +138,9 @@ export default function OnboardingV2Flow() {
   const acceptedState = useRef(stateQuery.data ?? null);
   if (stateQuery.data) {
     const snap = stateQuery.data;
+    const chosen = preferOnboardingSnapshot(acceptedState.current, snap);
     if (
+      chosen === snap &&
       shouldApplyServerSnapshot({
         requestId: readAttempt.current,
         currentId: readAttempt.current,
@@ -166,6 +169,7 @@ export default function OnboardingV2Flow() {
   const recRequestedAt = useRef<number | null>(null);
   const recSeenAt = useRef<number | null>(null);
   const latestRecAt = useRef<number | null>(null);
+  const seenAnalysis = useRef<string | null>(null);
   const completing = useRef(false);
   const submissions = useRef(createSubmitLock()).current;
   const recommendationRequests = useRef(new Set<string>());
@@ -344,10 +348,11 @@ export default function OnboardingV2Flow() {
   const confirmedAudience = items.some(i => i.kind === "audience" && i.status === "confirmed");
   const isStep4 = screen === "goal" || screen === "audience" || screen === "pillars";
   const step4 = isStep4 ? (screen as PersonalizationStep) : null;
+  const hasSavedSuggestions = stepHasDisplaySuggestions(step4, items);
 
-  // Ask once per evidence phase. A later analysis snapshot or a confirmed goal
-  // changes the key, so biography-only suggestions are replaced. A missing goal
-  // does not block Audience or Pillars.
+  // Ask once per evidence phase. A later snapshot may enrich unconfirmed
+  // suggestions. Saved rows stay on screen while that job is still open.
+  // A missing goal does not block Audience or Pillars.
   useEffect(() => {
     if (!step4 || !state?.profile) return;
     const requestKey = suggestionRequestKey({
@@ -393,7 +398,7 @@ export default function OnboardingV2Flow() {
         const started = recRequestedAt.current;
         if (started == null) return false;
         if (Date.now() - started > 120_000) {
-          setRecWaitExpired(true);
+          if (!hasSavedSuggestions) setRecWaitExpired(true);
           return false;
         }
         const data = q.state.data;
@@ -416,8 +421,21 @@ export default function OnboardingV2Flow() {
     typeof recStatus.data.at === "number" &&
     recStatus.data.at !== recSeenAt.current;
   useEffect(() => {
-    if (recFresh) void refresh();
-  }, [recFresh, recStatus.data, refresh]);
+    if (!recFresh) return;
+    void utils.onboardingV2.getState.invalidate();
+  }, [recFresh, recStatus.data, utils]);
+  const analysisMarker = `${state?.analysis?.status ?? ""}:${state?.analysis?.postsInWindow ?? ""}`;
+  useEffect(() => {
+    if (!step4) return;
+    if (seenAnalysis.current === analysisMarker) return;
+    const hadPrevious = seenAnalysis.current != null;
+    seenAnalysis.current = analysisMarker;
+    if (!hadPrevious) return;
+    const status = state?.analysis?.status;
+    if (status === "succeeded" || status === "partial" || status === "failed") {
+      void utils.onboardingV2.getState.invalidate();
+    }
+  }, [step4, analysisMarker, state?.analysis?.status, utils]);
 
   const ai = useMemo(
     () =>
@@ -428,8 +446,17 @@ export default function OnboardingV2Flow() {
         waitExpired: recWaitExpired,
         requestFailed: requestRecs.isError,
         statusUnreadable: recStatus.isError,
+        hasSavedSuggestions,
       }),
-    [step4, requested, recStatus.data, recStatus.isError, recWaitExpired, requestRecs.isError]
+    [
+      step4,
+      requested,
+      recStatus.data,
+      recStatus.isError,
+      recWaitExpired,
+      requestRecs.isError,
+      hasSavedSuggestions,
+    ]
   );
 
   /* ---------- previews ---------- */

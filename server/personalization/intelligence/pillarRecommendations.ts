@@ -165,7 +165,7 @@ export function parsePillarOutput(
       droppedFor = "a pillar contains numbers that are not in the evidence";
       continue;
     }
-    if (unsupportedProperNouns(`${title}. ${description}`, corpus).length) {
+    if (unsupportedProperNouns(`${titleCaseAsWords(title)}. ${description}`, corpus).length) {
       droppedFor = "a pillar names things that are not in the evidence";
       continue;
     }
@@ -194,6 +194,22 @@ export function parsePillarOutput(
       confidence: shape.data.confidence,
     },
   };
+}
+
+/**
+ * Short titles are written in Title Case. That is not a proper noun.
+ * A word with an internal capital, such as a brand, is left unchanged.
+ */
+function titleCaseAsWords(title: string): string {
+  return title
+    .split(/\s+/)
+    .map(word => {
+      if (word.length < 2) return word;
+      const rest = word.slice(1);
+      if (rest !== rest.toLowerCase()) return word;
+      return `${word.charAt(0).toLowerCase()}${rest}`;
+    })
+    .join(" ");
 }
 
 function cleanSubtopics(raw: string[] | undefined, corpus: string): string[] {

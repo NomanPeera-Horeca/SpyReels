@@ -157,6 +157,8 @@ export type RecommendationResult =
       status: "failed";
       kind: "timeout" | "invalid_output" | "llm_unavailable";
       usage: LlmUsage;
+      /** Stable parser or provider reason. Never profile text. */
+      reason?: string;
     };
 
 /** Durable job idempotency key for one generation (same inputs = same job). */
@@ -214,6 +216,33 @@ export function stepSuggestionsSaved(
   evidence: CreatorEvidence
 ): boolean {
   return freshAiCovers(items, STEP_KIND[step], stepInputsHash(step, items, evidence));
+}
+
+const STEP_DISPLAY_KINDS: Record<RecommendationStep, readonly string[]> = {
+  goal: ["goal", "niche", "language"],
+  audience: ["audience"],
+  pillars: ["pillar"],
+};
+
+/** Saved rows for this step, including ones written before the latest evidence. */
+export function stepHasLiveSuggestions(
+  items: readonly { kind: string; status: string }[],
+  step: RecommendationStep
+): boolean {
+  const kinds = STEP_DISPLAY_KINDS[step];
+  return items.some(
+    item =>
+      kinds.includes(item.kind) &&
+      (item.status === "suggested" || item.status === "confirmed")
+  );
+}
+
+/** Parser reason only. Drops parenthetical evidence so logs stay free of profile text. */
+export function safeValidationReason(message: string): string {
+  const stripped = message.replace(/\([^)]*\)/g, "").replace(/\s+/g, " ").trim();
+  if (!stripped || stripped.length > 140) return "validation_failed";
+  if (/https?:|@\w/i.test(stripped)) return "validation_failed";
+  return stripped;
 }
 
 function freshAiCovers(
@@ -362,7 +391,12 @@ export async function generateRecommendations(
     }
   } catch (err) {
     if (err instanceof IntelligenceError)
-      return { status: "failed", kind: err.kind, usage: err.usage };
+      return {
+        status: "failed",
+        kind: err.kind,
+        usage: err.usage,
+        reason: safeValidationReason(err.message),
+      };
     throw err;
   }
 
@@ -677,7 +711,12 @@ async function runGoalStep(input: {
     };
   }
   if (goalError && goalStillOpen)
-    return { status: "failed", kind: goalError.kind, usage: goalError.usage };
+    return {
+      status: "failed",
+      kind: goalError.kind,
+      usage: goalError.usage,
+      reason: safeValidationReason(goalError.message),
+    };
   if (inserted === 0) {
     const live = input.items.filter(
       i => i.kind === "goal" && (i.status === "suggested" || i.status === "confirmed")
