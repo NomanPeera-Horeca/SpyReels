@@ -6,16 +6,16 @@ import { trpc } from "@/lib/trpc";
 import { classifyServerQuery } from "@/lib/recovery/classifyServerQuery";
 import { retryRead } from "@/lib/recovery/guards";
 import { useRecoveryBound } from "@/lib/recovery/useRecoveryBound";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { parseResearchIntent } from "@shared/researchIntent";
 import { stashResearchHandleForAfterAuth } from "@/lib/researchPendingHandle";
+import { useExperienceAccess } from "@/lib/experienceAccess";
 import {
-  FIRST_SIGNUP_GUIDE_MS,
-  ONBOARDING_RELEASED_KEY,
   decideOnboardingAccess,
   hasLegacyOnboardingProgress,
   hasSavedOnboardingProgress,
+  isDefaultAppEntry,
 } from "@shared/onboardingAccess";
 
 const FEATURE_LAUNCH_DATE = new Date(FEATURE_LAUNCH_DATE_ISO);
@@ -25,22 +25,6 @@ function toDate(value: unknown): Date | null {
   if (value instanceof Date) return value;
   const parsed = new Date(String(value));
   return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function readReleased(): boolean {
-  try {
-    return window.localStorage.getItem(ONBOARDING_RELEASED_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function writeReleased() {
-  try {
-    window.localStorage.setItem(ONBOARDING_RELEASED_KEY, "1");
-  } catch {
-    // Private mode can refuse storage. The in-memory flag still covers this visit.
-  }
 }
 
 function GateTimeoutFallback() {
@@ -68,14 +52,14 @@ export default function OnboardingGate({
   const { user, loading, refresh } = useAuth();
   const [location, setLocation] = useLocation();
   const [showTimeoutFallback, setShowTimeoutFallback] = useState(false);
-  const [released, setReleased] = useState(readReleased);
   const [retryKey, setRetryKey] = useState(0);
   const utils = trpc.useUtils();
+  const { ready: experienceReady, access } = useExperienceAccess();
+  const didMarkEntered = useRef(false);
 
   const createdAt = toDate(user?.createdAt);
   const isPostLaunchUser =
     Boolean(user) && Boolean(createdAt) && createdAt!.getTime() > FEATURE_LAUNCH_DATE.getTime();
-  const accountAgeMs = createdAt ? Date.now() - createdAt.getTime() : null;
 
   // Completed and skipped stay on the legacy user row. Refetch so another
   // tab finishing setup is seen. This read does not start analysis.
@@ -95,6 +79,7 @@ export default function OnboardingGate({
   const legacy = onboardingStateQuery.data;
   const completed = Boolean(legacy?.onboardingCompletedAt);
   const skipped = Boolean(legacy?.onboardingSkippedAt);
+  const entered = Boolean(legacy?.onboardingEnteredAt);
   const legacyProgress = hasLegacyOnboardingProgress(
     legacy
       ? {
@@ -106,24 +91,25 @@ export default function OnboardingGate({
         }
       : null
   );
-  const youngAccount =
-    accountAgeMs != null && accountAgeMs >= 0 && accountAgeMs <= FIRST_SIGNUP_GUIDE_MS;
-  const couldGuide =
+  const legacyKnown = Boolean(legacy) || onboardingStateQuery.isError;
+  const mightBeFirst =
     Boolean(user) &&
     isPostLaunchUser &&
-    !loading &&
+    isDefaultAppEntry(location) &&
     !completed &&
     !skipped &&
-    !released &&
-    !legacyProgress &&
-    !onboardingStateQuery.isLoading &&
-    !onboardingStateQuery.isError &&
-    location === "/" &&
-    youngAccount;
+    !entered &&
+    !legacyProgress;
+  const firstSignupCandidate =
+    mightBeFirst &&
+    !loading &&
+    experienceReady &&
+    legacyKnown &&
+    !onboardingStateQuery.isError;
 
-  // Saved v2 progress is read only when a first-signup guide is still possible.
+  // Saved v2 progress is read only when a first signup on a default entry is still possible.
   const progressQuery = trpc.onboardingV2.getState.useQuery(undefined, {
-    enabled: couldGuide,
+    enabled: firstSignupCandidate && access.onboarding === "v2",
     staleTime: 0,
     refetchOnWindowFocus: false,
     retry: (failureCount, error) => {
@@ -133,9 +119,17 @@ export default function OnboardingGate({
     },
   });
 
-  const progressPending =
-    couldGuide && !progressQuery.data && (progressQuery.isLoading || progressQuery.isFetching);
-  const progressTimedOut = useRecoveryBound(progressPending, retryKey);
+  const v2Pending =
+    firstSignupCandidate &&
+    access.onboarding === "v2" &&
+    !progressQuery.data &&
+    (progressQuery.isLoading || progressQuery.isFetching) &&
+    !progressQuery.isError;
+  const entryWaiting =
+    mightBeFirst &&
+    !onboardingStateQuery.isError &&
+    (!experienceReady || !legacyKnown || v2Pending);
+  const entryTimedOut = useRecoveryBound(entryWaiting, retryKey);
 
   const saved = progressQuery.data;
   const savedProgress = hasSavedOnboardingProgress(
@@ -150,18 +144,28 @@ export default function OnboardingGate({
   );
 
   const guide =
+    experienceReady &&
+    legacyKnown &&
+    !v2Pending &&
     decideOnboardingAccess({
       isPostLaunchUser,
       completed,
       skipped,
       hasSavedProgress: legacyProgress || savedProgress,
-      released,
-      progressUnreadable:
-        onboardingStateQuery.isError || progressQuery.isError || progressTimedOut,
+      entered,
+      progressUnreadable: onboardingStateQuery.isError || progressQuery.isError || entryTimedOut,
       pathname: location,
-      accountAgeMs,
-    }) === "guide" &&
-    !progressPending;
+    }) === "guide";
+
+  const markEntered = trpc.onboarding.markEntered.useMutation({
+    onSuccess: () => {
+      utils.onboarding.getState.setData(undefined, current =>
+        current ? { ...current, onboardingEnteredAt: new Date() } : current
+      );
+    },
+  });
+  const markEnteredRef = useRef(markEntered.mutate);
+  markEnteredRef.current = markEntered.mutate;
 
   const onboardingPending =
     location === "/onboarding" &&
@@ -169,10 +173,15 @@ export default function OnboardingGate({
   const onboardingTimedOut = useRecoveryBound(onboardingPending, retryKey);
 
   useEffect(() => {
-    if (location !== "/onboarding" || !user) return;
-    writeReleased();
-    setReleased(true);
-  }, [location, user]);
+    if (location !== "/onboarding" || loading || !user) return;
+    if (legacy?.onboardingEnteredAt || didMarkEntered.current) return;
+    didMarkEntered.current = true;
+    markEnteredRef.current(undefined, {
+      onError: () => {
+        didMarkEntered.current = false;
+      },
+    });
+  }, [location, loading, user, legacy?.onboardingEnteredAt]);
 
   useEffect(() => {
     if (!loading) {
@@ -206,6 +215,11 @@ export default function OnboardingGate({
 
   useEffect(() => {
     if (!guide || location === "/onboarding") return;
+    try {
+      if (sessionStorage.getItem(PENDING_INVITATION_KEY)?.trim()) return;
+    } catch {
+      // ignore
+    }
     const intent = parseResearchIntent(window.location.search);
     if (intent) stashResearchHandleForAfterAuth(intent.handle, intent.autostart, intent.platform);
     setLocation("/onboarding", { replace: true });
@@ -236,15 +250,18 @@ export default function OnboardingGate({
     );
   }
 
-  if (location === "/" && progressPending && !progressTimedOut && !progressQuery.isError) {
+  if (isDefaultAppEntry(location) && entryWaiting && !entryTimedOut) {
     return (
       <AppRecoveryScreen
         view={{ kind: "loading" }}
         onRetry={() => {
           setRetryKey(key => key + 1);
           void retryRead({
-            cancel: () => utils.onboardingV2.getState.cancel(),
-            refetch: () => progressQuery.refetch(),
+            cancel: () => utils.onboarding.getState.cancel(),
+            refetch: async () => {
+              await refresh();
+              return onboardingStateQuery.refetch();
+            },
             isCurrent: () => true,
           });
         }}

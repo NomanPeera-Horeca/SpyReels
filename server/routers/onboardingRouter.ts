@@ -5,7 +5,7 @@ import { featuredAccounts, users } from "../../drizzle/schema";
 import type { User } from "../../drizzle/schema";
 import { inferOnboardingSlugsFromDescription, shouldAskCreatorContextQuestion } from "../../shared/onboardingDescription";
 import { routeNiche as routeNichePrompt } from "../ai/prompts/niche-routing";
-import { getOnboardingState, updateOnboardingState, getDb, seedDemoScrape, markOnboardingComplete, updateUserPersonalization, getScrapeJob, markOnboardingSkipped } from "../db";
+import { getOnboardingState, updateOnboardingState, getDb, seedDemoScrape, markOnboardingComplete, markOnboardingEntered, updateUserPersonalization, getScrapeJob, markOnboardingSkipped } from "../db";
 import { getOnboardingGenerationProgress } from "../onboardingGenerationProgress";
 import { runOnboardingStartCreating } from "../onboardingStartCreating";
 import { and, not, or, eq } from "drizzle-orm";
@@ -106,7 +106,18 @@ export const onboardingRouter = router({
         targetAudience: state.targetAudience ?? null,
         onboardingCompletedAt: state.onboardingCompletedAt,
         onboardingSkippedAt: state.onboardingSkippedAt,
+        onboardingEnteredAt: state.onboardingEnteredAt,
       };
+    }),
+
+    /**
+     * First time the account actually opens onboarding. This is the
+     * interrupted state: later visits to Home or research are not forced
+     * back. Repeat calls keep the original timestamp.
+     */
+    markEntered: protectedProcedure.mutation(async ({ ctx }) => {
+      await markOnboardingEntered(ctx.user.id);
+      return { success: true as const };
     }),
 
     /** Fires on any welcome-modal action (close, tour, demo, overlay). */
