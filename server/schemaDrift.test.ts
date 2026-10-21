@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   CRITICAL_SCHEMA_EXPECTATIONS,
@@ -15,6 +16,18 @@ describe("schemaDrift", () => {
     expect(keys).toContain(
       "saved_reels:idx_saved_reels_workspace_user_platform_source"
     );
+    expect(keys).toContain("personalization_items:dismissedFromStatus");
+  });
+
+  it("ships the onboarding undo column as an additive migration", () => {
+    const sql = readFileSync(
+      "drizzle/0106_personalization_items_dismiss_memory.sql",
+      "utf8"
+    );
+    expect(sql).toContain("personalization_items");
+    expect(sql).toContain("dismissedFromStatus");
+    expect(sql).toContain("chk_personalization_items_restore_memory");
+    expect(sql.toLowerCase()).not.toContain("drop table");
   });
 
   it("summarizes findings for Telegram", () => {
