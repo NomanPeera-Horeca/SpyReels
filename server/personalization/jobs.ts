@@ -357,7 +357,7 @@ export async function enqueueRecommendations(
       await persistRecommendationOutcome(key, payload, result, "inline");
       rememberState(key, stateFromResult(result));
     } catch (err) {
-      rememberState(key, { state: "failed" });
+      rememberState(key, { state: "failed", at: Date.now() });
       throw err;
     }
   });

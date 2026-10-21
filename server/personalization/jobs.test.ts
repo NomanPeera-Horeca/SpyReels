@@ -30,6 +30,16 @@ describe("recommendationStateFromSources", () => {
     ).toEqual({ state: "done", at: 1 });
   });
 
+  it("keeps a failed goal failed when other suggestions for the step were saved", () => {
+    expect(
+      recommendationStateFromSources({
+        job: { status: "failed", payload: { outcome: { state: "failed" } }, at: 30 },
+        memory: null,
+        suggestionsSaved: true,
+      })
+    ).toEqual({ state: "failed", at: 30 });
+  });
+
   it("does not let an older failed row hide a retry running on this process", () => {
     expect(
       recommendationStateFromSources({

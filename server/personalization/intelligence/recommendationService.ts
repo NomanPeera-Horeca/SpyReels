@@ -665,7 +665,10 @@ async function runGoalStep(input: {
     if (wrote === "applied") inserted += 1;
   }
 
-  if (goalResult && goalResult.status === "needs_clarification" && inserted === 0) {
+  // Niche and language can be saved from the profile while the goal model fails.
+  // That fallback must not be reported as a finished goal.
+  const goalStillOpen = input.needGoal && !goalCached;
+  if (goalResult && goalResult.status === "needs_clarification" && goalStillOpen) {
     return {
       status: "needs_clarification",
       question: goalResult.question,
@@ -673,7 +676,7 @@ async function runGoalStep(input: {
       usage: goalResult.usage,
     };
   }
-  if (goalError && inserted === 0)
+  if (goalError && goalStillOpen)
     return { status: "failed", kind: goalError.kind, usage: goalError.usage };
   if (inserted === 0) {
     const live = input.items.filter(

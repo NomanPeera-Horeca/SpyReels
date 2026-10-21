@@ -223,8 +223,10 @@ async function loadAnalysisView(
   profileId: string,
   workspaceId: string
 ): Promise<OnboardingStateView["analysis"]> {
-  const [run] = await db
-    .select()
+  // The profile index is (socialProfileId, workspaceId, createdAt). Pick the id first
+  // so the JSON snapshot is loaded by primary key and is not part of the sort.
+  const [latest] = await db
+    .select({ id: profileAnalysisRuns.id })
     .from(profileAnalysisRuns)
     .where(
       and(
@@ -233,6 +235,12 @@ async function loadAnalysisView(
       )
     )
     .orderBy(desc(profileAnalysisRuns.createdAt))
+    .limit(1);
+  if (!latest) return null;
+  const [run] = await db
+    .select()
+    .from(profileAnalysisRuns)
+    .where(eq(profileAnalysisRuns.id, latest.id))
     .limit(1);
   if (!run) return null;
   const stageRows = await db
