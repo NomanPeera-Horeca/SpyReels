@@ -10,6 +10,7 @@ import { detectContentLanguage } from "@shared/personalization/contentLanguage";
 import type {
   AnalysisSourceSnapshot,
   ItemPayloadByKind,
+  ProfileEvidence,
   SocialPlatform,
 } from "@shared/personalization/model";
 import { stableHash, type ItemRecord } from "@shared/personalization/state";
@@ -17,6 +18,9 @@ import { stableHash, type ItemRecord } from "@shared/personalization/state";
 export type EvidenceSource =
   | "display_name"
   | "bio"
+  | "category"
+  | "cta"
+  | "website"
   | "captions"
   | "brand_description"
   | "niche"
@@ -93,6 +97,17 @@ const OFFER_PATTERNS: RegExp[] = [
 const BUSINESS_NAME =
   /\b(supply|supplies|realty|accounting|bakery|bakehouse|florist|trattoria|restaurant|cafe|studio|llc|inc|pizza truck|food truck|agency|clinic|salon|& co)\b/i;
 
+/** A bio line that already states an offer or CTA. Nothing is rewritten. */
+export function verbatimCta(bio: string | null | undefined): string | null {
+  const text = (bio ?? "").trim();
+  if (!text) return null;
+  const parts = text.split(/\n+|(?<=[.!?])\s+/);
+  const hit = parts.find(part => OFFER_PATTERNS.some(re => re.test(part)));
+  if (!hit) return null;
+  const line = hit.replace(/\s+/g, " ").trim();
+  return line ? line.slice(0, 180) : null;
+}
+
 export function detectCommercialSignals(input: {
   bio: string | null;
   brandDescription: string | null;
@@ -117,12 +132,21 @@ export function buildCreatorEvidence(input: {
   snapshot: AnalysisSourceSnapshot | null;
   items: ItemRecord[];
   legacyBrandDescription?: string | null;
+  /** Lookup facts. Used when the post scrape has not finished. */
+  profileEvidence?: ProfileEvidence | null;
 }): CreatorEvidence {
   const snippets: EvidenceSnippet[] = [];
   const name = clean(input.displayName);
   if (name) snippets.push({ source: "display_name", text: clip(name, 80) });
   const bio = clean(input.bio);
   if (bio) snippets.push({ source: "bio", text: clip(bio, MAX_BIO_CHARS) });
+  const evidence = input.profileEvidence ?? input.snapshot?.profileEvidence ?? null;
+  const category = clean(evidence?.category);
+  if (category) snippets.push({ source: "category", text: clip(category, 80) });
+  const cta = clean(evidence?.cta);
+  if (cta) snippets.push({ source: "cta", text: clip(cta, 180) });
+  const website = clean(evidence?.websiteUrl);
+  if (website) snippets.push({ source: "website", text: clip(website, 200) });
 
   const live = input.items.filter(
     i => i.status === "confirmed" || i.source !== "ai_suggested"
@@ -143,7 +167,12 @@ export function buildCreatorEvidence(input: {
   }
 
   const posts = input.snapshot?.posts ?? [];
-  const captions = posts.map(p => clean(p.caption)).filter(Boolean);
+  const postCaptions = posts.map(p => clean(p.caption)).filter(Boolean);
+  const lookupCaptions =
+    postCaptions.length > 0
+      ? []
+      : (evidence?.captions ?? []).map(clean).filter(Boolean).slice(0, MAX_CAPTIONS);
+  const captions = [...postCaptions, ...lookupCaptions];
   for (const c of captions.slice(0, MAX_CAPTIONS)) {
     snippets.push({ source: "captions", text: clip(c, MAX_CAPTION_CHARS) });
   }
@@ -161,6 +190,8 @@ export function buildCreatorEvidence(input: {
   let score = 0;
   if (bio.split(" ").filter(Boolean).length >= 5) score += 2;
   else if (bio) score += 1;
+  else if (name.split(" ").filter(Boolean).length >= 2) score += 1;
+  if (!bio && category) score += 1;
   if (brandText) score += 2;
   if (snippets.some(s => s.source === "niche")) score += 1;
   if (captions.length >= 10) score += 3;

@@ -30,6 +30,7 @@ import type {
   NichePayload,
   PersonalizationItemKind,
   PillarPayload,
+  ProfileEvidence,
   SocialPlatform,
   SocialProfileStatus,
 } from "@shared/personalization/model";
@@ -88,6 +89,7 @@ export type GenerationProfile = {
   platform: SocialPlatform | null;
   displayName: string | null;
   bio: string | null;
+  confirmedAt?: Date | null;
 };
 
 export type GeneratedInsert = AiSuggestionInsert & {
@@ -101,6 +103,11 @@ export interface RecommendationStore {
   ): Promise<GenerationProfile | null>;
   /** Snapshot of the latest succeeded or partial analysis, or null. */
   loadLatestSnapshot(profileId: string): Promise<AnalysisSourceSnapshot | null>;
+  /**
+   * Lookup facts on a run whose posts are not fetched yet.
+   * Null once sourceFetchedAt is set. Those facts then live on the snapshot.
+   */
+  loadOpenProfileEvidence?(profileId: string): Promise<ProfileEvidence | null>;
   loadItems(profileId: string): Promise<ItemRecord[]>;
   loadPersonalizationVersion(profileId: string): Promise<number>;
   /**
@@ -191,6 +198,51 @@ export function stepInputsHash(
   if (step === "goal") return stableHash(`goal|${evidence.hash}`);
   // Keep the upstream hash as a prefix so an evidence refresh is not treated as an edit.
   return `${upstreamInputsHash(STEP_KIND[step], items)}|${evidence.hash}`;
+}
+
+/** Elapsed time from "That's me" to a saved suggestion. Null when the clock is missing or absurd. */
+export function msSinceConfirm(
+  confirmedAt: Date | null | undefined,
+  now = Date.now()
+): number | null {
+  if (!confirmedAt) return null;
+  const ms = now - confirmedAt.getTime();
+  if (!Number.isFinite(ms) || ms < 0 || ms > 24 * 60 * 60 * 1000) return null;
+  return ms;
+}
+
+function logSuggestionSaved(input: {
+  profileId: string;
+  step: string;
+  confirmedAt: Date | null | undefined;
+  first: boolean;
+}): void {
+  const elapsed = msSinceConfirm(input.confirmedAt);
+  if (elapsed == null) return;
+  console.info("[personalization] suggestion_saved", {
+    profileId: input.profileId,
+    step: input.step,
+    msSinceConfirm: elapsed,
+    first: input.first,
+  });
+}
+
+function profileTextForBasics(
+  profile: { displayName: string | null; bio: string | null },
+  evidence: CreatorEvidence
+): string {
+  const extra = evidence.snippets
+    .filter(
+      snippet =>
+        snippet.source === "category" ||
+        snippet.source === "cta" ||
+        snippet.source === "website" ||
+        snippet.source === "captions"
+    )
+    .map(snippet => snippet.text);
+  return [profile.displayName, profile.bio, ...extra]
+    .filter(text => Boolean(text && text.trim()))
+    .join("\n");
 }
 
 function snapshotFingerprint(snapshot: AnalysisSourceSnapshot | null): string {
@@ -286,11 +338,29 @@ export async function generateRecommendations(
   );
   const items = await deps.store.loadItems(profile.id);
   const kind = STEP_KIND[input.step];
+  let firstSuggestion = !items.some(
+    item =>
+      item.source === "ai_suggested" &&
+      (item.status === "suggested" || item.status === "confirmed")
+  );
+  const noteSaved = (step: string) => {
+    logSuggestionSaved({
+      profileId: profile.id,
+      step,
+      confirmedAt: profile.confirmedAt,
+      first: firstSuggestion,
+    });
+    firstSuggestion = false;
+  };
 
   const goals = confirmedOf(items, "goal");
   const audiences = confirmedOf(items, "audience");
 
   const snapshot = await deps.store.loadLatestSnapshot(profile.id);
+  const openEvidence =
+    snapshot && snapshot.posts.length > 0
+      ? null
+      : ((await deps.store.loadOpenProfileEvidence?.(profile.id)) ?? null);
   const fingerprintAtStart = snapshotFingerprint(snapshot);
   const evidence = buildCreatorEvidence({
     platform: profile.platform,
@@ -298,6 +368,7 @@ export async function generateRecommendations(
     bio: profile.bio,
     snapshot,
     items,
+    profileEvidence: snapshot?.profileEvidence ?? openEvidence,
   });
   const inputsHash = stepInputsHash(input.step, items, evidence);
   const versionAtStart = await deps.store.loadPersonalizationVersion(profile.id);
@@ -310,13 +381,12 @@ export async function generateRecommendations(
       evidence,
       inputsHash,
       versionAtStart,
-      profileText: [profile.displayName, profile.bio, ...evidence.topCaptions]
-        .filter((s): s is string => Boolean(s && s.trim()))
-        .join("\n"),
+      profileText: profileTextForBasics(profile, evidence),
       needGoal: !lockedByUser(items, "goal") && !freshAiCovers(items, "goal", inputsHash),
       needNiche: !lockedByUser(items, "niche") && !freshAiCovers(items, "niche", inputsHash),
       needLanguage:
         !lockedByUser(items, "language") && !freshAiCovers(items, "language", inputsHash),
+      noteSaved,
       fingerprintAtStart,
       timeoutMs: deps.timeoutMs,
     });
@@ -437,6 +507,7 @@ export async function generateRecommendations(
     inserts: plan.insert.map(i => ({ ...i, generationMeta: meta })),
   });
   if (applied === "stale") return { status: "stale_discarded", usage };
+  if (applied === "applied" && plan.insert.length) noteSaved(input.step);
   if (input.step === "pillars" && subtopicGroups.length) {
     // The pillars are already saved. A failed topic save must not fail the pillar
     // step or be retried here: the pillar card offers "Find topic ideas" instead.
@@ -538,6 +609,7 @@ async function runGoalStep(input: {
   needNiche: boolean;
   needLanguage: boolean;
   fingerprintAtStart: string;
+  noteSaved: (step: string) => void;
   timeoutMs?: number;
 }): Promise<RecommendationResult> {
   const { deps, evidence } = input;
@@ -642,7 +714,10 @@ async function runGoalStep(input: {
       attempts: goalResult.attempts,
     });
     if (wrote === "stale") return { status: "stale_discarded", usage: goalResult.usage };
-    if (wrote === "applied") inserted += 1;
+    if (wrote === "applied") {
+      inserted += 1;
+      input.noteSaved("goal");
+    }
   }
 
   if (basics.niche) {
@@ -671,7 +746,10 @@ async function runGoalStep(input: {
     });
     if (wrote === "stale")
       return { status: "stale_discarded", usage };
-    if (wrote === "applied") inserted += 1;
+    if (wrote === "applied") {
+      inserted += 1;
+      input.noteSaved("niche");
+    }
   }
 
   if (basics.language) {
@@ -696,7 +774,10 @@ async function runGoalStep(input: {
       attempts: 0,
     });
     if (wrote === "stale") return { status: "stale_discarded", usage };
-    if (wrote === "applied") inserted += 1;
+    if (wrote === "applied") {
+      inserted += 1;
+      input.noteSaved("language");
+    }
   }
 
   // Niche and language can be saved from the profile while the goal model fails.

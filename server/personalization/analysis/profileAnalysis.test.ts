@@ -3,7 +3,9 @@ import type {
   AnalysisSourceSnapshot,
   AnalysisStage,
   AnalysisStageStatus,
+  ProfileEvidence,
   ProviderAttemptRecord,
+  SocialPlatform,
 } from "@shared/personalization/model";
 import {
   SCRAPECREATORS_BUDGET_STATUS,
@@ -35,6 +37,11 @@ import {
 } from "./existingProviderSource";
 import { requestProfileAnalysis } from "./requestProfileAnalysis";
 import { runProfileAnalysis } from "./runProfileAnalysis";
+import {
+  createSnapshotLock,
+  writeProfileEvidence,
+  writeScrapeSnapshot,
+} from "./snapshotWrite";
 
 /* ------------------------------------------------------------------ */
 /* Test doubles that enforce the same rules as the real system         */
@@ -48,6 +55,9 @@ class MemoryStore implements AnalysisStore {
   runs = new Map<string, AnalysisRun>();
   items: Array<ItemRecord & { socialProfileId: string }> = [];
   version = new Map<string, number>();
+  private runLocked = createSnapshotLock();
+  /** Test seam. Runs inside the snapshot lock, before the write. */
+  snapshotGate: (() => Promise<void>) | null = null;
 
   async loadProfile(id: string, ws: string) {
     const p = this.profiles.get(id);
@@ -93,6 +103,7 @@ class MemoryStore implements AnalysisStore {
       ...run,
       stages: {},
       snapshot: null,
+      sourceFetchedAt: null,
       postsInWindow: null,
       providerCallCount: null,
       providerAttempts: [],
@@ -122,9 +133,37 @@ class MemoryStore implements AnalysisStore {
     this.runs.get(id)!.stages[stage] = status;
   }
   async saveSnapshot(id: string, snapshot: AnalysisSourceSnapshot) {
-    const r = this.runs.get(id)!;
-    r.snapshot = structuredClone(snapshot);
-    r.postsInWindow = snapshot.posts.length;
+    await this.runLocked(async () => {
+      const r = this.runs.get(id)!;
+      const clock = {
+        snapshot: r.snapshot,
+        sourceFetchedAt: r.sourceFetchedAt,
+        postsInWindow: r.postsInWindow,
+      };
+      if (this.snapshotGate) await this.snapshotGate();
+      writeScrapeSnapshot(clock, snapshot, new Date());
+      r.snapshot = clock.snapshot;
+      r.sourceFetchedAt = clock.sourceFetchedAt;
+      r.postsInWindow = clock.postsInWindow;
+    });
+  }
+  async saveProfileEvidence(
+    id: string,
+    evidence: ProfileEvidence,
+    identity: { platform: SocialPlatform; handle: string; followerCount: number | null }
+  ) {
+    await this.runLocked(async () => {
+      const r = this.runs.get(id);
+      if (!r) return;
+      const clock = {
+        snapshot: r.snapshot,
+        sourceFetchedAt: r.sourceFetchedAt,
+        postsInWindow: r.postsInWindow,
+      };
+      if (this.snapshotGate) await this.snapshotGate();
+      writeProfileEvidence(clock, evidence, identity);
+      r.snapshot = clock.snapshot;
+    });
   }
   async recordProviderAttempt(id: string, attempt: ProviderAttemptRecord) {
     const r = this.runs.get(id)!;
@@ -405,6 +444,65 @@ describe("initial analysis: idempotent, no duplicate provider work", () => {
     expect(run.postsInWindow).toBe(12);
     expect(run.snapshot?.performancePanels?.goal?.confidence).toBe("qualitative");
     expect(run.snapshot?.performancePanels?.goal?.figure).toBeNull();
+    expect(t.provider.calls).toBe(1);
+  });
+
+  it("stores lookup evidence without marking the scrape finished, then keeps it on the posts", async () => {
+    const t = setup();
+    await t.request("initial");
+    await t.store.saveProfileEvidence(
+      "run-1",
+      {
+        username: "cafe",
+        displayName: "Cafe Supply",
+        bio: "Commercial kitchen equipment. DM for a quote.",
+        category: "Product/service",
+        cta: "DM for a quote.",
+        websiteUrl: "https://example.com/",
+        captions: ["How to spec a combi oven"],
+      },
+      { platform: "instagram", handle: "cafe", followerCount: 10 }
+    );
+    const before = t.store.runs.get("run-1")!;
+    expect(before.sourceFetchedAt).toBeNull();
+    expect(before.postsInWindow).toBeNull();
+    expect(before.snapshot?.posts).toEqual([]);
+    await t.work();
+    const after = t.store.runs.get("run-1")!;
+    expect(t.provider.calls).toBe(1);
+    expect(after.sourceFetchedAt).not.toBeNull();
+    expect(after.postsInWindow).toBe(12);
+    expect(after.snapshot?.profileEvidence?.captions).toEqual(["How to spec a combi oven"]);
+    expect(after.snapshot?.posts).toHaveLength(12);
+  });
+
+  it("keeps posts and panels when profile evidence is saved after the scrape", async () => {
+    const t = setup();
+    await t.request("initial");
+    await t.work();
+    const scraped = t.store.runs.get("run-1")!;
+    expect(scraped.sourceFetchedAt).not.toBeNull();
+    expect(scraped.postsInWindow).toBe(12);
+    expect(scraped.snapshot?.performancePanels).toBeTruthy();
+    await t.store.saveProfileEvidence(
+      "run-1",
+      {
+        username: "cafe",
+        displayName: "Cafe Supply",
+        bio: "Commercial kitchen equipment. DM for a quote.",
+        category: "Product/service",
+        cta: "DM for a quote.",
+        websiteUrl: "https://example.com/",
+        captions: ["How to spec a combi oven"],
+      },
+      { platform: "instagram", handle: "cafe", followerCount: 10 }
+    );
+    const after = t.store.runs.get("run-1")!;
+    expect(after.sourceFetchedAt).toEqual(scraped.sourceFetchedAt);
+    expect(after.postsInWindow).toBe(12);
+    expect(after.snapshot?.posts).toHaveLength(12);
+    expect(after.snapshot?.performancePanels).toEqual(scraped.snapshot?.performancePanels);
+    expect(after.snapshot?.profileEvidence?.captions).toEqual(["How to spec a combi oven"]);
     expect(t.provider.calls).toBe(1);
   });
 

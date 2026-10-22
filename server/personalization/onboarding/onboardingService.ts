@@ -265,6 +265,7 @@ function safePanels(
   completedAt: Date | null
 ): PerformancePanels | null {
   if (!snapshot) return null;
+  if (!snapshot.posts?.length && !snapshot.performancePanels) return null;
   if (snapshot.performancePanels) return snapshot.performancePanels;
   try {
     return buildPerformancePanels(snapshot.posts ?? [], completedAt ?? new Date());

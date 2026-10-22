@@ -170,6 +170,10 @@ export default function OnboardingV2Flow() {
   const recSeenAt = useRef<number | null>(null);
   const latestRecAt = useRef<number | null>(null);
   const seenAnalysis = useRef<string | null>(null);
+  const suggestionClock = useRef<{ started: number | null; reported: boolean }>({
+    started: null,
+    reported: false,
+  });
   const completing = useRef(false);
   const submissions = useRef(createSubmitLock()).current;
   const recommendationRequests = useRef(new Set<string>());
@@ -193,6 +197,13 @@ export default function OnboardingV2Flow() {
     },
     [access.internal, posthog]
   );
+  useEffect(() => {
+    const clock = suggestionClock.current;
+    if (clock.started == null || clock.reported) return;
+    if ((state?.items.length ?? 0) === 0) return;
+    clock.reported = true;
+    track("suggestion_visible", { msSinceConfirm: Date.now() - clock.started });
+  }, [state?.items, track]);
 
   const lookup = trpc.onboardingV2.lookupProfile.useMutation();
   const confirm = trpc.onboardingV2.confirmProfile.useMutation();
@@ -718,6 +729,7 @@ export default function OnboardingV2Flow() {
                 setScreen("platform");
                 return;
               }
+              suggestionClock.current = { started: Date.now(), reported: false };
               track("step_completed", { step: "profile" });
               await refresh();
               // Adding another profile: the account answers exist, go straight to its strategy.

@@ -103,8 +103,11 @@ export async function runProfileAnalysis(
   await store.markRunRunning(runId, deps.now());
 
   // Stage 1: published content (the only stage that calls the provider).
+  // Profile evidence can sit on the snapshot before this. sourceFetchedAt is
+  // the scrape clock. An evidence-only snapshot must still fetch posts.
   let snapshot = run.snapshot;
-  if (!snapshot) {
+  const priorEvidence = snapshot?.profileEvidence ?? null;
+  if (!run.sourceFetchedAt) {
     // Cost protection: a logical run never spends more than its attempt budget,
     // whatever mix of durable retries and user "try again" got it here.
     const used = run.providerAttempts.length;
@@ -147,8 +150,11 @@ export async function runProfileAnalysis(
         windowStart,
         windowEnd,
       });
-      snapshot = fetched.snapshot;
+      snapshot = priorEvidence
+        ? { ...fetched.snapshot, profileEvidence: priorEvidence }
+        : fetched.snapshot;
       await record("ok", fetched.meter);
+      // The store locks the row and keeps evidence saved while this fetch ran.
       await store.saveSnapshot(runId, snapshot);
     } catch (err) {
       const kind = err instanceof ProviderError ? err.kind : "transient";
@@ -187,6 +193,12 @@ export async function runProfileAnalysis(
       await store.setStage(runId, "published_content", "waiting", kind);
       throw err; // durable queue retries the same job
     }
+  }
+  if (!snapshot) {
+    await store.setStage(runId, "published_content", "failed", "missing_snapshot");
+    for (const s of ANALYSIS_STAGES.slice(1))
+      await store.setStage(runId, s, "skipped");
+    return finish("provider_unavailable", "failed");
   }
   await store.setStage(runId, "published_content", "done");
   logAnalysis(runId, "published_content", "done", snapshot.posts.length);

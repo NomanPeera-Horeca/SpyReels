@@ -59,7 +59,8 @@ async function runAnalysisJob(payload: ProfileAnalysisPayload, attempt: number, 
       store: createAnalysisStore(db),
       source: createExistingProviderSource(),
       classify: createPostClassifier(),
-      // Goal / Audience / Pillars run as their own job once the user reaches step 4.
+      // Goal / Audience / Pillars are their own jobs. Confirm starts them
+      // from profile evidence. This analysis job does not write suggestions.
       suggestions: null,
       now: () => new Date(),
     }
@@ -339,6 +340,20 @@ export const enqueueProfileAnalysis: DurableEnqueue = async input => {
   runInlineOnce(input.idempotencyKey, () => runAnalysisJob(input.payload, 1, 1));
   return 0;
 };
+
+export const PRELIMINARY_SUGGESTION_STEPS = ["goal", "audience", "pillars"] as const;
+
+/** Starts the three suggestion jobs from evidence already saved. Does not wait for the scrape. */
+export async function enqueuePreliminarySuggestions(input: {
+  workspaceId: string;
+  userId: number;
+  socialProfileId: string;
+  version: number;
+}): Promise<void> {
+  for (const step of PRELIMINARY_SUGGESTION_STEPS) {
+    await enqueueRecommendations({ ...input, step }, input.version);
+  }
+}
 
 /**
  * Starts (or reuses) a recommendation generation for one step. The key

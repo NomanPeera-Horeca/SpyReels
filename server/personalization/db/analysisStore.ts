@@ -17,6 +17,7 @@ import {
   ANALYSIS_STAGES,
   type AnalysisStage,
   type AnalysisStageStatus,
+  type ProfileEvidence,
 } from "@shared/personalization/model";
 import {
   analysisRequestFingerprint,
@@ -31,6 +32,7 @@ import {
   profileAnalysisStages,
   socialProfiles,
 } from "../../../drizzle/personalizationSchema";
+import { writeProfileEvidence, writeScrapeSnapshot } from "../analysis/snapshotWrite";
 import {
   DuplicateRunError,
   type AnalysisProfile,
@@ -92,6 +94,7 @@ function toRun(
     status: r.status,
     stages,
     snapshot: r.sourceSnapshot ?? null,
+    sourceFetchedAt: r.sourceFetchedAt ?? null,
     postsInWindow: r.postsInWindow,
     providerCallCount: r.providerCallCount,
     providerAttempts: r.providerAttempts ?? [],
@@ -279,16 +282,59 @@ export function createAnalysisStore(db: Db): AnalysisStore {
     },
 
     async saveSnapshot(runId, snapshot) {
-      await db
-        .update(profileAnalysisRuns)
-        .set({
-          sourceSnapshot: snapshot,
-          sourceFetchedAt: new Date(),
-          postsInWindow: snapshot.posts.length,
-          windowStart: new Date(snapshot.windowStart),
-          windowEnd: new Date(snapshot.windowEnd),
-        })
-        .where(eq(profileAnalysisRuns.id, runId));
+      await db.transaction(async tx => {
+        const [row] = await tx
+          .select({
+            snapshot: profileAnalysisRuns.sourceSnapshot,
+            sourceFetchedAt: profileAnalysisRuns.sourceFetchedAt,
+            postsInWindow: profileAnalysisRuns.postsInWindow,
+          })
+          .from(profileAnalysisRuns)
+          .where(eq(profileAnalysisRuns.id, runId))
+          .for("update");
+        if (!row) return;
+        const clock = {
+          snapshot: row.snapshot,
+          sourceFetchedAt: row.sourceFetchedAt,
+          postsInWindow: row.postsInWindow,
+        };
+        writeScrapeSnapshot(clock, snapshot, new Date());
+        await tx
+          .update(profileAnalysisRuns)
+          .set({
+            sourceSnapshot: clock.snapshot,
+            sourceFetchedAt: clock.sourceFetchedAt,
+            postsInWindow: clock.postsInWindow,
+            windowStart: new Date(clock.snapshot!.windowStart),
+            windowEnd: new Date(clock.snapshot!.windowEnd),
+          })
+          .where(eq(profileAnalysisRuns.id, runId));
+      });
+    },
+
+    async saveProfileEvidence(runId, evidence, identity) {
+      await db.transaction(async tx => {
+        const [row] = await tx
+          .select({
+            snapshot: profileAnalysisRuns.sourceSnapshot,
+            sourceFetchedAt: profileAnalysisRuns.sourceFetchedAt,
+            postsInWindow: profileAnalysisRuns.postsInWindow,
+          })
+          .from(profileAnalysisRuns)
+          .where(eq(profileAnalysisRuns.id, runId))
+          .for("update");
+        if (!row) return;
+        const clock = {
+          snapshot: row.snapshot,
+          sourceFetchedAt: row.sourceFetchedAt,
+          postsInWindow: row.postsInWindow,
+        };
+        writeProfileEvidence(clock, evidence, identity);
+        await tx
+          .update(profileAnalysisRuns)
+          .set({ sourceSnapshot: clock.snapshot })
+          .where(eq(profileAnalysisRuns.id, runId));
+      });
     },
 
     async recordProviderAttempt(runId, attempt) {
@@ -394,8 +440,28 @@ export function createRecommendationStore(db: Db): RecommendationStore {
             platform: p.platform,
             displayName: p.displayName,
             bio: p.bio,
+            confirmedAt: p.confirmedAt,
           }
         : null;
+    },
+
+    async loadOpenProfileEvidence(profileId): Promise<ProfileEvidence | null> {
+      const [latest] = await db
+        .select({
+          id: profileAnalysisRuns.id,
+          fetched: profileAnalysisRuns.sourceFetchedAt,
+        })
+        .from(profileAnalysisRuns)
+        .where(eq(profileAnalysisRuns.socialProfileId, profileId))
+        .orderBy(desc(profileAnalysisRuns.createdAt))
+        .limit(1);
+      if (!latest || latest.fetched) return null;
+      const [row] = await db
+        .select({ snapshot: profileAnalysisRuns.sourceSnapshot })
+        .from(profileAnalysisRuns)
+        .where(eq(profileAnalysisRuns.id, latest.id))
+        .limit(1);
+      return row?.snapshot?.profileEvidence ?? null;
     },
 
     async loadLatestSnapshot(profileId) {
