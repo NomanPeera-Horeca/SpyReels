@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { CreatorEvidence } from "./evidence";
 import { copiesSourceText } from "./guards";
 import { parsePillarOutput } from "./pillarRecommendations";
+import { safeValidationReason, stepHasLiveSuggestions } from "./recommendationService";
 import { detectContentLanguage } from "./profileBasics";
 import { planSubtopicInserts } from "../subtopics";
 import { videoMatchText } from "../home/homeService";
@@ -82,6 +83,64 @@ describe("suggestion guards", () => {
       "Weekly specials",
     ]);
     expect(parsed.value.pillars.every(p => p.viewSharePercent === null)).toBe(true);
+  });
+
+  it("accepts title-case pillar labels and still drops an invented brand", () => {
+    const parsed = parsePillarOutput(
+      {
+        pillars: [
+          {
+            title: "Menu Pricing",
+            serves: "Shows owners how to price a menu without guessing.",
+            subtopics: ["Food cost", "Menu pricing", "Weekly specials"],
+          },
+          {
+            title: "Kitchen Layout",
+            serves: "Helps founders plan a kitchen that can actually run service.",
+            subtopics: ["Line setup"],
+          },
+          {
+            title: "Weekly HorecaStore",
+            serves: "Gives owners a simple way to train a new team.",
+          },
+          {
+            title: "Staff Training",
+            serves: "Gives owners a simple way to train a new team.",
+          },
+        ],
+        confidence: "medium",
+      },
+      evidence,
+      "Help restaurant owners run a profitable kitchen.",
+      [],
+      []
+    );
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.value.pillars.map(p => p.title)).toEqual([
+      "Menu Pricing",
+      "Kitchen Layout",
+      "Staff Training",
+    ]);
+  });
+
+  it("reports a pillar validation failure without profile text", () => {
+    expect(safeValidationReason("goal names things not in the evidence (HorecaStore)")).toBe(
+      "goal names things not in the evidence"
+    );
+    expect(
+      stepHasLiveSuggestions(
+        [
+          { kind: "niche", status: "suggested" },
+          { kind: "language", status: "confirmed" },
+          { kind: "pillar", status: "superseded" },
+        ],
+        "goal"
+      )
+    ).toBe(true);
+    expect(
+      stepHasLiveSuggestions([{ kind: "pillar", status: "superseded" }], "pillars")
+    ).toBe(false);
   });
 
   it("detects Spanish from the profile text and does not guess from an empty bio", () => {

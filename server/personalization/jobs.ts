@@ -30,6 +30,7 @@ import { runProfileAnalysis } from "./analysis/runProfileAnalysis";
 import { buildCreatorEvidence } from "./intelligence/evidence";
 import {
   generateRecommendations,
+  stepHasLiveSuggestions,
   stepSuggestionsSaved,
   type RecommendationResult,
   type RecommendationStep,
@@ -167,18 +168,25 @@ function readOutcome(payload: unknown): RecommendationOutcome | null {
 }
 
 /**
- * Terminal state comes from the database. Process memory only covers the
- * moment before that write, on the instance that is running the job.
+ * A finished database row wins over stale process memory. Memory covers only
+ * a retry that started after that row. An empty result is not a running job.
+ * Saved suggestions still count when they were written for older evidence.
  */
 export function recommendationStateFromSources(input: {
   job: { status: string; payload: unknown; at: number | null } | null;
   memory: RecommendationJobState | null;
   suggestionsSaved: boolean;
+  liveSuggestions?: boolean;
 }): RecommendationJobState | null {
-  // This process just started the job. An older finished row must not hide that.
-  if (input.memory?.state === "running") return { state: "running", at: Date.now() };
   const job = input.job;
   const at = job?.at ?? undefined;
+  const terminal =
+    job != null &&
+    (job.status === "succeeded" || job.status === "failed" || job.status === "dead");
+  const memoryAt = input.memory?.state === "running" ? (input.memory.at ?? null) : null;
+  const inFlight =
+    memoryAt != null && (!terminal || job?.at == null || memoryAt > job.at);
+  if (inFlight) return { state: "running", at: memoryAt ?? undefined };
   if (job && (job.status === "failed" || job.status === "dead")) return { state: "failed", at };
   if (job && job.status === "succeeded") {
     const outcome = readOutcome(job.payload);
@@ -188,10 +196,15 @@ export function recommendationStateFromSources(input: {
     if (outcome?.state === "failed") return { state: "failed", at };
     return { state: "done", at };
   }
-  if (input.suggestionsSaved) return { state: "done", at: at ?? 1 };
+  if (input.suggestionsSaved || input.liveSuggestions) return { state: "done", at: at ?? 1 };
   if (job && (job.status === "queued" || job.status === "running")) return { state: "running", at };
-  if (input.memory) return input.memory;
+  if (input.memory && input.memory.state !== "running") return input.memory;
   return null;
+}
+
+/** A row for this evidence key already ran. Do not call the model again. */
+export function shouldStartRecommendationJob(existingStatus: string | null): boolean {
+  return existingStatus == null;
 }
 
 function jobUpdatedAt(value: unknown): number | null {
@@ -239,7 +252,7 @@ async function persistRecommendationOutcome(
     return;
   }
   const status = result.status === "failed" ? "failed" : "succeeded";
-  const lastError = result.status === "failed" ? `recommendations_${result.kind}` : null;
+  const lastError = recommendationFailureDetail(result);
   await db.execute(sql`
     INSERT INTO durable_jobs
       (jobType, idempotencyKey, payload, status, attempt, maxAttempts, completedAt, lastError)
@@ -253,15 +266,15 @@ async function persistRecommendationOutcome(
   `);
 }
 
-async function suggestionsSavedFor(
+async function suggestionFlagsFor(
   profileId: string,
   workspaceId: string,
   step: RecommendationStep
-): Promise<boolean> {
+): Promise<{ saved: boolean; live: boolean }> {
   const db = await requireDb();
   const store = createRecommendationStore(db);
   const profile = await store.loadProfile(profileId, workspaceId);
-  if (!profile || profile.deletedAt) return false;
+  if (!profile || profile.deletedAt) return { saved: false, live: false };
   const items = await store.loadItems(profileId);
   const snapshot = await store.loadLatestSnapshot(profileId);
   const evidence = buildCreatorEvidence({
@@ -271,7 +284,10 @@ async function suggestionsSavedFor(
     snapshot,
     items,
   });
-  return stepSuggestionsSaved(items, step, evidence);
+  return {
+    saved: stepSuggestionsSaved(items, step, evidence),
+    live: stepHasLiveSuggestions(items, step),
+  };
 }
 
 /** What the UI shows while it waits: running, done, failed, or a clarifying question. */
@@ -283,11 +299,15 @@ export async function getRecommendationState(
 ): Promise<RecommendationJobState | null> {
   const key = await recommendationJobKeyFor(profileId, step, version);
   const job = await loadJobRow(key).catch(() => null);
-  const suggestionsSaved = await suggestionsSavedFor(profileId, workspaceId, step).catch(() => false);
+  const flags = await suggestionFlagsFor(profileId, workspaceId, step).catch(() => ({
+    saved: false,
+    live: false,
+  }));
   return recommendationStateFromSources({
     job,
     memory: recommendationStates.get(key) ?? null,
-    suggestionsSaved,
+    suggestionsSaved: flags.saved,
+    liveSuggestions: flags.live,
   });
 }
 
@@ -343,17 +363,13 @@ export async function enqueueRecommendations(
     });
     return "durable";
   }
-  if (!inlineRunning.has(key)) rememberState(key, { state: "running" });
+  const existing = await loadJobRow(key).catch(() => null);
+  if (existing && !shouldStartRecommendationJob(existing.status)) return "inline";
+  if (!inlineRunning.has(key)) rememberState(key, { state: "running", at: Date.now() });
   runInlineOnce(key, async () => {
     try {
       const result = await runRecommendationJob(payload);
-      if (result.status === "failed") {
-        console.warn("[personalization] recommendations_failed", {
-          step: payload.step,
-          kind: result.kind,
-          profileId: payload.socialProfileId,
-        });
-      }
+      logRecommendationFailure(payload, result);
       await persistRecommendationOutcome(key, payload, result, "inline");
       rememberState(key, stateFromResult(result));
     } catch (err) {
@@ -362,6 +378,22 @@ export async function enqueueRecommendations(
     }
   });
   return "inline";
+}
+
+function recommendationFailureDetail(result: RecommendationResult): string | null {
+  if (result.status !== "failed") return null;
+  const reason = result.reason ? `: ${result.reason}` : "";
+  return `recommendations_${result.kind}${reason}`.slice(0, 180);
+}
+
+function logRecommendationFailure(payload: RecommendationPayload, result: RecommendationResult): void {
+  if (result.status !== "failed") return;
+  console.warn("[personalization] recommendations_failed", {
+    step: payload.step,
+    kind: result.kind,
+    reason: result.reason ?? result.kind,
+    profileId: payload.socialProfileId,
+  });
 }
 
 let registered = false;
@@ -377,13 +409,7 @@ export function registerPersonalizationJobHandlers(): void {
   registerDurableJobHandler("personalization_recommendations", async (job: ClaimedJob) => {
     const payload = job.payload as RecommendationPayload;
     const result = await runRecommendationJob(payload);
-    if (result.status === "failed") {
-      console.warn("[personalization] recommendations_failed", {
-        step: payload.step,
-        kind: result.kind,
-        profileId: payload.socialProfileId,
-      });
-    }
+    logRecommendationFailure(payload, result);
     await persistRecommendationOutcome(job.idempotencyKey, payload, result, "attached");
     // Model timeouts / outages: let the durable queue retry the same job.
     if (result.status === "failed" && result.kind !== "invalid_output") {
