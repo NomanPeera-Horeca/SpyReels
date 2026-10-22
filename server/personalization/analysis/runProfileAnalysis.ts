@@ -150,12 +150,11 @@ export async function runProfileAnalysis(
         windowStart,
         windowEnd,
       });
-      const fresh = await store.loadRun(runId, workspaceId);
-      const kept = fresh?.snapshot?.profileEvidence ?? priorEvidence;
-      snapshot = kept
-        ? { ...fetched.snapshot, profileEvidence: kept }
+      snapshot = priorEvidence
+        ? { ...fetched.snapshot, profileEvidence: priorEvidence }
         : fetched.snapshot;
       await record("ok", fetched.meter);
+      // The store locks the row and keeps evidence saved while this fetch ran.
       await store.saveSnapshot(runId, snapshot);
     } catch (err) {
       const kind = err instanceof ProviderError ? err.kind : "transient";
@@ -231,12 +230,7 @@ export async function runProfileAnalysis(
       }
     }
     const performancePanels = buildPerformancePanels(posts, deps.now());
-    const duringClassify = await store.loadRun(runId, workspaceId);
-    const keptEvidence =
-      duringClassify?.snapshot?.profileEvidence ?? snapshot.profileEvidence ?? null;
-    snapshot = keptEvidence
-      ? { ...snapshot, posts, performancePanels, profileEvidence: keptEvidence }
-      : { ...snapshot, posts, performancePanels };
+    snapshot = { ...snapshot, posts, performancePanels };
     await store.saveSnapshot(runId, snapshot);
   }
 

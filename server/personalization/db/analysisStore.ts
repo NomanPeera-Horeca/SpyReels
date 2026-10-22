@@ -15,7 +15,6 @@ import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { MySql2Database } from "drizzle-orm/mysql2";
 import {
   ANALYSIS_STAGES,
-  type AnalysisSourceSnapshot,
   type AnalysisStage,
   type AnalysisStageStatus,
   type ProfileEvidence,
@@ -33,6 +32,7 @@ import {
   profileAnalysisStages,
   socialProfiles,
 } from "../../../drizzle/personalizationSchema";
+import { writeProfileEvidence, writeScrapeSnapshot } from "../analysis/snapshotWrite";
 import {
   DuplicateRunError,
   type AnalysisProfile,
@@ -282,50 +282,59 @@ export function createAnalysisStore(db: Db): AnalysisStore {
     },
 
     async saveSnapshot(runId, snapshot) {
-      await db
-        .update(profileAnalysisRuns)
-        .set({
-          sourceSnapshot: snapshot,
-          sourceFetchedAt: new Date(),
-          postsInWindow: snapshot.posts.length,
-          windowStart: new Date(snapshot.windowStart),
-          windowEnd: new Date(snapshot.windowEnd),
-        })
-        .where(eq(profileAnalysisRuns.id, runId));
+      await db.transaction(async tx => {
+        const [row] = await tx
+          .select({
+            snapshot: profileAnalysisRuns.sourceSnapshot,
+            sourceFetchedAt: profileAnalysisRuns.sourceFetchedAt,
+            postsInWindow: profileAnalysisRuns.postsInWindow,
+          })
+          .from(profileAnalysisRuns)
+          .where(eq(profileAnalysisRuns.id, runId))
+          .for("update");
+        if (!row) return;
+        const clock = {
+          snapshot: row.snapshot,
+          sourceFetchedAt: row.sourceFetchedAt,
+          postsInWindow: row.postsInWindow,
+        };
+        writeScrapeSnapshot(clock, snapshot, new Date());
+        await tx
+          .update(profileAnalysisRuns)
+          .set({
+            sourceSnapshot: clock.snapshot,
+            sourceFetchedAt: clock.sourceFetchedAt,
+            postsInWindow: clock.postsInWindow,
+            windowStart: new Date(clock.snapshot!.windowStart),
+            windowEnd: new Date(clock.snapshot!.windowEnd),
+          })
+          .where(eq(profileAnalysisRuns.id, runId));
+      });
     },
 
     async saveProfileEvidence(runId, evidence, identity) {
-      const [row] = await db
-        .select({
-          snapshot: profileAnalysisRuns.sourceSnapshot,
-          fetched: profileAnalysisRuns.sourceFetchedAt,
-        })
-        .from(profileAnalysisRuns)
-        .where(eq(profileAnalysisRuns.id, runId))
-        .limit(1);
-      if (!row) return;
-      if (row.fetched) {
-        if (!row.snapshot) return;
-        await db
+      await db.transaction(async tx => {
+        const [row] = await tx
+          .select({
+            snapshot: profileAnalysisRuns.sourceSnapshot,
+            sourceFetchedAt: profileAnalysisRuns.sourceFetchedAt,
+            postsInWindow: profileAnalysisRuns.postsInWindow,
+          })
+          .from(profileAnalysisRuns)
+          .where(eq(profileAnalysisRuns.id, runId))
+          .for("update");
+        if (!row) return;
+        const clock = {
+          snapshot: row.snapshot,
+          sourceFetchedAt: row.sourceFetchedAt,
+          postsInWindow: row.postsInWindow,
+        };
+        writeProfileEvidence(clock, evidence, identity);
+        await tx
           .update(profileAnalysisRuns)
-          .set({ sourceSnapshot: { ...row.snapshot, profileEvidence: evidence } })
+          .set({ sourceSnapshot: clock.snapshot })
           .where(eq(profileAnalysisRuns.id, runId));
-        return;
-      }
-      const shell: AnalysisSourceSnapshot = {
-        version: 1,
-        platform: identity.platform,
-        handle: identity.handle,
-        followerCount: identity.followerCount,
-        windowStart: new Date(0).toISOString(),
-        windowEnd: new Date(0).toISOString(),
-        posts: [],
-        profileEvidence: evidence,
-      };
-      await db
-        .update(profileAnalysisRuns)
-        .set({ sourceSnapshot: shell })
-        .where(eq(profileAnalysisRuns.id, runId));
+      });
     },
 
     async recordProviderAttempt(runId, attempt) {

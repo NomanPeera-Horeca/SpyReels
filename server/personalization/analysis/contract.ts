@@ -138,11 +138,15 @@ export interface AnalysisStore {
     status: AnalysisStageStatus,
     errorCode?: string | null
   ): Promise<void>;
-  /** Saves the stage-1 checkpoint. The request count is kept by recordProviderAttempt. */
+  /**
+   * Saves a scrape checkpoint. Locks the row and keeps profile evidence and
+   * panels already stored. Sets sourceFetchedAt. The request count is kept
+   * by recordProviderAttempt.
+   */
   saveSnapshot(runId: string, snapshot: AnalysisSourceSnapshot): Promise<void>;
   /**
-   * Stores lookup facts on the run. Does not set sourceFetchedAt, postsInWindow,
-   * or the scrape window. A later post save must keep profileEvidence.
+   * Stores lookup facts on the run. Locks the row and keeps posts and panels
+   * already stored. Does not set sourceFetchedAt, postsInWindow, or the scrape window.
    */
   saveProfileEvidence(
     runId: string,
