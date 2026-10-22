@@ -15,8 +15,10 @@ import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { MySql2Database } from "drizzle-orm/mysql2";
 import {
   ANALYSIS_STAGES,
+  type AnalysisSourceSnapshot,
   type AnalysisStage,
   type AnalysisStageStatus,
+  type ProfileEvidence,
 } from "@shared/personalization/model";
 import {
   analysisRequestFingerprint,
@@ -92,6 +94,7 @@ function toRun(
     status: r.status,
     stages,
     snapshot: r.sourceSnapshot ?? null,
+    sourceFetchedAt: r.sourceFetchedAt ?? null,
     postsInWindow: r.postsInWindow,
     providerCallCount: r.providerCallCount,
     providerAttempts: r.providerAttempts ?? [],
@@ -291,6 +294,40 @@ export function createAnalysisStore(db: Db): AnalysisStore {
         .where(eq(profileAnalysisRuns.id, runId));
     },
 
+    async saveProfileEvidence(runId, evidence, identity) {
+      const [row] = await db
+        .select({
+          snapshot: profileAnalysisRuns.sourceSnapshot,
+          fetched: profileAnalysisRuns.sourceFetchedAt,
+        })
+        .from(profileAnalysisRuns)
+        .where(eq(profileAnalysisRuns.id, runId))
+        .limit(1);
+      if (!row) return;
+      if (row.fetched) {
+        if (!row.snapshot) return;
+        await db
+          .update(profileAnalysisRuns)
+          .set({ sourceSnapshot: { ...row.snapshot, profileEvidence: evidence } })
+          .where(eq(profileAnalysisRuns.id, runId));
+        return;
+      }
+      const shell: AnalysisSourceSnapshot = {
+        version: 1,
+        platform: identity.platform,
+        handle: identity.handle,
+        followerCount: identity.followerCount,
+        windowStart: new Date(0).toISOString(),
+        windowEnd: new Date(0).toISOString(),
+        posts: [],
+        profileEvidence: evidence,
+      };
+      await db
+        .update(profileAnalysisRuns)
+        .set({ sourceSnapshot: shell })
+        .where(eq(profileAnalysisRuns.id, runId));
+    },
+
     async recordProviderAttempt(runId, attempt) {
       await db.transaction(async tx => {
         const rows = await tx
@@ -394,8 +431,28 @@ export function createRecommendationStore(db: Db): RecommendationStore {
             platform: p.platform,
             displayName: p.displayName,
             bio: p.bio,
+            confirmedAt: p.confirmedAt,
           }
         : null;
+    },
+
+    async loadOpenProfileEvidence(profileId): Promise<ProfileEvidence | null> {
+      const [latest] = await db
+        .select({
+          id: profileAnalysisRuns.id,
+          fetched: profileAnalysisRuns.sourceFetchedAt,
+        })
+        .from(profileAnalysisRuns)
+        .where(eq(profileAnalysisRuns.socialProfileId, profileId))
+        .orderBy(desc(profileAnalysisRuns.createdAt))
+        .limit(1);
+      if (!latest || latest.fetched) return null;
+      const [row] = await db
+        .select({ snapshot: profileAnalysisRuns.sourceSnapshot })
+        .from(profileAnalysisRuns)
+        .where(eq(profileAnalysisRuns.id, latest.id))
+        .limit(1);
+      return row?.snapshot?.profileEvidence ?? null;
     },
 
     async loadLatestSnapshot(profileId) {

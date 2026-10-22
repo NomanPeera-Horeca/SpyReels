@@ -3,7 +3,9 @@ import type {
   AnalysisSourceSnapshot,
   AnalysisStage,
   AnalysisStageStatus,
+  ProfileEvidence,
   ProviderAttemptRecord,
+  SocialPlatform,
 } from "@shared/personalization/model";
 import {
   SCRAPECREATORS_BUDGET_STATUS,
@@ -93,6 +95,7 @@ class MemoryStore implements AnalysisStore {
       ...run,
       stages: {},
       snapshot: null,
+      sourceFetchedAt: null,
       postsInWindow: null,
       providerCallCount: null,
       providerAttempts: [],
@@ -124,7 +127,30 @@ class MemoryStore implements AnalysisStore {
   async saveSnapshot(id: string, snapshot: AnalysisSourceSnapshot) {
     const r = this.runs.get(id)!;
     r.snapshot = structuredClone(snapshot);
+    r.sourceFetchedAt = new Date();
     r.postsInWindow = snapshot.posts.length;
+  }
+  async saveProfileEvidence(
+    id: string,
+    evidence: ProfileEvidence,
+    identity: { platform: SocialPlatform; handle: string; followerCount: number | null }
+  ) {
+    const r = this.runs.get(id);
+    if (!r) return;
+    if (r.sourceFetchedAt && r.snapshot) {
+      r.snapshot = { ...r.snapshot, profileEvidence: evidence };
+      return;
+    }
+    r.snapshot = {
+      version: 1,
+      platform: identity.platform,
+      handle: identity.handle,
+      followerCount: identity.followerCount,
+      windowStart: new Date(0).toISOString(),
+      windowEnd: new Date(0).toISOString(),
+      posts: [],
+      profileEvidence: evidence,
+    };
   }
   async recordProviderAttempt(id: string, attempt: ProviderAttemptRecord) {
     const r = this.runs.get(id)!;
@@ -406,6 +432,35 @@ describe("initial analysis: idempotent, no duplicate provider work", () => {
     expect(run.snapshot?.performancePanels?.goal?.confidence).toBe("qualitative");
     expect(run.snapshot?.performancePanels?.goal?.figure).toBeNull();
     expect(t.provider.calls).toBe(1);
+  });
+
+  it("stores lookup evidence without marking the scrape finished, then keeps it on the posts", async () => {
+    const t = setup();
+    await t.request("initial");
+    await t.store.saveProfileEvidence(
+      "run-1",
+      {
+        username: "cafe",
+        displayName: "Cafe Supply",
+        bio: "Commercial kitchen equipment. DM for a quote.",
+        category: "Product/service",
+        cta: "DM for a quote.",
+        websiteUrl: "https://example.com/",
+        captions: ["How to spec a combi oven"],
+      },
+      { platform: "instagram", handle: "cafe", followerCount: 10 }
+    );
+    const before = t.store.runs.get("run-1")!;
+    expect(before.sourceFetchedAt).toBeNull();
+    expect(before.postsInWindow).toBeNull();
+    expect(before.snapshot?.posts).toEqual([]);
+    await t.work();
+    const after = t.store.runs.get("run-1")!;
+    expect(t.provider.calls).toBe(1);
+    expect(after.sourceFetchedAt).not.toBeNull();
+    expect(after.postsInWindow).toBe(12);
+    expect(after.snapshot?.profileEvidence?.captions).toEqual(["How to spec a combi oven"]);
+    expect(after.snapshot?.posts).toHaveLength(12);
   });
 
   it("double tap / reload while queued reuses the run and the job", async () => {

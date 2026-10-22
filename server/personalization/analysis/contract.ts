@@ -24,6 +24,7 @@ import type {
   AnalysisSourceSnapshot,
   AnalysisStage,
   AnalysisStageStatus,
+  ProfileEvidence,
   SocialPlatform,
   SocialProfileStatus,
   ProviderAttemptRecord,
@@ -88,6 +89,8 @@ export type AnalysisRun = {
   status: AnalysisRunStatus;
   stages: Partial<Record<AnalysisStage, AnalysisStageStatus>>;
   snapshot: AnalysisSourceSnapshot | null;
+  /** Set only when stage 1 has stored posts. Profile evidence must leave this null. */
+  sourceFetchedAt: Date | null;
   postsInWindow: number | null;
   providerCallCount: number | null;
   providerAttempts: ProviderAttemptRecord[];
@@ -118,6 +121,7 @@ export interface AnalysisStore {
       AnalysisRun,
       | "stages"
       | "snapshot"
+      | "sourceFetchedAt"
       | "postsInWindow"
       | "providerCallCount"
       | "providerAttempts"
@@ -136,6 +140,15 @@ export interface AnalysisStore {
   ): Promise<void>;
   /** Saves the stage-1 checkpoint. The request count is kept by recordProviderAttempt. */
   saveSnapshot(runId: string, snapshot: AnalysisSourceSnapshot): Promise<void>;
+  /**
+   * Stores lookup facts on the run. Does not set sourceFetchedAt, postsInWindow,
+   * or the scrape window. A later post save must keep profileEvidence.
+   */
+  saveProfileEvidence(
+    runId: string,
+    evidence: ProfileEvidence,
+    identity: { platform: SocialPlatform; handle: string; followerCount: number | null }
+  ): Promise<void>;
   /** Appends one attempt and adds its requests to providerCallCount. */
   recordProviderAttempt(
     runId: string,

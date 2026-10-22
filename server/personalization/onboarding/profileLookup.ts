@@ -66,6 +66,7 @@ type InstagramLookup = {
     thumbnailUrl: string;
     viewCount: number | null;
     isPinned: boolean;
+    caption?: string | null;
   }>;
 };
 
@@ -197,7 +198,11 @@ async function fetchPreview(
     const p = await deps.instagram(handle, call);
     const canonical = p.username.toLowerCase();
     const countsKnown = p.countsKnown !== false;
-    const media = (p.recentMedia ?? []).slice(0, 6);
+    const media = (p.recentMedia ?? []).slice(0, 12);
+    const lookupCaptions = media
+      .map(m => textOrNull(m.caption))
+      .filter((c): c is string => Boolean(c))
+      .slice(0, 6);
     return {
       platform,
       handle: canonical,
@@ -214,12 +219,17 @@ async function fetchPreview(
       followingCount: countsKnown ? countOrNull(p.followingCount) : null,
       likeCount: null,
       videoCount: null,
-      recentPosts: media.map(m => ({
-        id: m.shortcode,
-        thumbnailUrl: textOrNull(m.thumbnailUrl),
-        viewCount: countOrNull(m.viewCount),
-        isPinned: m.isPinned,
-      })),
+      recentPosts: media
+        .filter(m => m.shortcode && m.thumbnailUrl)
+        .slice(0, 6)
+        .map(m => ({
+          id: m.shortcode,
+          thumbnailUrl: textOrNull(m.thumbnailUrl),
+          viewCount: countOrNull(m.viewCount),
+          isPinned: m.isPinned,
+          ...(textOrNull(m.caption) ? { caption: textOrNull(m.caption) } : {}),
+        })),
+      ...(lookupCaptions.length ? { lookupCaptions } : {}),
     };
   }
   if (platform === "tiktok") {

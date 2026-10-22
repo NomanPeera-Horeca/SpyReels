@@ -278,7 +278,18 @@ export type InstagramRecentMedia = {
   thumbnailUrl: string;
   viewCount: number | null;
   isPinned: boolean;
+  /** Creator caption from the same profile payload. Not alt text. */
+  caption?: string | null;
 };
+
+/** Creator caption already on a profile-payload node. Alt text is not a caption. */
+function captionFromProfileNode(node: any): string | null {
+  const edge = node?.edge_media_to_caption?.edges?.[0]?.node?.text;
+  const text = typeof edge === "string" ? edge : node?.caption?.text;
+  if (typeof text !== "string") return null;
+  const cleaned = text.replace(/\s+/g, " ").trim();
+  return cleaned ? cleaned.slice(0, 280) : null;
+}
 
 /** Parses the recent posts already present in a graph-user profile payload. */
 export function recentMediaFromGraphUser(user: any): InstagramRecentMedia[] {
@@ -289,13 +300,15 @@ export function recentMediaFromGraphUser(user: any): InstagramRecentMedia[] {
     const node = edge?.node;
     const shortcode = typeof node?.shortcode === "string" ? node.shortcode : "";
     const thumbnailUrl = String(node?.thumbnail_src || node?.display_url || "");
-    if (!shortcode || !thumbnailUrl) continue;
+    const caption = captionFromProfileNode(node);
+    if (!shortcode || (!thumbnailUrl && !caption)) continue;
     const views = node?.video_view_count ?? node?.video_play_count;
     out.push({
       shortcode,
       thumbnailUrl,
       viewCount: typeof views === "number" && Number.isFinite(views) ? views : null,
       isPinned: Array.isArray(node?.pinned_for_users) && node.pinned_for_users.length > 0,
+      ...(caption ? { caption } : {}),
     });
   }
   return out;

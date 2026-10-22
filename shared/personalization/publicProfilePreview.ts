@@ -13,6 +13,8 @@ export type PublicProfilePost = {
   /** Real view or play count from the provider, or null when unknown. */
   viewCount: number | null;
   isPinned?: boolean;
+  /** Caption from the same profile payload, when the provider included one. */
+  caption?: string | null;
 };
 
 export type PublicProfilePreview = {
@@ -37,6 +39,11 @@ export type PublicProfilePreview = {
   videoCount: number | null;
   /** Most recent public posts, newest first. Empty when not available. */
   recentPosts: PublicProfilePost[];
+  /**
+   * Captions already present in the profile payload, including posts that had
+   * no thumbnail. Empty or omitted when the provider sent none. Not a scrape.
+   */
+  lookupCaptions?: string[];
 };
 
 function trimZero(s: string): string {

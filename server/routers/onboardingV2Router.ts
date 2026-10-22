@@ -24,7 +24,9 @@ import { getDb } from "../db";
 import { assertOnboardingV2Access, getExperienceAccess } from "../experienceAccess";
 import { createAnalysisStore, type Db } from "../personalization/db/analysisStore";
 import { requestProfileAnalysis } from "../personalization/analysis/requestProfileAnalysis";
+import { profileEvidenceFromPreview } from "../personalization/onboarding/profileEvidence";
 import {
+  enqueuePreliminarySuggestions,
   enqueueProfileAnalysis,
   enqueueRecommendations,
   getRecommendationState,
@@ -174,6 +176,32 @@ export const onboardingV2Router = router({
       }
       const { profileId } = await confirmProfile(db, octx(ctx), preview);
       const analysis = await startInitialAnalysis(db, ctx, profileId);
+      if (analysis.status !== "rejected") {
+        try {
+          const store = createAnalysisStore(db);
+          await store.saveProfileEvidence(
+            analysis.runId,
+            profileEvidenceFromPreview(preview),
+            {
+              platform: preview.platform,
+              handle: preview.handle,
+              followerCount: preview.followerCount,
+            }
+          );
+          const version = await store.loadPersonalizationVersion(profileId);
+          await enqueuePreliminarySuggestions({
+            workspaceId: ctx.workspaceId,
+            userId: ctx.user.id,
+            socialProfileId: profileId,
+            version,
+          });
+        } catch (err) {
+          console.warn("[personalization] preliminary_suggestions_not_started", {
+            profileId,
+            reason: err instanceof Error ? err.name : "error",
+          });
+        }
+      }
       return { ok: true as const, profileId, analysis: analysis.status };
     }),
 

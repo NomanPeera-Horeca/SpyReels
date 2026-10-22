@@ -303,6 +303,21 @@ export type NormalizedPost = {
   topicLabel?: string | null;
 };
 
+/**
+ * Public facts gathered at lookup. Stored before the post scrape finishes.
+ * Writing this must not set sourceFetchedAt or postsInWindow.
+ */
+export type ProfileEvidence = {
+  username: string;
+  displayName: string | null;
+  bio: string | null;
+  category: string | null;
+  /** Verbatim offer or CTA line from the bio. Null when the bio has none. */
+  cta: string | null;
+  websiteUrl: string | null;
+  captions: string[];
+};
+
 /** Stored on profile_analysis_runs.sourceSnapshot after stage 1. */
 export type AnalysisSourceSnapshot = {
   version: 1;
@@ -315,6 +330,8 @@ export type AnalysisSourceSnapshot = {
   posts: NormalizedPost[];
   /** Calculated after posts are saved. Older snapshots omit it and are derived on read. */
   performancePanels?: PerformancePanels | null;
+  /** Lookup facts. Present before posts exist. The scrape must keep this block. */
+  profileEvidence?: ProfileEvidence | null;
 };
 
 /**
