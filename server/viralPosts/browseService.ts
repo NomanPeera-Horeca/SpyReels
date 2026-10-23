@@ -1,3 +1,4 @@
+import type { FollowerViralBadge } from "@shared/viralTier";
 import type {
   ViralMediaStatus,
   ViralPost,
@@ -24,13 +25,22 @@ import {
   isViralPostsInstagramEnabled,
   isViralPostsLive,
   isViralPostsTiktokEnabled,
+  isViralPostsYoutubeEnabled,
 } from "./featureFlag";
 import { resolveThumbnailFallback } from "./mediaMirror";
 import { classifyCandidatePillars } from "./pillarClassify";
 import * as poolRepo from "./poolRepository";
 import { schedulePoolRefresh } from "./poolRefresh";
 import * as repo from "./repository";
-import { selectIndexedHomePosts } from "./indexedHomeSelection";
+import {
+  CREATOR_SIGNAL_RECENT_DAYS,
+  HOME_CREATOR_LIMIT,
+} from "../personalization/home/homeService";
+import {
+  rankIndexedHomeInventory,
+  type IndexedHomeCreatorPick,
+  type IndexedHomePost,
+} from "./indexedHomeSelection";
 import { scoreCandidate } from "./scoring";
 
 const EXPLORE_BROWSE_LIMIT = 24;
@@ -83,23 +93,35 @@ async function loadUserBusinessDescription(userId: number): Promise<string> {
     : "Instagram Reels ideas for small business owners who want practical, remakeable content.";
 }
 
+type BrowsePlatforms = {
+  instagram: boolean;
+  tiktok: boolean;
+  youtube: boolean;
+};
+
 function browsePoolSpecs(args: {
   niche: string;
   pillars: string[];
   includeSeedMix?: boolean;
+  platforms?: BrowsePlatforms;
 }) {
+  const platforms = args.platforms ?? {
+    instagram: isViralPostsInstagramEnabled,
+    tiktok: isViralPostsTiktokEnabled,
+    youtube: isViralPostsYoutubeEnabled,
+  };
   const specs: Array<{
     niche: string;
     pillar: string;
     platform?: string;
   }> = [];
 
-  if (isViralPostsInstagramEnabled) {
+  if (platforms.instagram) {
     for (const pillar of args.pillars.slice(0, 6)) {
       specs.push({ niche: args.niche, pillar, platform: "instagram" });
     }
   }
-  if (isViralPostsTiktokEnabled) {
+  if (platforms.tiktok) {
     for (const pillar of args.pillars.slice(0, 6)) {
       specs.push({ niche: args.niche, pillar, platform: "tiktok" });
     }
@@ -111,7 +133,11 @@ function browsePoolSpecs(args: {
       });
     }
   }
-  // Viral Posts V1: no YouTube pool ensure (historical rows may remain).
+  if (platforms.youtube) {
+    for (const pillar of args.pillars.slice(0, 6)) {
+      specs.push({ niche: args.niche, pillar, platform: "youtube" });
+    }
+  }
 
   return specs;
 }
@@ -124,6 +150,7 @@ function browsePoolSpecs(args: {
 export function indexedHomePoolSpecChoices(args: {
   nicheText: string;
   confirmedPillars: string[];
+  platforms?: BrowsePlatforms;
 }): {
   niche: string;
   confirmedSpecs: Array<{ niche: string; pillar: string; platform?: string }>;
@@ -137,12 +164,18 @@ export function indexedHomePoolSpecChoices(args: {
     niche,
     confirmedSpecs:
       confirmed.length > 0
-        ? browsePoolSpecs({ niche, pillars: confirmed, includeSeedMix: false })
+        ? browsePoolSpecs({
+            niche,
+            pillars: confirmed,
+            includeSeedMix: false,
+            platforms: args.platforms,
+          })
         : [],
     fallbackSpecs: browsePoolSpecs({
       niche,
       pillars: inferActivePillars(args.nicheText, niche),
       includeSeedMix: true,
+      platforms: args.platforms,
     }),
   };
 }
@@ -327,11 +360,24 @@ export async function browseViralPosts(userId: number): Promise<{
   return assembleBrowse({ userId, pools, niche, allowRefresh: true, limit: EXPLORE_BROWSE_LIMIT });
 }
 
+export type IndexedHomeCreator = {
+  id: number;
+  handle: string;
+  displayName: string | null;
+  profilePicUrl: string | null;
+  followerCount: number;
+  platform: "instagram" | "tiktok" | "youtube";
+  badge: FollowerViralBadge;
+  bestPost: ViralPost;
+};
+
 /**
- * Home v2 "Videos for you". Reads pools that already exist. Confirmed pillar
- * titles are used only when one of those pools is present. Goal and audience
- * affect rank through the existing topic boost and are not part of the niche
- * text. Never inserts a pool and never schedules a refresh.
+ * Home v2 videos and creators. Both come from pools that already exist.
+ * Confirmed pillar titles are used only when one of those pools is present.
+ * Goal and audience affect video rank through the existing topic boost and
+ * are not part of the niche text. Creators are grouped from the full
+ * qualified set, not from the short video row. Never inserts a pool and
+ * never schedules a refresh.
  */
 export async function browseIndexedViralPosts(args: {
   userId: number;
@@ -343,8 +389,13 @@ export async function browseIndexedViralPosts(args: {
   goalText?: string | null;
   audienceText?: string | null;
   limit: number;
-}): Promise<{ items: ViralPost[]; niche: string; poolRefreshStarted: false }> {
-  if (!isViralPostsLive) return { items: [], niche: "", poolRefreshStarted: false };
+}): Promise<{
+  items: ViralPost[];
+  creators: IndexedHomeCreator[];
+  niche: string;
+  poolRefreshStarted: false;
+}> {
+  if (!isViralPostsLive) return { items: [], creators: [], niche: "", poolRefreshStarted: false };
   const explicit = args.description?.trim() ?? "";
   const text = explicit.length > 0 ? explicit : await loadUserBusinessDescription(args.userId);
   const plan = indexedHomePoolSpecChoices({
@@ -369,8 +420,10 @@ export async function browseIndexedViralPosts(args: {
     const pool = existing.find(row => row.poolKey === key);
     return pool ? [pool] : [];
   });
-  if (pools.length === 0) return { items: [], niche: plan.niche, poolRefreshStarted: false };
-  const items = await assembleIndexedHome({
+  if (pools.length === 0) {
+    return { items: [], creators: [], niche: plan.niche, poolRefreshStarted: false };
+  }
+  const assembled = await assembleIndexedHome({
     userId: args.userId,
     pools,
     niche: plan.niche,
@@ -378,8 +431,15 @@ export async function browseIndexedViralPosts(args: {
     audienceText: args.audienceText ?? null,
     limit: args.limit,
   });
-  return { items, niche: plan.niche, poolRefreshStarted: false };
+  return { ...assembled, niche: plan.niche, poolRefreshStarted: false };
 }
+
+type IndexedPoolRow = {
+  candidate: ViralPostCandidate;
+  primaryPillar: string;
+  pillarConfidence: number;
+  pillarReason: string | null;
+};
 
 async function assembleIndexedHome(args: {
   userId: number;
@@ -388,7 +448,7 @@ async function assembleIndexedHome(args: {
   goalText: string | null;
   audienceText: string | null;
   limit: number;
-}): Promise<ViralPost[]> {
+}): Promise<{ items: ViralPost[]; creators: IndexedHomeCreator[] }> {
   const { userId, pools, niche } = args;
   const [poolRows, hidden, dismissed, saved] = await Promise.all([
     poolRepo.loadPoolCandidatesForAssembly({
@@ -409,13 +469,15 @@ async function assembleIndexedHome(args: {
     return !creatorKey || !hidden.has(creatorKey);
   });
 
-  const selected = selectIndexedHomePosts({
+  const ranked = rankIndexedHomeInventory({
     posts: visible.map(row => ({
       id: row.candidate.id,
       platform: row.candidate.platform,
       sourceId: row.candidate.sourceId,
       creatorId: row.candidate.creatorId,
       creatorHandle: row.candidate.creatorHandle,
+      creatorName: row.candidate.creatorName,
+      creatorAvatarUrl: row.candidate.creatorAvatarUrl,
       caption: row.candidate.caption,
       hashtags: row.candidate.hashtags ?? [],
       views: row.candidate.views,
@@ -432,9 +494,11 @@ async function assembleIndexedHome(args: {
     goalText: args.goalText,
     audienceText: args.audienceText,
     limit: args.limit,
+    creatorLimit: HOME_CREATOR_LIMIT,
+    recentDays: CREATOR_SIGNAL_RECENT_DAYS,
   });
 
-  return selected.map(({ row }) => {
+  const toPost = (row: IndexedPoolRow) => {
     const adapted = candidateToAdapted(
       row.candidate,
       row.primaryPillar,
@@ -442,7 +506,37 @@ async function assembleIndexedHome(args: {
       row.pillarReason
     );
     return toViralPost(row.candidate, adapted, saved.has(row.candidate.id));
-  });
+  };
+
+  return {
+    items: ranked.display.map(({ row }) => toPost(row)),
+    creators: ranked.creators.map(pick => indexedCreatorFromPick(pick, toPost)),
+  };
+}
+
+function indexedCreatorFromPick(
+  pick: IndexedHomeCreatorPick<IndexedHomePost & { row: IndexedPoolRow }>,
+  toPost: (row: IndexedPoolRow) => ViralPost
+): IndexedHomeCreator {
+  const candidate = pick.post.row.candidate;
+  const platform =
+    candidate.platform === "tiktok" || candidate.platform === "youtube"
+      ? candidate.platform
+      : "instagram";
+  const handle = (candidate.creatorHandle || candidate.creatorId || "")
+    .trim()
+    .replace(/^@/, "");
+  const name = candidate.creatorName.trim();
+  return {
+    id: candidate.id,
+    handle,
+    displayName: name || null,
+    profilePicUrl: candidate.creatorAvatarUrl || null,
+    followerCount: candidate.creatorFollowers ?? 0,
+    platform,
+    badge: pick.badge,
+    bestPost: toPost(pick.post.row),
+  };
 }
 
 async function assembleBrowse(args: {

@@ -5,12 +5,11 @@
  *
  * - context: the user's confirmed personalization (active profile) mapped to
  *   the existing featured-creator niche taxonomy with inferNicheFromText.
- * - creators: featured catalog (already stored). A creator is included only
- *   when the best recent video earns a real viral badge (shared/viralTier).
+ * - creators: the same indexed Viral Posts inventory as videos. Home groups
+ *   qualified posts by creator. The featured catalog is not that source.
  * - videos: indexed Viral Posts pools that already exist (no new pools, no
  *   refresh), see browseIndexedViralPosts.
  */
-import { and, desc, eq, gte, inArray, ne } from "drizzle-orm";
 import { inferNicheFromText } from "@shared/creatorContextInference";
 import type {
   AudiencePayload,
@@ -21,24 +20,17 @@ import type {
   StepStatus,
 } from "@shared/personalization/model";
 import { followerViralBadge, type FollowerViralBadge } from "@shared/viralTier";
-import {
-  featuredAccountNiches,
-  featuredAccounts,
-  featuredReels,
-  niches,
-} from "../../../drizzle/schema";
 import type { OnboardingStateView } from "../onboarding/onboardingService";
 
 /** "Recent" for the creator signal (engineering default, open for CEO/CTO confirmation). */
 export const CREATOR_SIGNAL_RECENT_DAYS = 90;
 export const HOME_CREATOR_LIMIT = 3;
-const CANDIDATE_ACCOUNTS = 40;
 
 export type HomeContext = {
   hasProfile: boolean;
   /** Confirmed niche label, or null (sidebar and subtitles say "not personalized yet"). */
   nicheLabel: string | null;
-  /** Featured-catalog slug for creators; null means general picks. */
+  /** Slug inferred from the confirmed niche label. Not the Home creator source. */
   featuredNicheSlug: string | null;
   /** Confirmed niche, goal, and pillar text joined for display context. Not a pool key. */
   description: string | null;
@@ -132,9 +124,9 @@ type AccountRow = {
 type ReelRow = { featuredAccountId: number; viewCount: number; postedAt: Date };
 
 /**
- * Pure: pick the creators to show. Badge = best video in the recent window.
- * No recent video, missing followers, or below Healthy -> no badge.
- * A null badge excludes the creator. Empty slots stay empty.
+ * Badge filter for a featured-shaped list. Home does not use this list.
+ * Badge = best video in the recent window. A null badge excludes the row.
+ * Empty slots stay empty.
  */
 export function pickViralCreators(
   accounts: AccountRow[],
@@ -161,56 +153,4 @@ export function pickViralCreators(
     .filter(creator => creator.badge !== null)
     .sort((x, y) => (y.badge?.multiple ?? 0) - (x.badge?.multiple ?? 0))
     .slice(0, limit);
-}
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type AnyDb = any;
-
-export async function loadViralCreators(
-  db: AnyDb,
-  featuredNicheSlug: string | null,
-  now = new Date()
-): Promise<HomeCreator[]> {
-  const select = {
-    id: featuredAccounts.id,
-    handle: featuredAccounts.handle,
-    displayName: featuredAccounts.displayName,
-    profilePicUrl: featuredAccounts.profilePicUrl,
-    followerCount: featuredAccounts.followerCount,
-  };
-  const accounts: AccountRow[] = featuredNicheSlug
-    ? await db
-        .select(select)
-        .from(featuredAccounts)
-        .innerJoin(featuredAccountNiches, eq(featuredAccountNiches.accountId, featuredAccounts.id))
-        .innerJoin(niches, eq(niches.id, featuredAccountNiches.nicheId))
-        .where(and(eq(niches.slug, featuredNicheSlug), eq(featuredAccounts.isActive, true)))
-        .orderBy(desc(featuredAccounts.followerCount))
-        .limit(CANDIDATE_ACCOUNTS)
-    : await db
-        .select(select)
-        .from(featuredAccounts)
-        .where(eq(featuredAccounts.isActive, true))
-        .orderBy(desc(featuredAccounts.followerCount))
-        .limit(CANDIDATE_ACCOUNTS);
-  if (accounts.length === 0) return [];
-  const since = new Date(now.getTime() - CREATOR_SIGNAL_RECENT_DAYS * 86_400_000);
-  const reels: ReelRow[] = await db
-    .select({
-      featuredAccountId: featuredReels.featuredAccountId,
-      viewCount: featuredReels.viewCount,
-      postedAt: featuredReels.postedAt,
-    })
-    .from(featuredReels)
-    .where(
-      and(
-        inArray(
-          featuredReels.featuredAccountId,
-          accounts.map(a => a.id)
-        ),
-        gte(featuredReels.postedAt, since),
-        ne(featuredReels.transcriptionStatus, "failed")
-      )
-    );
-  return pickViralCreators(accounts, reels, now);
 }

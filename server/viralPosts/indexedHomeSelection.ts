@@ -1,10 +1,12 @@
 import type { ViralTrendStatus } from "@shared/viralPosts";
+import { followerViralBadge, type FollowerViralBadge } from "@shared/viralTier";
 import {
   deriveHook,
   inferFormatFromCopy,
 } from "./candidateAdapter";
 import { selectTieredDailyFeed, type DiversityCandidate } from "./diversity";
 import { passesIndexedViralQualification } from "./indexedQualification";
+import { CREATOR_SIGNAL_RECENT_DAYS } from "../personalization/home/homeService";
 import {
   personalizationRelevanceBoost,
   strategyTopicSignals,
@@ -13,9 +15,13 @@ import { remakeabilityScoreForCandidate, relevanceScoreForCandidate } from "./ra
 import { scoreCandidate, TODAY_PICKS_SCORE_WEIGHTS } from "./scoring";
 
 /**
- * Home "Videos for you" ranking. Qualification, relevance, Today's Picks
+ * Home ranking for both sections. Qualification, relevance, Today's Picks
  * weights, and diversity all come from Viral Posts. Goal and audience text
  * can only add the existing capped topic boost. They are not a niche.
+ *
+ * Videos are the diverse top slice. Creators are grouped from every qualified
+ * post in that same inventory, then ranked by the existing follower viral
+ * badge. A null badge drops the creator. Follower count is not a rank.
  *
  * `min: 1` is the shared selector's fill target, not a new score cutoff.
  * The strong and fallback floors stay the Today's Picks constants. A thin
@@ -39,6 +45,13 @@ export type IndexedHomePost = {
   publishedAt: Date | null;
   primaryPillar: string;
   pillarConfidence: number;
+  creatorName?: string | null;
+  creatorAvatarUrl?: string | null;
+};
+
+export type IndexedHomeCreatorPick<T extends IndexedHomePost = IndexedHomePost> = {
+  post: T;
+  badge: FollowerViralBadge;
 };
 
 export function selectIndexedHomePosts<T extends IndexedHomePost>(args: {
@@ -48,8 +61,21 @@ export function selectIndexedHomePosts<T extends IndexedHomePost>(args: {
   limit: number;
   now?: Date;
 }): T[] {
-  const limit = Math.max(0, args.limit);
-  if (limit === 0 || args.posts.length === 0) return [];
+  if (args.limit <= 0 || args.posts.length === 0) return [];
+  return rankIndexedHomeInventory(args).display;
+}
+
+export function rankIndexedHomeInventory<T extends IndexedHomePost>(args: {
+  posts: T[];
+  goalText: string | null;
+  audienceText: string | null;
+  limit: number;
+  creatorLimit?: number;
+  now?: Date;
+  recentDays?: number;
+}): { display: T[]; creators: Array<IndexedHomeCreatorPick<T>> } {
+  const empty = { display: [] as T[], creators: [] as Array<IndexedHomeCreatorPick<T>> };
+  if (args.posts.length === 0) return empty;
 
   const qualified = args.posts.filter(post =>
     passesIndexedViralQualification({
@@ -60,7 +86,7 @@ export function selectIndexedHomePosts<T extends IndexedHomePost>(args: {
       creatorFollowers: post.creatorFollowers,
     })
   );
-  if (qualified.length === 0) return [];
+  if (qualified.length === 0) return empty;
 
   const signals = strategyTopicSignals({
     goalText: args.goalText,
@@ -135,12 +161,66 @@ export function selectIndexedHomePosts<T extends IndexedHomePost>(args: {
     };
   });
 
-  const selection = selectTieredDailyFeed(diversityInput, { min: 1, max: limit });
-  const byId = new Map(diversityInput.map(entry => [entry.candidateId, entry.post]));
-  const selected: T[] = [];
-  for (const entry of selection.selected) {
-    const post = byId.get(entry.candidateId);
-    if (post) selected.push(post);
+  const limit = Math.max(0, args.limit);
+  const display: T[] = [];
+  if (limit > 0) {
+    const selection = selectTieredDailyFeed(diversityInput, { min: 1, max: limit });
+    const byId = new Map(diversityInput.map(entry => [entry.candidateId, entry.post]));
+    for (const entry of selection.selected) {
+      const post = byId.get(entry.candidateId);
+      if (post) display.push(post);
+    }
   }
-  return selected;
+
+  return {
+    display,
+    creators: groupCreatorsFromQualified({
+      scored: diversityInput.map(entry => ({
+        post: entry.post,
+        finalScore: entry.finalScore,
+      })),
+      limit: args.creatorLimit ?? 3,
+      now,
+      recentDays: args.recentDays,
+    }),
+  };
+}
+
+function groupCreatorsFromQualified<T extends IndexedHomePost>(args: {
+  scored: Array<{ post: T; finalScore: number }>;
+  limit: number;
+  now: Date;
+  recentDays?: number;
+}): Array<IndexedHomeCreatorPick<T>> {
+  const recentDays = args.recentDays ?? CREATOR_SIGNAL_RECENT_DAYS;
+  const since = args.now.getTime() - recentDays * 86_400_000;
+  const best = new Map<string, IndexedHomeCreatorPick<T> & { finalScore: number }>();
+
+  for (const entry of args.scored) {
+    const platform = entry.post.platform;
+    if (platform !== "instagram" && platform !== "tiktok" && platform !== "youtube") continue;
+    const handle = (entry.post.creatorId || entry.post.creatorHandle || "")
+      .trim()
+      .replace(/^@/, "")
+      .toLowerCase();
+    if (!handle) continue;
+    const publishedAt = entry.post.publishedAt;
+    if (!publishedAt || publishedAt.getTime() < since) continue;
+    const badge = followerViralBadge(entry.post.views, entry.post.creatorFollowers);
+    if (!badge) continue;
+    const key = `${platform}:${handle}`;
+    const current = best.get(key);
+    const stronger =
+      !current ||
+      badge.multiple > current.badge.multiple ||
+      (badge.multiple === current.badge.multiple && entry.finalScore > current.finalScore);
+    if (stronger) {
+      best.set(key, { post: entry.post, badge, finalScore: entry.finalScore });
+    }
+  }
+
+  return [...best.values()]
+    .sort((a, b) => b.badge.multiple - a.badge.multiple || b.finalScore - a.finalScore)
+    .slice(0, Math.max(0, args.limit))
+    .map(({ post, badge }) => ({ post, badge }));
 }
