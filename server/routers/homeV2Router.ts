@@ -55,9 +55,12 @@ export const homeV2Router = router({
     const res = await browseIndexedViralPosts({
       userId: ctx.user.id,
       description: videoMatchText(c),
+      pillars: c.pillarTitles,
+      goalText: c.goalText,
+      audienceText: c.audienceText,
       limit: HOME_VIDEO_LIMIT,
     });
-    return { personalized: c.description !== null, nicheLabel: c.nicheLabel, items: res.items };
+    return { personalized: c.nicheLabel !== null, nicheLabel: c.nicheLabel, items: res.items };
   }),
 
   profiles: homeProcedure.query(async ({ ctx }) => listWorkspaceProfiles(await requireDb(), octx(ctx))),

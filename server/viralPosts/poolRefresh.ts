@@ -28,6 +28,7 @@ import {
 import { discoverYouTubePoolCandidates } from "./youtubePoolDiscovery";
 import { classifyCandidateForPoolAdmission } from "./poolAdmission";
 import type { SemanticPoolReroute } from "./semanticPoolRelevance";
+import { qualifyAdaptedForSeedAdmission } from "./indexedQualification";
 import { adaptTikTokVideos } from "./platformAdapters";
 import * as poolRepo from "./poolRepository";
 import * as repo from "./repository";
@@ -392,13 +393,22 @@ async function collectSeedPlatformCandidates(
         timeoutMs: 90_000,
       });
       scCalls += VIRAL_POOL_DEFAULTS.seedScCallsPerHandle;
-      adapted.push(
-        ...adaptTikTokVideos(result.videos.slice(0, maxVideos), {
-          niche: pool.niche,
-          creatorFollowers: result.followerCount,
-          creatorAvatarUrl: result.profilePicUrl,
-        })
-      );
+      const scraped = adaptTikTokVideos(result.videos.slice(0, maxVideos), {
+        niche: pool.niche,
+        creatorFollowers: result.followerCount,
+        creatorAvatarUrl: result.profilePicUrl,
+      });
+      const qualified = qualifyAdaptedForSeedAdmission(scraped);
+      if (qualified.length < scraped.length) {
+        console.info("[viralPosts.pool] seed_below_viral_gate", {
+          poolId: pool.id,
+          platform,
+          handle: seed.handle,
+          scraped: scraped.length,
+          admitted: qualified.length,
+        });
+      }
+      adapted.push(...qualified);
     } catch (err) {
       scCalls += 1;
       console.warn("[viralPosts.pool] seed_handle_failed", {

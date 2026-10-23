@@ -15,6 +15,7 @@ import {
   type AdaptedCandidate,
 } from "./candidateAdapter";
 import {
+  buildPoolKey,
   DEFAULT_CONTENT_PILLARS,
   VIRAL_POOL_DEFAULTS,
   VIRAL_SEED_POOL_PILLAR,
@@ -29,6 +30,7 @@ import { classifyCandidatePillars } from "./pillarClassify";
 import * as poolRepo from "./poolRepository";
 import { schedulePoolRefresh } from "./poolRefresh";
 import * as repo from "./repository";
+import { selectIndexedHomePosts } from "./indexedHomeSelection";
 import { scoreCandidate } from "./scoring";
 
 const EXPLORE_BROWSE_LIMIT = 24;
@@ -81,7 +83,11 @@ async function loadUserBusinessDescription(userId: number): Promise<string> {
     : "Instagram Reels ideas for small business owners who want practical, remakeable content.";
 }
 
-function browsePoolSpecs(args: { niche: string; pillars: string[] }) {
+function browsePoolSpecs(args: {
+  niche: string;
+  pillars: string[];
+  includeSeedMix?: boolean;
+}) {
   const specs: Array<{
     niche: string;
     pillar: string;
@@ -97,15 +103,71 @@ function browsePoolSpecs(args: { niche: string; pillars: string[] }) {
     for (const pillar of args.pillars.slice(0, 6)) {
       specs.push({ niche: args.niche, pillar, platform: "tiktok" });
     }
-    specs.push({
-      niche: args.niche,
-      pillar: VIRAL_SEED_POOL_PILLAR,
-      platform: "tiktok",
-    });
+    if (args.includeSeedMix !== false) {
+      specs.push({
+        niche: args.niche,
+        pillar: VIRAL_SEED_POOL_PILLAR,
+        platform: "tiktok",
+      });
+    }
   }
   // Viral Posts V1: no YouTube pool ensure (historical rows may remain).
 
   return specs;
+}
+
+/**
+ * Confirmed pillar titles are looked up under the existing Viral Posts niche
+ * string. Goal text is not an input. When none of those pools exist, the
+ * caller uses the inferred pillar specs, including the TikTok seed-mix pool.
+ */
+export function indexedHomePoolSpecChoices(args: {
+  nicheText: string;
+  confirmedPillars: string[];
+}): {
+  niche: string;
+  confirmedSpecs: Array<{ niche: string; pillar: string; platform?: string }>;
+  fallbackSpecs: Array<{ niche: string; pillar: string; platform?: string }>;
+} {
+  const niche = inferNiche(args.nicheText);
+  const confirmed = [
+    ...new Set(args.confirmedPillars.map(pillar => pillar.trim()).filter(Boolean)),
+  ].slice(0, 6);
+  return {
+    niche,
+    confirmedSpecs:
+      confirmed.length > 0
+        ? browsePoolSpecs({ niche, pillars: confirmed, includeSeedMix: false })
+        : [],
+    fallbackSpecs: browsePoolSpecs({
+      niche,
+      pillars: inferActivePillars(args.nicheText, niche),
+      includeSeedMix: true,
+    }),
+  };
+}
+
+export function chooseIndexedHomeSpecs<
+  T extends { niche: string; pillar: string; platform?: string },
+>(args: {
+  confirmedSpecs: T[];
+  fallbackSpecs: T[];
+  existingKeys: ReadonlySet<string>;
+}): { specs: T[]; source: "confirmed" | "inferred" } {
+  const confirmed = args.confirmedSpecs.filter(spec =>
+    args.existingKeys.has(
+      buildPoolKey({ platform: spec.platform, niche: spec.niche, pillar: spec.pillar })
+    )
+  );
+  if (confirmed.length > 0) return { specs: confirmed, source: "confirmed" };
+  return {
+    source: "inferred",
+    specs: args.fallbackSpecs.filter(spec =>
+      args.existingKeys.has(
+        buildPoolKey({ platform: spec.platform, niche: spec.niche, pillar: spec.pillar })
+      )
+    ),
+  };
 }
 
 async function ensureBrowsePools(args: { niche: string; pillars: string[] }) {
@@ -266,34 +328,121 @@ export async function browseViralPosts(userId: number): Promise<{
 }
 
 /**
- * Home v2 "Videos for you": the same ranking as Explore over pools that
- * already exist for this niche. Never inserts a pool and never schedules a
- * refresh, so rendering Home costs no provider calls. Thin or missing pools
- * simply return fewer posts (Home shows its empty state).
+ * Home v2 "Videos for you". Reads pools that already exist. Confirmed pillar
+ * titles are used only when one of those pools is present. Goal and audience
+ * affect rank through the existing topic boost and are not part of the niche
+ * text. Never inserts a pool and never schedules a refresh.
  */
 export async function browseIndexedViralPosts(args: {
   userId: number;
-  /** Personalization text (niche, goal, pillars). Null uses the legacy profile text. */
+  /** Confirmed niche label. Null uses the legacy profile text, not goal or audience. */
   description: string | null;
+  /** Confirmed pillar titles. Used only when a pool for that pillar already exists. */
+  pillars?: string[];
+  /** Ranking boost only. Must not be concatenated into the niche text. */
+  goalText?: string | null;
+  audienceText?: string | null;
   limit: number;
 }): Promise<{ items: ViralPost[]; niche: string; poolRefreshStarted: false }> {
   if (!isViralPostsLive) return { items: [], niche: "", poolRefreshStarted: false };
-  const text =
-    args.description && args.description.trim().length >= 3
-      ? args.description
-      : await loadUserBusinessDescription(args.userId);
-  const niche = inferNiche(text);
-  const pillars = inferActivePillars(text, niche);
-  const pools = await poolRepo.findExistingPools(browsePoolSpecs({ niche, pillars }));
-  if (pools.length === 0) return { items: [], niche, poolRefreshStarted: false };
-  const res = await assembleBrowse({
+  const explicit = args.description?.trim() ?? "";
+  const text = explicit.length > 0 ? explicit : await loadUserBusinessDescription(args.userId);
+  const plan = indexedHomePoolSpecChoices({
+    nicheText: text,
+    confirmedPillars: args.pillars ?? [],
+  });
+  const existing = await poolRepo.findExistingPools([
+    ...plan.confirmedSpecs,
+    ...plan.fallbackSpecs,
+  ]);
+  const choice = chooseIndexedHomeSpecs({
+    confirmedSpecs: plan.confirmedSpecs,
+    fallbackSpecs: plan.fallbackSpecs,
+    existingKeys: new Set(existing.map(pool => pool.poolKey)),
+  });
+  const pools = choice.specs.flatMap(spec => {
+    const key = buildPoolKey({
+      platform: spec.platform,
+      niche: spec.niche,
+      pillar: spec.pillar,
+    });
+    const pool = existing.find(row => row.poolKey === key);
+    return pool ? [pool] : [];
+  });
+  if (pools.length === 0) return { items: [], niche: plan.niche, poolRefreshStarted: false };
+  const items = await assembleIndexedHome({
     userId: args.userId,
     pools,
-    niche,
-    allowRefresh: false,
+    niche: plan.niche,
+    goalText: args.goalText ?? null,
+    audienceText: args.audienceText ?? null,
     limit: args.limit,
   });
-  return { items: res.items, niche, poolRefreshStarted: false };
+  return { items, niche: plan.niche, poolRefreshStarted: false };
+}
+
+async function assembleIndexedHome(args: {
+  userId: number;
+  pools: Awaited<ReturnType<typeof poolRepo.findExistingPools>>;
+  niche: string;
+  goalText: string | null;
+  audienceText: string | null;
+  limit: number;
+}): Promise<ViralPost[]> {
+  const { userId, pools, niche } = args;
+  const [poolRows, hidden, dismissed, saved] = await Promise.all([
+    poolRepo.loadPoolCandidatesForAssembly({
+      poolIds: pools.map(p => p.id),
+      limit: EXPLORE_POOL_LOAD_LIMIT,
+    }),
+    repo.getHiddenCreatorKeys(userId),
+    repo.getRecentlyDismissedCandidateIds(userId),
+    repo.getSavedCandidateIds(userId),
+  ]);
+
+  const visible = poolRows.filter(row => {
+    if (!isViralPostsV1Platform(row.candidate.platform)) return false;
+    if (dismissed.has(row.candidate.id)) return false;
+    const creatorKey = (row.candidate.creatorId || row.candidate.creatorHandle || "")
+      .toLowerCase()
+      .replace(/^@/, "");
+    return !creatorKey || !hidden.has(creatorKey);
+  });
+
+  const selected = selectIndexedHomePosts({
+    posts: visible.map(row => ({
+      id: row.candidate.id,
+      platform: row.candidate.platform,
+      sourceId: row.candidate.sourceId,
+      creatorId: row.candidate.creatorId,
+      creatorHandle: row.candidate.creatorHandle,
+      caption: row.candidate.caption,
+      hashtags: row.candidate.hashtags ?? [],
+      views: row.candidate.views,
+      likes: row.candidate.likes,
+      comments: row.candidate.comments,
+      shares: row.candidate.shares,
+      saves: row.candidate.saves,
+      creatorFollowers: row.candidate.creatorFollowers,
+      publishedAt: row.candidate.publishedAt,
+      primaryPillar: row.primaryPillar,
+      pillarConfidence: row.pillarConfidence,
+      row,
+    })),
+    goalText: args.goalText,
+    audienceText: args.audienceText,
+    limit: args.limit,
+  });
+
+  return selected.map(({ row }) => {
+    const adapted = candidateToAdapted(
+      row.candidate,
+      row.primaryPillar,
+      niche,
+      row.pillarReason
+    );
+    return toViralPost(row.candidate, adapted, saved.has(row.candidate.id));
+  });
 }
 
 async function assembleBrowse(args: {
