@@ -6,6 +6,7 @@ import type {
   AnalysisSourceSnapshot,
   ProfileEvidence,
   SocialPlatform,
+  WebsiteIntelligence,
 } from "@shared/personalization/model";
 
 export type SnapshotClock = {
@@ -58,6 +59,23 @@ export function writeProfileEvidence(
     return;
   }
   row.snapshot = { ...current, profileEvidence: evidence };
+}
+
+/**
+ * Adds the website read onto evidence already stored.
+ * Does not create a snapshot, replace posts, or set sourceFetchedAt.
+ */
+export function writeWebsiteIntelligence(
+  row: SnapshotClock,
+  website: WebsiteIntelligence
+): boolean {
+  const current = row.snapshot;
+  if (!current?.profileEvidence) return false;
+  row.snapshot = {
+    ...current,
+    profileEvidence: { ...current.profileEvidence, website },
+  };
+  return true;
 }
 
 /**

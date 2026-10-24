@@ -321,6 +321,32 @@ export type ProfileEvidence = {
    * grid. Absent on snapshots saved before this field existed.
    */
   previewPosts?: ProfilePreviewPost[];
+  /**
+   * Facts read from the public website after suggestions were already started.
+   * Absent until that read finishes. Never required for the first suggestions.
+   */
+  website?: WebsiteIntelligence | null;
+};
+
+/** What the public website page itself said. Short extracts only, no page body. */
+export type WebsiteBusinessModel =
+  | "b2b"
+  | "b2c"
+  | "coaching"
+  | "courses"
+  | "digital_products"
+  | "ecommerce"
+  | "local_service";
+
+export type WebsiteIntelligence = {
+  url: string;
+  fetchedAt: string;
+  title: string | null;
+  offers: string[];
+  businessModel: WebsiteBusinessModel | null;
+  customers: string[];
+  callsToAction: string[];
+  goalEvidence: string[];
 };
 
 /** A lookup post kept for the onboarding phone. No caption text. */
