@@ -26,6 +26,28 @@ type State = "A" | "B" | "C" | "loading" | "error";
 const badge = (tier: string, multiple: number) => ({ tier, multiple, label: `${tier} · ${multiple}x followers` });
 const SAMPLE_MP4 = "https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4";
 
+function samplePost(id: string) {
+  return {
+    id,
+    sourceId: "C13BR_GvZVJ",
+    platform: "instagram" as const,
+    creatorName: "Sample",
+    creatorHandle: "sample.creator",
+    creatorFollowers: 1000,
+    sourceUrl: "https://www.instagram.com/reel/C13BR_GvZVJ/",
+    thumbnailUrl: null,
+    videoUrl: SAMPLE_MP4,
+    hook: "Sample video title for QA",
+    views: 34_000,
+    trendStatus: "stable" as const,
+    relevanceLabel: "",
+    relevanceReason: "",
+    saved: false,
+    dismissed: false,
+    remade: false,
+  };
+}
+
 function readInput(input: unknown): Record<string, unknown> {
   return input != null && typeof input === "object" ? (input as Record<string, unknown>) : {};
 }
@@ -61,9 +83,9 @@ function fixture(path: string, state: State): unknown {
         personalized: complete,
         nicheLabel: complete ? "Sample niche" : null,
         creators: [
-          { id: 1, handle: "sample.creator", displayName: "Sample Creator", profilePicUrl: null, followerCount: 1000, platform: "instagram", badge: badge("Strong", 34) },
-          { id: 2, handle: "a.very.long.sample.creator.handle", displayName: "A Very Long Sample Creator Name For Truncation", profilePicUrl: null, followerCount: 1000, platform: "instagram", badge: badge("Viral", 130) },
-          { id: 3, handle: "third.sample", displayName: "Third Sample", profilePicUrl: null, followerCount: 1000, platform: "instagram", badge: null },
+          { id: 1, handle: "sample.creator", displayName: "Sample Creator", profilePicUrl: null, followerCount: 1000, platform: "instagram", badge: badge("Strong", 34), bestPost: samplePost("creator-1") },
+          { id: 2, handle: "a.very.long.sample.creator.handle", displayName: "A Very Long Sample Creator Name For Truncation", profilePicUrl: null, followerCount: 1000, platform: "instagram", badge: badge("Viral", 130), bestPost: samplePost("creator-2") },
+          { id: 3, handle: "third.sample", displayName: "Third Sample", profilePicUrl: null, followerCount: 1000, platform: "instagram", badge: null, bestPost: samplePost("creator-3") },
         ],
       };
     case "homeV2.videos":

@@ -437,6 +437,20 @@ function addExplicitCreatorSignals(
 }
 
 /**
+ * Confirmed goal and audience text, scored only through the existing topic
+ * boost. This does not choose a niche or a pool.
+ */
+export function strategyTopicSignals(args: {
+  goalText?: string | null;
+  audienceText?: string | null;
+}): ViralPersonalizationSignals {
+  const signals = createEmptySignals();
+  addTopicTerms(signals, args.goalText, 2);
+  addTopicTerms(signals, args.audienceText, 2);
+  return signals;
+}
+
+/**
  * Score-only personalization. It can help a good post win among other good
  * posts, but the +30 cap means personal history cannot replace the existing
  * virality/remakeability signals or bypass Today’s Picks quality floor by itself.

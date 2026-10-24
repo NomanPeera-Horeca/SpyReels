@@ -15,7 +15,12 @@ import {
   switchActiveProfile,
   type OnboardingCtx,
 } from "../personalization/onboarding/onboardingService";
-import { homeContextFromState, loadViralCreators, videoMatchText } from "../personalization/home/homeService";
+import {
+  CREATOR_SIGNAL_RECENT_DAYS,
+  HOME_CREATOR_LIMIT,
+  homeContextFromState,
+  videoMatchText,
+} from "../personalization/home/homeService";
 import { browseIndexedViralPosts } from "../viralPosts/browseService";
 
 export const HOME_VIDEO_LIMIT = 4;
@@ -46,8 +51,17 @@ export const homeV2Router = router({
 
   creators: homeProcedure.query(async ({ ctx }) => {
     const c = await context(ctx);
-    const creators = await loadViralCreators(await requireDb(), c.featuredNicheSlug);
-    return { personalized: c.featuredNicheSlug !== null, nicheLabel: c.nicheLabel, creators };
+    const res = await browseIndexedViralPosts({
+      userId: ctx.user.id,
+      description: videoMatchText(c),
+      pillars: c.pillarTitles,
+      goalText: c.goalText,
+      audienceText: c.audienceText,
+      limit: HOME_VIDEO_LIMIT,
+      creatorLimit: HOME_CREATOR_LIMIT,
+      recentDays: CREATOR_SIGNAL_RECENT_DAYS,
+    });
+    return { personalized: c.nicheLabel !== null, nicheLabel: c.nicheLabel, creators: res.creators };
   }),
 
   videos: homeProcedure.query(async ({ ctx }) => {
@@ -55,9 +69,14 @@ export const homeV2Router = router({
     const res = await browseIndexedViralPosts({
       userId: ctx.user.id,
       description: videoMatchText(c),
+      pillars: c.pillarTitles,
+      goalText: c.goalText,
+      audienceText: c.audienceText,
       limit: HOME_VIDEO_LIMIT,
+      creatorLimit: HOME_CREATOR_LIMIT,
+      recentDays: CREATOR_SIGNAL_RECENT_DAYS,
     });
-    return { personalized: c.description !== null, nicheLabel: c.nicheLabel, items: res.items };
+    return { personalized: c.nicheLabel !== null, nicheLabel: c.nicheLabel, items: res.items };
   }),
 
   profiles: homeProcedure.query(async ({ ctx }) => listWorkspaceProfiles(await requireDb(), octx(ctx))),

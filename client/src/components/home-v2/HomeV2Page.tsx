@@ -8,7 +8,7 @@
  *   as 30-Day Plan "Write script"), auto-submitted once on arrival.
  * - Ideas: plan.listCards (existing 30-Day Plan).
  * - Videos: homeV2.videos (indexed Viral Posts pools only; no scraping).
- * - Creators: homeV2.creators (stored featured catalog; no scraping).
+ * - Creators: homeV2.creators (same indexed Viral Posts inventory as videos; no scraping).
  * - Remake (shared Result Card 288:666): the existing Collected Reels remake chain.
  * Rendering Home never starts paid scraping, a pool refresh or a model call.
  *
@@ -137,8 +137,8 @@ export default function HomeV2Page() {
   const [savedOverride, setSavedOverride] = useState<Record<string, boolean>>(
     {}
   );
-  const [playingVideoId, setPlayingVideoId] = useState<string | null>(null);
-  const closePlayer = useCallback(() => setPlayingVideoId(null), []);
+  const [playingPost, setPlayingPost] = useState<ViralPost | null>(null);
+  const closePlayer = useCallback(() => setPlayingPost(null), []);
 
   const ctx = contextQ.data;
   const complete = ctx?.personalizationComplete ?? false;
@@ -303,17 +303,6 @@ export default function HomeV2Page() {
   const showBanner = Boolean(ctx) && !complete && !bannerDismissed;
   const creators = creatorsQ.data;
   const videos = videosQ.data;
-  const playingPost = useMemo(() => {
-    if (!playingVideoId || !videos) return null;
-    return videos.items.find(item => item.id === playingVideoId) ?? null;
-  }, [playingVideoId, videos]);
-
-  useEffect(() => {
-    if (!playingVideoId || !videos) return;
-    if (!videos.items.some(item => item.id === playingVideoId)) {
-      setPlayingVideoId(null);
-    }
-  }, [playingVideoId, videos]);
   const videosSubtitle =
     videos?.personalized && nicheLabel
       ? `${nicheLabel} · ${C.videos.allPlatforms}`
@@ -523,7 +512,7 @@ export default function HomeV2Page() {
                       post={p}
                       compact={compact}
                       busy={remakeBusyId === post.id}
-                      onPlay={() => setPlayingVideoId(post.id)}
+                      onPlay={() => setPlayingPost(post)}
                       onRemake={() => void createFromVideo(post)}
                       onToggleSave={() => void toggleSave(p)}
                     />
@@ -590,7 +579,7 @@ export default function HomeV2Page() {
                       compact={compact}
                       onSee={() => {
                         track("creator_open");
-                        navigate(`/dashboard?featuredAccountId=${c.id}`);
+                        if (c.bestPost) setPlayingPost(c.bestPost);
                       }}
                     />
                     <div className={styles.divider} />
