@@ -18,6 +18,7 @@ import {
   type AnalysisStage,
   type AnalysisStageStatus,
   type ProfileEvidence,
+  type WebsiteIntelligence,
 } from "@shared/personalization/model";
 import {
   analysisRequestFingerprint,
@@ -32,7 +33,7 @@ import {
   profileAnalysisStages,
   socialProfiles,
 } from "../../../drizzle/personalizationSchema";
-import { writeProfileEvidence, writeScrapeSnapshot } from "../analysis/snapshotWrite";
+import { writeProfileEvidence, writeScrapeSnapshot, writeWebsiteIntelligence } from "../analysis/snapshotWrite";
 import {
   DuplicateRunError,
   type AnalysisProfile,
@@ -330,6 +331,40 @@ export function createAnalysisStore(db: Db): AnalysisStore {
           postsInWindow: row.postsInWindow,
         };
         writeProfileEvidence(clock, evidence, identity);
+        await tx
+          .update(profileAnalysisRuns)
+          .set({ sourceSnapshot: clock.snapshot })
+          .where(eq(profileAnalysisRuns.id, runId));
+      });
+    },
+
+    async loadRunProfileEvidence(runId): Promise<ProfileEvidence | null> {
+      const [row] = await db
+        .select({ snapshot: profileAnalysisRuns.sourceSnapshot })
+        .from(profileAnalysisRuns)
+        .where(eq(profileAnalysisRuns.id, runId))
+        .limit(1);
+      return row?.snapshot?.profileEvidence ?? null;
+    },
+
+    async saveWebsiteIntelligence(runId, website: WebsiteIntelligence) {
+      await db.transaction(async tx => {
+        const [row] = await tx
+          .select({
+            snapshot: profileAnalysisRuns.sourceSnapshot,
+            sourceFetchedAt: profileAnalysisRuns.sourceFetchedAt,
+            postsInWindow: profileAnalysisRuns.postsInWindow,
+          })
+          .from(profileAnalysisRuns)
+          .where(eq(profileAnalysisRuns.id, runId))
+          .for("update");
+        if (!row) return;
+        const clock = {
+          snapshot: row.snapshot,
+          sourceFetchedAt: row.sourceFetchedAt,
+          postsInWindow: row.postsInWindow,
+        };
+        if (!writeWebsiteIntelligence(clock, website)) return;
         await tx
           .update(profileAnalysisRuns)
           .set({ sourceSnapshot: clock.snapshot })

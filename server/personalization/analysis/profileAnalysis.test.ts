@@ -5,6 +5,7 @@ import type {
   AnalysisStageStatus,
   ProfileEvidence,
   ProviderAttemptRecord,
+  WebsiteIntelligence,
   SocialPlatform,
 } from "@shared/personalization/model";
 import {
@@ -40,6 +41,7 @@ import { runProfileAnalysis } from "./runProfileAnalysis";
 import {
   createSnapshotLock,
   writeProfileEvidence,
+  writeWebsiteIntelligence,
   writeScrapeSnapshot,
 } from "./snapshotWrite";
 
@@ -162,6 +164,23 @@ class MemoryStore implements AnalysisStore {
       };
       if (this.snapshotGate) await this.snapshotGate();
       writeProfileEvidence(clock, evidence, identity);
+      r.snapshot = clock.snapshot;
+    });
+  }
+  async loadRunProfileEvidence(id: string) {
+    return this.runs.get(id)?.snapshot?.profileEvidence ?? null;
+  }
+  async saveWebsiteIntelligence(id: string, website: WebsiteIntelligence) {
+    await this.runLocked(async () => {
+      const r = this.runs.get(id);
+      if (!r) return;
+      const clock = {
+        snapshot: r.snapshot,
+        sourceFetchedAt: r.sourceFetchedAt,
+        postsInWindow: r.postsInWindow,
+      };
+      if (this.snapshotGate) await this.snapshotGate();
+      writeWebsiteIntelligence(clock, website);
       r.snapshot = clock.snapshot;
     });
   }

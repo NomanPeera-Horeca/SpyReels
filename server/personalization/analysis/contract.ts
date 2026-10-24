@@ -26,6 +26,7 @@ import type {
   AnalysisStageStatus,
   ProfileEvidence,
   SocialPlatform,
+  WebsiteIntelligence,
   SocialProfileStatus,
   ProviderAttemptRecord,
 } from "@shared/personalization/model";
@@ -153,6 +154,13 @@ export interface AnalysisStore {
     evidence: ProfileEvidence,
     identity: { platform: SocialPlatform; handle: string; followerCount: number | null }
   ): Promise<void>;
+  /** Evidence already on this run, by primary key. Null when the run or evidence is missing. */
+  loadRunProfileEvidence(runId: string): Promise<ProfileEvidence | null>;
+  /**
+   * Merges a finished website read onto the current evidence.
+   * Locks the row. Does not set sourceFetchedAt or replace posts.
+   */
+  saveWebsiteIntelligence(runId: string, website: WebsiteIntelligence): Promise<void>;
   /** Appends one attempt and adds its requests to providerCallCount. */
   recordProviderAttempt(
     runId: string,

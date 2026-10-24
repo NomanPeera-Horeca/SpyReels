@@ -24,7 +24,8 @@ import { getDb } from "../db";
 import { assertOnboardingV2Access, getExperienceAccess } from "../experienceAccess";
 import { createAnalysisStore, type Db } from "../personalization/db/analysisStore";
 import { requestProfileAnalysis } from "../personalization/analysis/requestProfileAnalysis";
-import { profileEvidenceFromPreview } from "../personalization/onboarding/profileEvidence";
+import { profileEvidenceFromPreview, publicWebsiteUrl } from "../personalization/onboarding/profileEvidence";
+import { scheduleWebsiteIntelligence, startWebsiteIntelligence } from "../personalization/onboarding/websiteIntelligence";
 import {
   enqueuePreliminarySuggestions,
   enqueueProfileAnalysis,
@@ -191,11 +192,21 @@ export const onboardingV2Router = router({
             }
           );
           const version = await store.loadPersonalizationVersion(profileId);
-          await enqueuePreliminarySuggestions({
-            workspaceId: ctx.workspaceId,
-            userId: ctx.user.id,
-            socialProfileId: profileId,
-            version,
+          await scheduleWebsiteIntelligence({
+            enqueueSuggestions: () =>
+              enqueuePreliminarySuggestions({
+                workspaceId: ctx.workspaceId,
+                userId: ctx.user.id,
+                socialProfileId: profileId,
+                version,
+              }),
+            websiteUrl: publicWebsiteUrl(preview.externalUrl),
+            start: url =>
+              startWebsiteIntelligence({
+                runId: analysis.runId,
+                url,
+                store,
+              }),
           });
         } catch (err) {
           console.warn("[personalization] preliminary_suggestions_not_started", {

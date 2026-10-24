@@ -5,6 +5,7 @@ import {
   createSnapshotLock,
   writeProfileEvidence,
   writeScrapeSnapshot,
+  writeWebsiteIntelligence,
   type SnapshotClock,
 } from "./snapshotWrite";
 
@@ -175,6 +176,30 @@ describe("snapshot writes", () => {
     expect(writer.row.snapshot?.posts).toHaveLength(12);
     expect(writer.row.snapshot?.performancePanels).toEqual(panels);
     expect(writer.row.snapshot?.profileEvidence?.captions).toEqual(["after"]);
+  });
+
+  it("adds a website read without marking the scrape finished or dropping posts", () => {
+    const row = clock();
+    row.snapshot = { ...scrape(4, true), profileEvidence: evidence("lookup") };
+    row.sourceFetchedAt = new Date("2026-10-22T13:00:00.000Z");
+    row.postsInWindow = 4;
+    const wrote = writeWebsiteIntelligence(row, {
+      url: "https://example.com/",
+      fetchedAt: "2026-10-24T15:00:00.000Z",
+      title: "Cafe Supply",
+      offers: ["We offer ovens"],
+      businessModel: "b2b",
+      customers: ["restaurant owners"],
+      callsToAction: ["Book a showroom visit"],
+      goalEvidence: [],
+    });
+    expect(wrote).toBe(true);
+    expect(row.sourceFetchedAt?.toISOString()).toBe("2026-10-22T13:00:00.000Z");
+    expect(row.postsInWindow).toBe(4);
+    expect(row.snapshot?.posts).toHaveLength(4);
+    expect(row.snapshot?.performancePanels).toEqual(panels);
+    expect(row.snapshot?.profileEvidence?.captions).toEqual(["lookup"]);
+    expect(row.snapshot?.profileEvidence?.website?.offers).toEqual(["We offer ovens"]);
   });
 
   it("retries either write without dropping the other side", async () => {
