@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { CreatorEvidence } from "./evidence";
 import { copiesSourceText } from "./guards";
 import { parsePillarOutput } from "./pillarRecommendations";
-import { safeValidationReason, stepHasLiveSuggestions } from "./recommendationService";
+import { firstVisibleDelayMs, safeValidationReason, stepHasLiveSuggestions } from "./recommendationService";
 import { detectContentLanguage } from "./profileBasics";
-import { planSubtopicInserts } from "../subtopics";
+import { SubtopicStoreError, planSubtopicInserts, subtopicSaveFailureFields } from "../subtopics";
 import { videoMatchText } from "../home/homeService";
 
 const evidence: CreatorEvidence = {
@@ -208,6 +208,26 @@ describe("pillar subtopics", () => {
       ],
     });
     expect(labels).toEqual(["Food cost"]);
+  });
+});
+
+describe("release A corrections", () => {
+  it("names a missing topic migration without profile text", () => {
+    const fields = subtopicSaveFailureFields(
+      new SubtopicStoreError(["migration 0104: table pillar_subtopics is missing"])
+    );
+    expect(fields).toEqual({
+      code: "subtopic_store",
+      missing: ["migration 0104: table pillar_subtopics is missing"],
+    });
+    expect(JSON.stringify(fields)).not.toMatch(/bio|caption/i);
+  });
+
+  it("records the visible delay only after a suggestion exists", () => {
+    const confirmedAt = new Date("2026-10-23T13:50:43.001Z");
+    expect(firstVisibleDelayMs(confirmedAt, 0, confirmedAt.getTime() + 5700)).toBeNull();
+    expect(firstVisibleDelayMs(confirmedAt, 1, confirmedAt.getTime() + 5700)).toBe(5700);
+    expect(firstVisibleDelayMs(null, 1, Date.now())).toBeNull();
   });
 });
 

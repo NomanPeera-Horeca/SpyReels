@@ -31,7 +31,7 @@ import {
   type SocialProfileStatus,
   type StepStatus,
 } from "@shared/personalization/model";
-import type { PublicProfilePreview } from "@shared/personalization/publicProfilePreview";
+import type { PublicProfilePost, PublicProfilePreview } from "@shared/personalization/publicProfilePreview";
 import {
   idsToConfirmForStep,
   isPersonalizationComplete,
@@ -58,6 +58,8 @@ import {
   type PerformancePanels,
 } from "@shared/personalization/performanceInsights";
 import { readOptional } from "./optionalRead";
+import { previewPostsFromEvidence } from "./profileEvidence";
+import { firstVisibleDelayMs } from "../intelligence/recommendationService";
 import { toItemRecord } from "../db/rows";
 import {
   listProfileSubtopics,
@@ -110,6 +112,8 @@ export type OnboardingStateView = {
     followingCount: number | null;
     postCount: number | null;
     status: SocialProfileStatus;
+    /** Cover images from the confirmed lookup. Empty when that lookup had none. */
+    recentPosts: PublicProfilePost[];
   } | null;
   analysis: {
     runId: string;
@@ -217,12 +221,12 @@ function safeBestPost(
   }
 }
 
-/** Latest analysis for this profile. A bad snapshot or a failed read does not throw. */
+/** Latest analysis for this profile, plus the lookup covers stored on that run. */
 async function loadAnalysisView(
   db: Db,
   profileId: string,
   workspaceId: string
-): Promise<OnboardingStateView["analysis"]> {
+): Promise<{ analysis: OnboardingStateView["analysis"]; previewPosts: PublicProfilePost[] } | null> {
   // The profile index is (socialProfileId, workspaceId, createdAt). Pick the id first
   // so the JSON snapshot is loaded by primary key and is not part of the sort.
   const [latest] = await db
@@ -250,13 +254,16 @@ async function loadAnalysisView(
   const stages: Partial<Record<AnalysisStage, AnalysisStageStatus>> = {};
   for (const s of stageRows) stages[s.stage] = s.status;
   return {
-    runId: run.id,
-    status: run.status,
-    stages,
-    errorCode: run.errorCode,
-    postsInWindow: run.postsInWindow,
-    bestPost: safeBestPost(run.status, run.sourceSnapshot),
-    panels: safePanels(run.sourceSnapshot, run.completedAt),
+    analysis: {
+      runId: run.id,
+      status: run.status,
+      stages,
+      errorCode: run.errorCode,
+      postsInWindow: run.postsInWindow,
+      bestPost: safeBestPost(run.status, run.sourceSnapshot),
+      panels: safePanels(run.sourceSnapshot, run.completedAt),
+    },
+    previewPosts: previewPostsFromEvidence(run.sourceSnapshot?.profileEvidence),
   };
 }
 
@@ -307,13 +314,14 @@ export async function loadOnboardingState(db: Db, ctx: OnboardingCtx): Promise<O
         )
       : {};
 
-  const analysis = profile
+  const analysisBundle = profile
     ? await readOptional(
         "profile analysis",
         () => loadAnalysisView(db, profile.id, ctx.workspaceId),
         null
       )
     : null;
+  const analysis = analysisBundle?.analysis ?? null;
 
   const steps: Record<PersonalizationStep, StepStatus> = {
     goal: progress?.goalStatus ?? "pending",
@@ -350,6 +358,7 @@ export async function loadOnboardingState(db: Db, ctx: OnboardingCtx): Promise<O
           followingCount: profile.followingCount,
           postCount: profile.postCount,
           status: profile.status,
+          recentPosts: analysisBundle?.previewPosts ?? [],
         }
       : null,
     analysis,
@@ -382,6 +391,22 @@ export async function loadOnboardingState(db: Db, ctx: OnboardingCtx): Promise<O
         : [],
     completedAt: progress?.completedAt ?? null,
   };
+}
+
+/**
+ * Logs confirm-to-first-visible once the client can show a saved suggestion.
+ * The clock is the server's confirmedAt. Profile text is not included.
+ */
+export async function recordFirstVisibleSuggestion(db: Db, ctx: OnboardingCtx, now = Date.now()): Promise<void> {
+  const profile = await activeProfileRow(db, ctx);
+  if (!profile || profile.status === "pending_confirmation") return;
+  const items = liveItems(await loadItems(db, profile.id));
+  const ms = firstVisibleDelayMs(profile.confirmedAt, items.length, now);
+  if (ms == null) return;
+  console.info("[personalization] suggestion_visible", {
+    profileId: profile.id,
+    msSinceConfirm: ms,
+  });
 }
 
 async function setActive(db: Db, ctx: OnboardingCtx, profileId: string) {

@@ -170,9 +170,11 @@ export default function OnboardingV2Flow() {
   const recSeenAt = useRef<number | null>(null);
   const latestRecAt = useRef<number | null>(null);
   const seenAnalysis = useRef<string | null>(null);
-  const suggestionClock = useRef<{ started: number | null; reported: boolean }>({
+  const suggestionClock = useRef<{ started: number | null; reported: boolean; pending: boolean; attempts: number }>({
     started: null,
     reported: false,
+    pending: false,
+    attempts: 0,
   });
   const completing = useRef(false);
   const submissions = useRef(createSubmitLock()).current;
@@ -197,13 +199,29 @@ export default function OnboardingV2Flow() {
     },
     [access.internal, posthog]
   );
+  const noteVisible = trpc.onboardingV2.noteSuggestionVisible.useMutation();
+  const noteVisibleRef = useRef(noteVisible.mutate);
+  noteVisibleRef.current = noteVisible.mutate;
   useEffect(() => {
     const clock = suggestionClock.current;
-    if (clock.started == null || clock.reported) return;
+    if (clock.started == null || clock.reported || clock.pending || clock.attempts >= 2) return;
     if ((state?.items.length ?? 0) === 0) return;
-    clock.reported = true;
-    track("suggestion_visible", { msSinceConfirm: Date.now() - clock.started });
-  }, [state?.items, track]);
+    clock.pending = true;
+    clock.attempts += 1;
+    const started = clock.started;
+    noteVisibleRef.current(undefined, {
+      onSuccess: () => {
+        clock.reported = true;
+        clock.pending = false;
+      },
+      onError: () => {
+        clock.pending = false;
+      },
+    });
+    if (!access.internal && clock.attempts === 1) {
+      posthog?.capture("onboarding_v2_suggestion_visible", { msSinceConfirm: Date.now() - started });
+    }
+  }, [state?.items, access.internal, posthog]);
 
   const lookup = trpc.onboardingV2.lookupProfile.useMutation();
   const confirm = trpc.onboardingV2.confirmProfile.useMutation();
@@ -492,7 +510,7 @@ export default function OnboardingV2Flow() {
       followingCount: p.followingCount,
       likeCount: null,
       videoCount: null,
-      recentPosts: [],
+      recentPosts: p.recentPosts ?? [],
     };
   }, [preview, state?.profile]);
 
@@ -729,7 +747,7 @@ export default function OnboardingV2Flow() {
                 setScreen("platform");
                 return;
               }
-              suggestionClock.current = { started: Date.now(), reported: false };
+              suggestionClock.current = { started: Date.now(), reported: false, pending: false, attempts: 0 };
               track("step_completed", { step: "profile" });
               await refresh();
               // Adding another profile: the account answers exist, go straight to its strategy.

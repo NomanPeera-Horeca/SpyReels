@@ -39,6 +39,20 @@ export class SubtopicStoreError extends Error {
   }
 }
 
+/** Fields safe to log when topic rows cannot be saved. Never includes profile text. */
+export function subtopicSaveFailureFields(err: unknown): { code: string; missing?: string[] } {
+  if (err instanceof SubtopicStoreError) {
+    return {
+      code: "subtopic_store",
+      missing: err.missing.slice(0, 8).map(part => part.slice(0, 120)),
+    };
+  }
+  const code = (err as { code?: unknown })?.code;
+  if (typeof code === "string" && code.trim()) return { code: code.slice(0, 60) };
+  if (err instanceof Error && err.name) return { code: err.name.slice(0, 60) };
+  return { code: "error" };
+}
+
 export type SubtopicStoreCheck = { ready: true } | { ready: false; missing: string[] };
 
 /** Checks the catalog for what the subtopic code needs. Uncached: a few small reads. */

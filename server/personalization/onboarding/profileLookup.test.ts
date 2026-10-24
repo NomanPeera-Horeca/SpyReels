@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { InstagramPrivateAccountError, InstagramProviderError } from "../../instagram";
 import { classifyLookupError } from "./profileLookupDeps";
 import {
@@ -192,26 +192,43 @@ describe("lookupPublicProfile", () => {
     });
   });
 
-  it("warms stable media after the profile is already returned", async () => {
-    let release: (url: string) => void = () => {};
-    const gate = new Promise<string>(resolve => {
-      release = resolve;
-    });
+  it("returns mirrored thumbnails in the lookup response", async () => {
     const r = await lookupPublicProfile({
       userId: 1,
       platform: "instagram",
       handle: "test.kitchen",
       warmMedia: true,
       deps: deps({
-        mirrorAvatar: () => gate,
-        mirrorThumbnails: async () => new Map(),
+        mirrorAvatar: async () => "https://cdn.example/pic.jpg?r2",
+        mirrorThumbnails: async () => new Map([["a1", "https://cdn.example/a1.jpg?r2"]]),
       }),
     });
-    expect(r.ok && r.profile.avatarUrl).toBe("https://cdn.example/pic.jpg");
-    release("https://cdn.example/pic.jpg?r2");
-    await vi.waitFor(() => {
-      expect(recallCachedPublicProfile("instagram", "test.kitchen")?.avatarUrl).toBe("https://cdn.example/pic.jpg?r2");
+    expect(r.ok && r.profile.avatarUrl).toBe("https://cdn.example/pic.jpg?r2");
+    if (!r.ok) return;
+    expect(r.profile.recentPosts[0]?.thumbnailUrl).toBe("https://cdn.example/a1.jpg?r2");
+    expect(recallCachedPublicProfile("instagram", "test.kitchen")?.recentPosts[0]?.thumbnailUrl).toBe(
+      "https://cdn.example/a1.jpg?r2"
+    );
+  });
+
+  it("returns the provider image when mirroring stalls", async () => {
+    const started = Date.now();
+    const r = await lookupPublicProfile({
+      userId: 1,
+      platform: "instagram",
+      handle: "stall",
+      warmMedia: true,
+      warmMediaMs: 30,
+      deps: deps({
+        instagram: async () => ({ ...igProfile, username: "stall" }),
+        mirrorAvatar: () => new Promise(() => {}),
+        mirrorThumbnails: () => new Promise(() => {}),
+      }),
     });
+    expect(Date.now() - started).toBeLessThan(500);
+    expect(r.ok && r.profile.avatarUrl).toBe("https://cdn.example/pic.jpg");
+    if (!r.ok) return;
+    expect(r.profile.recentPosts[0]?.thumbnailUrl).toBe("https://cdn.example/a1.jpg");
   });
 });
 

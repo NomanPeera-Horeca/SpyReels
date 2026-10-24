@@ -316,6 +316,19 @@ export type ProfileEvidence = {
   cta: string | null;
   websiteUrl: string | null;
   captions: string[];
+  /**
+   * Cover images from the same lookup. Stored so a refresh can paint the phone
+   * grid. Absent on snapshots saved before this field existed.
+   */
+  previewPosts?: ProfilePreviewPost[];
+};
+
+/** A lookup post kept for the onboarding phone. No caption text. */
+export type ProfilePreviewPost = {
+  id: string;
+  thumbnailUrl: string | null;
+  viewCount: number | null;
+  isPinned?: boolean;
 };
 
 /** Stored on profile_analysis_runs.sourceSnapshot after stage 1. */

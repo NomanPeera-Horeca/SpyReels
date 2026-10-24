@@ -45,6 +45,7 @@ import {
   confirmProfile,
   editItem,
   loadOnboardingState,
+  recordFirstVisibleSuggestion,
   removeItem,
   restorePersonalizationItem,
   resolveStep,
@@ -170,6 +171,7 @@ export const onboardingV2Router = router({
           platform: input.platform,
           handle: input.handle,
           deps: productionLookupDeps(),
+          warmMedia: true,
         });
         if (!again.ok) return { ok: false as const, reason: again.reason };
         preview = again.profile;
@@ -204,6 +206,13 @@ export const onboardingV2Router = router({
       }
       return { ok: true as const, profileId, analysis: analysis.status };
     }),
+
+  /** Client can see a saved suggestion. Internal QA accounts are included. No profile text. */
+  noteSuggestionVisible: v2Procedure.mutation(async ({ ctx }) => {
+    const db = await requireDb();
+    await recordFirstVisibleSuggestion(db, octx(ctx));
+    return { ok: true as const };
+  }),
 
   /** "Try again" after a failed analysis: same run, same budget (no new charge). */
   retryAnalysis: v2Procedure.mutation(async ({ ctx }) => {
