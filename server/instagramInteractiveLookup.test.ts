@@ -54,24 +54,6 @@ function searchCalls(fetchMock: ReturnType<typeof vi.fn>): number {
   return fetchMock.mock.calls.filter(([input]) => String(input).includes("/v1/instagram/search")).length;
 }
 
-function installDelayedProfile(delayMs: number, body: unknown = graphProfile("noman_peera")) {
-  let signal: AbortSignal | undefined;
-  const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
-    signal = init?.signal ?? undefined;
-    return new Promise<Response>((resolve, reject) => {
-      const timer = setTimeout(() => resolve(jsonResponse(200, body)), delayMs);
-      const abort = () => {
-        clearTimeout(timer);
-        reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
-      };
-      if (init?.signal?.aborted) abort();
-      else init?.signal?.addEventListener("abort", abort, { once: true });
-    });
-  });
-  vi.stubGlobal("fetch", fetchMock);
-  return { fetchMock, signal: () => signal };
-}
-
 describe("interactive Instagram profile lookup", () => {
   const logs: string[] = [];
 
@@ -92,27 +74,52 @@ describe("interactive Instagram profile lookup", () => {
 
   async function expectProfileAt(delayMs: number) {
     vi.useFakeTimers();
-    const { fetchMock, signal } = installDelayedProfile(delayMs);
+    const signals: AbortSignal[] = [];
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      const requestSignal = init?.signal;
+      if (requestSignal) signals.push(requestSignal);
+      return new Promise<Response>((resolve, reject) => {
+        const timer = setTimeout(() => resolve(jsonResponse(200, graphProfile("noman_peera"))), delayMs);
+        const abort = () => {
+          clearTimeout(timer);
+          reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+        };
+        if (requestSignal?.aborted) abort();
+        else requestSignal?.addEventListener("abort", abort, { once: true });
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
     const pending = resolveInstagramIdentity("noman_peera", onboardingBudget());
-    if (delayMs > 8_000) {
-      await vi.advanceTimersByTimeAsync(8_000);
-      expect(signal()?.aborted).toBe(false);
+    if (delayMs > 6_000) {
+      await vi.advanceTimersByTimeAsync(6_000);
+      expect(signals[0]?.aborted).toBe(false);
       expect(profileCalls(fetchMock)).toBe(1);
+      await vi.advanceTimersByTimeAsync(delayMs - 6_000);
+    } else {
+      await vi.advanceTimersByTimeAsync(delayMs);
     }
-    await vi.advanceTimersByTimeAsync(delayMs > 8_000 ? delayMs - 8_000 : delayMs);
     const identity = await pending;
     expect(identity.resolutionMethod).toBe("profile_handle");
     expect(identity.fallbackUsed).toBe(false);
     expect(identity.username).toBe("noman_peera");
     expect(identity.userId).toBe("42");
-    expect(profileCalls(fetchMock)).toBe(1);
     expect(searchCalls(fetchMock)).toBe(0);
+    const hedged = delayMs > 6_500;
+    expect(profileCalls(fetchMock)).toBe(hedged ? 2 : 1);
+    if (hedged) expect(signals[1]?.aborted).toBe(true);
     const attempts = logs.filter(line => line.includes("[Instagram] profile attempt"));
-    expect(attempts).toEqual([
-      expect.stringContaining(`requested=@noman_peera n=1/2 ms=${delayMs} status=200 detail=ok`),
-    ]);
-    expect(attempts.join("\n")).not.toMatch(/Media studio|Noman Peera|test-key|biography/);
+    expect(attempts[0]).toContain(`requested=@noman_peera n=1/2 ms=${delayMs} status=200 detail=ok`);
+    const hedge = logs.find(line => line.includes("[Instagram] profile hedge"));
+    expect(hedge).toContain(hedged ? "hedge=1" : "hedge=0");
+    expect(hedge).toContain("outcome=ok");
+    expect(hedge).toContain("winner=1");
+    expect(hedge).toContain(hedged ? "extraRequests=1" : "extraRequests=0");
+    expect(logs.join("\n")).not.toMatch(/Media studio|Noman Peera|test-key|biography/);
   }
+
+  it("returns the profile before the hedge when the direct request answers at 3 seconds", async () => {
+    await expectProfileAt(3_000);
+  });
 
   it("returns the profile when the direct request answers at 8 seconds", async () => {
     await expectProfileAt(8_000);
@@ -124,10 +131,12 @@ describe("interactive Instagram profile lookup", () => {
 
   it("returns the profile when the direct request answers at 12 seconds", async () => {
     vi.useFakeTimers();
-    let release: ((value: Response) => void) | undefined;
-    let signal: AbortSignal | undefined;
+    let releaseFirst: ((value: Response) => void) | undefined;
+    let firstSignal: AbortSignal | undefined;
+    let calls = 0;
     const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
-      signal = init?.signal ?? undefined;
+      calls += 1;
+      const call = calls;
       return new Promise<Response>((resolve, reject) => {
         const abort = () => reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
         if (init?.signal?.aborted) {
@@ -135,27 +144,32 @@ describe("interactive Instagram profile lookup", () => {
           return;
         }
         init?.signal?.addEventListener("abort", abort, { once: true });
-        release = resolve;
+        if (call === 1) {
+          firstSignal = init?.signal ?? undefined;
+          releaseFirst = resolve;
+        }
       });
     });
     vi.stubGlobal("fetch", fetchMock);
     const pending = resolveInstagramIdentity("noman_peera", onboardingBudget());
-    await vi.advanceTimersByTimeAsync(8_000);
-    expect(signal?.aborted).toBe(false);
-    await vi.advanceTimersByTimeAsync(4_000 - 1);
-    expect(signal?.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(6_000);
+    expect(firstSignal?.aborted).toBe(false);
     expect(profileCalls(fetchMock)).toBe(1);
-    release?.(jsonResponse(200, graphProfile("noman_peera")));
+    await vi.advanceTimersByTimeAsync(6_000 - 1);
+    expect(firstSignal?.aborted).toBe(false);
+    expect(profileCalls(fetchMock)).toBe(2);
+    releaseFirst?.(jsonResponse(200, graphProfile("noman_peera")));
     const identity = await pending;
     expect(identity.username).toBe("noman_peera");
     expect(identity.fallbackUsed).toBe(false);
-    expect(profileCalls(fetchMock)).toBe(1);
     expect(searchCalls(fetchMock)).toBe(0);
     const attempts = logs.filter(line => line.includes("[Instagram] profile attempt"));
-    expect(attempts).toHaveLength(1);
-    expect(attempts[0]).toContain("status=200 detail=ok");
+    expect(attempts.some(line => line.includes("n=1/2") && line.includes("status=200 detail=ok"))).toBe(true);
     expect(attempts[0]).toContain("requested=@noman_peera");
     expect(Number(attempts[0]?.match(/ms=(\d+)/)?.[1])).toBeGreaterThanOrEqual(11_999);
+    expect(profileCalls(fetchMock)).toBe(2);
+    expect(logs.some(line => line.includes("hedge=1") && line.includes("winner=1") && line.includes("extraRequests=1"))).toBe(true);
+    expect(logs.join("\n")).not.toMatch(/Media studio|Noman Peera|test-key|biography/);
   });
 
   it("classifies a still-open profile request at the deadline as timeout", async () => {
@@ -173,9 +187,10 @@ describe("interactive Instagram profile lookup", () => {
       () => ({ ok: true as const }),
       (error: unknown) => ({ ok: false as const, error })
     );
-    await vi.advanceTimersByTimeAsync(8_000);
+    await vi.advanceTimersByTimeAsync(6_000);
     expect(profileCalls(fetchMock)).toBe(1);
-    await vi.advanceTimersByTimeAsync(4_000);
+    await vi.advanceTimersByTimeAsync(6_000);
+    expect(profileCalls(fetchMock)).toBe(2);
     const outcome = await settled;
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
@@ -183,10 +198,11 @@ describe("interactive Instagram profile lookup", () => {
     expect(outcome.error).not.toBeInstanceOf(InstagramHandleNotFoundError);
     expect(outcome.error).toMatchObject({ httpStatus: 408, detail: "timeout" });
     expect(classifyLookupError(outcome.error)).toBe("timeout");
-    expect(profileCalls(fetchMock)).toBe(1);
+    expect(profileCalls(fetchMock)).toBe(2);
     expect(searchCalls(fetchMock)).toBe(0);
     const attempts = logs.filter(line => line.includes("[Instagram] profile attempt"));
-    expect(attempts.some(line => line.includes("detail=timeout"))).toBe(true);
+    expect(attempts.filter(line => line.includes("detail=timeout"))).toHaveLength(2);
+    expect(logs.some(line => line.includes("hedge=1") && line.includes("outcome=timeout") && line.includes("extraRequests=1"))).toBe(true);
     expect(attempts.join("\n")).not.toMatch(/Media studio|test-key/);
   });
 
@@ -243,6 +259,7 @@ describe("interactive Instagram profile lookup", () => {
     expect(attempts[0]).toContain("detail=rate_limit");
     expect(attempts[1]).toContain("n=2/2");
     expect(attempts[1]).toContain("detail=ok");
+    expect(logs.some(line => line.includes("hedge=0") && line.includes("winner=2") && line.includes("extraRequests=1"))).toBe(true);
   });
 
   it("keeps a real not-found, private account, and exhausted rate limit distinct from timeout", async () => {
@@ -282,5 +299,177 @@ describe("interactive Instagram profile lookup", () => {
     expect(rateError).toBeInstanceOf(InstagramProviderError);
     expect(rateError).not.toBeInstanceOf(InstagramHandleNotFoundError);
     expect(classifyLookupError(rateError)).toBe("rate_limited");
+    expect(logs.some(line => line.includes("hedge=0") && line.includes("outcome=rate_limit") && line.includes("extraRequests=1"))).toBe(true);
+  });
+
+  it("returns the overlapping profile and cancels the request that is still pending", async () => {
+    vi.useFakeTimers();
+    const signals: AbortSignal[] = [];
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      const requestSignal = init?.signal;
+      if (requestSignal) signals.push(requestSignal);
+      const attempt = signals.length;
+      return new Promise<Response>((resolve, reject) => {
+        const timer = setTimeout(
+          () => resolve(jsonResponse(200, graphProfile("noman_peera"))),
+          attempt === 1 ? 20_000 : 1_000
+        );
+        const abort = () => {
+          clearTimeout(timer);
+          reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+        };
+        if (requestSignal?.aborted) abort();
+        else requestSignal?.addEventListener("abort", abort, { once: true });
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const pending = resolveInstagramIdentity("noman_peera", onboardingBudget());
+    await vi.advanceTimersByTimeAsync(6_500);
+    expect(profileCalls(fetchMock)).toBe(2);
+    await vi.advanceTimersByTimeAsync(1_000);
+    const identity = await pending;
+    expect(identity.username).toBe("noman_peera");
+    expect(identity.fallbackUsed).toBe(false);
+    expect(signals[0]?.aborted).toBe(true);
+    expect(searchCalls(fetchMock)).toBe(0);
+    expect(logs.some(line => line.includes("hedge=1") && line.includes("winner=2") && line.includes("outcome=ok") && line.includes("extraRequests=1"))).toBe(true);
+    expect(logs.join("\n")).not.toMatch(/Media studio|Noman Peera|test-key|biography/);
+  });
+
+  it("does not let a temporary provider error cancel the overlapping request", async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    const fetchMock = vi.fn(() => {
+      calls += 1;
+      const attempt = calls;
+      return new Promise<Response>(resolve => {
+        setTimeout(() => {
+          resolve(
+            attempt === 1
+              ? jsonResponse(503, { error: "unavailable" })
+              : jsonResponse(200, graphProfile("noman_peera"))
+          );
+        }, attempt === 1 ? 7_000 : 2_000);
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const pending = resolveInstagramIdentity("noman_peera", onboardingBudget());
+    let settled = false;
+    pending.then(
+      () => {
+        settled = true;
+      },
+      () => {
+        settled = true;
+      }
+    );
+    await vi.advanceTimersByTimeAsync(7_000);
+    expect(profileCalls(fetchMock)).toBe(2);
+    expect(settled).toBe(false);
+    await vi.advanceTimersByTimeAsync(1_500);
+    const identity = await pending;
+    expect(identity.username).toBe("noman_peera");
+    expect(logs.some(line => line.includes("hedge=1") && line.includes("winner=2") && line.includes("outcome=ok"))).toBe(true);
+    expect(logs.join("\n")).not.toMatch(/unavailable|Media studio|test-key/);
+  });
+
+  it("keeps a not-found final when it arrives while the overlap is still pending", async () => {
+    vi.useFakeTimers();
+    let profiles = 0;
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const path = String(input);
+      if (path.includes("/v1/instagram/search")) {
+        return Promise.resolve(jsonResponse(200, { data: { users: [] } }));
+      }
+      profiles += 1;
+      const attempt = profiles;
+      return new Promise<Response>((resolve, reject) => {
+        const abort = () => reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+        if (init?.signal?.aborted) {
+          abort();
+          return;
+        }
+        init?.signal?.addEventListener("abort", abort, { once: true });
+        if (attempt === 1) {
+          setTimeout(() => resolve(jsonResponse(404, { error: "not_found" })), 7_000);
+        }
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const pending = resolveInstagramIdentity("missing.handle", onboardingBudget());
+    const settled = pending.then(
+      () => null,
+      (error: unknown) => error
+    );
+    await vi.advanceTimersByTimeAsync(7_000);
+    const error = await settled;
+    expect(error).toBeInstanceOf(InstagramHandleNotFoundError);
+    expect(error).not.toBeInstanceOf(InstagramProviderError);
+    expect(classifyLookupError(error)).toBe("not_found");
+    expect(profileCalls(fetchMock)).toBe(2);
+    expect(searchCalls(fetchMock)).toBe(1);
+    expect(logs.some(line => line.includes("outcome=not_found"))).toBe(true);
+  });
+
+  it("keeps a private account final when it arrives while the overlap is still pending", async () => {
+    vi.useFakeTimers();
+    let profiles = 0;
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      profiles += 1;
+      const attempt = profiles;
+      return new Promise<Response>((resolve, reject) => {
+        const abort = () => reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+        if (init?.signal?.aborted) {
+          abort();
+          return;
+        }
+        init?.signal?.addEventListener("abort", abort, { once: true });
+        if (attempt === 1) {
+          setTimeout(
+            () => resolve(jsonResponse(200, { error: "private", message: "Account is private" })),
+            7_000
+          );
+        } else {
+          setTimeout(() => resolve(jsonResponse(200, graphProfile("private.handle"))), 3_000);
+        }
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const pending = resolveInstagramIdentity("private.handle", onboardingBudget());
+    const settled = pending.then(
+      () => null,
+      (error: unknown) => error
+    );
+    await vi.advanceTimersByTimeAsync(7_000);
+    const error = await settled;
+    expect(error).toBeInstanceOf(InstagramPrivateAccountError);
+    expect(classifyLookupError(error)).toBe("private");
+    expect(profileCalls(fetchMock)).toBe(2);
+    expect(searchCalls(fetchMock)).toBe(0);
+    expect(logs.some(line => line.includes("outcome=private") && line.includes("winner=1"))).toBe(true);
+    expect(logs.join("\n")).not.toMatch(/Account is private|Media studio|test-key/);
+  });
+
+  it("does not hedge an unbudgeted Creator Radar profile lookup", async () => {
+    vi.useFakeTimers();
+    let release: ((value: Response) => void) | undefined;
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      return new Promise<Response>((resolve, reject) => {
+        const abort = () => reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+        if (init?.signal?.aborted) abort();
+        else init?.signal?.addEventListener("abort", abort, { once: true });
+        release = resolve;
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const pending = resolveInstagramIdentity("noman_peera");
+    await vi.advanceTimersByTimeAsync(7_000);
+    expect(profileCalls(fetchMock)).toBe(1);
+    expect(logs.some(line => line.includes("profile hedge"))).toBe(false);
+    release?.(jsonResponse(200, graphProfile("noman_peera")));
+    const identity = await pending;
+    expect(identity.username).toBe("noman_peera");
+    expect(identity.resolutionMethod).toBe("profile_handle");
+    expect(profileCalls(fetchMock)).toBe(1);
   });
 });
