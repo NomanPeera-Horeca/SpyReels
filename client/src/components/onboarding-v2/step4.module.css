@@ -78,7 +78,9 @@
 }
 
 .languageCard {
-  flex: 0 0 190px;
+  flex: 0 1 190px;
+  max-width: 190px;
+  min-width: 0;
 }
 
 .caption {
@@ -106,13 +108,27 @@
   max-width: 100%;
   /* Figma chip: 6px block padding (half of space-3). */
   padding: calc(var(--sr-space-3) / 2) var(--sr-space-3);
+  border: 0;
   border-radius: var(--sr-radius-full);
   background: var(--sr-color-surface-hover);
   color: var(--sr-color-text-primary);
+  font: inherit;
   font-size: var(--sr-type-product-body-large-size);
   font-weight: var(--sr-font-weight-medium);
   line-height: var(--sr-type-product-body-large-line);
+  text-align: left;
   overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.chip:focus-visible {
+  outline: none;
+  box-shadow: var(--sr-elevation-focus-neutral-action);
+}
+
+.chip:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .groupActions {
@@ -229,10 +245,10 @@
   color: var(--sr-color-action-destructive-default);
 }
 
-/* Pillar card (1216:106): 64 icon tile, text, Edit + trash. Gap 16, padding 20. */
+/* Pillar card (15B 1680:656): icon tile, title, saved sparkle chips. */
 .pillarCard {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: var(--sr-space-4);
 }
 
@@ -253,13 +269,6 @@
   flex-direction: column;
   gap: var(--sr-space-1);
   min-width: 0;
-}
-
-.clamp2 {
-  display: -webkit-box;
-  overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
 }
 
 .pillarActions {
@@ -315,21 +324,29 @@
   justify-content: space-between;
   gap: var(--sr-space-3);
   width: 100%;
+  min-width: 0;
 }
 
 .actionsEnd {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: var(--sr-space-2);
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
-/* Figma: main button 240 wide on desktop. */
+/* Figma: main button 240 wide on desktop, and it shrinks inside a narrow action row. */
 .main {
-  min-width: 240px;
+  width: min(240px, 100%);
+  max-width: 100%;
+  min-width: 0;
+  flex: 0 1 auto;
 }
 
 @media (max-width: 900px) {
   .main {
+    width: auto;
     min-width: 0;
     flex: 2 1 0 !important;
   }
@@ -381,27 +398,28 @@
   flex-wrap: wrap;
   gap: var(--sr-space-2);
   margin: 0;
-  padding: 0 0 var(--sr-space-2);
+  padding: 0;
   list-style: none;
 }
 
 .subtopic {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--sr-space-1);
   max-width: 100%;
-  padding: 4px 8px 4px 10px;
-  border-radius: var(--sr-radius-full, 999px);
-  background: var(--sr-color-surface-subtle, var(--sr-neutral-100));
-  color: var(--sr-color-text-secondary, var(--sr-neutral-700));
-  font-size: 13px;
-  line-height: 18px;
+  padding: var(--sr-space-1) var(--sr-space-2);
+  border-radius: var(--sr-radius-full);
+  background: var(--sr-color-surface-hover);
+  color: var(--sr-color-text-secondary);
+  font-size: var(--sr-type-product-caption-size);
+  font-weight: var(--sr-font-weight-medium);
+  line-height: var(--sr-type-product-caption-line);
 }
 
 .subtopicText {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--sr-space-2);
   min-width: 0;
   overflow-wrap: anywhere;
 }
@@ -417,7 +435,7 @@
   border: 0;
   border-radius: 50%;
   background: transparent;
-  color: var(--sr-color-text-secondary, var(--sr-neutral-700));
+  color: var(--sr-color-text-secondary);
   cursor: pointer;
   opacity: 0;
   transition: opacity 120ms ease;
@@ -457,18 +475,31 @@
 .chipEditRow {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--sr-space-2);
+  min-width: 0;
 }
 
 .chipField {
-  display: flex;
-  flex: 1 1 auto;
-  min-width: 0;
+  display: inline-grid;
+  flex: 0 1 auto;
+  max-width: calc(100% - 44px - var(--sr-space-2));
+  min-width: 4rem;
   padding: calc(var(--sr-space-3) / 2) var(--sr-space-3);
   border: var(--sr-shape-border-default-width) solid transparent;
   border-radius: var(--sr-radius-full);
   background: var(--sr-color-surface-hover);
   cursor: text;
+}
+
+.chipSizer {
+  grid-area: 1 / 1;
+  visibility: hidden;
+  white-space: pre;
+  font: inherit;
+  font-size: var(--sr-type-product-body-large-size);
+  font-weight: var(--sr-font-weight-medium);
+  line-height: var(--sr-type-product-body-large-line);
 }
 
 .chipField:focus-within {
@@ -477,7 +508,8 @@
 }
 
 .chipInput {
-  flex: 1 1 auto;
+  grid-area: 1 / 1;
+  width: 100%;
   min-width: 0;
   padding: 0;
   border: 0;
@@ -546,6 +578,11 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--sr-space-2);
+}
+
+.sectionEdit {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .pillarTitleButton {
