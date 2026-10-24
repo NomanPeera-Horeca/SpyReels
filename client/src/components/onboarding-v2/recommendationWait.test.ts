@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { recommendationWaitState, stepHasDisplaySuggestions } from "./recommendationWait";
+import { recommendationWaitState, stepHasDisplaySuggestions, suggestionVisibleReady } from "./recommendationWait";
 
 const base = {
   requested: true,
@@ -100,5 +100,13 @@ describe("stepHasDisplaySuggestions", () => {
     expect(stepHasDisplaySuggestions("audience", items)).toBe(true);
     expect(stepHasDisplaySuggestions("pillars", items)).toBe(false);
     expect(stepHasDisplaySuggestions(null, items)).toBe(false);
+  });
+
+  it("counts a suggestion as visible only after that step has painted it", () => {
+    const items = [{ kind: "goal" }, { kind: "niche" }];
+    expect(suggestionVisibleReady({ step: null, items, painted: false })).toBe(false);
+    expect(suggestionVisibleReady({ step: "goal", items, painted: false })).toBe(false);
+    expect(suggestionVisibleReady({ step: "audience", items, painted: true })).toBe(false);
+    expect(suggestionVisibleReady({ step: "goal", items, painted: true })).toBe(true);
   });
 });

@@ -291,6 +291,14 @@ function captionFromProfileNode(node: any): string | null {
   return cleaned ? cleaned.slice(0, 280) : null;
 }
 
+/** Cover image already on a profile node. Same fields the reel parser already reads. */
+function thumbnailFromProfileNode(node: any): string {
+  const direct = node?.thumbnail_src || node?.display_url;
+  if (typeof direct === "string" && direct.trim()) return direct.trim();
+  const candidate = node?.image_versions2?.candidates?.[0]?.url;
+  return typeof candidate === "string" ? candidate.trim() : "";
+}
+
 /** Parses the recent posts already present in a graph-user profile payload. */
 export function recentMediaFromGraphUser(user: any): InstagramRecentMedia[] {
   const edges = user?.edge_owner_to_timeline_media?.edges;
@@ -299,7 +307,7 @@ export function recentMediaFromGraphUser(user: any): InstagramRecentMedia[] {
   for (const edge of edges) {
     const node = edge?.node;
     const shortcode = typeof node?.shortcode === "string" ? node.shortcode : "";
-    const thumbnailUrl = String(node?.thumbnail_src || node?.display_url || "");
+    const thumbnailUrl = thumbnailFromProfileNode(node);
     const caption = captionFromProfileNode(node);
     if (!shortcode || (!thumbnailUrl && !caption)) continue;
     const views = node?.video_view_count ?? node?.video_play_count;

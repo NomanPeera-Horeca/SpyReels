@@ -67,6 +67,7 @@ import {
   type LlmInvoker,
   type LlmUsage,
 } from "./structuredLlm";
+import { subtopicSaveFailureFields } from "../subtopics";
 
 export type RecommendationStep = "goal" | "audience" | "pillars";
 
@@ -209,6 +210,16 @@ export function msSinceConfirm(
   const ms = now - confirmedAt.getTime();
   if (!Number.isFinite(ms) || ms < 0 || ms > 24 * 60 * 60 * 1000) return null;
   return ms;
+}
+
+/** Confirm-to-visible delay once at least one saved suggestion is on screen. */
+export function firstVisibleDelayMs(
+  confirmedAt: Date | null | undefined,
+  suggestionCount: number,
+  now = Date.now()
+): number | null {
+  if (suggestionCount < 1) return null;
+  return msSinceConfirm(confirmedAt, now);
 }
 
 function logSuggestionSaved(input: {
@@ -511,17 +522,14 @@ export async function generateRecommendations(
   if (input.step === "pillars" && subtopicGroups.length) {
     // The pillars are already saved. A failed topic save must not fail the pillar
     // step or be retried here: the pillar card offers "Find topic ideas" instead.
-    // Only the error code is logged, never message text.
+    // Log the missing migration names only. Never message text or profile text.
     try {
       await deps.store.saveSubtopics?.(
         profile.id,
         subtopicGroups.map(g => ({ ...g, pillarHash: inputsHash }))
       );
     } catch (err) {
-      const code = (err as { code?: unknown })?.code;
-      console.warn("[personalization] pillar topics not saved; pillars kept", {
-        code: typeof code === "string" ? code.slice(0, 60) : "error",
-      });
+      console.warn("[personalization] pillar topics not saved; pillars kept", subtopicSaveFailureFields(err));
     }
   }
   return {

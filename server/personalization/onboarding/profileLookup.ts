@@ -326,48 +326,42 @@ function firstSettled<T>(run: Promise<T>, fallback: T, ms: number): Promise<T> {
   });
 }
 
-function warmMedia(
-  key: string,
-  generation: number,
+/**
+ * Copies avatar and cover images at the same time, under one budget.
+ * A slow copy falls back to the provider URL so lookup still finishes.
+ */
+async function mirrorPreviewMedia(
   profile: PublicProfilePreview,
-  deps: ProfileLookupDeps
-): void {
-  void (async () => {
-    const avatar = profile.avatarUrl
-      ? await firstSettled(
+  deps: ProfileLookupDeps,
+  budgetMs: number
+): Promise<PublicProfilePreview> {
+  const sources = profile.recentPosts
+    .filter(post => post.thumbnailUrl)
+    .map(post => ({ shortcode: post.id, thumbnailUrl: post.thumbnailUrl ?? "" }));
+  const [avatar, thumbs] = await Promise.all([
+    profile.avatarUrl
+      ? firstSettled(
           deps.mirrorAvatar(profile.handle, profile.avatarUrl, profile.platform).catch(() => profile.avatarUrl),
           profile.avatarUrl,
-          WARM_MEDIA_MS
+          budgetMs
         )
-      : profile.avatarUrl;
-    const sources = profile.recentPosts
-      .filter(post => post.thumbnailUrl)
-      .map(post => ({ shortcode: post.id, thumbnailUrl: post.thumbnailUrl ?? "" }));
-    const thumbs = sources.length
-      ? await firstSettled(
+      : Promise.resolve(profile.avatarUrl),
+    sources.length
+      ? firstSettled(
           deps.mirrorThumbnails(sources).catch(() => new Map<string, string>()),
           new Map<string, string>(),
-          WARM_MEDIA_MS
+          budgetMs
         )
-      : new Map<string, string>();
-    const current = successCache.get(key);
-    if (!current || current.generation !== generation) return;
-    const updated: PublicProfilePreview = {
-      ...current.profile,
-      avatarUrl: textOrNull(avatar) ?? current.profile.avatarUrl,
-      recentPosts: current.profile.recentPosts.map(post => ({
-        ...post,
-        thumbnailUrl: textOrNull(thumbs.get(post.id) ?? post.thumbnailUrl),
-      })),
-    };
-    const write = (cacheKey: string) => {
-      const entry = successCache.get(cacheKey);
-      if (!entry || entry.generation !== generation) return;
-      successCache.set(cacheKey, { ...entry, profile: updated });
-    };
-    write(key);
-    write(publicProfileCacheKey(profile.platform, profile.handle));
-  })();
+      : Promise.resolve(new Map<string, string>()),
+  ]);
+  return {
+    ...profile,
+    avatarUrl: textOrNull(avatar) ?? profile.avatarUrl,
+    recentPosts: profile.recentPosts.map(post => ({
+      ...post,
+      thumbnailUrl: textOrNull(thumbs.get(post.id) ?? post.thumbnailUrl),
+    })),
+  };
 }
 
 export async function lookupPublicProfile(input: {
@@ -378,8 +372,10 @@ export async function lookupPublicProfile(input: {
   now?: number;
   /** Test override. Production uses PROFILE_LOOKUP_DEADLINE_MS. */
   deadlineMs?: number;
-  /** Copy provider media to stable storage after the response is ready. */
+  /** Copy provider media to stable storage and return those URLs. */
   warmMedia?: boolean;
+  /** Test override. Production uses WARM_MEDIA_MS. */
+  warmMediaMs?: number;
 }): Promise<ProfileLookupResult> {
   const now = input.now ?? Date.now();
   const key = publicProfileCacheKey(input.platform, input.handle);
@@ -422,12 +418,14 @@ export async function lookupPublicProfile(input: {
       );
       return { ok: false, reason: "private", meter: metered.report };
     }
-    const generation = remember(key, metered.result, now);
-    if (input.warmMedia) warmMedia(key, generation, metered.result, input.deps);
+    const profile = input.warmMedia
+      ? await mirrorPreviewMedia(metered.result, input.deps, input.warmMediaMs ?? WARM_MEDIA_MS)
+      : metered.result;
+    remember(key, profile, now);
     console.log(
       `[onboarding.lookup] platform=${input.platform} ms=${Date.now() - started} ok=true requests=${metered.report.requests}`
     );
-    return { ok: true, profile: metered.result, meter: metered.report };
+    return { ok: true, profile, meter: metered.report };
   })();
 
   inflight.set(key, work);

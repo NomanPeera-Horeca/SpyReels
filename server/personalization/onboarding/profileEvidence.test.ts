@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { recentMediaFromGraphUser } from "../../instagram";
 import { buildCreatorEvidence, verbatimCta } from "../intelligence/evidence";
-import { msSinceConfirm } from "../intelligence/recommendationService";
+import { firstVisibleDelayMs, msSinceConfirm } from "../intelligence/recommendationService";
 import { catalogNiche } from "../intelligence/profileBasics";
-import { profileEvidenceFromPreview, publicWebsiteUrl } from "./profileEvidence";
+import { persistedPreviewPosts, previewPostsFromEvidence, profileEvidenceFromPreview, publicWebsiteUrl } from "./profileEvidence";
 
 describe("profile evidence from lookup", () => {
   it("keeps the caption that arrived in the profile payload", () => {
@@ -29,6 +29,27 @@ describe("profile evidence from lookup", () => {
     expect(media.map(item => item.caption)).toEqual([
       "DM for a quote on ovens",
       "Wholesale catalog for cafes",
+    ]);
+  });
+
+  it("uses image_versions2 when the profile node has no thumbnail_src", () => {
+    const media = recentMediaFromGraphUser({
+      edge_owner_to_timeline_media: {
+        edges: [
+          {
+            node: {
+              shortcode: "cover",
+              image_versions2: { candidates: [{ url: "https://cdn.example/cover.jpg", width: 640 }] },
+            },
+          },
+        ],
+      },
+    });
+    expect(media).toEqual([
+      expect.objectContaining({
+        shortcode: "cover",
+        thumbnailUrl: "https://cdn.example/cover.jpg",
+      }),
     ]);
   });
 
@@ -60,6 +81,35 @@ describe("profile evidence from lookup", () => {
       cta: "Book a workshop via the link.",
     });
     expect(evidence.captions).toEqual(["Wholesale catalog for cafes", "Dawn in the marsh"]);
+    expect(evidence.previewPosts).toEqual([
+      { id: "a", thumbnailUrl: "https://cdn.example/a.jpg", viewCount: 5 },
+    ]);
+    expect(
+      previewPostsFromEvidence({
+        ...evidence,
+        previewPosts: persistedPreviewPosts({
+          platform: "instagram",
+          handle: "wildlife",
+          displayName: null,
+          bio: null,
+          category: null,
+          externalUrl: null,
+          avatarUrl: null,
+          bannerUrl: null,
+          isVerified: false,
+          isPrivate: false,
+          postCount: null,
+          followerCount: null,
+          followingCount: null,
+          likeCount: null,
+          videoCount: null,
+          recentPosts: [
+            { id: "a", thumbnailUrl: "https://cdn.example/a.jpg", viewCount: 5, isPinned: true },
+            { id: "gone", thumbnailUrl: null, viewCount: null },
+          ],
+        }),
+      })
+    ).toEqual([{ id: "a", thumbnailUrl: "https://cdn.example/a.jpg", viewCount: 5, isPinned: true }]);
     expect(verbatimCta("I photograph wild animals.")).toBeNull();
     expect(publicWebsiteUrl("javascript:alert(1)")).toBeNull();
   });
