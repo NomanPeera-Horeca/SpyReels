@@ -55,6 +55,8 @@ export type WebsiteBlockCode =
   | "http_status"
   | "unsupported_type"
   | "request"
+  | "blocked_port"
+  | "response_too_large"
   | "no_evidence";
 
 export type WebsiteHostAddress = { address: string; family: 4 | 6 };
@@ -65,10 +67,12 @@ export type WebsiteResponse = {
   contentType: string;
   bodyText: string;
   bytes: number;
+  /** True when the body passed the byte cap. The text is not evidence. */
+  truncated?: boolean;
 };
 
 export type WebsiteReadDeps = {
-  resolve: (hostname: string) => Promise<WebsiteHostAddress[]>;
+  resolve: (hostname: string, signal: AbortSignal) => Promise<WebsiteHostAddress[]>;
   request: (input: {
     url: URL;
     address: string;
@@ -122,6 +126,13 @@ export function isBlockedIpAddress(address: string): boolean {
     }
   }
   return true;
+}
+
+/** HTTP only on 80. HTTPS only on 443. An omitted port is the scheme default. */
+export function standardWebsitePort(url: URL): boolean {
+  if (url.protocol === "https:") return url.port === "" || url.port === "443";
+  if (url.protocol === "http:") return url.port === "" || url.port === "80";
+  return false;
 }
 
 export function blockedHostname(hostname: string): WebsiteBlockCode | null {
@@ -291,6 +302,16 @@ function failed(code: WebsiteBlockCode, started: number): WebsiteReadResult {
   return { ok: false, code, ms: Date.now() - started };
 }
 
+function abortError(signal: AbortSignal): Promise<never> {
+  return new Promise((_resolve, reject) => {
+    if (signal.aborted) {
+      reject(new Error("aborted"));
+      return;
+    }
+    signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+  });
+}
+
 export async function readPublicWebsite(rawUrl: string, deps: WebsiteReadDeps): Promise<WebsiteReadResult> {
   const started = Date.now();
   const controller = new AbortController();
@@ -303,13 +324,17 @@ export async function readPublicWebsite(rawUrl: string, deps: WebsiteReadDeps): 
     for (let hop = 0; hop <= maxRedirects; hop += 1) {
       if (controller.signal.aborted) return failed("timeout", started);
       const url = new URL(current);
+      if (!standardWebsitePort(url)) return failed("blocked_port", started);
       const hostCode = blockedHostname(url.hostname);
       if (hostCode) return failed(hostCode, started);
       let addresses: WebsiteHostAddress[];
       try {
-        addresses = await deps.resolve(url.hostname);
+        addresses = await Promise.race([
+          deps.resolve(url.hostname, controller.signal),
+          abortError(controller.signal),
+        ]);
       } catch {
-        return failed("dns", started);
+        return failed(controller.signal.aborted ? "timeout" : "dns", started);
       }
       const chosen = choosePublicAddress(addresses);
       if (!chosen.ok) return failed(chosen.code, started);
@@ -323,17 +348,12 @@ export async function readPublicWebsite(rawUrl: string, deps: WebsiteReadDeps): 
             signal: controller.signal,
             maxBytes,
           }),
-          new Promise<never>((_resolve, reject) => {
-            if (controller.signal.aborted) {
-              reject(new Error("aborted"));
-              return;
-            }
-            controller.signal.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
-          }),
+          abortError(controller.signal),
         ]);
       } catch {
         return failed(controller.signal.aborted ? "timeout" : "request", started);
       }
+      if (response.truncated || response.bytes > maxBytes) return failed("response_too_large", started);
       if (response.status >= 300 && response.status < 400) {
         if (hop === maxRedirects) return failed("redirect_limit", started);
         const next = resolveRedirect(current, response.location);
@@ -359,12 +379,16 @@ export async function readPublicWebsite(rawUrl: string, deps: WebsiteReadDeps): 
   }
 }
 
-export async function resolveWebsiteHost(hostname: string): Promise<WebsiteHostAddress[]> {
+export async function resolveWebsiteHost(hostname: string, signal?: AbortSignal): Promise<WebsiteHostAddress[]> {
   if (isIP(hostname)) {
     const family = isIP(hostname) === 6 ? 6 : 4;
     return [{ address: hostname, family }];
   }
-  const rows = await lookup(hostname, { all: true, verbatim: true });
+  // Node 24 cancels lookup when signal aborts. The installed types omit that option.
+  const rows = await lookup(hostname, { all: true, verbatim: true, signal } as {
+    all: true;
+    verbatim: true;
+  });
   return rows.map(row => ({ address: row.address, family: row.family === 6 ? 6 : 4 }));
 }
 
@@ -377,6 +401,17 @@ export function productionWebsiteRequest(input: {
 }): Promise<WebsiteResponse> {
   const lib = input.url.protocol === "https:" ? https : http;
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (response: WebsiteResponse) => {
+      if (settled) return;
+      settled = true;
+      resolve(response);
+    };
+    const fail = (err: Error) => {
+      if (settled) return;
+      settled = true;
+      reject(err);
+    };
     const req = lib.request(
       {
         protocol: input.url.protocol,
@@ -396,36 +431,48 @@ export function productionWebsiteRequest(input: {
         signal: input.signal,
       },
       res => {
+        const location = typeof res.headers.location === "string" ? res.headers.location : null;
+        const contentType = typeof res.headers["content-type"] === "string" ? res.headers["content-type"] : "";
+        const declared = Number(res.headers["content-length"]);
+        if (Number.isFinite(declared) && declared > input.maxBytes) {
+          res.destroy();
+          finish({
+            status: res.statusCode ?? 0,
+            location,
+            contentType,
+            bodyText: "",
+            bytes: declared,
+            truncated: true,
+          });
+          return;
+        }
         const chunks: Buffer[] = [];
         let size = 0;
-        let settled = false;
-        const finish = () => {
-          if (settled) return;
-          settled = true;
-          const body = Buffer.concat(chunks).subarray(0, input.maxBytes);
-          const location = res.headers.location;
-          resolve({
+        let truncated = false;
+        const done = () => {
+          finish({
             status: res.statusCode ?? 0,
-            location: typeof location === "string" ? location : null,
-            contentType: typeof res.headers["content-type"] === "string" ? res.headers["content-type"] : "",
-            bodyText: body.toString("utf8"),
-            bytes: body.length,
+            location,
+            contentType,
+            bodyText: truncated ? "" : Buffer.concat(chunks).toString("utf8"),
+            bytes: size,
+            truncated,
           });
         };
         res.on("data", (chunk: Buffer) => {
           size += chunk.length;
           if (size > input.maxBytes) {
-            chunks.push(chunk.subarray(0, Math.max(0, chunk.length - (size - input.maxBytes))));
+            truncated = true;
             res.destroy();
             return;
           }
           chunks.push(chunk);
         });
-        res.on("end", finish);
-        res.on("close", finish);
+        res.on("end", done);
+        res.on("close", done);
       }
     );
-    req.on("error", reject);
+    req.on("error", err => fail(err));
     req.end();
   });
 }
@@ -460,6 +507,13 @@ async function readAndStore(input: {
   });
 }
 
+const readsInFlight = new Set<string>();
+
+/** Test seam. Production reads clear themselves when they finish. */
+export function resetWebsiteReadsForTests(): void {
+  readsInFlight.clear();
+}
+
 /** Starts the read and returns immediately. Suggestion enqueue must already have been called. */
 export function startWebsiteIntelligence(input: {
   runId: string;
@@ -467,16 +521,22 @@ export function startWebsiteIntelligence(input: {
   store: WebsiteIntelligenceStore;
   read?: (url: string) => Promise<WebsiteReadResult>;
 }): void {
+  if (readsInFlight.has(input.runId)) return;
+  readsInFlight.add(input.runId);
   const read = input.read ?? (url => readPublicWebsite(url, {
     resolve: resolveWebsiteHost,
     request: productionWebsiteRequest,
   }));
-  void readAndStore({ ...input, read }).catch(err => {
-    console.warn("[personalization] website_intelligence", {
-      code: err instanceof Error ? err.name : "error",
-      costUsd: WEBSITE_INTELLIGENCE_USD,
+  void readAndStore({ ...input, read })
+    .catch(err => {
+      console.warn("[personalization] website_intelligence", {
+        code: err instanceof Error ? err.name : "error",
+        costUsd: WEBSITE_INTELLIGENCE_USD,
+      });
+    })
+    .finally(() => {
+      readsInFlight.delete(input.runId);
     });
-  });
 }
 
 /**

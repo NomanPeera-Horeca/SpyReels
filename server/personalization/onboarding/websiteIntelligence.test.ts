@@ -1,14 +1,19 @@
-import { describe, expect, it, vi } from "vitest";
+import http from "node:http";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ProfileEvidence } from "@shared/personalization/model";
 import {
   WEBSITE_INTELLIGENCE_USD,
+  WEBSITE_MAX_BYTES,
   analyzeWebsitePage,
   blockedHostname,
   choosePublicAddress,
   isBlockedIpAddress,
   pageParts,
+  productionWebsiteRequest,
   readPublicWebsite,
+  resetWebsiteReadsForTests,
   scheduleWebsiteIntelligence,
+  standardWebsitePort,
   startWebsiteIntelligence,
   type WebsiteIntelligenceStore,
   type WebsiteResponse,
@@ -46,6 +51,21 @@ function htmlResponse(body: string, status = 200, location: string | null = null
 }
 
 describe("website address checks", () => {
+  beforeEach(() => {
+    resetWebsiteReadsForTests();
+  });
+
+  it("allows only http on 80 and https on 443", () => {
+    expect(standardWebsitePort(new URL("https://example.com/menu"))).toBe(true);
+    expect(standardWebsitePort(new URL("https://example.com:443/menu"))).toBe(true);
+    expect(standardWebsitePort(new URL("http://example.com/menu"))).toBe(true);
+    expect(standardWebsitePort(new URL("http://example.com:80/menu"))).toBe(true);
+    expect(standardWebsitePort(new URL("https://example.com:8443/menu"))).toBe(false);
+    expect(standardWebsitePort(new URL("http://example.com:8080/menu"))).toBe(false);
+    expect(standardWebsitePort(new URL("https://example.com:80/menu"))).toBe(false);
+    expect(standardWebsitePort(new URL("http://example.com:443/menu"))).toBe(false);
+  });
+
   it("blocks loopback, link-local, private, and metadata addresses", () => {
     expect(isBlockedIpAddress("127.0.0.1")).toBe(true);
     expect(isBlockedIpAddress("10.1.2.3")).toBe(true);
@@ -133,6 +153,66 @@ describe("website page reading", () => {
     expect(WEBSITE_INTELLIGENCE_USD).toBe(0);
   });
 
+  it("does not connect when the profile link or a redirect uses a nonstandard port", async () => {
+    const requested: string[] = [];
+    const direct = await readPublicWebsite("https://example.com:8443/menu", {
+      resolve: async () => {
+        requested.push("resolve");
+        return [{ address: "1.1.1.1", family: 4 }];
+      },
+      request: async () => {
+        requested.push("request");
+        return htmlResponse(PAGE);
+      },
+    });
+    expect(direct.ok).toBe(false);
+    if (!direct.ok) expect(direct.code).toBe("blocked_port");
+    expect(requested).toEqual([]);
+
+    const redirected = await readPublicWebsite("https://example.com/menu", {
+      resolve: async () => [{ address: "1.1.1.1", family: 4 }],
+      request: async input => {
+        requested.push(input.url.port || "443");
+        return htmlResponse("", 302, "https://example.com:8443/admin");
+      },
+    });
+    expect(redirected.ok).toBe(false);
+    if (!redirected.ok) expect(redirected.code).toBe("blocked_port");
+    expect(requested).toEqual(["443"]);
+  });
+
+  it("rejects a body over the byte cap instead of reading a partial page", async () => {
+    const result = await readPublicWebsite("https://example.com/menu", {
+      maxBytes: 32,
+      resolve: async () => [{ address: "1.1.1.1", family: 4 }],
+      request: async () => ({
+        ...htmlResponse(PAGE),
+        bytes: 70_000,
+        truncated: true,
+      }),
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("response_too_large");
+    expect(WEBSITE_MAX_BYTES).toBe(64 * 1024);
+  });
+
+  it("stops a hanging DNS lookup inside the same budget and does not connect", async () => {
+    const requested: string[] = [];
+    const started = Date.now();
+    const result = await readPublicWebsite("https://example.com/", {
+      timeoutMs: 40,
+      resolve: () => new Promise(() => {}),
+      request: async input => {
+        requested.push(input.address);
+        return htmlResponse(PAGE);
+      },
+    });
+    expect(Date.now() - started).toBeLessThan(180);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe("timeout");
+    expect(requested).toEqual([]);
+  });
+
   it("stops a stalled read inside one timeout budget", async () => {
     const started = Date.now();
     const result = await readPublicWebsite("https://example.com/", {
@@ -150,6 +230,10 @@ describe("website page reading", () => {
 });
 
 describe("website scheduling", () => {
+  beforeEach(() => {
+    resetWebsiteReadsForTests();
+  });
+
   it("returns after suggestions are queued and does not wait for the page", async () => {
     const order: string[] = [];
     let release!: () => void;
@@ -240,5 +324,58 @@ describe("website scheduling", () => {
       }),
     });
     await vi.waitFor(() => expect(savedTitle).toBe("Cafe Supply Co"));
+  });
+
+  it("does not start a second read while the same run is already reading", async () => {
+    let reads = 0;
+    let release!: () => void;
+    const gate = new Promise<void>(resolve => {
+      release = resolve;
+    });
+    const read = async () => {
+      reads += 1;
+      await gate;
+      return { ok: false as const, code: "request" as const, ms: 1 };
+    };
+    const store: WebsiteIntelligenceStore = {
+      async loadRunProfileEvidence() {
+        return evidence();
+      },
+      async saveWebsiteIntelligence() {},
+    };
+    startWebsiteIntelligence({ runId: "run-same", url: "https://example.com/menu", store, read });
+    startWebsiteIntelligence({ runId: "run-same", url: "https://example.com/menu", store, read });
+    await vi.waitFor(() => expect(reads).toBe(1));
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(reads).toBe(1);
+    release();
+  });
+});
+
+describe("website response cap", () => {
+  it("returns a bounded failure from the live reader when the body exceeds 64 KB", async () => {
+    const server = http.createServer((_req, res) => {
+      res.writeHead(200, { "content-type": "text/html" });
+      res.write("<title>Cafe Supply Co</title>We offer ovens.");
+      res.write("x".repeat(200));
+      res.end();
+    });
+    await new Promise<void>(resolve => server.listen(0, "127.0.0.1", () => resolve()));
+    const address = server.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+    try {
+      const response = await productionWebsiteRequest({
+        url: new URL(`http://127.0.0.1:${port}/`),
+        address: "127.0.0.1",
+        family: 4,
+        signal: AbortSignal.timeout(1_000),
+        maxBytes: 64,
+      });
+      expect(response.truncated).toBe(true);
+      expect(response.bodyText).toBe("");
+      expect(response.bytes).toBeGreaterThan(64);
+    } finally {
+      await new Promise(resolve => server.close(() => resolve(undefined)));
+    }
   });
 });
