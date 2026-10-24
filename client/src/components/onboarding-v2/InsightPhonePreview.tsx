@@ -6,10 +6,11 @@ import { useCallback, useEffect, useState } from "react";
 import type { SocialPlatform } from "@shared/personalization/model";
 import type { PanelInsight } from "@shared/personalization/performanceInsights";
 import type { PublicProfilePreview } from "@shared/personalization/publicProfilePreview";
-import { formatProfileCount } from "@shared/personalization/publicProfilePreview";
+import { formatViewCount } from "@shared/personalization/publicProfilePreview";
 import { DevicePhoneFrame } from "@/design-system/DevicePhoneFrame";
 import { ReelDialogVideo } from "@/components/ReelDialogVideo";
 import { COPY } from "./copy";
+import { insightCardLines } from "./insightPanel";
 import { ProfilePhonePreview } from "./previews";
 import styles from "./InsightPhonePreview.module.css";
 
@@ -33,10 +34,9 @@ export function InsightPhonePreview({
   useEffect(() => {
     setPlaybackFailed(false);
   }, [panel.postId, videoUrl]);
+  const lines = showCard ? insightCardLines(panel) : null;
   const views =
-    showCard && typeof panel.views === "number"
-      ? `${formatProfileCount(panel.views)} ${C.views}`
-      : null;
+    lines && typeof panel.views === "number" ? `${formatViewCount(panel.views)} ${COPY.whatWorks.views}` : null;
 
   if (playbackFailed && !thumbnailUrl) {
     return profile ? <ProfilePhonePreview profile={profile} /> : null;
@@ -45,36 +45,38 @@ export function InsightPhonePreview({
   const showThumbnail = Boolean(thumbnailUrl) && (!videoUrl || playbackFailed);
 
   return (
-    <DevicePhoneFrame label={C.label} tone="dark" className={styles.phone}>
-      <div className={styles.stage}>
-        {showThumbnail ? (
-          <img src={thumbnailUrl} alt="" className={styles.video} />
-        ) : (
-          <ReelDialogVideo
-            platform={platform}
-            shortcode={platform === "instagram" ? panel.postId : null}
-            videoUrl={videoUrl}
-            thumbnailUrl={thumbnailUrl || null}
-            autoPlay
-            muted
-            loop
-            controls={false}
-            posterFallback
-            onPlaybackFailed={onPlaybackFailed}
-            className={styles.video}
-          />
-        )}
-        {showCard && panel.figure ? (
-          <div className={styles.card}>
-            <p className={["sr-text-product-heading-4", styles.figure].join(" ")}>{panel.figure}</p>
-            <p className={["sr-text-product-card-title", styles.headline].join(" ")}>{panel.headline}</p>
-            <p className={["sr-text-product-body-small", styles.support].join(" ")}>{panel.support}</p>
-            {views ? (
-              <p className={["sr-text-product-caption", styles.views].join(" ")}>{views}</p>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-    </DevicePhoneFrame>
+    <div className={[styles.fit, lines ? styles.fitCard : ""].filter(Boolean).join(" ")} data-onboarding-phone="">
+      <DevicePhoneFrame label={C.label} tone="dark" className={styles.phone}>
+        <div className={styles.stage}>
+          {showThumbnail ? (
+            <img src={thumbnailUrl} alt="" className={styles.video} />
+          ) : (
+            <ReelDialogVideo
+              platform={platform}
+              shortcode={platform === "instagram" ? panel.postId : null}
+              videoUrl={videoUrl}
+              thumbnailUrl={thumbnailUrl || null}
+              autoPlay
+              muted
+              loop
+              controls={false}
+              posterFallback
+              onPlaybackFailed={onPlaybackFailed}
+              className={styles.video}
+            />
+          )}
+          {views ? <p className={["sr-text-product-caption", styles.badge].join(" ")}>{views}</p> : null}
+        </div>
+      </DevicePhoneFrame>
+      {lines ? (
+        <div className={styles.card}>
+          {lines.eyebrow ? (
+            <p className={["sr-text-product-caption", styles.eyebrow].join(" ")}>{lines.eyebrow}</p>
+          ) : null}
+          <p className={["sr-text-product-card-title", styles.figure].join(" ")}>{lines.figureLine}</p>
+          <p className={["sr-text-product-body-small", styles.detail].join(" ")}>{lines.detail}</p>
+        </div>
+      ) : null}
+    </div>
   );
 }

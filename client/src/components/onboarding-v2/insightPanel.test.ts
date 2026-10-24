@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { step4RightPanel } from "./insightPanel";
+import { insightCardLines, step4RightPanel } from "./insightPanel";
 
 const media = {
   confidence: "eligible" as const,
@@ -47,5 +47,71 @@ describe("step4RightPanel", () => {
         panel: { ...media, videoUrl: "  ", thumbnailUrl: null },
       })
     ).toEqual({ mode: "profile" });
+  });
+});
+
+describe("insightCardLines", () => {
+  const comparison = {
+    metric: "views" as const,
+    groupLabel: "starting with a question",
+    groupCount: 4,
+    groupValue: 100,
+    baselineLabel: "other videos",
+    baselineCount: 8,
+    baselineValue: 40,
+    definition: "Mean views of the group divided by mean views of the other videos.",
+  };
+
+  it("returns no lines when there is no figure", () => {
+    expect(
+      insightCardLines({
+        figure: null,
+        headline: "One of your public videos",
+        comparison: null,
+      })
+    ).toBeNull();
+    expect(insightCardLines({ figure: "  ", headline: "Unused", comparison: null })).toBeNull();
+  });
+
+  it("builds the three lines from the stored views comparison", () => {
+    expect(
+      insightCardLines({
+        figure: "2.4x",
+        headline: "Videos starting with a question average 2.4x more views.",
+        comparison,
+      })
+    ).toEqual({
+      eyebrow: "Compared with 8 other videos",
+      figureLine: "2.4x more views",
+      detail: "starting with a question",
+    });
+  });
+
+  it("uses the engagement wording when that is the stored metric", () => {
+    expect(
+      insightCardLines({
+        figure: "60%",
+        headline: "Videos filmed as talking head average 60% higher engagement.",
+        comparison: { ...comparison, metric: "engagement_rate", groupLabel: "filmed as talking head" },
+      })
+    ).toEqual({
+      eyebrow: "Compared with 8 other videos",
+      figureLine: "60% higher engagement",
+      detail: "filmed as talking head",
+    });
+  });
+
+  it("keeps a stored figure without inventing a comparison sentence", () => {
+    expect(
+      insightCardLines({
+        figure: "2.4x",
+        headline: "Videos starting with a question average 2.4x more views.",
+        comparison: null,
+      })
+    ).toEqual({
+      eyebrow: null,
+      figureLine: "2.4x",
+      detail: "Videos starting with a question average 2.4x more views.",
+    });
   });
 });

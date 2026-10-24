@@ -26,6 +26,7 @@ export function DevicePhoneFrame({
     <figure
       className={[styles.frame, className].filter(Boolean).join(" ")}
       aria-label={label}
+      data-onboarding-phone=""
     >
       <div
         className={[styles.viewport, tone === "dark" && styles.dark, viewportClassName]
