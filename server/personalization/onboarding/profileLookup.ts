@@ -327,7 +327,7 @@ function firstSettled<T>(run: Promise<T>, fallback: T, ms: number): Promise<T> {
 }
 
 /**
- * Copies avatar and cover images to stable storage, then returns those URLs.
+ * Copies avatar and cover images at the same time, under one budget.
  * A slow copy falls back to the provider URL so lookup still finishes.
  */
 async function mirrorPreviewMedia(
@@ -335,23 +335,25 @@ async function mirrorPreviewMedia(
   deps: ProfileLookupDeps,
   budgetMs: number
 ): Promise<PublicProfilePreview> {
-  const avatar = profile.avatarUrl
-    ? await firstSettled(
-        deps.mirrorAvatar(profile.handle, profile.avatarUrl, profile.platform).catch(() => profile.avatarUrl),
-        profile.avatarUrl,
-        budgetMs
-      )
-    : profile.avatarUrl;
   const sources = profile.recentPosts
     .filter(post => post.thumbnailUrl)
     .map(post => ({ shortcode: post.id, thumbnailUrl: post.thumbnailUrl ?? "" }));
-  const thumbs = sources.length
-    ? await firstSettled(
-        deps.mirrorThumbnails(sources).catch(() => new Map<string, string>()),
-        new Map<string, string>(),
-        budgetMs
-      )
-    : new Map<string, string>();
+  const [avatar, thumbs] = await Promise.all([
+    profile.avatarUrl
+      ? firstSettled(
+          deps.mirrorAvatar(profile.handle, profile.avatarUrl, profile.platform).catch(() => profile.avatarUrl),
+          profile.avatarUrl,
+          budgetMs
+        )
+      : Promise.resolve(profile.avatarUrl),
+    sources.length
+      ? firstSettled(
+          deps.mirrorThumbnails(sources).catch(() => new Map<string, string>()),
+          new Map<string, string>(),
+          budgetMs
+        )
+      : Promise.resolve(new Map<string, string>()),
+  ]);
   return {
     ...profile,
     avatarUrl: textOrNull(avatar) ?? profile.avatarUrl,

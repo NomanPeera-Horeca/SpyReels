@@ -462,7 +462,7 @@ function ChipGroup({
       {items.length ? (
         <ul className={styles.chips}>
           {items.map(item => (
-            <li key={item.id} className={styles.chip}>
+            <li key={item.id} className={styles.chip} data-suggestion-visible="">
               {item.label}
             </li>
           ))}
@@ -574,7 +574,12 @@ function ValueCard({
         <div className={styles.row}>
           <div className={styles.text}>
             <span className={["sr-text-product-caption", styles.caption].join(" ")}>{label}</span>
-            <span className={["sr-text-product-card-title", styles.value].join(" ")}>{value ?? P.notSet}</span>
+            <span
+              className={["sr-text-product-card-title", styles.value].join(" ")}
+              {...(value ? { "data-suggestion-visible": "" } : {})}
+            >
+              {value ?? P.notSet}
+            </span>
           </div>
           <EditAction onClick={onEdit} label={label} disabled={busy} />
         </div>
@@ -780,10 +785,14 @@ function PillarCard({
         <div className={styles.pillarText}>
           {inEdit ? (
             <button type="button" className={styles.pillarTitleButton} onClick={onStartEdit} disabled={busy}>
-              <span className={["sr-text-product-card-title", styles.value].join(" ")}>{pillar.payload.title}</span>
+              <span className={["sr-text-product-card-title", styles.value].join(" ")} data-suggestion-visible="">
+                {pillar.payload.title}
+              </span>
             </button>
           ) : (
-            <span className={["sr-text-product-card-title", styles.value].join(" ")}>{pillar.payload.title}</span>
+            <span className={["sr-text-product-card-title", styles.value].join(" ")} data-suggestion-visible="">
+              {pillar.payload.title}
+            </span>
           )}
           {pillar.payload.description ? (
             <span className={["sr-text-product-body-small", styles.muted, styles.clamp2].join(" ")}>

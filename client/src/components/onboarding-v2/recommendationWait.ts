@@ -26,6 +26,18 @@ export function stepHasDisplaySuggestions(
   return items.some(item => kinds.includes(item.kind));
 }
 
+/**
+ * True only after this step's suggestions are in the document.
+ * Items sitting in the API response do not count.
+ */
+export function suggestionVisibleReady(input: {
+  step: keyof typeof DISPLAY_KINDS | null;
+  items: readonly { kind: string }[];
+  painted: boolean;
+}): boolean {
+  return input.painted && stepHasDisplaySuggestions(input.step, input.items);
+}
+
 export function recommendationWaitState(input: {
   requested: boolean;
   status: RecommendationStatus | null;

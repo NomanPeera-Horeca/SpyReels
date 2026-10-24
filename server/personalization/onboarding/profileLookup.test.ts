@@ -211,6 +211,31 @@ describe("lookupPublicProfile", () => {
     );
   });
 
+  it("copies the avatar and covers under one budget", async () => {
+    const started = Date.now();
+    const r = await lookupPublicProfile({
+      userId: 1,
+      platform: "instagram",
+      handle: "test.kitchen",
+      warmMedia: true,
+      warmMediaMs: 1_000,
+      deps: deps({
+        mirrorAvatar: async () => {
+          await new Promise(resolve => setTimeout(resolve, 200));
+          return "https://cdn.example/pic.jpg?r2";
+        },
+        mirrorThumbnails: async () => {
+          await new Promise(resolve => setTimeout(resolve, 200));
+          return new Map([["a1", "https://cdn.example/a1.jpg?r2"]]);
+        },
+      }),
+    });
+    expect(Date.now() - started).toBeLessThan(350);
+    expect(r.ok && r.profile.avatarUrl).toBe("https://cdn.example/pic.jpg?r2");
+    if (!r.ok) return;
+    expect(r.profile.recentPosts[0]?.thumbnailUrl).toBe("https://cdn.example/a1.jpg?r2");
+  });
+
   it("returns the provider image when mirroring stalls", async () => {
     const started = Date.now();
     const r = await lookupPublicProfile({
@@ -218,14 +243,14 @@ describe("lookupPublicProfile", () => {
       platform: "instagram",
       handle: "stall",
       warmMedia: true,
-      warmMediaMs: 30,
+      warmMediaMs: 80,
       deps: deps({
         instagram: async () => ({ ...igProfile, username: "stall" }),
         mirrorAvatar: () => new Promise(() => {}),
         mirrorThumbnails: () => new Promise(() => {}),
       }),
     });
-    expect(Date.now() - started).toBeLessThan(500);
+    expect(Date.now() - started).toBeLessThan(180);
     expect(r.ok && r.profile.avatarUrl).toBe("https://cdn.example/pic.jpg");
     if (!r.ok) return;
     expect(r.profile.recentPosts[0]?.thumbnailUrl).toBe("https://cdn.example/a1.jpg");

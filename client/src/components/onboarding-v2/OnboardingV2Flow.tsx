@@ -50,7 +50,7 @@ import {
   type PlatformError,
 } from "./steps";
 import { preferOnboardingSnapshot } from "./onboardingSnapshot";
-import { recommendationWaitState, stepHasDisplaySuggestions } from "./recommendationWait";
+import { recommendationWaitState, stepHasDisplaySuggestions, suggestionVisibleReady } from "./recommendationWait";
 import { AudienceStep, GoalStep, MAX_GOALS, PillarsStep, type StepItem } from "./step4";
 import { COPY } from "./copy";
 import { suggestionRequestKey } from "@shared/personalization/suggestionRequest";
@@ -202,26 +202,6 @@ export default function OnboardingV2Flow() {
   const noteVisible = trpc.onboardingV2.noteSuggestionVisible.useMutation();
   const noteVisibleRef = useRef(noteVisible.mutate);
   noteVisibleRef.current = noteVisible.mutate;
-  useEffect(() => {
-    const clock = suggestionClock.current;
-    if (clock.started == null || clock.reported || clock.pending || clock.attempts >= 2) return;
-    if ((state?.items.length ?? 0) === 0) return;
-    clock.pending = true;
-    clock.attempts += 1;
-    const started = clock.started;
-    noteVisibleRef.current(undefined, {
-      onSuccess: () => {
-        clock.reported = true;
-        clock.pending = false;
-      },
-      onError: () => {
-        clock.pending = false;
-      },
-    });
-    if (!access.internal && clock.attempts === 1) {
-      posthog?.capture("onboarding_v2_suggestion_visible", { msSinceConfirm: Date.now() - started });
-    }
-  }, [state?.items, access.internal, posthog]);
 
   const lookup = trpc.onboardingV2.lookupProfile.useMutation();
   const confirm = trpc.onboardingV2.confirmProfile.useMutation();
@@ -378,6 +358,31 @@ export default function OnboardingV2Flow() {
   const isStep4 = screen === "goal" || screen === "audience" || screen === "pillars";
   const step4 = isStep4 ? (screen as PersonalizationStep) : null;
   const hasSavedSuggestions = stepHasDisplaySuggestions(step4, items);
+
+  // After the suggestion chip is painted. Not when getState merely returns rows.
+  // The request is not awaited, so the screen is not held for the log.
+  useEffect(() => {
+    const clock = suggestionClock.current;
+    if (clock.started == null || clock.reported || clock.pending || clock.attempts >= 2) return;
+    const painted =
+      typeof document !== "undefined" && document.querySelector("[data-suggestion-visible]") != null;
+    if (!suggestionVisibleReady({ step: step4, items, painted })) return;
+    clock.pending = true;
+    clock.attempts += 1;
+    const started = clock.started;
+    noteVisibleRef.current(undefined, {
+      onSuccess: () => {
+        clock.reported = true;
+        clock.pending = false;
+      },
+      onError: () => {
+        clock.pending = false;
+      },
+    });
+    if (!access.internal && clock.attempts === 1) {
+      posthog?.capture("onboarding_v2_suggestion_visible", { msSinceConfirm: Date.now() - started });
+    }
+  }, [step4, items, access.internal, posthog]);
 
   // Ask once per evidence phase. A later snapshot may enrich unconfirmed
   // suggestions. Saved rows stay on screen while that job is still open.

@@ -394,8 +394,9 @@ export async function loadOnboardingState(db: Db, ctx: OnboardingCtx): Promise<O
 }
 
 /**
- * Logs confirm-to-first-visible once the client can show a saved suggestion.
+ * Logs confirm-to-first-visible after the client has painted a suggestion.
  * The clock is the server's confirmedAt. Profile text is not included.
+ * This write is not on the path that renders the screen.
  */
 export async function recordFirstVisibleSuggestion(db: Db, ctx: OnboardingCtx, now = Date.now()): Promise<void> {
   const profile = await activeProfileRow(db, ctx);
