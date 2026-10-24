@@ -266,13 +266,50 @@ function TrashAction({ onClick, label, disabled }: { onClick: () => void; label:
 
 /* ---------- inline chip group (Goals 1676:428 / 1676:468, Audience 1676:537) ---------- */
 
+/** Grey edit chip that hugs its text. The row pins the trash to the far end. */
+function ChipField({
+  label,
+  value,
+  placeholder,
+  maxLength,
+  disabled,
+  autoFocus,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  placeholder?: string;
+  maxLength: number;
+  disabled: boolean;
+  autoFocus?: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className={styles.chipField}>
+      <span className={styles.chipSizer} aria-hidden>
+        {value.length > 0 ? value : "\u00a0"}
+      </span>
+      <input
+        className={styles.chipInput}
+        aria-label={label}
+        placeholder={placeholder}
+        value={value}
+        maxLength={maxLength}
+        disabled={disabled}
+        autoFocus={autoFocus}
+        onChange={e => onChange(e.target.value)}
+      />
+    </label>
+  );
+}
+
 type ChipItem = { id: string; label: string };
 const NEW = "__new__";
 const hasText = (v: string | undefined) => (v ?? "").trim() !== "";
 
 /**
- * Grey chips. Default: read-only chips with one quiet Edit and an Add. Edit mode:
- * every chip's text is editable in place, red trash sits beside each chip,
+ * Grey chips. Default: one quiet Edit, an Add, and each chip opens the same edit.
+ * Edit mode: every chip hugs its text, the red trash stays at the row end,
  * Add opens an empty chip, and one small Cancel / Save covers the group.
  * Trash removes at once (the step offers Undo). Save and Continue save the
  * drafts; Cancel is the only thing that discards them.
@@ -309,6 +346,8 @@ function ChipGroup({
   const pending = useContext(PendingEditsContext);
   const groupId = useId();
   const [mode, setMode] = useState<"view" | "edit">("view");
+  /** Chip to focus when edit opens. Null focuses the first chip (the section Edit). */
+  const [focusKey, setFocusKey] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const canAdd = max === undefined || items.length < max;
   const canRemove = items.length > min;
@@ -326,11 +365,17 @@ function ChipGroup({
     });
 
   const startAdd = () => {
+    setFocusKey(NEW);
     setMode("edit");
     setDrafts(d => ({ ...d, [NEW]: d[NEW] ?? "" }));
   };
+  const openEdit = (key: string | null) => {
+    setFocusKey(key);
+    setMode("edit");
+  };
   const cancel = () => {
     setDrafts({});
+    setFocusKey(null);
     setMode("view");
   };
 
@@ -400,37 +445,38 @@ function ChipGroup({
           }}
         >
           <ul className={styles.chipEditList}>
-            {items.map(item => (
-              <li key={item.id} className={styles.chipEditRow}>
-                <label className={styles.chipField}>
-                  <input
-                    className={styles.chipInput}
-                    aria-label={`${fieldLabel}: ${item.label}`}
-                    value={drafts[item.id] ?? item.label}
+            {items.map(item => {
+              const value = drafts[item.id] ?? item.label;
+              const focusThis = focusKey === item.id || (focusKey === null && item.id === items[0]?.id);
+              return (
+                <li key={item.id} className={styles.chipEditRow}>
+                  <ChipField
+                    label={`${fieldLabel}: ${item.label}`}
+                    value={value}
                     maxLength={maxLength}
                     disabled={busy}
-                    onChange={e => setDraft(item.id, e.target.value)}
+                    autoFocus={focusThis && !(NEW in drafts)}
+                    onChange={next => setDraft(item.id, next)}
                   />
-                </label>
-                {canRemove ? (
-                  <TrashAction onClick={() => onRemove(item.id)} label={item.label} disabled={busy} />
-                ) : null}
-              </li>
-            ))}
+                  {canRemove ? (
+                    <TrashAction onClick={() => onRemove(item.id)} label={item.label} disabled={busy} />
+                  ) : (
+                    <span className={styles.chipSpacer} aria-hidden />
+                  )}
+                </li>
+              );
+            })}
             {NEW in drafts ? (
               <li className={styles.chipEditRow}>
-                <label className={styles.chipField}>
-                  <input
-                    className={styles.chipInput}
-                    aria-label={fieldLabel}
-                    placeholder={placeholder}
-                    value={drafts[NEW]}
-                    maxLength={maxLength}
-                    disabled={busy}
-                    autoFocus
-                    onChange={e => setDraft(NEW, e.target.value)}
-                  />
-                </label>
+                <ChipField
+                  label={fieldLabel}
+                  placeholder={placeholder}
+                  value={drafts[NEW] ?? ""}
+                  maxLength={maxLength}
+                  disabled={busy}
+                  autoFocus
+                  onChange={next => setDraft(NEW, next)}
+                />
                 <span className={styles.chipSpacer} aria-hidden />
               </li>
             ) : null}
@@ -462,8 +508,16 @@ function ChipGroup({
       {items.length ? (
         <ul className={styles.chips}>
           {items.map(item => (
-            <li key={item.id} className={styles.chip} data-suggestion-visible="">
-              {item.label}
+            <li key={item.id}>
+              <button
+                type="button"
+                className={styles.chip}
+                data-suggestion-visible=""
+                disabled={busy}
+                onClick={() => openEdit(item.id)}
+              >
+                {item.label}
+              </button>
             </li>
           ))}
         </ul>
@@ -478,7 +532,7 @@ function ChipGroup({
         ) : (
           <span />
         )}
-        {items.length ? <EditAction onClick={() => setMode("edit")} label={groupLabel} disabled={busy} /> : null}
+        {items.length ? <EditAction onClick={() => openEdit(null)} label={groupLabel} disabled={busy} /> : null}
       </div>
     </section>
   );
@@ -754,7 +808,7 @@ const visibleFor = (all: PillarSubtopicView[], pillarItemId: string) =>
     .filter(s => s.pillarItemId === pillarItemId && s.status !== "dismissed")
     .map(s => ({ id: s.id, text: s.label }));
 
-/** One pillar card. Title only is editable; description and subtopics are kept as stored. */
+/** One pillar card. Title plus saved sparkle chips. The description stays in the payload and is not shown. */
 function PillarCard({
   pillar,
   subtopics,
@@ -794,11 +848,7 @@ function PillarCard({
               {pillar.payload.title}
             </span>
           )}
-          {pillar.payload.description ? (
-            <span className={["sr-text-product-body-small", styles.muted, styles.clamp2].join(" ")}>
-              {pillar.payload.description}
-            </span>
-          ) : null}
+          <SubtopicChips subtopics={subtopics} busy={busy} onRemove={onRemoveSubtopic} label={pillar.payload.title} />
         </div>
         {inEdit ? (
           <div className={styles.pillarActions}>
@@ -806,7 +856,6 @@ function PillarCard({
           </div>
         ) : null}
       </section>
-      <SubtopicChips subtopics={subtopics} busy={busy} onRemove={onRemoveSubtopic} label={pillar.payload.title} />
       <TopicIdeasAction state={topicState} busy={busy} onRequest={onRequestTopics} />
     </div>
   );
@@ -1040,6 +1089,17 @@ function PillarsBody({
           Your pillars are saved. Topic ideas can't be shown right now, and nothing you saved has been lost.
         </p>
       ) : null}
+      {pillars.length ? (
+        <div className={styles.sectionEdit}>
+          {mode === "edit" ? (
+            <GhostButton type="button" onClick={() => void finishDone()} disabled={common.busy}>
+              {P.done}
+            </GhostButton>
+          ) : (
+            <EditAction onClick={() => setMode("edit")} label={P.pillars.title} disabled={common.busy} />
+          )}
+        </div>
+      ) : null}
       {pillars.map(p =>
         editing === p.id ? (
           <div key={p.id} className={styles.pillarGroup}>
@@ -1086,32 +1146,19 @@ function PillarsBody({
           }}
         />
       ) : null}
-      <div className={styles.groupActions}>
-        {editing === "new" ? (
-          <span />
-        ) : (
-          <button
-            type="button"
-            className={styles.addChip}
-            onClick={() => {
-              setMode("edit");
-              setEditing("new");
-            }}
-            disabled={common.busy}
-          >
-            {P.pillars.add}
-          </button>
-        )}
-        {pillars.length ? (
-          mode === "edit" ? (
-            <GhostButton type="button" onClick={() => void finishDone()} disabled={common.busy}>
-              {P.done}
-            </GhostButton>
-          ) : (
-            <EditAction onClick={() => setMode("edit")} label={P.pillars.title} disabled={common.busy} />
-          )
-        ) : null}
-      </div>
+      {editing === "new" ? null : (
+        <button
+          type="button"
+          className={styles.addButton}
+          onClick={() => {
+            setMode("edit");
+            setEditing("new");
+          }}
+          disabled={common.busy}
+        >
+          {P.pillars.add}
+        </button>
+      )}
     </>
   );
 }

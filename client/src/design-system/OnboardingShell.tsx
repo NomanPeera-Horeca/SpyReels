@@ -67,11 +67,11 @@ export function OnboardingShell({
         )}
       </section>
       {preview ? (
-        <aside className={styles.right} aria-label="Preview">
+        <aside className={styles.right} aria-label="Preview" data-onboarding-preview="">
           {preview}
         </aside>
       ) : (
-        <aside className={styles.right} aria-hidden />
+        <aside className={styles.right} aria-hidden data-onboarding-preview="" />
       )}
     </div>
   );

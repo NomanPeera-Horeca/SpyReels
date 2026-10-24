@@ -148,7 +148,19 @@ export default function DevOnboardingV2Preview() {
         : "Compared with 8 other videos that have this metric. This describes a pattern in the posts.",
     figure: insightParam === "empty" ? null : "2.4x",
     confidence: insightParam === "empty" ? ("qualitative" as const) : ("eligible" as const),
-    comparison: null,
+    comparison:
+      insightParam === "empty"
+        ? null
+        : {
+            metric: "views" as const,
+            groupLabel: "starting with a question",
+            groupCount: 4,
+            groupValue: 100,
+            baselineLabel: "other videos",
+            baselineCount: 8,
+            baselineValue: 40,
+            definition: "Mean views of the group divided by mean views of the other videos.",
+          },
   };
   const insightChoice = step4RightPanel({ status: insightStatus, panel: insightPanel });
   const step4Preview =

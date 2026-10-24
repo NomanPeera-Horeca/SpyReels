@@ -1,5 +1,24 @@
-/* Insight card inside the approved phone frame. Tokens only. */
+/* Insight phone (Figma 15A). The card hangs off the lower right of the 390x800 frame. Tokens only. */
+
+.fit {
+  position: relative;
+  flex: 0 0 auto;
+  width: 390px;
+  height: 800px;
+  --onboarding-preview-w: 390px;
+  --onboarding-preview-h: 800px;
+}
+
+/* Phone at x=878, card at x=1084: 206px into the frame, 116px past its right edge (300px card). */
+.fitCard {
+  width: 506px;
+  --onboarding-preview-w: 506px;
+}
+
 .phone {
+  position: absolute;
+  top: 0;
+  left: 0;
   margin: 0;
 }
 
@@ -18,28 +37,43 @@
   background: var(--sr-neutral-950);
 }
 
+.badge {
+  position: absolute;
+  top: var(--sr-space-4);
+  left: 50%;
+  z-index: 2;
+  margin: 0;
+  padding: var(--sr-space-1) var(--sr-space-3);
+  border-radius: var(--sr-radius-full);
+  background: var(--sr-color-surface-default);
+  color: var(--sr-color-text-primary);
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
 .card {
   position: absolute;
-  left: var(--sr-space-4);
-  right: var(--sr-space-4);
-  bottom: var(--sr-space-4);
+  top: 594px;
+  left: 206px;
+  z-index: 2;
   display: flex;
   flex-direction: column;
-  gap: var(--sr-space-2);
+  gap: var(--sr-space-1);
+  width: 300px;
+  box-sizing: border-box;
   padding: var(--sr-space-4);
   border-radius: var(--sr-radius-16);
   background: var(--sr-color-surface-default);
   box-shadow: var(--sr-elevation-surface-raised);
 }
 
-.figure,
-.headline {
-  margin: 0;
-  color: var(--sr-color-text-primary);
-}
-
-.support,
-.views {
+.eyebrow,
+.detail {
   margin: 0;
   color: var(--sr-color-text-secondary);
+}
+
+.figure {
+  margin: 0;
+  color: var(--sr-color-text-primary);
 }
