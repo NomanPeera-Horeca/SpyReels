@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CREATOR_SIGNAL_RECENT_DAYS } from "../../personalization/home/homeService";
 import { buildPoolKey, VIRAL_SEED_POOL_PILLAR } from "../constants";
 import {
   chooseIndexedHomeSpecs,
@@ -330,6 +331,7 @@ describe("rankIndexedHomeInventory creators", () => {
       goalText: "Help fitness coaches sign clients.",
       audienceText: "Restaurant owners. Lower food cost",
       limit: 1,
+      recentDays: CREATOR_SIGNAL_RECENT_DAYS,
       now,
     });
 
@@ -358,6 +360,7 @@ describe("rankIndexedHomeInventory creators", () => {
       goalText: null,
       audienceText: null,
       limit: 4,
+      recentDays: CREATOR_SIGNAL_RECENT_DAYS,
       now,
     });
     expect(ranked.display.map(item => item.sourceId)).toEqual(["skip"]);
@@ -381,6 +384,7 @@ describe("rankIndexedHomeInventory creators", () => {
       goalText: null,
       audienceText: null,
       limit: 4,
+      recentDays: CREATOR_SIGNAL_RECENT_DAYS,
       now,
     });
     expect(ranked.creators).toEqual([]);
@@ -412,6 +416,7 @@ describe("rankIndexedHomeInventory creators", () => {
       goalText: null,
       audienceText: null,
       limit: 4,
+      recentDays: CREATOR_SIGNAL_RECENT_DAYS,
       now,
     });
     expect(ranked.creators).toHaveLength(1);
@@ -433,6 +438,7 @@ describe("rankIndexedHomeInventory creators", () => {
       goalText: null,
       audienceText: null,
       limit: 4,
+      recentDays: CREATOR_SIGNAL_RECENT_DAYS,
       now,
     });
     expect(ranked.display).toEqual([]);

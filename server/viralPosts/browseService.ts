@@ -33,10 +33,6 @@ import * as poolRepo from "./poolRepository";
 import { schedulePoolRefresh } from "./poolRefresh";
 import * as repo from "./repository";
 import {
-  CREATOR_SIGNAL_RECENT_DAYS,
-  HOME_CREATOR_LIMIT,
-} from "../personalization/home/homeService";
-import {
   rankIndexedHomeInventory,
   type IndexedHomeCreatorPick,
   type IndexedHomePost,
@@ -389,6 +385,10 @@ export async function browseIndexedViralPosts(args: {
   goalText?: string | null;
   audienceText?: string | null;
   limit: number;
+  /** Home row size. Supplied by the gated Home router. */
+  creatorLimit: number;
+  /** Home creator window in days. Supplied by the gated Home router. */
+  recentDays: number;
 }): Promise<{
   items: ViralPost[];
   creators: IndexedHomeCreator[];
@@ -430,6 +430,8 @@ export async function browseIndexedViralPosts(args: {
     goalText: args.goalText ?? null,
     audienceText: args.audienceText ?? null,
     limit: args.limit,
+    creatorLimit: args.creatorLimit,
+    recentDays: args.recentDays,
   });
   return { ...assembled, niche: plan.niche, poolRefreshStarted: false };
 }
@@ -448,6 +450,8 @@ async function assembleIndexedHome(args: {
   goalText: string | null;
   audienceText: string | null;
   limit: number;
+  creatorLimit: number;
+  recentDays: number;
 }): Promise<{ items: ViralPost[]; creators: IndexedHomeCreator[] }> {
   const { userId, pools, niche } = args;
   const [poolRows, hidden, dismissed, saved] = await Promise.all([
@@ -494,8 +498,8 @@ async function assembleIndexedHome(args: {
     goalText: args.goalText,
     audienceText: args.audienceText,
     limit: args.limit,
-    creatorLimit: HOME_CREATOR_LIMIT,
-    recentDays: CREATOR_SIGNAL_RECENT_DAYS,
+    creatorLimit: args.creatorLimit,
+    recentDays: args.recentDays,
   });
 
   const toPost = (row: IndexedPoolRow) => {

@@ -6,7 +6,6 @@ import {
 } from "./candidateAdapter";
 import { selectTieredDailyFeed, type DiversityCandidate } from "./diversity";
 import { passesIndexedViralQualification } from "./indexedQualification";
-import { CREATOR_SIGNAL_RECENT_DAYS } from "../personalization/home/homeService";
 import {
   personalizationRelevanceBoost,
   strategyTopicSignals,
@@ -192,8 +191,10 @@ function groupCreatorsFromQualified<T extends IndexedHomePost>(args: {
   now: Date;
   recentDays?: number;
 }): Array<IndexedHomeCreatorPick<T>> {
-  const recentDays = args.recentDays ?? CREATOR_SIGNAL_RECENT_DAYS;
-  const since = args.now.getTime() - recentDays * 86_400_000;
+  // The Home router supplies CREATOR_SIGNAL_RECENT_DAYS. This module does not
+  // keep a second copy of that window, and it does not import personalization.
+  if (args.recentDays == null) return [];
+  const since = args.now.getTime() - args.recentDays * 86_400_000;
   const best = new Map<string, IndexedHomeCreatorPick<T> & { finalScore: number }>();
 
   for (const entry of args.scored) {

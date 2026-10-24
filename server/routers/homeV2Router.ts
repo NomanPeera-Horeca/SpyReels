@@ -15,7 +15,12 @@ import {
   switchActiveProfile,
   type OnboardingCtx,
 } from "../personalization/onboarding/onboardingService";
-import { homeContextFromState, videoMatchText } from "../personalization/home/homeService";
+import {
+  CREATOR_SIGNAL_RECENT_DAYS,
+  HOME_CREATOR_LIMIT,
+  homeContextFromState,
+  videoMatchText,
+} from "../personalization/home/homeService";
 import { browseIndexedViralPosts } from "../viralPosts/browseService";
 
 export const HOME_VIDEO_LIMIT = 4;
@@ -53,6 +58,8 @@ export const homeV2Router = router({
       goalText: c.goalText,
       audienceText: c.audienceText,
       limit: HOME_VIDEO_LIMIT,
+      creatorLimit: HOME_CREATOR_LIMIT,
+      recentDays: CREATOR_SIGNAL_RECENT_DAYS,
     });
     return { personalized: c.nicheLabel !== null, nicheLabel: c.nicheLabel, creators: res.creators };
   }),
@@ -66,6 +73,8 @@ export const homeV2Router = router({
       goalText: c.goalText,
       audienceText: c.audienceText,
       limit: HOME_VIDEO_LIMIT,
+      creatorLimit: HOME_CREATOR_LIMIT,
+      recentDays: CREATOR_SIGNAL_RECENT_DAYS,
     });
     return { personalized: c.nicheLabel !== null, nicheLabel: c.nicheLabel, items: res.items };
   }),
