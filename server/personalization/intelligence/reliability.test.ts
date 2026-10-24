@@ -239,6 +239,9 @@ describe("Home niche freshness", () => {
         nicheLabel: "Restaurants & Cafes",
         featuredNicheSlug: "restaurants-cafes",
         description: "Restaurants & Cafes. Help fitness coaches sign clients.",
+        pillarTitles: ["Menu engineering"],
+        goalText: "Help fitness coaches sign clients.",
+        audienceText: "Restaurant owners. Lower food cost",
         personalizationComplete: true,
         nextStep: null,
       })

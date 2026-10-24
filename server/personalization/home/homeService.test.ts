@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { CREATOR_SIGNAL_RECENT_DAYS, homeContextFromState, pickViralCreators } from "./homeService";
+import type { OnboardingStateView } from "../onboarding/onboardingService";
+import { CREATOR_SIGNAL_RECENT_DAYS, homeContextFromState, pickViralCreators, videoMatchText } from "./homeService";
 
 const now = new Date("2026-10-16T12:00:00Z");
 const daysAgo = (d: number) => new Date(now.getTime() - d * 86_400_000);
@@ -28,13 +29,24 @@ describe("pickViralCreators", () => {
     expect(out.map(c => [c.handle, c.badge?.label ?? null])).toEqual([
       ["d", "Explosive · 520x followers"],
       ["a", "Strong · 34x followers"],
-      ["b", null],
-      ["c", null],
     ]);
   });
 
-  it("limits to three by default", () => {
-    expect(pickViralCreators(accounts, [], now)).toHaveLength(3);
+  it("does not fill empty slots with large accounts that have no viral badge", () => {
+    const famous = {
+      id: 9,
+      handle: "famous",
+      displayName: "Famous",
+      profilePicUrl: null,
+      followerCount: 10_000_000,
+    };
+    expect(pickViralCreators([famous, ...accounts], [], now)).toEqual([]);
+    const oneBadge = pickViralCreators(
+      [famous, ...accounts],
+      [{ featuredAccountId: 4, viewCount: 260_000, postedAt: daysAgo(2) }],
+      now
+    );
+    expect(oneBadge.map(c => c.handle)).toEqual(["d"]);
   });
 });
 
@@ -44,8 +56,53 @@ describe("homeContextFromState", () => {
       hasProfile: false,
       nicheLabel: null,
       featuredNicheSlug: null,
+      pillarTitles: [],
+      goalText: null,
+      audienceText: null,
       personalizationComplete: false,
       nextStep: "goal",
     });
+  });
+
+  it("keeps a fitness goal from changing the niche, and still exposes it for ranking", () => {
+    const state = {
+      profile: { id: "p" },
+      steps: { goal: "confirmed", audience: "confirmed", pillars: "pending" },
+      items: [
+        {
+          kind: "niche",
+          status: "confirmed",
+          payload: { slug: "pottery", label: "Pottery studio" },
+        },
+        {
+          kind: "goal",
+          status: "confirmed",
+          payload: { text: "Help fitness coaches sign clients." },
+        },
+        {
+          kind: "audience",
+          status: "confirmed",
+          payload: { who: "Restaurant owners", outcome: "Lower food cost" },
+        },
+        {
+          kind: "pillar",
+          status: "suggested",
+          payload: { title: "Ignored pillar", description: "" },
+        },
+        {
+          kind: "pillar",
+          status: "confirmed",
+          payload: { title: "Menu engineering", description: "Prices" },
+        },
+      ],
+    } as OnboardingStateView;
+    const ctx = homeContextFromState(state);
+    expect(ctx.nicheLabel).toBe("Pottery studio");
+    expect(ctx.featuredNicheSlug).toBeNull();
+    expect(ctx.goalText).toBe("Help fitness coaches sign clients.");
+    expect(ctx.audienceText).toBe("Restaurant owners. Lower food cost");
+    expect(ctx.pillarTitles).toEqual(["Menu engineering"]);
+    expect(videoMatchText(ctx)).toBe("Pottery studio");
+    expect(videoMatchText(ctx)).not.toContain("fitness");
   });
 });
