@@ -2,8 +2,15 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { InstagramPrivateAccountError, InstagramProviderError } from "../../instagram";
 import { classifyLookupError } from "./profileLookupDeps";
 import {
+  PROFILE_LOOKUP_ATTEMPT_TIMEOUT_MS,
+  PROFILE_LOOKUP_DEADLINE_MS,
+  PROFILE_LOOKUP_MAX_ATTEMPTS,
+  PROFILE_LOOKUP_SLOW_AFTER_MS,
+} from "@shared/personalization/profileLookup";
+import {
   PROFILE_LOOKUPS_PER_HOUR,
   lookupPublicProfile,
+  profileLookupProviderBudget,
   recallCachedPublicProfile,
   resetLookupLimiterForTests,
   resetProfileLookupCacheForTests,
@@ -149,6 +156,77 @@ describe("lookupPublicProfile", () => {
     ]);
     expect(calls).toBe(1);
     expect(a.ok && b.ok).toBe(true);
+  });
+
+  it("gives Instagram the full deadline and keeps the shorter cap for other platforms", async () => {
+    expect(PROFILE_LOOKUP_SLOW_AFTER_MS).toBe(8_000);
+    expect(PROFILE_LOOKUP_DEADLINE_MS).toBe(12_000);
+    expect(PROFILE_LOOKUP_ATTEMPT_TIMEOUT_MS).toBe(8_000);
+    expect(PROFILE_LOOKUP_MAX_ATTEMPTS).toBe(2);
+    expect(profileLookupProviderBudget("instagram", 12_000)).toEqual({
+      timeoutMs: 12_000,
+      maxAttempts: 2,
+      deadlineMs: 12_000,
+    });
+    expect(profileLookupProviderBudget("tiktok", 12_000).timeoutMs).toBe(8_000);
+    expect(profileLookupProviderBudget("youtube", 12_000).timeoutMs).toBe(8_000);
+
+    const seen: Array<{ platform: string; timeoutMs?: number; deadlineMs?: number; maxAttempts?: number }> = [];
+    const d = deps({
+      instagram: async (_handle, call) => {
+        seen.push({
+          platform: "instagram",
+          timeoutMs: call?.timeoutMs,
+          deadlineMs: call?.deadlineMs,
+          maxAttempts: call?.maxAttempts,
+        });
+        return igProfile;
+      },
+      tiktok: async (_handle, call) => {
+        seen.push({
+          platform: "tiktok",
+          timeoutMs: call?.timeoutMs,
+          deadlineMs: call?.deadlineMs,
+          maxAttempts: call?.maxAttempts,
+        });
+        return {
+          userId: "1",
+          uniqueId: "tik",
+          nickname: "Tik",
+          isPrivate: false,
+          followerCount: 1,
+          followingCount: 1,
+          videoCount: 1,
+          heartCount: 1,
+          avatarUrl: "",
+        };
+      },
+      youtube: async (_handle, call) => {
+        seen.push({
+          platform: "youtube",
+          timeoutMs: call?.timeoutMs,
+          deadlineMs: call?.deadlineMs,
+          maxAttempts: call?.maxAttempts,
+        });
+        return {
+          channelId: "c",
+          handle: "chan",
+          name: "Chan",
+          isVerified: false,
+          subscriberCount: 8,
+          description: "",
+          avatarUrl: "",
+        };
+      },
+    });
+    expect((await lookupPublicProfile({ userId: 1, platform: "instagram", handle: "a", deps: d, deadlineMs: 12_000 })).ok).toBe(true);
+    expect((await lookupPublicProfile({ userId: 2, platform: "tiktok", handle: "b", deps: d, deadlineMs: 12_000 })).ok).toBe(true);
+    expect((await lookupPublicProfile({ userId: 3, platform: "youtube", handle: "c", deps: d, deadlineMs: 12_000 })).ok).toBe(true);
+    expect(seen).toEqual([
+      { platform: "instagram", timeoutMs: 12_000, deadlineMs: 12_000, maxAttempts: 2 },
+      { platform: "tiktok", timeoutMs: 8_000, deadlineMs: 12_000, maxAttempts: 2 },
+      { platform: "youtube", timeoutMs: 8_000, deadlineMs: 12_000, maxAttempts: 2 },
+    ]);
   });
 
   it("returns timeout when the provider is still pending at the deadline", async () => {

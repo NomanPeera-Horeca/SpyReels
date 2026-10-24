@@ -22,6 +22,25 @@ import {
 } from "../../scrapeCreatorsMeter";
 import type { LookupBudgetOptions } from "../../providerLookupBudget";
 
+/**
+ * Direct Instagram identification stays on one profile request until the
+ * lookup deadline. The 8 second mark is only the on-screen slow hint.
+ * TikTok and YouTube keep the shorter per-attempt cap.
+ */
+export function profileLookupProviderBudget(
+  platform: SocialPlatform,
+  deadlineMs: number
+): Pick<LookupBudgetOptions, "timeoutMs" | "maxAttempts" | "deadlineMs"> {
+  return {
+    timeoutMs:
+      platform === "instagram"
+        ? deadlineMs
+        : Math.min(PROFILE_LOOKUP_ATTEMPT_TIMEOUT_MS, deadlineMs),
+    maxAttempts: PROFILE_LOOKUP_MAX_ATTEMPTS,
+    deadlineMs,
+  };
+}
+
 /** Provider requests allowed for one lookup (IG may need search + by-id). */
 export const PROFILE_LOOKUP_REQUEST_BUDGET = 8;
 /** Lookups per user per rolling hour. */
@@ -395,9 +414,7 @@ export async function lookupPublicProfile(input: {
     const metered = await withScrapeCreatorsMeter(PROFILE_LOOKUP_REQUEST_BUDGET, () =>
       withLookupDeadline(deadlineMs, signal =>
         fetchPreview(input.platform, input.handle, input.deps, {
-          timeoutMs: Math.min(PROFILE_LOOKUP_ATTEMPT_TIMEOUT_MS, deadlineMs),
-          maxAttempts: PROFILE_LOOKUP_MAX_ATTEMPTS,
-          deadlineMs,
+          ...profileLookupProviderBudget(input.platform, deadlineMs),
           signal,
         })
       )
@@ -408,7 +425,7 @@ export async function lookupPublicProfile(input: {
           ? "timeout"
           : input.deps.classify(metered.error);
       console.log(
-        `[onboarding.lookup] platform=${input.platform} ms=${Date.now() - started} ok=false reason=${reason}`
+        `[onboarding.lookup] platform=${input.platform} ms=${Date.now() - started} ok=false reason=${reason} requests=${metered.report.requests}`
       );
       return { ok: false, reason, meter: metered.report };
     }

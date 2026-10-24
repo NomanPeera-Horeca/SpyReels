@@ -600,6 +600,26 @@ function deadlineMiss(): ProfileLookupResult {
   return { ok: false, kind: "provider", httpStatus: 408, detail: "deadline" };
 }
 
+/** Attempt timing for an interactive budgeted lookup. No profile text or response body. */
+function logBudgetedProfileAttempt(
+  budget: LookupBudget | undefined,
+  args: {
+    handle: string;
+    attempt: number;
+    maxAttempts: number;
+    elapsedMs: number;
+    status: number;
+    detail: string;
+  }
+): void {
+  if (!budget) return;
+  const requested = normalizeInstagramHandle(args.handle).replace(/[^a-z0-9._]/g, "");
+  const detail = args.detail.replace(/[^a-z0-9_]/gi, "") || "unknown";
+  console.log(
+    `[Instagram] profile attempt requested=@${requested} n=${args.attempt}/${args.maxAttempts} ms=${Math.max(0, Math.round(args.elapsedMs))} status=${args.status} detail=${detail}`
+  );
+}
+
 async function lookupProfileByHandle(
   handle: string,
   budget?: LookupBudget
@@ -611,7 +631,18 @@ async function lookupProfileByHandle(
   let lastDetail = "";
 
   for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
-    if (budgetExpiredOrTight(budget)) return deadlineMiss();
+    if (budgetExpiredOrTight(budget)) {
+      logBudgetedProfileAttempt(budget, {
+        handle: cleanHandle,
+        attempt,
+        maxAttempts: MAX_TRIES,
+        elapsedMs: 0,
+        status: 408,
+        detail: "deadline",
+      });
+      return deadlineMiss();
+    }
+    const attemptStarted = Date.now();
     const { status, data } = await scGet(
       "/v1/instagram/profile",
       { handle: cleanHandle },
@@ -623,8 +654,19 @@ async function lookupProfileByHandle(
         : undefined
     );
     lastStatus = status;
+    const elapsedMs = Date.now() - attemptStarted;
+    const logAttempt = (detail: string) =>
+      logBudgetedProfileAttempt(budget, {
+        handle: cleanHandle,
+        attempt,
+        maxAttempts: MAX_TRIES,
+        elapsedMs,
+        status,
+        detail,
+      });
 
     if (status === 404) {
+      logAttempt("not_found");
       return {
         ok: false,
         kind: "not_found",
@@ -634,6 +676,7 @@ async function lookupProfileByHandle(
     }
     if (status === 408 || data?.error === "scrapecreators_request_timeout") {
       lastDetail = "timeout";
+      logAttempt("timeout");
       if (attempt < MAX_TRIES && !budgetExpiredOrTight(budget)) {
         if (budget) await budget.sleep(400);
         else await sleep(1000 * attempt);
@@ -642,6 +685,7 @@ async function lookupProfileByHandle(
       return { ok: false, kind: "provider", httpStatus: 408, detail: "timeout" };
     }
     if (status === 429) {
+      logAttempt("rate_limit");
       if (attempt < MAX_TRIES && !budgetExpiredOrTight(budget)) {
         if (budget) await budget.sleep(400);
         else await sleep(2000 * attempt);
@@ -656,6 +700,7 @@ async function lookupProfileByHandle(
     }
     if (status !== 200 || !data) {
       lastDetail = `http_${status}`;
+      logAttempt(`http_${status}`);
       if (attempt < MAX_TRIES && !budgetExpiredOrTight(budget)) {
         if (budget) await budget.sleep(400);
         else await sleep(1000 * attempt);
@@ -671,6 +716,7 @@ async function lookupProfileByHandle(
 
     const user = data?.data?.user;
     if (user) {
+      logAttempt("ok");
       return {
         ok: true,
         profile: profileFromGraphUser(user, cleanHandle),
@@ -684,6 +730,7 @@ async function lookupProfileByHandle(
     lastDetail = `${vendorError} ${vendorMsg}`.trim();
 
     if (failureKind === "not_found") {
+      logAttempt("not_found");
       return {
         ok: false,
         kind: "not_found",
@@ -692,6 +739,7 @@ async function lookupProfileByHandle(
       };
     }
     if (failureKind === "private") {
+      logAttempt("private");
       return {
         ok: false,
         kind: "private",
@@ -705,6 +753,7 @@ async function lookupProfileByHandle(
       attempt < MAX_TRIES &&
       !budgetExpiredOrTight(budget)
     ) {
+      logAttempt(failureKind === "rate_limit" ? "rate_limit" : "vendor_retry");
       console.warn(
         `[Instagram] Vendor ${failureKind} envelope for @${cleanHandle} ` +
           `(attempt ${attempt}/${MAX_TRIES}): ${lastDetail}`
@@ -714,6 +763,7 @@ async function lookupProfileByHandle(
       continue;
     }
     if (failureKind === "rate_limit") {
+      logAttempt("rate_limit");
       return {
         ok: false,
         kind: "provider",
@@ -721,6 +771,7 @@ async function lookupProfileByHandle(
         detail: lastDetail || "rate_limit",
       };
     }
+    logAttempt("provider");
     return {
       ok: false,
       kind: "provider",
