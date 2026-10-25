@@ -16,6 +16,7 @@ import {
 import { toast } from "sonner";
 import { TRPCClientError } from "@trpc/client";
 import { MIN_SPY_DISPLAY_REELS } from "@shared/spyReelsLimits";
+import { isValidTikTokHandleNormalized } from "@shared/socialHandles";
 import { resolveFromParamFallback } from "@shared/appNavigation";
 import { useAppBack } from "@/hooks/useAppBack";
 import { trpc } from "@/lib/trpc";
@@ -218,7 +219,7 @@ export default function PlatformResearch({
   });
   useEffect(() => {
     if (config.platform !== "tiktok" || !initialHandle || initialJobId != null) return;
-    if (!/^[a-z0-9._]{2,24}$/i.test(initialHandle) || autoStartedHandleRef.current === initialHandle) return;
+    if (!isValidTikTokHandleNormalized(initialHandle) || autoStartedHandleRef.current === initialHandle) return;
     autoStartedHandleRef.current = initialHandle;
     setHandle(initialHandle);
     tiktokStart.mutate({ handle: initialHandle, timeframe: "30" });

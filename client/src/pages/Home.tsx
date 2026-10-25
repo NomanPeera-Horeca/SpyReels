@@ -98,9 +98,6 @@ function TipDot() {
   );
 }
 
-const PROFILE_PREVIEW_INVALID_HANDLE_MESSAGE =
-  "Instagram handles can only contain letters, numbers, underscores, and periods.";
-
 export default function Home() {
   const posthog = usePostHog();
   const utils = trpc.useUtils();
@@ -211,7 +208,7 @@ export default function Home() {
   const profilePreviewInvalidShape =
     debouncedHandle.length >= 2 && !debouncedHandleShapeOk;
   const profileError = profilePreviewInvalidShape
-    ? PROFILE_PREVIEW_INVALID_HANDLE_MESSAGE
+    ? INSTAGRAM_HANDLE_INVALID_MESSAGE
     : profile?.found === false
       ? profile.error
       : null;

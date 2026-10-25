@@ -37,6 +37,10 @@ import {
   PUBLIC_TIKTOK_DEMO_HANDLES,
   isPublicTikTokDemoHandle,
 } from "@shared/publicTikTokDemoAccounts";
+import {
+  isValidTikTokHandleNormalized,
+  normalizeTikTokHandle,
+} from "@shared/socialHandles";
 
 const PAGE_PATH = "/free-tools/tiktok-viral-video-finder";
 const PAGE_TITLE = "TikTok Finder - Viral Videos by Username | SpyReels";
@@ -125,13 +129,11 @@ const COMPARE_ROWS = [
 type SortMode = "outlier" | "views" | "engagement";
 
 function parseTikTokHandle(raw: string): string {
-  const trimmed = raw.trim();
-  const fromUrl = trimmed.match(/tiktok\.com\/@?([^/?#\s]+)/i);
-  return (fromUrl ? fromUrl[1] : trimmed).replace(/^@/, "").trim().toLowerCase();
+  return normalizeTikTokHandle(raw);
 }
 
 function isValidTikTokHandle(handle: string): boolean {
-  return /^[a-z0-9._]{2,24}$/i.test(handle);
+  return isValidTikTokHandleNormalized(handle);
 }
 
 function outlierMultiple(viewCount: number, median: number): number | null {

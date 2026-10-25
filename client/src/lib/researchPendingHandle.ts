@@ -1,3 +1,5 @@
+import { isValidInstagramHandleNormalized } from "@shared/instagramHandle";
+
 /** Session keys for landing → Research handle handoff after sign-in. */
 export const RESEARCH_PENDING_HANDLE_KEY = "spyreels:research_pending_handle";
 export const RESEARCH_AUTOSTART_KEY = "spyreels:research_autostart";
@@ -23,7 +25,7 @@ export function parseLandingAuthQuery(search: string): {
   return {
     auth,
     returnTo: safeAuthReturnTo(params.get("returnTo")),
-    researchHandle: handle && /^[a-z0-9._]{1,30}$/i.test(handle) ? handle : undefined,
+    researchHandle: handle && isValidInstagramHandleNormalized(handle) ? handle : undefined,
   };
 }
 

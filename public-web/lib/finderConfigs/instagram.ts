@@ -1,4 +1,9 @@
 import { researchReturnTo } from "../../../shared/researchIntent";
+import {
+  INSTAGRAM_HANDLE_INVALID_MESSAGE,
+  isValidInstagramHandleNormalized,
+  normalizeInstagramHandle,
+} from "../../../shared/socialHandles";
 import { buildFaqPageJsonLd } from "../../components/marketingFaqJsonLd";
 import { trpcQuery } from "../trpcBrowser";
 import type { FinderConfig, FinderDemoItem, FinderProfileLookupResult } from "./types";
@@ -41,13 +46,11 @@ const FAQ_ITEMS = [
 ] as const;
 
 function normalizeHandle(raw: string): string {
-  const trimmed = raw.trim();
-  const fromUrl = trimmed.match(/instagram\.com\/([^/?#\s]+)/i);
-  return (fromUrl ? fromUrl[1] : trimmed).replace(/^@+/, "").toLowerCase();
+  return normalizeInstagramHandle(raw);
 }
 
 function validHandle(handle: string): boolean {
-  return /^[a-z0-9._]{1,30}$/i.test(handle);
+  return isValidInstagramHandleNormalized(handle);
 }
 
 type ProfilePayload = FinderProfileLookupResult | { found: false; error?: string };
@@ -207,8 +210,7 @@ export const instagramFinderConfig: FinderConfig = {
     profileLoadingLabel: "Looking up Instagram profile…",
     profileErrorId: "viral-finder-error",
     profileTestId: "confirmed-instagram-profile",
-    invalidHandleMessage:
-      "Instagram usernames can only contain letters, numbers, periods and underscores.",
+    invalidHandleMessage: INSTAGRAM_HANDLE_INVALID_MESSAGE,
     emptyHandleMessage: "Enter a valid Instagram username or profile link.",
     profileContinueAriaLabel: (username) => `Continue with @${username} in Creator Radar`,
     inputName: "handle",

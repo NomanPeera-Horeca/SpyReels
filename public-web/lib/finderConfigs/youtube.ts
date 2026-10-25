@@ -1,4 +1,9 @@
 import { buildFaqPageJsonLd } from "../../components/marketingFaqJsonLd";
+import {
+  isValidYouTubeHandleNormalized,
+  normalizeYouTubeHandle,
+  YOUTUBE_HANDLE_INVALID_MESSAGE,
+} from "../../../shared/socialHandles";
 import { trpcQuery } from "../trpcBrowser";
 import type { FinderConfig, FinderDemoItem, FinderProfileLookupResult } from "./types";
 
@@ -45,18 +50,11 @@ const faqs = [
 ] as const;
 
 function parseHandle(raw: string) {
-  const trimmed = raw.trim();
-  const channelUrl = trimmed.match(
-    /(?:https?:\/\/)?(?:www\.)?youtube\.com\/(?:@|channel\/|c\/|user\/)([^/?#\s]+)/i
-  );
-  if (channelUrl) {
-    return channelUrl[1]!.replace(/^@/, "").toLowerCase();
-  }
-  return trimmed.replace(/^@/, "").toLowerCase();
+  return normalizeYouTubeHandle(raw);
 }
 
 function validHandle(handle: string) {
-  return /^[a-z0-9._-]{2,64}$/i.test(handle);
+  return isValidYouTubeHandleNormalized(handle);
 }
 
 type ProfilePayload = FinderProfileLookupResult | { found: false; error?: string };
@@ -218,8 +216,7 @@ export const youtubeFinderConfig: FinderConfig = {
     profileLoadingLabel: "Looking up YouTube channel…",
     profileErrorId: "youtube-search-error",
     profileTestId: "confirmed-youtube-profile",
-    invalidHandleMessage:
-      "YouTube usernames can only contain letters, numbers, periods, underscores and hyphens.",
+    invalidHandleMessage: YOUTUBE_HANDLE_INVALID_MESSAGE,
     emptyHandleMessage: "Enter a valid YouTube username or channel link.",
     profileContinueAriaLabel: (username) => `Continue with @${username} in SpyReels`,
     noValidate: true,
