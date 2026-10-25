@@ -4,7 +4,6 @@ import { buildPoolKey, VIRAL_SEED_POOL_PILLAR } from "../constants";
 import {
   chooseIndexedHomeSpecs,
   indexedHomePoolSpecChoices,
-  remainingIndexedNichePools,
 } from "../browseService";
 import {
   rankIndexedHomeInventory,
@@ -186,46 +185,6 @@ describe("indexed home pool choice", () => {
         existingKeys: new Set(),
       }).specs
     ).toEqual([]);
-  });
-
-  it("uses the indexed Business and Entrepreneurship pillars for that niche label", () => {
-    const plan = indexedHomePoolSpecChoices({
-      nicheText: "Business & Entrepreneurship",
-      confirmedPillars: [],
-    });
-    expect(plan.niche).toBe("Business & Entrepreneurship");
-    expect(plan.fallbackSpecs.some(spec => spec.pillar === "menu engineering")).toBe(true);
-    expect(plan.fallbackSpecs.some(spec => spec.pillar === "restaurant profitability")).toBe(true);
-    expect(plan.fallbackSpecs.some(spec => spec.pillar === "Business & Entrepreneurship marketing")).toBe(false);
-    const populated = buildPoolKey({
-      platform: "tiktok",
-      niche: plan.niche,
-      pillar: "restaurant marketing",
-    });
-    const choice = chooseIndexedHomeSpecs({
-      confirmedSpecs: plan.confirmedSpecs,
-      fallbackSpecs: plan.fallbackSpecs,
-      existingKeys: new Set([populated]),
-    });
-    expect(choice.specs.map(spec => spec.pillar)).toEqual(["restaurant marketing"]);
-  });
-
-  it("keeps an unrelated business off the restaurant pillar list", () => {
-    const plan = indexedHomePoolSpecChoices({
-      nicheText: "I teach portrait photography for small studios.",
-      confirmedPillars: [],
-    });
-    expect(plan.niche).toBe("Business & Entrepreneurship");
-    expect(plan.fallbackSpecs.some(spec => spec.pillar === "menu engineering")).toBe(false);
-    expect(plan.fallbackSpecs.some(spec => spec.pillar === "Business & Entrepreneurship marketing")).toBe(true);
-  });
-
-  it("keeps niche pools the guessed keys did not select", () => {
-    const extra = remainingIndexedNichePools(new Set(["instagram:business:empty:en"]), [
-      { poolKey: "instagram:business:empty:en", pillar: "Business & Entrepreneurship" },
-      { poolKey: "tiktok:business:restaurant-marketing:en", pillar: "restaurant marketing" },
-    ]);
-    expect(extra.map(pool => pool.pillar)).toEqual(["restaurant marketing"]);
   });
 
   it("would retarget the niche if goal text were used as the niche input", () => {

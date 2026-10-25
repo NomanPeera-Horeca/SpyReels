@@ -146,22 +146,6 @@ export async function findExistingPools(
   return keys.map((k) => byKey.get(k)).filter((p): p is ViralPostPool => Boolean(p));
 }
 
-/** Existing pools for one niche. Does not insert a pool or start discovery. */
-export async function listPoolsForNiche(
-  niche: string,
-  platforms: string[]
-): Promise<ViralPostPool[]> {
-  const db = await getDb();
-  const allowed = platforms.filter(platform => isViralPostsV1Platform(platform));
-  if (!db || !niche.trim() || allowed.length === 0) return [];
-  return db
-    .select()
-    .from(viralPostPools)
-    .where(
-      and(eq(viralPostPools.niche, niche), inArray(viralPostPools.platform, allowed))
-    );
-}
-
 export async function listPoolsNeedingRefresh(limit = 8): Promise<ViralPostPool[]> {
   const db = await getDb();
   if (!db) return [];

@@ -6,17 +6,19 @@
  * Home ranking stays in indexedHomeSelection. Call this when a feature needs
  * the same qualified supply without assembling Today's Picks.
  */
+import { and, eq, inArray } from "drizzle-orm";
+import { viralPostPools } from "../../drizzle/schema";
+import { isViralPostsV1Platform } from "../../shared/viralPosts";
+import { getDb } from "../db";
+import {
+  chooseIndexedHomeSpecs,
+  indexedHomePoolSpecChoices,
+} from "./browseService";
 import { deriveHook, inferFormat } from "./candidateAdapter";
 import { buildPoolKey, VIRAL_POOL_DEFAULTS } from "./constants";
 import { passesIndexedViralQualification } from "./indexedQualification";
 import {
-  chooseIndexedHomeSpecs,
-  indexedHomePoolSpecChoices,
-  remainingIndexedNichePools,
-} from "./browseService";
-import {
   findExistingPools,
-  listPoolsForNiche,
   loadPoolCandidatesForAssembly,
   type ViralPoolEnsureSpec,
 } from "./poolRepository";
@@ -92,6 +94,28 @@ export function viralPostsCatalogReadable(): boolean {
   return isViralPostsLive && isAnyViralPostsPlatformEnabled;
 }
 
+/** Pools already chosen by the shared Home spec are not loaded again. */
+function poolsNotAlreadyChosen<T extends { poolKey: string }>(
+  chosenKeys: ReadonlySet<string>,
+  existing: T[]
+): T[] {
+  return existing.filter(pool => !chosenKeys.has(pool.poolKey));
+}
+
+/** Read-only. Does not insert a pool. Lives with niche evidence so Home can change separately. */
+async function listStoredPoolsForNiche(
+  niche: string,
+  platforms: string[]
+): Promise<Array<{ id: number; poolKey: string }>> {
+  const db = await getDb();
+  const allowed = platforms.filter(platform => isViralPostsV1Platform(platform));
+  if (!db || !niche.trim() || allowed.length === 0) return [];
+  return db
+    .select({ id: viralPostPools.id, poolKey: viralPostPools.poolKey })
+    .from(viralPostPools)
+    .where(and(eq(viralPostPools.niche, niche), inArray(viralPostPools.platform, allowed)));
+}
+
 const defaultDeps: QualifiedNicheReadDeps = {
   choices: indexedHomePoolSpecChoices,
   choose: chooseIndexedHomeSpecs,
@@ -104,7 +128,7 @@ const defaultDeps: QualifiedNicheReadDeps = {
       isViralPostsTiktokEnabled ? "tiktok" : "",
       isViralPostsYoutubeEnabled ? "youtube" : "",
     ].filter(platform => platform.length > 0);
-    const rows = await listPoolsForNiche(niche, platforms);
+    const rows = await listStoredPoolsForNiche(niche, platforms);
     return rows.map(row => ({ id: row.id, poolKey: row.poolKey }));
   },
   loadSimilar: args =>
@@ -291,7 +315,7 @@ export async function readQualifiedNicheExamples(
   });
   if (examples.length < 3 && deps.listNichePools) {
     const nichePools = await deps.listNichePools(choices.niche);
-    const widerIds = remainingIndexedNichePools(chosenKeys, nichePools)
+    const widerIds = poolsNotAlreadyChosen(chosenKeys, nichePools)
       .map(pool => pool.id)
       .filter(id => !poolIds.includes(id));
     if (widerIds.length > 0) {
