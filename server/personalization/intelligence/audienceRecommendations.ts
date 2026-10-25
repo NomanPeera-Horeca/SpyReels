@@ -18,7 +18,6 @@ import {
 } from "./evidence";
 import {
   commercialIntentAllowed,
-  inventsCommercialObjective,
   inventsMonetization,
   isGenericAudience,
   sanitizeCopy,
@@ -33,7 +32,7 @@ import {
   type ParseResult,
 } from "./structuredLlm";
 
-export const AUDIENCE_PROMPT_VERSION = "audience-v2";
+export const AUDIENCE_PROMPT_VERSION = "audience-v3";
 export const MAX_AUDIENCES = 3;
 
 export type AudienceRecommendation = AudiencePayload & { why: string };
@@ -91,8 +90,9 @@ export function buildAudiencePrompt(
     "- who: a short noun phrase (max 8 words). outcome: what this audience wants to achieve (max 10 words). why: one short sentence on how this audience serves the goal.",
     "- Do not add age, gender, ethnicity, religion, family role or orientation unless the evidence or goal mentions it.",
     "- Do not invent names, numbers or facts about the creator.",
-    "- A link in bio, a favorite product, or an affiliate mention is not a business. Do not recommend shoppers, buyers, or product audiences unless the evidence or the confirmed goal shows the creator sells their own offer.",
-    "- who names a specific role or situation from the evidence or goal. Do not use a generic viewer group such as people, viewers, fans, followers, or social-media browsers.",
+    "- A sensible audience names the role or situation implied by the subject, such as pet owners for pet videos or founders for someone building an app.",
+    "- A link in bio, a favorite product, or an affiliate mention is not a business. Do not recommend shoppers or affiliate audiences unless the evidence or the confirmed goal shows the creator sells their own offer.",
+    "- Do not use a generic viewer group such as people, viewers, fans, followers, or social-media browsers as the whole audience.",
     "- When the evidence is thin, return one or two segments. Do not invent a lifestyle, product, or problem that is not in the evidence.",
     "- Do not repeat audiences the user already confirmed.",
     `- Write in ${e.outputLanguage.label}.`,
@@ -123,6 +123,8 @@ export function parseAudienceOutput(
   const corpus = `${e.corpus}\n${goal.toLowerCase()}`;
   const seen = new Set(keep.map(a => itemIdentity("audience", a)));
   const out: AudienceRecommendation[] = [];
+  let droppedFor: string | null = null;
+  const monetizationAllowed = commercialIntentAllowed(goal, e.commercialSignals);
   for (const a of shape.data.audiences) {
     const who = sanitizeCopy(a.who);
     const outcome = sanitizeCopy(a.outcome).replace(/\.$/, "");
@@ -134,44 +136,40 @@ export function parseAudienceOutput(
       outcome.length > 90 ||
       why.length > 180
     ) {
-      return { ok: false, reason: "an audience is empty or too long" };
+      droppedFor = "an audience is empty or too long";
+      continue;
     }
     const text = `${who} ${outcome} ${why}`;
     if (isGenericAudience(who)) {
-      return { ok: false, reason: "audience is a generic viewer group" };
+      droppedFor = "audience is a generic viewer group";
+      continue;
     }
-    const allowed = commercialIntentAllowed(goal, e.commercialSignals);
-    if (inventsCommercialObjective(text, allowed) || inventsMonetization(text, allowed)) {
-      return {
-        ok: false,
-        reason: "audience assumes a business or product offer the evidence does not show",
-      };
+    if (inventsMonetization(text, monetizationAllowed)) {
+      droppedFor = "audience assumes a product or affiliate offer the evidence does not show";
+      continue;
     }
     const demo = unsupportedDemographics(text, corpus);
-    if (demo.length)
-      return {
-        ok: false,
-        reason: `audience assumes demographics not in the evidence (${demo.join(", ")})`,
-      };
+    if (demo.length) {
+      droppedFor = `audience assumes demographics not in the evidence (${demo.join(", ")})`;
+      continue;
+    }
     const nums = unsupportedNumbers(text, corpus);
-    if (nums.length)
-      return {
-        ok: false,
-        reason: `audience contains numbers not in the evidence (${nums.join(", ")})`,
-      };
+    if (nums.length) {
+      droppedFor = `audience contains numbers not in the evidence (${nums.join(", ")})`;
+      continue;
+    }
     const names = unsupportedProperNouns(`${who}. ${outcome}.`, corpus);
-    if (names.length)
-      return {
-        ok: false,
-        reason: `audience names things not in the evidence (${names.join(", ")})`,
-      };
+    if (names.length) {
+      droppedFor = `audience names things not in the evidence (${names.join(", ")})`;
+      continue;
+    }
     const key = itemIdentity("audience", { who, outcome });
     if (seen.has(key)) continue;
     seen.add(key);
     out.push({ who, outcome, why });
   }
   if (out.length === 0 && keep.length === 0)
-    return { ok: false, reason: "no usable audience" };
+    return { ok: false, reason: droppedFor ?? "no usable audience" };
   return {
     ok: true,
     value: {

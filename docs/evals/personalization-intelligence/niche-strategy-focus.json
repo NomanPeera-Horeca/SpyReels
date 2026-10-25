@@ -1,0 +1,991 @@
+{
+  "realModel": true,
+  "startedAt": "2026-10-25T17:19:56.880Z",
+  "promptVersions": {
+    "goal": "goal-v1",
+    "audience": "audience-v3",
+    "pillars": "pillars-v2"
+  },
+  "capUsd": 0.5,
+  "stoppedByCap": false,
+  "cases": [
+    {
+      "caseId": "RL-01",
+      "category": "restaurant_local",
+      "goal": {
+        "status": "generated",
+        "text": "Help restaurant, cafe, and food truck owners choose the right commercial kitchen equipment and get a quote.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Restaurant and cafe owners",
+            "outcome": "Choose the right kitchen equipment and get a quote"
+          },
+          {
+            "who": "Food truck operators",
+            "outcome": "Equip a compact kitchen efficiently and affordably"
+          },
+          {
+            "who": "New food service business owners",
+            "outcome": "Avoid costly equipment mistakes when opening"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Equipment Selection Guide",
+            "description": "Helps owners confidently choose the right commercial equipment for their kitchen type and volume."
+          },
+          {
+            "title": "Kitchen Layout Design",
+            "description": "Shows owners how smart layout planning improves workflow and supports a quote conversation."
+          },
+          {
+            "title": "Equipment Mistakes to Avoid",
+            "description": "Builds trust with owners by preventing costly purchasing errors before they commit."
+          },
+          {
+            "title": "Cooking Tech Compared",
+            "description": "Helps owners compare equipment options so they choose the best fit for their menu and budget."
+          },
+          {
+            "title": "Food Truck Kitchen Setup",
+            "description": "Guides food truck operators to equip a compact, efficient kitchen within tight space and budget constraints."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "commercial kitchen equipment sales",
+        "slug": "business",
+        "categoryLabel": "Business"
+      },
+      "routing": {
+        "pool": null,
+        "restaurantPillars": false
+      },
+      "cta": "DM for a quote.",
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 17865,
+      "wallClockMs": 16062,
+      "estimatedUsd": 0.029499,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "PB-01",
+      "category": "personal_brand",
+      "goal": {
+        "status": "generated",
+        "text": "Share every hard-won lesson from building a skincare brand into retail stores.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Indie skincare brand founders",
+            "outcome": "Get their products into retail stores"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Retail Buyer Relationships",
+            "description": "Teaches founders how to find, pitch, and win over retail buyers to land store placements."
+          },
+          {
+            "title": "Skincare Formulation Realities",
+            "description": "Helps founders avoid costly production mistakes by sharing hard lessons from real batch failures."
+          },
+          {
+            "title": "Retail Pricing Strategy",
+            "description": "Guides founders to set prices that work for retail margins without killing their brand."
+          },
+          {
+            "title": "Scaling Brand Operations",
+            "description": "Prepares founders for the operational leap that comes with growing into multiple retail doors."
+          },
+          {
+            "title": "Retail Compliance and Packaging",
+            "description": "Equips founders with the labeling and compliance knowledge retailers require before stocking products."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Skincare Brand Building",
+        "slug": "beauty",
+        "categoryLabel": "Beauty"
+      },
+      "routing": {
+        "pool": "Beauty",
+        "restaurantPillars": false
+      },
+      "cta": null,
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 17251,
+      "wallClockMs": 15324,
+      "estimatedUsd": 0.027579,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "PB-02",
+      "category": "personal_brand",
+      "goal": {
+        "status": "generated",
+        "text": "Inspire solo founders by sharing the real journey of building and shipping indie apps in public.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Software engineers considering going independent",
+            "outcome": "Gain confidence to leave employment and ship solo"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Building in Public",
+            "description": "Shows the raw, honest journey of shipping solo to inspire engineers considering independence."
+          },
+          {
+            "title": "Indie App Engineering",
+            "description": "Gives software engineers practical technical grounding to feel ready to build solo products."
+          },
+          {
+            "title": "Leaving Employment",
+            "description": "Addresses the fears and mindset shifts engineers face when considering going independent."
+          },
+          {
+            "title": "Solo Founder Mindset",
+            "description": "Builds the confidence and resilience audience members need to ship and keep going alone."
+          },
+          {
+            "title": "Early Traction Reality",
+            "description": "Sets honest expectations about early growth so aspiring indie founders stay motivated through slow starts."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "indie hacker app building",
+        "slug": "business",
+        "categoryLabel": "Business"
+      },
+      "routing": {
+        "pool": null,
+        "restaurantPillars": false
+      },
+      "cta": null,
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 15575,
+      "wallClockMs": 14021,
+      "estimatedUsd": 0.027219,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "EN-03",
+      "category": "entertainment",
+      "goal": {
+        "status": "generated",
+        "text": "Entertain pet lovers with funny and creative short-form pet video edits.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Pet owners with cats or dogs",
+            "outcome": "Laugh and share relatable pet moments"
+          },
+          {
+            "who": "Pet content enthusiasts on short-form video",
+            "outcome": "Discover creative and funny animal video edits"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Pet Reaction Edits",
+            "description": "Entertains pet lovers by capturing and amplifying the funniest, most relatable animal reaction moments."
+          },
+          {
+            "title": "Slow Motion Pets",
+            "description": "Delights creative video enthusiasts by revealing hilarious pet movement details invisible at normal speed."
+          },
+          {
+            "title": "Pet Heist Storytelling",
+            "description": "Entertains audiences with cinematic, narrative-style edits that turn everyday pet mischief into mini movie moments."
+          },
+          {
+            "title": "Relatable Pet Scenarios",
+            "description": "Connects with pet owners by editing universally shared pet ownership moments into funny, shareable clips."
+          },
+          {
+            "title": "Creative Sound Sync",
+            "description": "Engages short-form video enthusiasts by pairing pet footage with perfectly timed audio for comedic effect."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Funny pet videos",
+        "slug": "entertainment",
+        "categoryLabel": "Entertainment"
+      },
+      "routing": {
+        "pool": null,
+        "restaurantPillars": false
+      },
+      "cta": "Link in bio for my favorite pet products.",
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 17439,
+      "wallClockMs": 16180,
+      "estimatedUsd": 0.02823,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "TL-04",
+      "category": "travel_lifestyle_family",
+      "goal": {
+        "status": "needs_clarification",
+        "text": null,
+        "source": "none",
+        "question": "What is the main reason you create hiking content, for example to inspire beginners, help people find local trails, or something else?",
+        "confidence": null
+      },
+      "audiences": {
+        "status": "needs_clarification",
+        "items": [],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "needs_clarification",
+        "items": []
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Weekend hikes and trail tips",
+        "slug": "outdoors",
+        "categoryLabel": "Outdoors"
+      },
+      "routing": {
+        "pool": null,
+        "restaurantPillars": false
+      },
+      "cta": null,
+      "rejections": [],
+      "calls": 2,
+      "retries": 0,
+      "latencyMs": 3949,
+      "wallClockMs": 2741,
+      "estimatedUsd": 0.010761,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "SN-01",
+      "category": "small_new",
+      "goal": {
+        "status": "needs_clarification",
+        "text": null,
+        "source": "none",
+        "question": "In one sentence, why do you create content? For example: to grow your business, teach a skill, or entertain people.",
+        "confidence": null
+      },
+      "audiences": {
+        "status": "needs_clarification",
+        "items": [],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "needs_clarification",
+        "items": []
+      },
+      "niche": {
+        "status": "missing",
+        "label": null,
+        "slug": null,
+        "categoryLabel": null
+      },
+      "routing": {
+        "pool": null,
+        "restaurantPillars": false
+      },
+      "cta": null,
+      "rejections": [],
+      "calls": 0,
+      "retries": 0,
+      "latencyMs": 0,
+      "wallClockMs": 0,
+      "estimatedUsd": 0,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "SN-02",
+      "category": "small_new",
+      "goal": {
+        "status": "needs_clarification",
+        "text": null,
+        "source": "none",
+        "question": "What is the main reason you create content, for example to share a hobby, teach a skill, or grow a business?",
+        "confidence": null
+      },
+      "audiences": {
+        "status": "needs_clarification",
+        "items": [],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "needs_clarification",
+        "items": []
+      },
+      "niche": {
+        "status": "missing",
+        "label": null,
+        "slug": null,
+        "categoryLabel": null
+      },
+      "routing": {
+        "pool": null,
+        "restaurantPillars": false
+      },
+      "cta": null,
+      "rejections": [],
+      "calls": 1,
+      "retries": 0,
+      "latencyMs": 2586,
+      "wallClockMs": 2587,
+      "estimatedUsd": 0.006204,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "AM-01",
+      "category": "ambiguous_multilingual",
+      "goal": {
+        "status": "generated",
+        "text": "Enseñar recetas fáciles para cocinar en casa y conseguir pedidos de pasteles.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Personas que cocinan en casa a diario",
+            "outcome": "Preparar recetas sencillas y ricas sin complicaciones"
+          },
+          {
+            "who": "Quienes buscan pasteles caseros por encargo",
+            "outcome": "Encargar un pastel casero de calidad para una ocasión"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Recetas Cotidianas Fáciles",
+            "description": "Ayuda a cocineros caseros a preparar platos ricos y sencillos sin complicaciones cada día."
+          },
+          {
+            "title": "Postres Caseros Irresistibles",
+            "description": "Inspira a la audiencia con dulces fáciles y refuerza la imagen de Ana como experta en repostería."
+          },
+          {
+            "title": "Pasteles para Ocasiones",
+            "description": "Muestra el servicio de pedidos de pasteles y atrae a quienes buscan un pastel casero de calidad."
+          },
+          {
+            "title": "Cocina Española Accesible",
+            "description": "Conecta con cocineros caseros mostrando recetas tradicionales españolas al alcance de cualquiera."
+          },
+          {
+            "title": "Trucos de Cocina Práctica",
+            "description": "Aporta valor diario a cocineros caseros con consejos que ahorran tiempo y mejoran resultados."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "everyday home cooking recipes",
+        "slug": "food",
+        "categoryLabel": "Food"
+      },
+      "routing": {
+        "pool": null,
+        "restaurantPillars": false
+      },
+      "cta": "Pedidos de pasteles por DM.",
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 17421,
+      "wallClockMs": 16067,
+      "estimatedUsd": 0.031059,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "AM-02",
+      "category": "ambiguous_multilingual",
+      "goal": {
+        "status": "generated",
+        "text": "تشارك لحظات حياتها اليومية من دراسة وروتين صباحي وقهوة.",
+        "source": "ai",
+        "question": null,
+        "confidence": "medium"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "طلاب الجامعة في مرحلة الدراسة",
+            "outcome": "تنظيم يومهم الدراسي وتحسين إنتاجيتهم"
+          },
+          {
+            "who": "محبو القهوة والمقاهي",
+            "outcome": "اكتشاف أماكن وروتينات مرتبطة بالقهوة"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "الروتين الصباحي",
+            "description": "يساعد الطلاب على بناء روتين صباحي منظم يرفع إنتاجيتهم اليومية."
+          },
+          {
+            "title": "جلسات المذاكرة",
+            "description": "يلهم الطلاب لتنظيم وقت دراستهم وتحسين تركيزهم."
+          },
+          {
+            "title": "ثقافة القهوة",
+            "description": "يخدم محبي القهوة بمحتوى عن أنواعها وطرق تحضيرها في الحياة اليومية."
+          },
+          {
+            "title": "المقاهي الدراسية",
+            "description": "يساعد محبي القهوة والطلاب على اكتشاف أماكن مناسبة للدراسة والاسترخاء."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "daily life and study vlogs",
+        "slug": "lifestyle",
+        "categoryLabel": "Lifestyle"
+      },
+      "routing": {
+        "pool": null,
+        "restaurantPillars": false
+      },
+      "cta": null,
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 18389,
+      "wallClockMs": 16787,
+      "estimatedUsd": 0.03231,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "AM-03",
+      "category": "ambiguous_multilingual",
+      "goal": {
+        "status": "needs_clarification",
+        "text": null,
+        "source": "none",
+        "question": "What is the main reason you create and share your content, for example to inspire a lifestyle, entertain followers, or something else?",
+        "confidence": null
+      },
+      "audiences": {
+        "status": "needs_clarification",
+        "items": [],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "needs_clarification",
+        "items": []
+      },
+      "niche": {
+        "status": "missing",
+        "label": null,
+        "slug": null,
+        "categoryLabel": null
+      },
+      "routing": {
+        "pool": null,
+        "restaurantPillars": false
+      },
+      "cta": null,
+      "rejections": [],
+      "calls": 3,
+      "retries": 1,
+      "latencyMs": 7029,
+      "wallClockMs": 4117,
+      "estimatedUsd": 0.01527,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    }
+  ],
+  "calls": [
+    {
+      "caseId": "RL-01",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1400,
+      "outputTokens": 53,
+      "latencyMs": 1815,
+      "estimatedUsd": 0.004995,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-01",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1519,
+      "outputTokens": 156,
+      "latencyMs": 3273,
+      "estimatedUsd": 0.006897,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-01",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1568,
+      "outputTokens": 206,
+      "latencyMs": 5464,
+      "estimatedUsd": 0.007794,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-01",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1696,
+      "outputTokens": 315,
+      "latencyMs": 7313,
+      "estimatedUsd": 0.009813,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-01",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1334,
+      "outputTokens": 54,
+      "latencyMs": 1932,
+      "estimatedUsd": 0.004812,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-01",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1445,
+      "outputTokens": 146,
+      "latencyMs": 2822,
+      "estimatedUsd": 0.006525,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-01",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1490,
+      "outputTokens": 152,
+      "latencyMs": 4141,
+      "estimatedUsd": 0.00675,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-01",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1579,
+      "outputTokens": 317,
+      "latencyMs": 8356,
+      "estimatedUsd": 0.009492,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-02",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1318,
+      "outputTokens": 54,
+      "latencyMs": 1557,
+      "estimatedUsd": 0.004764,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-02",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1431,
+      "outputTokens": 148,
+      "latencyMs": 2499,
+      "estimatedUsd": 0.006513,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-02",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1478,
+      "outputTokens": 160,
+      "latencyMs": 4588,
+      "estimatedUsd": 0.006834,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-02",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1566,
+      "outputTokens": 294,
+      "latencyMs": 6931,
+      "estimatedUsd": 0.009108,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "EN-03",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1319,
+      "outputTokens": 53,
+      "latencyMs": 1262,
+      "estimatedUsd": 0.004752,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "EN-03",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1438,
+      "outputTokens": 147,
+      "latencyMs": 2661,
+      "estimatedUsd": 0.006519,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "EN-03",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1484,
+      "outputTokens": 170,
+      "latencyMs": 5093,
+      "estimatedUsd": 0.007002,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "EN-03",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1589,
+      "outputTokens": 346,
+      "latencyMs": 8423,
+      "estimatedUsd": 0.009957,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "TL-04",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1226,
+      "outputTokens": 57,
+      "latencyMs": 1209,
+      "estimatedUsd": 0.004533,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "TL-04",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1241,
+      "outputTokens": 167,
+      "latencyMs": 2740,
+      "estimatedUsd": 0.006228,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "SN-02",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1268,
+      "outputTokens": 160,
+      "latencyMs": 2586,
+      "estimatedUsd": 0.006204,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "AM-01",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1374,
+      "outputTokens": 53,
+      "latencyMs": 1356,
+      "estimatedUsd": 0.004917,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "AM-01",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1493,
+      "outputTokens": 164,
+      "latencyMs": 2770,
+      "estimatedUsd": 0.006939,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "AM-01",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1546,
+      "outputTokens": 184,
+      "latencyMs": 4954,
+      "estimatedUsd": 0.007398,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "AM-01",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1695,
+      "outputTokens": 448,
+      "latencyMs": 8341,
+      "estimatedUsd": 0.011805,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "AM-02",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1353,
+      "outputTokens": 56,
+      "latencyMs": 1607,
+      "estimatedUsd": 0.004899,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "AM-02",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1442,
+      "outputTokens": 165,
+      "latencyMs": 2876,
+      "estimatedUsd": 0.006801,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "AM-02",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1506,
+      "outputTokens": 268,
+      "latencyMs": 5803,
+      "estimatedUsd": 0.008538,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "AM-02",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1699,
+      "outputTokens": 465,
+      "latencyMs": 8103,
+      "estimatedUsd": 0.012072,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "AM-03",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1239,
+      "outputTokens": 48,
+      "latencyMs": 1255,
+      "estimatedUsd": 0.004437,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "AM-03",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1299,
+      "outputTokens": 162,
+      "latencyMs": 2914,
+      "estimatedUsd": 0.006327,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "AM-03",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1262,
+      "outputTokens": 48,
+      "latencyMs": 2860,
+      "estimatedUsd": 0.004506,
+      "error": null,
+      "rejected": false
+    }
+  ],
+  "totals": {
+    "cases": 10,
+    "calls": 30,
+    "retries": 1,
+    "rejections": 0,
+    "estimatedUsd": 0.208131,
+    "meanUsdPerCase": 0.020813,
+    "maxUsdPerCase": 0.03231,
+    "meanLatencyMs": 3917,
+    "p95LatencyMs": 8356,
+    "meanWallClockMs": 10389,
+    "p95WallClockMs": 16787,
+    "failedCallUsd": 0
+  }
+}

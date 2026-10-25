@@ -423,6 +423,21 @@ export async function generateRecommendations(
   const inputsHash = stepInputsHash(input.step, items, evidence);
   const versionAtStart = await deps.store.loadPersonalizationVersion(profile.id);
 
+  // No confirmed goal and not enough profile evidence: ask, do not invent an audience or pillar.
+  if (
+    input.step !== "goal" &&
+    goals.length === 0 &&
+    !evidenceSupportsNiche(evidence)
+  ) {
+    return {
+      status: "needs_clarification",
+      reason: "insufficient_evidence",
+      question:
+        "In one sentence, why do you create content, and who are you hoping to reach?",
+      usage: null,
+    };
+  }
+
   if (input.step === "goal") {
     return runGoalStep({
       deps,

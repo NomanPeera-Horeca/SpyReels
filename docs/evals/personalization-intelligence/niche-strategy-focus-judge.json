@@ -1,0 +1,158 @@
+{
+  "stem": "niche-strategy-focus",
+  "cases": 10,
+  "scored": 10,
+  "estimatedUsd": 0.064437,
+  "mean": {
+    "niche": 15.1,
+    "goal": 12.3,
+    "audience": 9.8,
+    "pillars": 12.4,
+    "specificity": 6.7,
+    "clarity": 5.9,
+    "evidence": 3.5,
+    "strategy": 50.6
+  },
+  "rows": [
+    {
+      "caseId": "RL-01",
+      "scores": {
+        "niche": 27,
+        "goal": 23,
+        "audience": 18,
+        "pillars": 23,
+        "specificity": 13,
+        "clarity": 9,
+        "evidence": 4,
+        "reason": "Niche label is accurate and specific; goal, audiences, and pillars map cleanly to bio and captions with no invented data; minor gap is financing angle unused."
+      },
+      "costUsd": 0.006735
+    },
+    {
+      "caseId": "PB-01",
+      "scores": {
+        "niche": 26,
+        "goal": 22,
+        "audience": 17,
+        "pillars": 20,
+        "specificity": 12,
+        "clarity": 8,
+        "evidence": 3,
+        "reason": "Niche and goal are accurate and specific; pillars are plausible but Compliance/Packaging is invented with no caption evidence, costing evidence and pillar marks."
+      },
+      "costUsd": 0.006591
+    },
+    {
+      "caseId": "PB-02",
+      "scores": {
+        "niche": 26,
+        "goal": 18,
+        "audience": 15,
+        "pillars": 20,
+        "specificity": 9,
+        "clarity": 8,
+        "evidence": 3,
+        "reason": "Niche and pillars align well with the profile, but the single audience segment is narrow, no CTA was extracted, and the $100 milestone is the only evidenced data point."
+      },
+      "costUsd": 0.006564
+    },
+    {
+      "caseId": "EN-03",
+      "scores": {
+        "niche": 18,
+        "goal": 20,
+        "audience": 15,
+        "pillars": 20,
+        "specificity": 10,
+        "clarity": 8,
+        "evidence": 3,
+        "reason": "Niche is broad; goal and pillars align well with content but Creative Sound Sync is invented with no caption evidence; duplicate captions noted but not penalized heavily."
+      },
+      "costUsd": 0.006717
+    },
+    {
+      "caseId": "TL-04",
+      "scores": {
+        "niche": 14,
+        "goal": 0,
+        "audience": 0,
+        "pillars": 0,
+        "specificity": 2,
+        "clarity": 4,
+        "evidence": 3,
+        "reason": "Bio-only data yields a niche echo, no goal, no audience, and no pillars; strategy is essentially empty and unscoreable beyond surface labels."
+      },
+      "costUsd": 0.005931
+    },
+    {
+      "caseId": "SN-01",
+      "scores": {
+        "niche": 0,
+        "goal": 0,
+        "audience": 0,
+        "pillars": 0,
+        "specificity": 0,
+        "clarity": 0,
+        "evidence": 5,
+        "reason": "No profile data exists; all strategy fields are missing or flagged needs_clarification, so no dimension can be scored."
+      },
+      "costUsd": 0.005784
+    },
+    {
+      "caseId": "SN-02",
+      "scores": {
+        "niche": 0,
+        "goal": 0,
+        "audience": 0,
+        "pillars": 0,
+        "specificity": 0,
+        "clarity": 2,
+        "evidence": 1,
+        "reason": "Every core element is missing or marked needs_clarification; no niche, goal, audience, or pillars can be scored from this draft."
+      },
+      "costUsd": 0.00588
+    },
+    {
+      "caseId": "AM-01",
+      "scores": {
+        "niche": 18,
+        "goal": 22,
+        "audience": 17,
+        "pillars": 21,
+        "specificity": 11,
+        "clarity": 8,
+        "evidence": 4,
+        "reason": "La etiqueta de nicho es genérica (\"everyday home cooking\") y no captura el ángulo español ni el componente comercial de repostería; los pilares son sólidos pero algo amplios."
+      },
+      "costUsd": 0.007191
+    },
+    {
+      "caseId": "AM-02",
+      "scores": {
+        "niche": 22,
+        "goal": 18,
+        "audience": 16,
+        "pillars": 20,
+        "specificity": 10,
+        "clarity": 8,
+        "evidence": 4,
+        "reason": "Niche and pillars align well with captions but lack geographic/demographic depth; goal is accurate yet generic; no invented stats penalize evidence lightly."
+      },
+      "costUsd": 0.007164
+    },
+    {
+      "caseId": "AM-03",
+      "scores": {
+        "niche": 0,
+        "goal": 0,
+        "audience": 0,
+        "pillars": 0,
+        "specificity": 0,
+        "clarity": 4,
+        "evidence": 5,
+        "reason": "Draft correctly flags all major elements as missing and defers to clarification rather than inventing details, but delivers zero actionable strategy."
+      },
+      "costUsd": 0.00588
+    }
+  ]
+}

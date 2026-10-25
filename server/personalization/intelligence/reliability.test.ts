@@ -262,6 +262,33 @@ describe("audience and pillar offer guards", () => {
     declaredText: "funny pet edits. link in bio for my favorite pet products.",
   };
 
+  it("keeps a valid audience when another suggestion is generic or an affiliate pitch", () => {
+    const parsed = parseAudienceOutput(
+      {
+        audiences: [
+          { who: "Pet owners", outcome: "laugh at animal clips", why: "The clips are about pets." },
+          { who: "Short-form video enthusiasts", outcome: "watch more clips", why: "They scroll." },
+          { who: "Pet product shoppers", outcome: "buy recommended products", why: "The link mentions products." },
+          {
+            who: "Aspiring app founders",
+            outcome: "ship a first business",
+            why: "The account is about building apps.",
+          },
+        ],
+        confidence: "medium",
+      },
+      hobby,
+      "Entertain people with funny pet clips.",
+      []
+    );
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.value.audiences.map(a => a.who)).toEqual([
+      "Pet owners",
+      "Aspiring app founders",
+    ]);
+  });
+
   it("rejects an affiliate audience and a generic viewer group", () => {
     const shoppers = parseAudienceOutput(
       {

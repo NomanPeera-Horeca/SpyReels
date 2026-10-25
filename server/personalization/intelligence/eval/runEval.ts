@@ -2,9 +2,11 @@
  * Real-model evaluation runner for the personalization engine (Phase 4B).
  *
  * Runs the PRODUCTION path for each synthetic case:
- *   evidence -> generateRecommendations(goal) -> confirm (or user's typed goal
- *   when the engine asks) -> generateRecommendations(audience) -> confirm ->
+ *   evidence -> generateRecommendations(goal) -> confirm the AI goal ->
+ *   generateRecommendations(audience) -> confirm the AI audiences ->
  *   generateRecommendations(pillars)
+ *   A clarification or a failed step stops that case. Fixture fallback answers
+ *   are not substituted, so they cannot hide an AI failure.
  * through the existing invokeLLM (default model routing, prompts, guards).
  *
  * It never substitutes scripted answers for a real run: realRun() refuses
@@ -379,42 +381,48 @@ export async function runEvaluation(input: {
       goal.source = "ai";
       goal.confidence = row.confidence ?? null;
       store.confirmSuggested("goal", 1);
-    } else {
-      if (g.status === "needs_clarification") goal.question = g.question;
-      store.typed("goal", { text: c.fallbackGoal });
-      goal.text = c.fallbackGoal;
-      goal.source = "user_typed";
+    } else if (g.status === "needs_clarification") {
+      goal.question = g.question;
+      goal.source = "none";
     }
     const userValuesBefore = JSON.stringify(
       store.items.filter(i => i.source === "user_entered")
     );
 
-    // Audience
-    step = "audience";
-    const a = await generateRecommendations(deps(store), {
-      ctx,
-      socialProfileId: "p",
-      step: "audience",
-    });
+    // Audience and pillars run only from an AI goal. A fixture fallback is not inserted.
+    let a: RecommendationResult = {
+      status: "needs_clarification",
+      question: goal.question ?? "",
+      reason: "insufficient_evidence",
+      usage: null,
+    };
     let usedFallback = false;
-    const suggestedAudiences = store.items
-      .filter(i => i.kind === "audience" && i.status === "suggested")
-      .map(i => i.payload as ItemPayloadByKind["audience"]);
-    if (store.confirmSuggested("audience", 2) === 0) {
-      usedFallback = true;
-      for (const fa of c.fallbackAudiences) store.typed("audience", fa);
+    let suggestedAudiences: ItemPayloadByKind["audience"][] = [];
+    let p: RecommendationResult = a;
+    let pillars: ItemPayloadByKind["pillar"][] = [];
+    if (g.status === "generated") {
+      step = "audience";
+      a = await generateRecommendations(deps(store), {
+        ctx,
+        socialProfileId: "p",
+        step: "audience",
+      });
+      suggestedAudiences = store.items
+        .filter(i => i.kind === "audience" && i.status === "suggested")
+        .map(i => i.payload as ItemPayloadByKind["audience"]);
+      if (a.status === "generated") {
+        store.confirmSuggested("audience", 2);
+        step = "pillars";
+        p = await generateRecommendations(deps(store), {
+          ctx,
+          socialProfileId: "p",
+          step: "pillars",
+        });
+        pillars = store.items
+          .filter(i => i.kind === "pillar" && i.status === "suggested")
+          .map(i => i.payload as ItemPayloadByKind["pillar"]);
+      }
     }
-
-    // Pillars
-    step = "pillars";
-    const p = await generateRecommendations(deps(store), {
-      ctx,
-      socialProfileId: "p",
-      step: "pillars",
-    });
-    const pillars = store.items
-      .filter(i => i.kind === "pillar" && i.status === "suggested")
-      .map(i => i.payload as ItemPayloadByKind["pillar"]);
 
     // Objective gates
     const evidence = buildCreatorEvidence({

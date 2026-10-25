@@ -100,10 +100,19 @@ async function main() {
   loadLocalEnv();
   assertRealRunAllowed(process.env, process.argv);
   const { invokeLLM } = await import("../server/_core/llm");
+  const capFlag = process.argv.find(arg => arg.startsWith("--cap="));
+  const capUsd = capFlag ? Number(capFlag.slice("--cap=".length)) : undefined;
+  if (
+    capUsd !== undefined &&
+    (!Number.isFinite(capUsd) || capUsd <= 0 || capUsd > 5)
+  ) {
+    throw new Error("--cap must be a dollar amount between 0 and 5.");
+  }
   const report = await runEvaluation({
     cases: selectedCases(),
     invoker: invokeLLM,
     realModel: true,
+    capUsd,
     promptVersions: {
       goal: GOAL_PROMPT_VERSION,
       audience: AUDIENCE_PROMPT_VERSION,

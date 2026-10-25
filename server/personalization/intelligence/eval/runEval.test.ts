@@ -209,7 +209,7 @@ describe("runner mechanics (fake model)", () => {
     expect(r.totals.failedCallUsd).toBeGreaterThan(0);
   });
 
-  it("when the engine asks to clarify, continues with what the user would type", async () => {
+  it("when the engine asks to clarify, does not substitute the fixture fallback", async () => {
     const zeroPost = EVAL_CASES.find(
       c => c.expect.clarification === "required"
     )!;
@@ -221,9 +221,16 @@ describe("runner mechanics (fake model)", () => {
       promptVersions: PROMPTS,
     });
     expect(r.cases[0].goal).toMatchObject({
-      source: "user_typed",
-      text: zeroPost.fallbackGoal,
+      source: "none",
+      text: null,
     });
+    expect(r.cases[0].goal.question).toBeTruthy();
+    expect(r.cases[0].goal.text).not.toBe(zeroPost.fallbackGoal);
+    expect(r.cases[0].audiences.items).toEqual([]);
+    expect(r.cases[0].pillars.items).toEqual([]);
+    expect(r.cases[0].audiences.usedFallback).toBe(false);
+    expect(r.calls.some(call => call.operation.includes("audience"))).toBe(false);
+    expect(r.calls.some(call => call.operation.includes("pillar"))).toBe(false);
     expect(r.cases[0].gates.clarificationExpectationMet).toBe(true);
     expect(r.cases[0].gates.confirmedPreserved).toBe(true);
   });
@@ -240,8 +247,9 @@ describe("runner mechanics (fake model)", () => {
     });
     expect(r.cases[0].audiences).toMatchObject({
       status: "failed",
-      usedFallback: true,
+      usedFallback: false,
     });
+    expect(r.cases[0].pillars.items).toEqual([]);
     expect(r.cases).toHaveLength(2);
   });
 
