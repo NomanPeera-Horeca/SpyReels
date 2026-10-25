@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { CREATOR_SIGNAL_RECENT_DAYS } from "../../personalization/home/homeService";
-import { buildPoolKey, VIRAL_SEED_POOL_PILLAR } from "../constants";
+import { buildPoolKey, DEFAULT_CONTENT_PILLARS, VIRAL_SEED_POOL_PILLAR } from "../constants";
 import {
   chooseIndexedHomeSpecs,
   indexedHomePoolSpecChoices,
+  indexedHomePoolsWhenSelectionIsEmpty,
 } from "../browseService";
 import {
   rankIndexedHomeInventory,
@@ -191,6 +192,112 @@ describe("indexed home pool choice", () => {
     expect(indexedHomePoolSpecChoices({ nicheText: "Help fitness coaches sign clients.", confirmedPillars: [] }).niche).toBe(
       "Health & Fitness"
     );
+  });
+
+  it("does not give every Business and Entrepreneurship creator the restaurant pillars", () => {
+    const plan = indexedHomePoolSpecChoices({
+      nicheText: "Business & Entrepreneurship",
+      confirmedPillars: ["Client acquisition"],
+      goalText: "Book more strategy calls",
+      audienceText: "Independent consultants",
+    });
+    expect(plan.niche).toBe("Business & Entrepreneurship");
+    expect(plan.fallbackSpecs.some(spec => spec.pillar === "menu engineering")).toBe(false);
+    expect(plan.fallbackSpecs.some(spec => spec.pillar === "Business & Entrepreneurship marketing")).toBe(true);
+  });
+
+  it("uses the six indexed content pillars when the strategy matches that supply", () => {
+    const plan = indexedHomePoolSpecChoices({
+      nicheText: "Business & Entrepreneurship",
+      confirmedPillars: ["Food cost control"],
+      goalText: "Help restaurant owners",
+      audienceText: null,
+    });
+    expect(plan.niche).toBe("Business & Entrepreneurship");
+    for (const pillar of DEFAULT_CONTENT_PILLARS) {
+      expect(plan.fallbackSpecs.some(spec => spec.pillar === pillar)).toBe(true);
+    }
+    expect(plan.fallbackSpecs.some(spec => spec.pillar === "Business & Entrepreneurship marketing")).toBe(false);
+  });
+
+  it("keeps an unrelated business off the restaurant pillar list", () => {
+    const plan = indexedHomePoolSpecChoices({
+      nicheText: "I teach portrait photography for local brands",
+      confirmedPillars: ["Client acquisition"],
+    });
+    expect(plan.niche).toBe("Business & Entrepreneurship");
+    expect(plan.fallbackSpecs.some(spec => spec.pillar === "menu engineering")).toBe(false);
+    expect(plan.confirmedSpecs.map(spec => spec.pillar)).toEqual(["Client acquisition", "Client acquisition"]);
+  });
+
+  it("reads populated content pools when the selected pools have no videos and no creators", () => {
+    const niche = "Business & Entrepreneurship";
+    const synthetic = {
+      poolKey: buildPoolKey({ platform: "instagram", niche, pillar: "Business & Entrepreneurship" }),
+      pillar: "Business & Entrepreneurship",
+    };
+    const content = {
+      poolKey: buildPoolKey({ platform: "tiktok", niche, pillar: "restaurant marketing" }),
+      pillar: "restaurant marketing",
+    };
+    const next = indexedHomePoolsWhenSelectionIsEmpty({
+      chosen: [synthetic],
+      nichePools: [synthetic, content, { poolKey: "seed", pillar: VIRAL_SEED_POOL_PILLAR }],
+      relevantPillars: [...DEFAULT_CONTENT_PILLARS],
+      eligibleVideos: 0,
+      qualifyingCreators: 0,
+    });
+    expect(next).toEqual([content]);
+  });
+
+  it("does not replace a selection that already has videos when creators are empty", () => {
+    const chosen = [{ poolKey: "chosen", pillar: "Menu engineering" }];
+    const sibling = { poolKey: "sibling", pillar: "restaurant marketing" };
+    const next = indexedHomePoolsWhenSelectionIsEmpty({
+      chosen,
+      nichePools: [chosen[0], sibling],
+      relevantPillars: [...DEFAULT_CONTENT_PILLARS],
+      eligibleVideos: 2,
+      qualifyingCreators: 0,
+    });
+    expect(next).toEqual(chosen);
+  });
+
+  it("does not replace a selection that already has creators when videos are empty", () => {
+    const chosen = [{ poolKey: "chosen", pillar: "Menu engineering" }];
+    const sibling = { poolKey: "sibling", pillar: "restaurant marketing" };
+    const next = indexedHomePoolsWhenSelectionIsEmpty({
+      chosen,
+      nichePools: [chosen[0], sibling],
+      relevantPillars: [...DEFAULT_CONTENT_PILLARS],
+      eligibleVideos: 0,
+      qualifyingCreators: 1,
+    });
+    expect(next).toEqual(chosen);
+  });
+
+  it("does not pull restaurant pools into an unrelated business niche", () => {
+    const chosen = [{ poolKey: "synthetic", pillar: "Business & Entrepreneurship" }];
+    const restaurant = { poolKey: "restaurant", pillar: "restaurant marketing" };
+    const next = indexedHomePoolsWhenSelectionIsEmpty({
+      chosen,
+      nichePools: [chosen[0], restaurant],
+      relevantPillars: [],
+      eligibleVideos: 0,
+      qualifyingCreators: 0,
+    });
+    expect(next).toEqual(chosen);
+  });
+
+  it("stays empty when the niche has no other relevant pools", () => {
+    const next = indexedHomePoolsWhenSelectionIsEmpty({
+      chosen: [],
+      nichePools: [],
+      relevantPillars: [...DEFAULT_CONTENT_PILLARS],
+      eligibleVideos: 0,
+      qualifyingCreators: 0,
+    });
+    expect(next).toEqual([]);
   });
 });
 
@@ -422,6 +529,35 @@ describe("rankIndexedHomeInventory creators", () => {
     expect(ranked.creators).toHaveLength(1);
     expect(ranked.creators[0]?.post.sourceId).toBe("stronger");
     expect(ranked.creators[0]?.badge.multiple).toBe(40);
+  });
+
+  it("keeps one handle on two platforms as two creators", () => {
+    const tiktok = post({
+      id: 21,
+      sourceId: "tt",
+      platform: "tiktok",
+      creatorId: "chef",
+      creatorHandle: "@chef",
+    });
+    const instagram = post({
+      id: 22,
+      sourceId: "ig",
+      platform: "instagram",
+      creatorId: "chef",
+      creatorHandle: "@chef",
+    });
+    const ranked = rankIndexedHomeInventory({
+      posts: [tiktok, instagram],
+      goalText: null,
+      audienceText: null,
+      limit: 4,
+      recentDays: CREATOR_SIGNAL_RECENT_DAYS,
+      now,
+    });
+    expect(ranked.creators.map(creator => `${creator.post.platform}:${creator.post.creatorId}`).sort()).toEqual([
+      "instagram:chef",
+      "tiktok:chef",
+    ]);
   });
 
   it("returns no creators when the only post is a 286-view TikTok", () => {
