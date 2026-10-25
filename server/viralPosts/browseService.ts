@@ -138,14 +138,86 @@ function browsePoolSpecs(args: {
   return specs;
 }
 
+const INDEXED_CONTENT_STRATEGY = /restaurant|cafe|food|kitchen|hospitality|menu|chef/;
+
+function isBareBusinessCatalogLabel(text: string): boolean {
+  const label = text.trim().toLowerCase();
+  return label === "business & entrepreneurship" || label === "business and entrepreneurship";
+}
+
+/**
+ * The six indexed content pillars are restaurant supply stored under
+ * Business & Entrepreneurship. Use them only when the confirmed niche and
+ * strategy actually match that supply. The catalog label alone does not.
+ * Explore still uses inferActivePillars and is not affected.
+ */
+export function strategyUsesIndexedContentPillars(args: {
+  nicheText: string;
+  confirmedPillars: string[];
+  goalText?: string | null;
+  audienceText?: string | null;
+}): boolean {
+  const indexed = new Set(DEFAULT_CONTENT_PILLARS.map(pillar => pillar.toLowerCase()));
+  const pillars = args.confirmedPillars.map(pillar => pillar.trim()).filter(Boolean);
+  if (pillars.some(pillar => indexed.has(pillar.toLowerCase()))) return true;
+  const strategy = [args.goalText ?? "", args.audienceText ?? "", ...pillars]
+    .join("\n")
+    .toLowerCase();
+  if (INDEXED_CONTENT_STRATEGY.test(strategy)) return true;
+  if (isBareBusinessCatalogLabel(args.nicheText)) return false;
+  return INDEXED_CONTENT_STRATEGY.test(args.nicheText.toLowerCase());
+}
+
+/**
+ * Other existing pools in the same niche, limited to pillars that match the
+ * strategy. Chosen pools and unrelated pillars stay out.
+ */
+export function relevantIndexedNichePools<T extends { poolKey: string; pillar: string }>(
+  chosenKeys: ReadonlySet<string>,
+  existing: T[],
+  relevantPillars: readonly string[]
+): T[] {
+  const allowed = new Set(relevantPillars.map(pillar => pillar.trim().toLowerCase()));
+  if (allowed.size === 0) return [];
+  return existing.filter(pool => {
+    if (chosenKeys.has(pool.poolKey)) return false;
+    return allowed.has(pool.pillar.trim().toLowerCase());
+  });
+}
+
+/**
+ * Both Home sections share one selection. Widen only when that selection has
+ * no eligible videos and no qualifying creators.
+ */
+export function indexedHomePoolsWhenSelectionIsEmpty<
+  T extends { poolKey: string; pillar: string },
+>(args: {
+  chosen: T[];
+  nichePools: T[];
+  relevantPillars: readonly string[];
+  eligibleVideos: number;
+  qualifyingCreators: number;
+}): T[] {
+  if (args.eligibleVideos > 0 || args.qualifyingCreators > 0) return args.chosen;
+  const extra = relevantIndexedNichePools(
+    new Set(args.chosen.map(pool => pool.poolKey)),
+    args.nichePools,
+    args.relevantPillars
+  );
+  return extra.length > 0 ? extra : args.chosen;
+}
+
 /**
  * Confirmed pillar titles are looked up under the existing Viral Posts niche
- * string. Goal text is not an input. When none of those pools exist, the
- * caller uses the inferred pillar specs, including the TikTok seed-mix pool.
+ * string. Goal and audience do not change that niche. They can select the six
+ * indexed content pillars when the strategy matches. When none of the chosen
+ * pools exist, the caller uses the fallback specs, including the TikTok seed-mix pool.
  */
 export function indexedHomePoolSpecChoices(args: {
   nicheText: string;
   confirmedPillars: string[];
+  goalText?: string | null;
+  audienceText?: string | null;
   platforms?: BrowsePlatforms;
 }): {
   niche: string;
@@ -156,6 +228,9 @@ export function indexedHomePoolSpecChoices(args: {
   const confirmed = [
     ...new Set(args.confirmedPillars.map(pillar => pillar.trim()).filter(Boolean)),
   ].slice(0, 6);
+  const fallbackPillars = strategyUsesIndexedContentPillars(args)
+    ? [...DEFAULT_CONTENT_PILLARS]
+    : inferActivePillars(args.nicheText, niche);
   return {
     niche,
     confirmedSpecs:
@@ -169,7 +244,7 @@ export function indexedHomePoolSpecChoices(args: {
         : [],
     fallbackSpecs: browsePoolSpecs({
       niche,
-      pillars: inferActivePillars(args.nicheText, niche),
+      pillars: fallbackPillars,
       includeSeedMix: true,
       platforms: args.platforms,
     }),
@@ -371,9 +446,10 @@ export type IndexedHomeCreator = {
  * Home v2 videos and creators. Both come from pools that already exist.
  * Confirmed pillar titles are used only when one of those pools is present.
  * Goal and audience affect video rank through the existing topic boost and
- * are not part of the niche text. Creators are grouped from the full
- * qualified set, not from the short video row. Never inserts a pool and
- * never schedules a refresh.
+ * do not change the niche string. They can select the six indexed content
+ * pillars when the strategy matches. Creators are grouped from the full
+ * qualified set, not from the short video row. Never inserts a pool, never
+ * schedules a refresh, and never calls a provider or a model.
  */
 export async function browseIndexedViralPosts(args: {
   userId: number;
@@ -401,6 +477,8 @@ export async function browseIndexedViralPosts(args: {
   const plan = indexedHomePoolSpecChoices({
     nicheText: text,
     confirmedPillars: args.pillars ?? [],
+    goalText: args.goalText,
+    audienceText: args.audienceText,
   });
   const existing = await poolRepo.findExistingPools([
     ...plan.confirmedSpecs,
@@ -420,12 +498,55 @@ export async function browseIndexedViralPosts(args: {
     const pool = existing.find(row => row.poolKey === key);
     return pool ? [pool] : [];
   });
-  if (pools.length === 0) {
-    return { items: [], creators: [], niche: plan.niche, poolRefreshStarted: false };
+  const assembled =
+    pools.length === 0
+      ? { items: [], creators: [] }
+      : await assembleIndexedHome({
+          userId: args.userId,
+          pools,
+          niche: plan.niche,
+          goalText: args.goalText ?? null,
+          audienceText: args.audienceText ?? null,
+          limit: args.limit,
+          creatorLimit: args.creatorLimit,
+          recentDays: args.recentDays,
+        });
+  if (assembled.items.length > 0 || assembled.creators.length > 0) {
+    return { ...assembled, niche: plan.niche, poolRefreshStarted: false };
   }
-  const assembled = await assembleIndexedHome({
+  const relevantPillars = strategyUsesIndexedContentPillars({
+    nicheText: text,
+    confirmedPillars: args.pillars ?? [],
+    goalText: args.goalText,
+    audienceText: args.audienceText,
+  })
+    ? [...DEFAULT_CONTENT_PILLARS]
+    : [];
+  if (relevantPillars.length === 0) {
+    return { ...assembled, niche: plan.niche, poolRefreshStarted: false };
+  }
+  const platforms = [
+    isViralPostsInstagramEnabled ? "instagram" : "",
+    isViralPostsTiktokEnabled ? "tiktok" : "",
+    isViralPostsYoutubeEnabled ? "youtube" : "",
+  ].filter(platform => platform.length > 0);
+  const nichePools = await poolRepo.listPoolsForNiche(plan.niche, platforms);
+  const next = indexedHomePoolsWhenSelectionIsEmpty({
+    chosen: pools,
+    nichePools,
+    relevantPillars,
+    eligibleVideos: 0,
+    qualifyingCreators: 0,
+  });
+  const chosenKeys = new Set(pools.map(pool => pool.poolKey));
+  const sameSelection =
+    next.length === pools.length && next.every(pool => chosenKeys.has(pool.poolKey));
+  if (sameSelection || next.length === 0) {
+    return { ...assembled, niche: plan.niche, poolRefreshStarted: false };
+  }
+  const widened = await assembleIndexedHome({
     userId: args.userId,
-    pools,
+    pools: next,
     niche: plan.niche,
     goalText: args.goalText ?? null,
     audienceText: args.audienceText ?? null,
@@ -433,7 +554,7 @@ export async function browseIndexedViralPosts(args: {
     creatorLimit: args.creatorLimit,
     recentDays: args.recentDays,
   });
-  return { ...assembled, niche: plan.niche, poolRefreshStarted: false };
+  return { ...widened, niche: plan.niche, poolRefreshStarted: false };
 }
 
 type IndexedPoolRow = {

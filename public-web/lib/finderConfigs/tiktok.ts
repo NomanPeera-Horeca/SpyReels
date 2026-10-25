@@ -1,4 +1,9 @@
 import { buildFaqPageJsonLd } from "../../components/marketingFaqJsonLd";
+import {
+  isValidTikTokHandleNormalized,
+  normalizeTikTokHandle,
+  TIKTOK_HANDLE_INVALID_MESSAGE,
+} from "../../../shared/socialHandles";
 import { trpcQuery } from "../trpcBrowser";
 import type { FinderConfig, FinderDemoItem, FinderProfileLookupResult } from "./types";
 
@@ -31,14 +36,11 @@ const faqs = [
 ] as const;
 
 function parseHandle(raw: string) {
-  const match = raw
-    .trim()
-    .match(/(?:https?:\/\/)?(?:www\.)?tiktok\.com\/@([^/?#\s]+)/i);
-  return (match ? match[1] : raw.trim()).replace(/^@/, "").toLowerCase();
+  return normalizeTikTokHandle(raw);
 }
 
 function validHandle(handle: string) {
-  return /^[a-z0-9._]{2,24}$/.test(handle);
+  return isValidTikTokHandleNormalized(handle);
 }
 
 type ProfilePayload = FinderProfileLookupResult | { found: false; error?: string };
@@ -184,8 +186,7 @@ export const tiktokFinderConfig: FinderConfig = {
     profileLoadingLabel: "Looking up TikTok profile…",
     profileErrorId: "tiktok-search-error",
     profileTestId: "confirmed-tiktok-profile",
-    invalidHandleMessage:
-      "TikTok usernames can only contain letters, numbers, periods and underscores.",
+    invalidHandleMessage: TIKTOK_HANDLE_INVALID_MESSAGE,
     emptyHandleMessage: "Enter a valid TikTok username or profile link.",
     profileContinueAriaLabel: (username) => `Continue with @${username} in SpyReels`,
     noValidate: true,

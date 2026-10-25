@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveServerAppOrigin } from "@/lib/appOrigin";
+import {
+  isValidInstagramHandleNormalized,
+  normalizeInstagramHandle,
+} from "../../../../../shared/socialHandles";
 
 export const dynamic = "force-dynamic";
 
 function normalizeHandle(raw: string): string {
-  const trimmed = raw.trim();
-  const fromUrl = trimmed.match(/instagram\.com\/([^/?#\s]+)/i);
-  return (fromUrl ? fromUrl[1] : trimmed).replace(/^@+/, "").toLowerCase();
+  return normalizeInstagramHandle(raw);
 }
 
 function validHandle(handle: string): boolean {
-  return /^[a-z0-9._]{1,30}$/i.test(handle);
+  return isValidInstagramHandleNormalized(handle);
 }
 
 function appOrigin(): string {

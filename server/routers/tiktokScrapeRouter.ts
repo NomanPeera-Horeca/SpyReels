@@ -14,9 +14,11 @@ import { isDurableTiktokVideoUrl, scheduleTiktokVideoMirror } from "../tiktokVid
 import { loadFeaturedDemoPublicPayload } from "../featuredDemo/publicDemo";
 import { not, eq, desc, sql, and, inArray, or } from "drizzle-orm";
 import { PublicTikTokDemoPayload } from "./_shared";
-
-const TIKTOK_HANDLE_INVALID_MESSAGE =
-  "TikTok usernames can only contain letters, numbers, periods and underscores.";
+import {
+  isValidTikTokHandleNormalized,
+  normalizeTikTokHandle,
+  TIKTOK_HANDLE_INVALID_MESSAGE,
+} from "../../shared/socialHandles";
 
 type PublicTikTokProfilePreviewPayload =
   | {
@@ -45,11 +47,11 @@ const publicTikTokProfilePreviewCache = new Map<
 >();
 
 function normalizePublicTikTokHandle(raw: string): string {
-  return raw.replace(/^@/, "").trim().toLowerCase();
+  return normalizeTikTokHandle(raw);
 }
 
 function isValidPublicTikTokHandle(handle: string): boolean {
-  return /^[a-z0-9._]{2,24}$/i.test(handle);
+  return isValidTikTokHandleNormalized(handle);
 }
 
 function readPublicTikTokProfilePreviewCache(

@@ -37,6 +37,10 @@ import {
   PUBLIC_YOUTUBE_DEMO_HANDLES,
   isPublicYouTubeDemoHandle,
 } from "@shared/publicYouTubeDemoAccounts";
+import {
+  isValidYouTubeHandleNormalized,
+  normalizeYouTubeHandle,
+} from "@shared/socialHandles";
 
 const PAGE_PATH = "/free-tools/youtube-shorts-viral-finder";
 const PAGE_TITLE = "YouTube Shorts Finder - Viral Shorts by Channel | SpyReels";
@@ -125,16 +129,11 @@ const COMPARE_ROWS = [
 type SortMode = "outlier" | "views" | "engagement";
 
 function parseYouTubeHandle(raw: string): string {
-  const trimmed = raw.trim();
-  const fromAt = trimmed.match(/youtube\.com\/@([^/?#\s]+)/i);
-  if (fromAt) return fromAt[1].replace(/^@/, "").trim().toLowerCase();
-  const fromPath = trimmed.match(/youtube\.com\/(?:c|channel|user)\/([^/?#\s]+)/i);
-  if (fromPath) return fromPath[1].replace(/^@/, "").trim().toLowerCase();
-  return trimmed.replace(/^@/, "").trim().toLowerCase();
+  return normalizeYouTubeHandle(raw);
 }
 
 function isValidYouTubeHandle(handle: string): boolean {
-  return /^[a-z0-9._-]{2,30}$/i.test(handle);
+  return isValidYouTubeHandleNormalized(handle);
 }
 
 function outlierMultiple(viewCount: number, median: number): number | null {
