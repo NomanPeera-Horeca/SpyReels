@@ -24,6 +24,7 @@ import { getDb } from "../db";
 import { assertOnboardingV2Access, getExperienceAccess } from "../experienceAccess";
 import { createAnalysisStore, type Db } from "../personalization/db/analysisStore";
 import { requestProfileAnalysis } from "../personalization/analysis/requestProfileAnalysis";
+import { nichePayloadForSave } from "../personalization/intelligence/profileBasics";
 import { profileEvidenceFromPreview, publicWebsiteUrl } from "../personalization/onboarding/profileEvidence";
 import { scheduleWebsiteIntelligence, startWebsiteIntelligence } from "../personalization/onboarding/websiteIntelligence";
 import {
@@ -110,9 +111,9 @@ const itemPayload = z.discriminatedUnion("kind", [
 
 /** Users can never type a "measured" number: pillars always save without a view share. */
 function normalizePayload(input: z.infer<typeof itemPayload>) {
-  return input.kind === "pillar"
-    ? { ...input.payload, viewSharePercent: null }
-    : input.payload;
+  if (input.kind === "pillar") return { ...input.payload, viewSharePercent: null };
+  if (input.kind === "niche") return nichePayloadForSave(input.payload);
+  return input.payload;
 }
 
 async function startInitialAnalysis(db: Db, ctx: { user: { id: number }; workspaceId: string; workspaceRole: string }, profileId: string) {

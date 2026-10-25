@@ -1,7 +1,9 @@
 import { TRPCError } from "@trpc/server";
-import { getOnboardingState } from "./db";
-import { formatReelTaxonomyLabel } from "@shared/reelNiches";
+import { resolveContentCategory } from "@shared/personalization/contentTaxonomy";
 import { resolvePrimaryNicheSlug } from "@shared/primaryNiche";
+import { formatReelTaxonomyLabel } from "@shared/reelNiches";
+import { getOnboardingState } from "./db";
+import { loadActiveNichePayload } from "./personalization/activeNiche";
 
 export type CreatorCoachProfile = {
   niche: string;
@@ -36,5 +38,14 @@ export async function getCreatorCoachProfile(userId: number): Promise<CreatorCoa
     });
   }
 
-  return { niche, nicheSlug, targetAudience, brandDescription };
+  const stored = await loadActiveNichePayload(userId);
+  const specific = stored?.label?.trim();
+  if (!specific) return { niche, nicheSlug, targetAudience, brandDescription };
+  const category = resolveContentCategory(stored?.categoryLabel);
+  return {
+    niche: specific,
+    nicheSlug: category?.slug ?? nicheSlug,
+    targetAudience,
+    brandDescription,
+  };
 }

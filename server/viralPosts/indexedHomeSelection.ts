@@ -57,6 +57,7 @@ export function selectIndexedHomePosts<T extends IndexedHomePost>(args: {
   posts: T[];
   goalText: string | null;
   audienceText: string | null;
+  nicheText?: string | null;
   limit: number;
   now?: Date;
 }): T[] {
@@ -68,6 +69,7 @@ export function rankIndexedHomeInventory<T extends IndexedHomePost>(args: {
   posts: T[];
   goalText: string | null;
   audienceText: string | null;
+  nicheText?: string | null;
   limit: number;
   creatorLimit?: number;
   now?: Date;
@@ -90,6 +92,7 @@ export function rankIndexedHomeInventory<T extends IndexedHomePost>(args: {
   const signals = strategyTopicSignals({
     goalText: args.goalText,
     audienceText: args.audienceText,
+    nicheText: args.nicheText,
   });
   const now = args.now ?? new Date();
   const scoreInputs = qualified.map(post => {

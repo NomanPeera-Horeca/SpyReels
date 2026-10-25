@@ -22,7 +22,11 @@ import {
 } from "./evidence";
 import {
   claimsPerformance,
+  commercialIntentAllowed,
   copiesSourceText,
+  inventsCommercialObjective,
+  inventsMonetization,
+  isGenericPillarTitle,
   sanitizeCopy,
   unsupportedNumbers,
   unsupportedProperNouns,
@@ -35,7 +39,7 @@ import {
   type ParseResult,
 } from "./structuredLlm";
 
-export const PILLAR_PROMPT_VERSION = "pillars-v1";
+export const PILLAR_PROMPT_VERSION = "pillars-v2";
 export const MIN_PILLARS = 3;
 export const MAX_PILLARS = 5;
 
@@ -100,6 +104,9 @@ export function buildPillarPrompt(
     "- subtopics: 3 short video topics under that pillar (2 to 4 words each). Specific themes, not a copy of the bio.",
     '- No numbers, percentages, view counts or claims about past performance (no "viral", "best performing").',
     "- Do not invent facts, names or products about the creator.",
+    "- Do not add a pillar about products, affiliates, shopping, or monetization unless the evidence or the confirmed goal shows the creator sells that offer.",
+    "- Each title names the creator's subject. Do not use a title made only of generic words such as Daily Life, Content, Moments, or Tips.",
+    "- Do not add a pillar the evidence does not support.",
     `- Write in ${e.outputLanguage.label}.`,
   ].join("\n");
   const user = [
@@ -159,6 +166,18 @@ export function parsePillarOutput(
     }
     if (claimsPerformance(`${title} ${description}`)) {
       droppedFor = "pillars must not claim performance or use percentages";
+      continue;
+    }
+    if (isGenericPillarTitle(title)) {
+      droppedFor = "a pillar title does not name a subject";
+      continue;
+    }
+    const allowed = commercialIntentAllowed(goal, e.commercialSignals);
+    if (
+      inventsCommercialObjective(`${title} ${description}`, allowed) ||
+      inventsMonetization(`${title} ${description}`, allowed)
+    ) {
+      droppedFor = "a pillar assumes a business or product offer the evidence does not show";
       continue;
     }
     if (unsupportedNumbers(`${title} ${description}`, corpus).length) {

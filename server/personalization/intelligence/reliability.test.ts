@@ -5,6 +5,8 @@ import { parsePillarOutput } from "./pillarRecommendations";
 import { firstVisibleDelayMs, safeValidationReason, stepHasLiveSuggestions } from "./recommendationService";
 import { detectContentLanguage } from "./profileBasics";
 import { SubtopicStoreError, planSubtopicInserts, subtopicSaveFailureFields } from "../subtopics";
+import { poolNicheForCategory } from "@shared/personalization/contentTaxonomy";
+import { parseAudienceOutput } from "./audienceRecommendations";
 import { videoMatchText } from "../home/homeService";
 
 const evidence: CreatorEvidence = {
@@ -232,12 +234,13 @@ describe("release A corrections", () => {
 });
 
 describe("Home niche freshness", () => {
-  it("matches videos to the confirmed niche label, not a blended description", () => {
+  it("keeps Home on the confirmed label and does not invent a pool for a missing category", () => {
     expect(
       videoMatchText({
         hasProfile: true,
         nicheLabel: "Restaurants & Cafes",
-        featuredNicheSlug: "restaurants-cafes",
+        categoryLabel: null,
+        featuredNicheSlug: null,
         description: "Restaurants & Cafes. Help fitness coaches sign clients.",
         pillarTitles: ["Menu engineering"],
         goalText: "Help fitness coaches sign clients.",
@@ -246,5 +249,63 @@ describe("Home niche freshness", () => {
         nextStep: null,
       })
     ).toBe("Restaurants & Cafes");
+    expect(poolNicheForCategory(null)).toBeNull();
+    expect(poolNicheForCategory("unknown")).toBeNull();
+  });
+});
+
+describe("audience and pillar offer guards", () => {
+  const hobby: CreatorEvidence = {
+    ...evidence,
+    commercialSignals: false,
+    corpus: "funny pet edits. link in bio for my favorite pet products.",
+    declaredText: "funny pet edits. link in bio for my favorite pet products.",
+  };
+
+  it("rejects an affiliate audience and a generic viewer group", () => {
+    const shoppers = parseAudienceOutput(
+      {
+        audiences: [
+          { who: "Pet product shoppers", outcome: "buy recommended products", why: "The link mentions products." },
+        ],
+        confidence: "medium",
+      },
+      hobby,
+      "Entertain people with funny pet clips.",
+      []
+    );
+    expect(shoppers.ok).toBe(false);
+    const viewers = parseAudienceOutput(
+      {
+        audiences: [
+          { who: "Short-form video enthusiasts", outcome: "watch more clips", why: "They scroll." },
+        ],
+        confidence: "medium",
+      },
+      hobby,
+      "Entertain people with funny pet clips.",
+      []
+    );
+    expect(viewers.ok).toBe(false);
+  });
+
+  it("drops a product pillar and a subjectless title, and keeps a subject pillar", () => {
+    const parsed = parsePillarOutput(
+      {
+        pillars: [
+          { title: "Pet Product Spotlights", serves: "Shows affiliate products from the link in bio." },
+          { title: "Daily Life", serves: "Shares ordinary moments from the week." },
+          { title: "Pet Reactions", serves: "Shows the funny reactions people already see in the clips." },
+        ],
+        confidence: "medium",
+      },
+      hobby,
+      "Entertain people with funny pet clips.",
+      [],
+      []
+    );
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.value.pillars.map(p => p.title)).toEqual(["Pet Reactions"]);
   });
 });

@@ -1,0 +1,3598 @@
+{
+  "realModel": true,
+  "startedAt": "2026-10-25T15:18:10.664Z",
+  "promptVersions": {
+    "goal": "goal-v1",
+    "audience": "audience-v1",
+    "pillars": "pillars-v1"
+  },
+  "capUsd": 5,
+  "stoppedByCap": false,
+  "cases": [
+    {
+      "caseId": "RL-01",
+      "category": "restaurant_local",
+      "goal": {
+        "status": "generated",
+        "text": "Help restaurant, cafe and food truck owners choose the right commercial kitchen equipment and get a quote.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Restaurant owners planning a kitchen build",
+            "outcome": "Choose the right equipment and avoid costly mistakes"
+          },
+          {
+            "who": "Cafe owners setting up or upgrading",
+            "outcome": "Design an efficient small kitchen on a budget"
+          },
+          {
+            "who": "Food truck operators sourcing commercial equipment",
+            "outcome": "Find compact, reliable equipment that fits their setup"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Equipment Decision Guide",
+            "description": "Helps owners confidently choose the right equipment for their kitchen type and volume, moving them toward a quote."
+          },
+          {
+            "title": "Kitchen Layout Strategy",
+            "description": "Guides owners through efficient space planning so they avoid costly redesigns and build with confidence."
+          },
+          {
+            "title": "Budget and Financing",
+            "description": "Removes financial hesitation for owners on a budget, making a quote feel accessible and low-risk."
+          },
+          {
+            "title": "Costly Mistakes to Avoid",
+            "description": "Builds trust with owners by surfacing common pitfalls before they commit to purchases or a build."
+          },
+          {
+            "title": "Behind the Build",
+            "description": "Shows real kitchen transformations to inspire owners and demonstrate the value of professional guidance and supply."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Commercial kitchen equipment sales",
+        "slug": "business-entrepreneurship",
+        "categoryLabel": "Business & Entrepreneurship"
+      },
+      "cta": "DM for a quote.",
+      "rejections": [],
+      "calls": 5,
+      "retries": 1,
+      "latencyMs": 19091,
+      "wallClockMs": 16067,
+      "estimatedUsd": 0.031455,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "RL-02",
+      "category": "restaurant_local",
+      "goal": {
+        "status": "generated",
+        "text": "Share the daily craft and tradition behind a family-run Italian restaurant to attract reservations.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Local diners seeking authentic Italian cuisine",
+            "outcome": "Find a trustworthy, tradition-rooted restaurant to book"
+          },
+          {
+            "who": "Food-curious diners planning special occasions",
+            "outcome": "Discover a memorable, handmade dining experience"
+          },
+          {
+            "who": "Italian food enthusiasts and pasta lovers",
+            "outcome": "Experience genuine handmade pasta and family recipes"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Family Legacy Stories",
+            "description": "Builds trust with local diners by revealing the generations of tradition behind every dish served."
+          },
+          {
+            "title": "Handmade Craft Up Close",
+            "description": "Draws food-curious diners in by showcasing the skilled, tactile artistry that defines a handmade dining experience."
+          },
+          {
+            "title": "Seasonal Ingredient Spotlight",
+            "description": "Excites special-occasion planners by showing the care and freshness that make each menu visit feel unique."
+          },
+          {
+            "title": "Behind the Pass",
+            "description": "Gives local diners an honest, immersive look at the real kitchen culture that earns their reservation."
+          },
+          {
+            "title": "The Table Experience",
+            "description": "Inspires special-occasion diners to book by painting a vivid picture of warmth and atmosphere in the dining room."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Handmade Italian pasta restaurant",
+        "slug": "restaurants-cafes",
+        "categoryLabel": "Restaurants & Cafes"
+      },
+      "cta": "Reservations at the link.",
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 17433,
+      "wallClockMs": 16111,
+      "estimatedUsd": 0.02745,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "RL-03",
+      "category": "restaurant_local",
+      "goal": {
+        "status": "generated",
+        "text": "Showcase wedding and event floral work to attract bookings for a local florist business.",
+        "source": "ai",
+        "question": null,
+        "confidence": "medium"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Couples planning their wedding",
+            "outcome": "Find a trusted local florist for their big day"
+          },
+          {
+            "who": "Local event planners and coordinators",
+            "outcome": "Source reliable floral vendors for client events"
+          },
+          {
+            "who": "People planning milestone celebrations",
+            "outcome": "Elevate a special event with professional florals"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Wedding Florals",
+            "description": "Inspires couples by showcasing real wedding floral designs that reflect the creator's local expertise and style."
+          },
+          {
+            "title": "Behind the Process",
+            "description": "Builds trust with couples and planners by showing the care and craft behind every floral arrangement."
+          },
+          {
+            "title": "Event Styling Tips",
+            "description": "Positions the creator as a knowledgeable vendor partner for event planners sourcing reliable floral talent."
+          },
+          {
+            "title": "Client Transformations",
+            "description": "Converts prospective clients by showing before-and-after venue transformations that demonstrate real booking results."
+          },
+          {
+            "title": "Booking Guidance",
+            "description": "Removes friction for couples and planners ready to book by answering common questions about working with a florist."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Wedding and event floral design",
+        "slug": "wedding-and-event-floral-design",
+        "categoryLabel": null
+      },
+      "cta": null,
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 15800,
+      "wallClockMs": 14575,
+      "estimatedUsd": 0.025248,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "RL-04",
+      "category": "restaurant_local",
+      "goal": {
+        "status": "generated",
+        "text": "Share weekly locations and inspire bookings for a wood-fired pizza truck.",
+        "source": "ai",
+        "question": null,
+        "confidence": "low"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Local food lovers near truck stops",
+            "outcome": "Find and visit the pizza truck this week"
+          },
+          {
+            "who": "Private event planners",
+            "outcome": "Book a unique catered food experience"
+          },
+          {
+            "who": "Local food and dining accounts",
+            "outcome": "Discover and share standout local eats"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Weekly Location Updates",
+            "description": "Tells local food lovers exactly where to find the truck each week, driving foot traffic."
+          },
+          {
+            "title": "Behind the Fire",
+            "description": "Shows the craft and passion behind the pizza, building appetite and trust with local audiences."
+          },
+          {
+            "title": "Event Booking Spotlight",
+            "description": "Demonstrates the truck's event experience to help planners visualize and confidently book a catered event."
+          },
+          {
+            "title": "Menu & Specials",
+            "description": "Highlights rotating pies and limited offerings to give both audiences a reason to visit or book now."
+          },
+          {
+            "title": "Customer Moments",
+            "description": "Showcases real guest reactions and gatherings to build social proof and community around the truck."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Wood-fired pizza truck",
+        "slug": "wood-fired-pizza-truck",
+        "categoryLabel": null
+      },
+      "cta": null,
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 16039,
+      "wallClockMs": 14802,
+      "estimatedUsd": 0.023922,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "RL-05",
+      "category": "restaurant_local",
+      "goal": {
+        "status": "generated",
+        "text": "Show the craft and care behind sourdough, croissants, and custom cakes to attract orders.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Local custom cake buyers",
+            "outcome": "Find a skilled baker for a special occasion cake"
+          },
+          {
+            "who": "Artisan bread enthusiasts nearby",
+            "outcome": "Source high-quality sourdough and croissants locally"
+          },
+          {
+            "who": "Gift-givers seeking premium baked goods",
+            "outcome": "Give a memorable, handcrafted food gift"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Behind the Order",
+            "description": "Shows local cake buyers the personal care and skill that goes into every custom cake order."
+          },
+          {
+            "title": "Bread Science Explained",
+            "description": "Helps artisan bread enthusiasts understand the craft and time behind quality sourdough and croissants."
+          },
+          {
+            "title": "Baker's Real Hours",
+            "description": "Builds trust with both audiences by revealing the early-morning dedication behind every bake."
+          },
+          {
+            "title": "Ingredient Integrity",
+            "description": "Reassures local buyers that quality sourcing drives the flavor and texture they are paying for."
+          },
+          {
+            "title": "Occasion Cake Gallery",
+            "description": "Inspires local custom cake buyers by showcasing the range of styles and celebrations the bakery serves."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Artisan sourdough, croissants, and custom cakes",
+        "slug": "artisan-sourdough-croissants-and-custom-cakes",
+        "categoryLabel": null
+      },
+      "cta": "Order cakes online.",
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 16482,
+      "wallClockMs": 15075,
+      "estimatedUsd": 0.027579,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "FH-01",
+      "category": "fitness_health",
+      "goal": {
+        "status": "generated",
+        "text": "Help busy professionals build strength through coaching, programming tips, and form guidance.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Busy professionals new to strength training",
+            "outcome": "Start lifting safely with a structured plan"
+          },
+          {
+            "who": "Professionals plateaued in their fitness routine",
+            "outcome": "Break through progress stalls with expert programming"
+          },
+          {
+            "who": "Professionals with limited time to train",
+            "outcome": "Build strength efficiently within a tight schedule"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Safe Lifting Foundations",
+            "description": "Helps beginners start strength training confidently with correct technique and injury-free habits."
+          },
+          {
+            "title": "Time-Smart Programming",
+            "description": "Shows busy professionals how to structure effective training around a demanding schedule."
+          },
+          {
+            "title": "Plateau-Breaking Strategies",
+            "description": "Gives stalled lifters expert programming tools to restart consistent strength progress."
+          },
+          {
+            "title": "Coaching Mindset",
+            "description": "Builds trust with both audiences by showing the professional approach behind effective strength coaching."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Strength training for busy professionals",
+        "slug": "health-fitness",
+        "categoryLabel": "Health & Fitness"
+      },
+      "cta": "Apply via link.",
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 16100,
+      "wallClockMs": 14655,
+      "estimatedUsd": 0.025761,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "FH-02",
+      "category": "fitness_health",
+      "goal": {
+        "status": "generated",
+        "text": "Share the honest journey of training as an amateur marathoner chasing a first sub-4 finish.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Amateur runners training for their first marathon",
+            "outcome": "Complete a first marathon with a strong finish time"
+          },
+          {
+            "who": "Runners chasing a sub-4 marathon breakthrough",
+            "outcome": "Break the four-hour marathon barrier"
+          },
+          {
+            "who": "Beginner runners managing training setbacks",
+            "outcome": "Stay consistent and recover from common running injuries"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Training Transparency",
+            "description": "Gives amateur runners an honest, relatable look at real marathon training blocks and pacing decisions."
+          },
+          {
+            "title": "Runner Fueling",
+            "description": "Helps audience make confident nutrition choices that support long runs and race-day performance."
+          },
+          {
+            "title": "Injury and Recovery",
+            "description": "Reassures runners that setbacks are normal and shows how to manage them without losing fitness."
+          },
+          {
+            "title": "Race Day Mindset",
+            "description": "Prepares first-time marathoners mentally for the pressure and unpredictability of race day."
+          },
+          {
+            "title": "Sub-4 Pacing Strategy",
+            "description": "Breaks down the specific pace targets and splits amateur runners need to chase a sub-4 finish."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Amateur marathon training journey",
+        "slug": "amateur-marathon-training-journey",
+        "categoryLabel": null
+      },
+      "cta": null,
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 17182,
+      "wallClockMs": 15910,
+      "estimatedUsd": 0.026913,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "FH-03",
+      "category": "fitness_health",
+      "goal": {
+        "status": "generated",
+        "text": "Teach simple, evidence-based nutrition to help people make informed food choices.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Nutrition myth believers seeking clarity",
+            "outcome": "Separate food facts from popular misinformation"
+          },
+          {
+            "who": "Busy people wanting quick, healthy eating habits",
+            "outcome": "Build simple, practical nutrition habits with ease"
+          },
+          {
+            "who": "Grocery shoppers learning to read food labels",
+            "outcome": "Understand what is actually in packaged foods"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Nutrition Myth Busting",
+            "description": "Directly addresses misinformation to help myth believers find clarity grounded in evidence."
+          },
+          {
+            "title": "Food Label Literacy",
+            "description": "Empowers busy people to make informed choices quickly when shopping or eating."
+          },
+          {
+            "title": "Everyday Meal Building",
+            "description": "Gives busy people a repeatable, science-backed framework for balanced, simple meals."
+          },
+          {
+            "title": "Gut and Fiber Health",
+            "description": "Teaches evidence-based fiber habits that support long-term health for both audience segments."
+          },
+          {
+            "title": "Mindful Eating Habits",
+            "description": "Helps busy people build sustainable nutrition behaviors without restriction or diet culture."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Registered dietitian nutrition education",
+        "slug": "registered-dietitian-nutrition-education",
+        "categoryLabel": null
+      },
+      "cta": null,
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 18418,
+      "wallClockMs": 16871,
+      "estimatedUsd": 0.02721,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "FH-04",
+      "category": "fitness_health",
+      "goal": {
+        "status": "generated",
+        "text": "Help beginners discover yoga and book in-studio or online classes.",
+        "source": "ai",
+        "question": null,
+        "confidence": "low"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Adults curious about starting yoga",
+            "outcome": "Take a first yoga class with confidence"
+          },
+          {
+            "who": "People managing mild pain or stiffness",
+            "outcome": "Find gentle movement to ease daily discomfort"
+          },
+          {
+            "who": "Remote or hybrid workers seeking wellness breaks",
+            "outcome": "Add a short yoga routine to their day"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Gentle Pain Relief",
+            "description": "Shows people with mild pain how yoga eases daily discomfort, motivating them to book a class."
+          },
+          {
+            "title": "Studio vs Online",
+            "description": "Helps beginners choose the right class format so they feel confident booking with the studio."
+          },
+          {
+            "title": "Breathwork Basics",
+            "description": "Gives beginners an accessible entry point that builds trust and encourages class bookings."
+          },
+          {
+            "title": "Quick Daily Moves",
+            "description": "Delivers short, repeatable value that keeps curious beginners engaged and returning to book."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Gentle yoga classes for beginners",
+        "slug": "gentle-yoga-classes-for-beginners",
+        "categoryLabel": null
+      },
+      "cta": "Book a class on our site.",
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 16381,
+      "wallClockMs": 14855,
+      "estimatedUsd": 0.02475,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "PB-01",
+      "category": "personal_brand",
+      "goal": {
+        "status": "generated",
+        "text": "Share every hard-won lesson from building a skincare brand into retail stores.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Aspiring beauty brand founders",
+            "outcome": "Launch and grow their own skincare brand"
+          },
+          {
+            "who": "Independent brands pursuing retail distribution",
+            "outcome": "Land shelf space in physical retail stores"
+          },
+          {
+            "who": "Early-stage product business owners",
+            "outcome": "Avoid costly mistakes in their first year"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Product Development",
+            "description": "Helps aspiring founders avoid costly formulation and manufacturing mistakes when building their first skincare product."
+          },
+          {
+            "title": "Retail Strategy",
+            "description": "Equips independent brands with real tactics to pitch, land, and keep shelf space in physical retail stores."
+          },
+          {
+            "title": "Brand Finances",
+            "description": "Guides founders through the financial decisions that determine whether a skincare brand survives and scales."
+          },
+          {
+            "title": "Brand Building",
+            "description": "Helps aspiring founders craft a brand identity that resonates with consumers and stands out on retail shelves."
+          },
+          {
+            "title": "Founder Operations",
+            "description": "Prepares early-stage founders for the operational realities of running and growing a small beauty business."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Skincare brand building and founding",
+        "slug": "beauty-skincare",
+        "categoryLabel": "Beauty & Skincare"
+      },
+      "cta": null,
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 16506,
+      "wallClockMs": 15159,
+      "estimatedUsd": 0.026544,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "PB-02",
+      "category": "personal_brand",
+      "goal": {
+        "status": "generated",
+        "text": "Inspire aspiring indie hackers by sharing the real journey of building and shipping apps in public.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Aspiring indie hackers with a side project idea",
+            "outcome": "Validate and ship their first app independently"
+          },
+          {
+            "who": "Employed developers considering going solo",
+            "outcome": "Gain confidence to leave employment and build independently"
+          },
+          {
+            "who": "Early-stage solo founders seeking tech guidance",
+            "outcome": "Choose the right stack and tools to ship faster"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Raw Founder Moments",
+            "description": "Inspires aspiring indie hackers by showing the honest, unfiltered reality of solo app building."
+          },
+          {
+            "title": "Idea to Launch",
+            "description": "Guides aspiring indie hackers through validating and shipping their first app independently."
+          },
+          {
+            "title": "Solo Dev Mindset",
+            "description": "Builds confidence in employed developers considering the leap to independent building."
+          },
+          {
+            "title": "Lean Tech Choices",
+            "description": "Helps solo founders pick practical tools that let one person ship fast and independently."
+          },
+          {
+            "title": "Early Revenue Reality",
+            "description": "Shows aspiring indie hackers what reaching first paying customers actually looks and feels like."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Solo founder app building in public",
+        "slug": "solo-founder-app-building-in-public",
+        "categoryLabel": null
+      },
+      "cta": null,
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 16921,
+      "wallClockMs": 15713,
+      "estimatedUsd": 0.026499,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "PB-03",
+      "category": "personal_brand",
+      "goal": {
+        "status": "generated",
+        "text": "Help first-time buyers understand the home buying process and book a tour.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "First-time buyers actively searching for a home",
+            "outcome": "Find and tour a home that fits their budget"
+          },
+          {
+            "who": "Renters considering their first home purchase",
+            "outcome": "Understand the steps and costs of buying a home"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Budget Reality Check",
+            "description": "Helps active searchers align expectations with true costs so they feel confident booking a tour."
+          },
+          {
+            "title": "Mortgage Made Simple",
+            "description": "Demystifies financing steps so renters and first-time buyers can move from curious to ready."
+          },
+          {
+            "title": "Offer and Negotiation",
+            "description": "Equips active searchers to make strong, informed offers after touring a home."
+          },
+          {
+            "title": "Neighborhood Deep Dives",
+            "description": "Helps buyers touring homes evaluate locations that fit their lifestyle and budget."
+          },
+          {
+            "title": "Buyer Timeline Guide",
+            "description": "Gives renters a clear step-by-step path from first thought to closing day."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "First-time home buyer guidance",
+        "slug": "real-estate",
+        "categoryLabel": "Real Estate"
+      },
+      "cta": "Call or DM to tour.",
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 16851,
+      "wallClockMs": 15375,
+      "estimatedUsd": 0.025971,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "PB-04",
+      "category": "personal_brand",
+      "goal": {
+        "status": "needs_clarification",
+        "text": "Share honest reflections on work and life that help people slow down.",
+        "source": "user_typed",
+        "question": "What is the main reason you create content, and who are you hoping to reach or help?",
+        "confidence": null
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Burned-out professionals questioning hustle culture",
+            "outcome": "Find permission to slow down and reprioritize"
+          },
+          {
+            "who": "People navigating major life transitions",
+            "outcome": "Gain clarity on what actually matters to them"
+          },
+          {
+            "who": "Thoughtful earners rethinking their money mindset",
+            "outcome": "Align spending and earning with personal values"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Hustle Culture Myths",
+            "description": "Helps burned-out professionals question productivity norms and feel seen in their exhaustion."
+          },
+          {
+            "title": "Slow Living Practice",
+            "description": "Gives both audiences concrete permission and language to embrace a slower, more intentional pace."
+          },
+          {
+            "title": "Money and Enough",
+            "description": "Challenges hustle-driven financial beliefs so professionals can redefine what financial success means to them."
+          },
+          {
+            "title": "Life Transition Clarity",
+            "description": "Guides people through major changes by helping them identify what genuinely matters when everything feels uncertain."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Personal reflections on work and life",
+        "slug": "make-money-online",
+        "categoryLabel": "Make Money Online"
+      },
+      "cta": null,
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 19146,
+      "wallClockMs": 16525,
+      "estimatedUsd": 0.025239,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "EN-01",
+      "category": "entertainment",
+      "goal": {
+        "status": "generated",
+        "text": "Entertain audiences with original AI-generated sci-fi, mystery, and suspense short stories daily.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Sci-fi and mystery fiction fans",
+            "outcome": "Discover fresh, bite-sized genre stories daily"
+          },
+          {
+            "who": "Short-form content binge-watchers",
+            "outcome": "Fill spare moments with gripping serialized stories"
+          },
+          {
+            "who": "Casual readers seeking quick story fixes",
+            "outcome": "Enjoy complete or serialized stories without long commitment"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Serialized Story Arcs",
+            "description": "Hooks binge-watchers with cliffhanger-driven multi-part narratives that reward daily return visits."
+          },
+          {
+            "title": "Standalone Micro Stories",
+            "description": "Gives casual viewers a complete, satisfying genre fix in a single sitting without commitment."
+          },
+          {
+            "title": "Atmospheric World Building",
+            "description": "Deepens immersion for genre fans by painting vivid, original fictional universes in short bursts."
+          },
+          {
+            "title": "Mystery and Whodunit",
+            "description": "Satisfies mystery fans with puzzle-driven stories that tease suspects and reveal answers across episodes."
+          },
+          {
+            "title": "Behind the Story",
+            "description": "Builds creative connection with fans by pulling back the curtain on how AI-generated stories come to life."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "AI-generated sci-fi and mystery short stories",
+        "slug": "ai-generated-sci-fi-and-mystery-short-stories",
+        "categoryLabel": null
+      },
+      "cta": null,
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 17038,
+      "wallClockMs": 15399,
+      "estimatedUsd": 0.027522,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "EN-02",
+      "category": "entertainment",
+      "goal": {
+        "status": "generated",
+        "text": "Entertain office workers with relatable comedy sketches about everyday corporate life.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Office workers in corporate environments",
+            "outcome": "Laugh and feel seen in daily work frustrations"
+          },
+          {
+            "who": "Remote and hybrid employees",
+            "outcome": "Find humor in shared workplace absurdities"
+          },
+          {
+            "who": "Early-career professionals and new hires",
+            "outcome": "Cope with corporate culture through comedy"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Corporate Character Types",
+            "description": "Entertains office workers by spotlighting recognizable workplace personalities they encounter daily."
+          },
+          {
+            "title": "Remote Work Absurdity",
+            "description": "Gives remote and hybrid employees comedy that validates the unique chaos of working from home."
+          },
+          {
+            "title": "Office Tech Struggles",
+            "description": "Entertains corporate workers by turning shared technology frustrations into relatable comedic moments."
+          },
+          {
+            "title": "Corporate Speak Decoded",
+            "description": "Helps office workers laugh at the hollow jargon and buzzwords that fill their workdays."
+          },
+          {
+            "title": "Unwritten Office Rules",
+            "description": "Entertains both in-office and remote employees by exposing the absurd unspoken norms of corporate culture."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Corporate office life comedy sketches",
+        "slug": "corporate-office-life-comedy-sketches",
+        "categoryLabel": null
+      },
+      "cta": null,
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 17414,
+      "wallClockMs": 16067,
+      "estimatedUsd": 0.02658,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "EN-03",
+      "category": "entertainment",
+      "goal": {
+        "status": "generated",
+        "text": "Entertain pet lovers with funny and creative short-form pet video edits.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Pet owners seeking daily entertainment",
+            "outcome": "Laugh and share relatable pet moments online"
+          },
+          {
+            "who": "Short-form video enthusiasts",
+            "outcome": "Discover fresh, creative video editing styles"
+          },
+          {
+            "who": "Pet product shoppers",
+            "outcome": "Find trusted product recommendations from pet creators"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Relatable Pet Reactions",
+            "description": "Gives pet owners shareable moments that mirror their own animals' funny, everyday behaviors."
+          },
+          {
+            "title": "Creative Edit Styles",
+            "description": "Showcases fresh editing techniques that keep short-form video enthusiasts coming back for more."
+          },
+          {
+            "title": "Pet Personality Spotlights",
+            "description": "Celebrates distinct animal quirks to entertain pet lovers who see their own pets on screen."
+          },
+          {
+            "title": "Trend Remixes With Pets",
+            "description": "Hooks short-form video fans by blending popular video trends with funny pet footage."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Funny pet video edits",
+        "slug": "funny-pet-video-edits",
+        "categoryLabel": null
+      },
+      "cta": "Link in bio for my favorite pet products.",
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 15312,
+      "wallClockMs": 14063,
+      "estimatedUsd": 0.025731,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "EN-04",
+      "category": "entertainment",
+      "goal": {
+        "status": "generated",
+        "text": "Entertain audiences with close-up magic to attract event bookings.",
+        "source": "ai",
+        "question": null,
+        "confidence": "low"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Corporate event planners",
+            "outcome": "Book unique entertainment that impresses guests"
+          },
+          {
+            "who": "Wedding planners and couples",
+            "outcome": "Add memorable interactive entertainment to their wedding"
+          },
+          {
+            "who": "Private party hosts",
+            "outcome": "Surprise guests with a standout entertainment experience"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Reaction Moments",
+            "description": "Showcases the emotional impact of close-up magic, helping planners visualize guest experience at their event."
+          },
+          {
+            "title": "Magic Up Close",
+            "description": "Demonstrates close-up magic skill in an entertaining way that builds credibility with event and wedding planners."
+          },
+          {
+            "title": "Event Behind Scenes",
+            "description": "Gives planners a realistic preview of how Mo fits into corporate and wedding event environments."
+          },
+          {
+            "title": "Trick Breakdowns",
+            "description": "Entertains curious viewers while positioning Mo as a skilled professional worth booking for special events."
+          },
+          {
+            "title": "Book Me Content",
+            "description": "Directly converts entertained viewers into booking inquiries by showing what planners and couples can expect."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Close-up card and coin magic",
+        "slug": "close-up-card-and-coin-magic",
+        "categoryLabel": null
+      },
+      "cta": "Book me for your event.",
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 18964,
+      "wallClockMs": 17506,
+      "estimatedUsd": 0.024942,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "TL-01",
+      "category": "travel_lifestyle_family",
+      "goal": {
+        "status": "generated",
+        "text": "Share slow travel experiences across small towns, big cities, and scenic countryside journeys.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Slow travel enthusiasts",
+            "outcome": "Discover unhurried, immersive travel experiences and destinations"
+          },
+          {
+            "who": "Light packers and minimalist travelers",
+            "outcome": "Learn practical packing strategies for longer trips"
+          },
+          {
+            "who": "Scenic rail and road trip fans",
+            "outcome": "Find inspiration for countryside and cross-country journeys"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Small Town Escapes",
+            "description": "Helps slow travel enthusiasts discover charming, unhurried destinations beyond the typical tourist trail."
+          },
+          {
+            "title": "Scenic Journey Diaries",
+            "description": "Immerses slow travel enthusiasts in the joy of the journey itself, not just the destination."
+          },
+          {
+            "title": "Slow City Living",
+            "description": "Shows slow travel enthusiasts how to experience big cities at a relaxed, locals-first pace."
+          },
+          {
+            "title": "Minimalist Packing Tips",
+            "description": "Gives light packers practical strategies to travel longer and lighter with less stress."
+          },
+          {
+            "title": "Immersive Local Culture",
+            "description": "Connects slow travel enthusiasts with authentic local experiences that go beyond sightseeing."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Slow travel vlogs and guides",
+        "slug": "restaurants-cafes",
+        "categoryLabel": "Restaurants & Cafes"
+      },
+      "cta": null,
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 17352,
+      "wallClockMs": 15748,
+      "estimatedUsd": 0.026451,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "TL-02",
+      "category": "travel_lifestyle_family",
+      "goal": {
+        "status": "generated",
+        "text": "Share the real, unfiltered joys and chaos of raising a family of five.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Parents navigating busy household routines",
+            "outcome": "Find relatable, practical ideas for daily family life"
+          },
+          {
+            "who": "Budget-conscious parents with multiple kids",
+            "outcome": "Stretch limited resources without sacrificing family fun"
+          },
+          {
+            "who": "Prospective parents expecting a larger family",
+            "outcome": "Get an honest preview of multi-child family life"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Honest Parenting Moments",
+            "description": "Gives busy parents relatable snapshots of real family chaos, validating their daily experiences."
+          },
+          {
+            "title": "Family Budget Wins",
+            "description": "Helps budget-conscious parents stretch limited resources while keeping family life fun and full."
+          },
+          {
+            "title": "Kid-Friendly Meal Ideas",
+            "description": "Gives busy parents practical, low-cost meal solutions that work for multiple children at once."
+          },
+          {
+            "title": "Family Adventure Planning",
+            "description": "Inspires budget-conscious parents to create memorable experiences without overspending on travel or outings."
+          },
+          {
+            "title": "Small Wins Celebrations",
+            "description": "Reminds overwhelmed parents to notice and share the joy hidden inside ordinary family moments."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Family of five daily life vlogs",
+        "slug": "personal-finance",
+        "categoryLabel": "Personal Finance"
+      },
+      "cta": null,
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 15801,
+      "wallClockMs": 14527,
+      "estimatedUsd": 0.026496,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "TL-03",
+      "category": "travel_lifestyle_family",
+      "goal": {
+        "status": "generated",
+        "text": "Inspire others to declutter and embrace intentional small-space living.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "People overwhelmed by clutter at home",
+            "outcome": "Clear their space and feel more in control"
+          },
+          {
+            "who": "Small-space and studio apartment dwellers",
+            "outcome": "Make the most of limited living space"
+          },
+          {
+            "who": "People curious about minimalist lifestyle",
+            "outcome": "Simplify purchases and live with less intentionally"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Declutter With Me",
+            "description": "Motivates overwhelmed viewers to take action by showing real, approachable decluttering in their own home."
+          },
+          {
+            "title": "Small Space Solutions",
+            "description": "Helps studio and small-space dwellers maximize every square foot with practical, visual ideas."
+          },
+          {
+            "title": "Mindful Consumption",
+            "description": "Guides the audience toward intentional buying habits that prevent clutter from returning."
+          },
+          {
+            "title": "Intentional Home Aesthetic",
+            "description": "Inspires viewers to create a calm, curated space that reflects their values and feels livable."
+          },
+          {
+            "title": "Clutter Mindset Shifts",
+            "description": "Addresses the emotional side of clutter to help overwhelmed viewers feel understood and empowered to start."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Decluttering and small space organization",
+        "slug": "decluttering-and-small-space-organization",
+        "categoryLabel": null
+      },
+      "cta": null,
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 17501,
+      "wallClockMs": 14930,
+      "estimatedUsd": 0.026736,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "TL-04",
+      "category": "travel_lifestyle_family",
+      "goal": {
+        "status": "needs_clarification",
+        "text": "Share weekend hikes and tips that help people get outdoors.",
+        "source": "user_typed",
+        "question": "What is the main reason you create this content, for example to inspire beginners, help people find local trails, or something else?",
+        "confidence": null
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Beginners wanting to start hiking outdoors",
+            "outcome": "Take their first confident steps on a trail"
+          },
+          {
+            "who": "Busy people seeking short outdoor escapes",
+            "outcome": "Find realistic weekend hikes that fit their schedule"
+          },
+          {
+            "who": "Casual hikers building trail knowledge",
+            "outcome": "Discover new trails and improve their hiking skills"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Beginner Trail Guides",
+            "description": "Helps first-timers find approachable trails and build confidence for their first hike."
+          },
+          {
+            "title": "Weekend Hike Planning",
+            "description": "Gives busy people quick, realistic frameworks for planning a satisfying weekend outdoor escape."
+          },
+          {
+            "title": "Trail Safety Basics",
+            "description": "Equips beginners and busy hikers with essential safety knowledge so they feel secure outdoors."
+          },
+          {
+            "title": "Gear Without Overwhelm",
+            "description": "Helps beginners choose practical, affordable gear so cost and confusion do not block them from starting."
+          },
+          {
+            "title": "Nature on the Trail",
+            "description": "Inspires both audiences to connect with the outdoors and return again by noticing what surrounds them."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Weekend hiking trails and tips",
+        "slug": "weekend-hiking-trails-and-tips",
+        "categoryLabel": null
+      },
+      "cta": null,
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 16941,
+      "wallClockMs": 15400,
+      "estimatedUsd": 0.024765,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "ES-01",
+      "category": "education_services",
+      "goal": {
+        "status": "generated",
+        "text": "Teach high school students algebra and math concepts in a clear, approachable way.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "High school students struggling with algebra",
+            "outcome": "Build confidence and pass math exams"
+          },
+          {
+            "who": "Students preparing for upcoming math exams",
+            "outcome": "Study efficiently and improve test scores"
+          },
+          {
+            "who": "Self-directed learners revisiting foundational math",
+            "outcome": "Fill gaps in algebra and fraction skills"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Concept Clarity",
+            "description": "Breaks down intimidating algebra topics so struggling students finally understand the why behind the math."
+          },
+          {
+            "title": "Exam Confidence",
+            "description": "Gives exam-prepping students targeted strategies to walk into tests feeling prepared and calm."
+          },
+          {
+            "title": "Step-by-Step Skills",
+            "description": "Teaches students repeatable problem-solving methods they can apply independently on any algebra question."
+          },
+          {
+            "title": "Math Mindset",
+            "description": "Addresses the fear and frustration around math so students build lasting confidence in their abilities."
+          },
+          {
+            "title": "Real-World Relevance",
+            "description": "Connects algebra concepts to everyday situations so students stay motivated and see the value in learning math."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "High school algebra and math tutoring",
+        "slug": "high-school-algebra-and-math-tutoring",
+        "categoryLabel": null
+      },
+      "cta": null,
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 15903,
+      "wallClockMs": 14737,
+      "estimatedUsd": 0.026616,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "ES-02",
+      "category": "education_services",
+      "goal": {
+        "status": "generated",
+        "text": "Teach small businesses bookkeeping and tax essentials to attract new clients.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Self-employed freelancers and solopreneurs",
+            "outcome": "Stop overpaying taxes and organize finances confidently"
+          },
+          {
+            "who": "Early-stage small business owners",
+            "outcome": "Understand bookkeeping basics to avoid costly mistakes"
+          },
+          {
+            "who": "Side hustlers turning business full-time",
+            "outcome": "Get compliant and financially ready for growth"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Tax Strategy Basics",
+            "description": "Helps freelancers and small business owners legally reduce their tax burden and stop overpaying."
+          },
+          {
+            "title": "Bookkeeping Foundations",
+            "description": "Gives early-stage owners the core knowledge to keep clean books and avoid costly financial mistakes."
+          },
+          {
+            "title": "Cash Flow Clarity",
+            "description": "Empowers solopreneurs to understand where money goes so they can make confident financial decisions."
+          },
+          {
+            "title": "Business Finance Mistakes",
+            "description": "Warns small business owners about common financial errors before they become expensive problems."
+          },
+          {
+            "title": "Hiring a Pro",
+            "description": "Guides business owners on when and how to get professional financial help to grow with confidence."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Small business bookkeeping and tax preparation",
+        "slug": "business-entrepreneurship",
+        "categoryLabel": "Business & Entrepreneurship"
+      },
+      "cta": "Free 15-minute consult.",
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 35724,
+      "wallClockMs": 34448,
+      "estimatedUsd": 0.028212,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "ES-03",
+      "category": "education_services",
+      "goal": {
+        "status": "generated",
+        "text": "Teach English speakers Spanish through clear, practical lessons covering common mistakes and grammar.",
+        "source": "ai",
+        "question": null,
+        "confidence": "medium"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "English speakers learning Spanish from scratch",
+            "outcome": "Build a practical Spanish foundation for real situations"
+          },
+          {
+            "who": "English speakers making common Spanish errors",
+            "outcome": "Correct persistent mistakes and speak more accurately"
+          },
+          {
+            "who": "English speakers preparing for travel or work",
+            "outcome": "Use Spanish confidently in practical, everyday scenarios"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Grammar Made Simple",
+            "description": "Breaks down confusing Spanish grammar so beginners can build accurate sentence structure fast."
+          },
+          {
+            "title": "Common Mistake Fixes",
+            "description": "Targets persistent errors English speakers make so learners speak more accurately and confidently."
+          },
+          {
+            "title": "Real Life Spanish",
+            "description": "Teaches practical vocabulary for everyday situations so learners can use Spanish outside the classroom."
+          },
+          {
+            "title": "English vs Spanish",
+            "description": "Highlights structural differences between both languages so learners stop thinking in English when speaking Spanish."
+          },
+          {
+            "title": "Quick Vocabulary Wins",
+            "description": "Delivers high-frequency words and phrases so beginners build a usable vocabulary foundation quickly."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Spanish language lessons for English speakers",
+        "slug": "restaurants-cafes",
+        "categoryLabel": "Restaurants & Cafes"
+      },
+      "cta": null,
+      "rejections": [
+        {
+          "step": "audience",
+          "reason": "audience names things not in the evidence (Spanish-speaking)"
+        }
+      ],
+      "calls": 5,
+      "retries": 1,
+      "latencyMs": 20739,
+      "wallClockMs": 19313,
+      "estimatedUsd": 0.031434,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "SN-01",
+      "category": "small_new",
+      "goal": {
+        "status": "needs_clarification",
+        "text": "Share my cooking journey as I learn to make healthy meals.",
+        "source": "user_typed",
+        "question": "In one sentence, why do you create content? For example: to grow your business, teach a skill, or entertain people.",
+        "confidence": null
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Beginners learning to cook at home",
+            "outcome": "Build confidence making simple, healthy meals"
+          },
+          {
+            "who": "People shifting to a healthier diet",
+            "outcome": "Find easy, realistic healthy meal inspiration"
+          },
+          {
+            "who": "Busy individuals with limited cooking experience",
+            "outcome": "Save time while eating better at home"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Beginner Kitchen Skills",
+            "description": "Builds cooking confidence by teaching simple, foundational techniques for healthy home cooking."
+          },
+          {
+            "title": "Easy Healthy Meals",
+            "description": "Gives beginners and diet-shifters realistic, simple meal ideas they can cook right away."
+          },
+          {
+            "title": "Healthy Ingredient Swaps",
+            "description": "Helps audiences make familiar meals healthier without feeling overwhelmed or deprived."
+          },
+          {
+            "title": "Meal Prep Made Simple",
+            "description": "Supports both audiences in building consistent, healthy eating habits with minimal daily effort."
+          },
+          {
+            "title": "Learning From Mistakes",
+            "description": "Makes the cooking journey relatable and encouraging for beginners who fear failing in the kitchen."
+          }
+        ]
+      },
+      "niche": {
+        "status": "missing",
+        "label": null,
+        "slug": null,
+        "categoryLabel": null
+      },
+      "cta": null,
+      "rejections": [],
+      "calls": 2,
+      "retries": 0,
+      "latencyMs": 11304,
+      "wallClockMs": 11306,
+      "estimatedUsd": 0.014535,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "SN-02",
+      "category": "small_new",
+      "goal": {
+        "status": "needs_clarification",
+        "text": "Document learning video editing and share what I figure out.",
+        "source": "user_typed",
+        "question": "What is the main reason you create content, for example to teach a skill, share your creative process, or something else?",
+        "confidence": null
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Beginners learning video editing",
+            "outcome": "Pick up editing skills through relatable, real examples"
+          },
+          {
+            "who": "New content creators starting their first channel",
+            "outcome": "Overcome the intimidation of posting their first videos"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Editing Discoveries",
+            "description": "Shows beginners real, relatable moments of figuring out editing tools for the first time."
+          },
+          {
+            "title": "Creator Mindset",
+            "description": "Helps new creators overcome intimidation by normalizing the messy, uncertain early stages of posting."
+          },
+          {
+            "title": "Gear for Beginners",
+            "description": "Guides budget-conscious beginners toward accessible tools without overwhelming technical jargon."
+          },
+          {
+            "title": "Behind the Edit",
+            "description": "Pulls back the curtain on the editing process so beginners can learn by watching real workflow decisions."
+          },
+          {
+            "title": "Channel Setup Journey",
+            "description": "Supports new creators building their first channel by sharing honest, step-by-step setup experiences."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "<UNKNOWN>",
+        "slug": "unknown",
+        "categoryLabel": null
+      },
+      "cta": null,
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 14594,
+      "wallClockMs": 13354,
+      "estimatedUsd": 0.023685,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "SN-03",
+      "category": "small_new",
+      "goal": {
+        "status": "needs_clarification",
+        "text": "Share my crochet learning journey and encourage other beginners.",
+        "source": "user_typed",
+        "question": "What is the main reason you share your crochet content, for example to document your learning, inspire beginners, or something else?",
+        "confidence": null
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Crochet beginners starting their first project",
+            "outcome": "Complete a first project without giving up"
+          },
+          {
+            "who": "Curious crafters considering learning crochet",
+            "outcome": "Decide if crochet is the right hobby for them"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Beginner Wins",
+            "description": "Celebrates small milestones to keep beginners motivated and show curious crafters that progress is achievable."
+          },
+          {
+            "title": "Honest Struggle",
+            "description": "Normalizes mistakes and frustration so beginners feel less alone and crafters know what to realistically expect."
+          },
+          {
+            "title": "Tool and Yarn Basics",
+            "description": "Helps beginners choose the right supplies so they can start their first project with confidence."
+          },
+          {
+            "title": "Learn With Me",
+            "description": "Invites the audience into the learning process so beginners feel they have a companion, not just a teacher."
+          },
+          {
+            "title": "Is Crochet For You",
+            "description": "Addresses the curiosity of crafters on the fence by giving an honest, relatable picture of the hobby."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Beginner crochet patterns and tutorials",
+        "slug": "beginner-crochet-patterns-and-tutorials",
+        "categoryLabel": null
+      },
+      "cta": null,
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 16009,
+      "wallClockMs": 14749,
+      "estimatedUsd": 0.024819,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "AM-01",
+      "category": "ambiguous_multilingual",
+      "goal": {
+        "status": "generated",
+        "text": "Enseñar recetas fáciles para cocinar en casa y conseguir pedidos de pasteles.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Personas que cocinan en casa sin experiencia",
+            "outcome": "Preparar comidas ricas y sencillas cada día"
+          },
+          {
+            "who": "Personas que buscan pasteles para ocasiones especiales",
+            "outcome": "Encargar un pastel casero de calidad"
+          },
+          {
+            "who": "Principiantes que quieren aprender platos clásicos",
+            "outcome": "Dominar recetas tradicionales paso a paso"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Recetas de diario",
+            "description": "Ayuda a cocineros sin experiencia a preparar comidas ricas y sencillas cada día en casa."
+          },
+          {
+            "title": "Técnicas para principiantes",
+            "description": "Da confianza a quienes empiezan enseñándoles habilidades básicas de cocina paso a paso."
+          },
+          {
+            "title": "Postres caseros fáciles",
+            "description": "Atrae a ambas audiencias mostrando que los postres ricos están al alcance de cualquiera en casa."
+          },
+          {
+            "title": "Pasteles para ocasiones",
+            "description": "Convierte a seguidores en clientes mostrando pasteles para celebraciones especiales disponibles por encargo."
+          },
+          {
+            "title": "Planificación semanal",
+            "description": "Ayuda a cocineros sin experiencia a organizarse y cocinar mejor durante toda la semana con menos esfuerzo."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Spanish home cooking recipes",
+        "slug": "spanish-home-cooking-recipes",
+        "categoryLabel": null
+      },
+      "cta": "Pedidos de pasteles por DM.",
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 18122,
+      "wallClockMs": 16859,
+      "estimatedUsd": 0.029931,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "AM-02",
+      "category": "ambiguous_multilingual",
+      "goal": {
+        "status": "generated",
+        "text": "تشارك لحظات حياتها اليومية من الدراسة والقهوة والروتين الصباحي.",
+        "source": "ai",
+        "question": null,
+        "confidence": "medium"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "طلاب يبحثون عن تحفيز دراسي",
+            "outcome": "الحفاظ على روتين دراسي منتظم وفعّال"
+          },
+          {
+            "who": "محبو القهوة وثقافة المقاهي",
+            "outcome": "اكتشاف أماكن وعادات مرتبطة بالقهوة"
+          },
+          {
+            "who": "مهتمون بأسلوب الحياة اليومي البسيط",
+            "outcome": "إيجاد إلهام لروتين صباحي هادئ ومنظم"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "بيئة الدراسة المثالية",
+            "description": "يساعد الطلاب على اختيار المكان المناسب للتركيز والإنتاجية الدراسية."
+          },
+          {
+            "title": "عادات الإنتاجية",
+            "description": "يمنح الطلاب أدوات عملية للحفاظ على روتين دراسي منتظم وفعّال."
+          },
+          {
+            "title": "ثقافة القهوة",
+            "description": "يلهم محبي القهوة باكتشاف عادات وتجارب مرتبطة بعالم القهوة."
+          },
+          {
+            "title": "لحظات الراحة الذكية",
+            "description": "يُعلّم الجمهور كيف يوازنون بين الدراسة والاسترخاء دون فقدان الزخم."
+          },
+          {
+            "title": "تحديات الحياة الجامعية",
+            "description": "يربط الصانعة بجمهورها من الطلاب عبر تجارب مشتركة وواقعية."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Student lifestyle and daily routines",
+        "slug": "student-lifestyle-and-daily-routines",
+        "categoryLabel": null
+      },
+      "cta": null,
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 22625,
+      "wallClockMs": 21239,
+      "estimatedUsd": 0.033489,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "AM-03",
+      "category": "ambiguous_multilingual",
+      "goal": {
+        "status": "needs_clarification",
+        "text": "Share my everyday style and moments that make people feel good.",
+        "source": "user_typed",
+        "question": "What is the main reason you create and share your content, for example to inspire a certain lifestyle, document your daily life, or something else?",
+        "confidence": null
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Everyday style enthusiasts",
+            "outcome": "Find fresh outfit ideas for daily life"
+          },
+          {
+            "who": "Mood and aesthetic seekers",
+            "outcome": "Discover uplifting content that brightens their day"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Daily Outfit Ideas",
+            "description": "Gives style enthusiasts fresh, relatable looks they can recreate for everyday life."
+          },
+          {
+            "title": "Feel-Good Moments",
+            "description": "Delivers uplifting everyday snapshots that brighten mood-seekers' days."
+          },
+          {
+            "title": "Aesthetic Lifestyle",
+            "description": "Connects aesthetic seekers to a cohesive, feel-good visual world they can aspire to."
+          },
+          {
+            "title": "Seasonal Style Shifts",
+            "description": "Helps style enthusiasts adapt their wardrobe as seasons and moods change."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Lifestyle photo and vlog content",
+        "slug": "lifestyle-photo-and-vlog-content",
+        "categoryLabel": null
+      },
+      "cta": null,
+      "rejections": [],
+      "calls": 4,
+      "retries": 0,
+      "latencyMs": 15760,
+      "wallClockMs": 13909,
+      "estimatedUsd": 0.024228,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    }
+  ],
+  "calls": [
+    {
+      "caseId": "RL-01",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1071,
+      "outputTokens": 39,
+      "latencyMs": 2295,
+      "estimatedUsd": 0.003798,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-01",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1519,
+      "outputTokens": 155,
+      "latencyMs": 3049,
+      "estimatedUsd": 0.006882,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-01",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1094,
+      "outputTokens": 36,
+      "latencyMs": 1419,
+      "estimatedUsd": 0.003822,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-01",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1432,
+      "outputTokens": 198,
+      "latencyMs": 4737,
+      "estimatedUsd": 0.007266,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-01",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1619,
+      "outputTokens": 322,
+      "latencyMs": 7591,
+      "estimatedUsd": 0.009687,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-02",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1019,
+      "outputTokens": 39,
+      "latencyMs": 1325,
+      "estimatedUsd": 0.003642,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-02",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1469,
+      "outputTokens": 155,
+      "latencyMs": 2718,
+      "estimatedUsd": 0.006732,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-02",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1381,
+      "outputTokens": 214,
+      "latencyMs": 5198,
+      "estimatedUsd": 0.007353,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-02",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1556,
+      "outputTokens": 337,
+      "latencyMs": 8192,
+      "estimatedUsd": 0.009723,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-03",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 931,
+      "outputTokens": 38,
+      "latencyMs": 1225,
+      "estimatedUsd": 0.003363,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-03",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1299,
+      "outputTokens": 161,
+      "latencyMs": 2722,
+      "estimatedUsd": 0.006312,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-03",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1212,
+      "outputTokens": 201,
+      "latencyMs": 4766,
+      "estimatedUsd": 0.006651,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-03",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1319,
+      "outputTokens": 331,
+      "latencyMs": 7087,
+      "estimatedUsd": 0.008922,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-04",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 908,
+      "outputTokens": 37,
+      "latencyMs": 1238,
+      "estimatedUsd": 0.003279,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-04",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1257,
+      "outputTokens": 145,
+      "latencyMs": 2232,
+      "estimatedUsd": 0.005946,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-04",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1166,
+      "outputTokens": 186,
+      "latencyMs": 4819,
+      "estimatedUsd": 0.006288,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-04",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1268,
+      "outputTokens": 307,
+      "latencyMs": 7750,
+      "estimatedUsd": 0.008409,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-05",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1051,
+      "outputTokens": 47,
+      "latencyMs": 1409,
+      "estimatedUsd": 0.003858,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-05",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1499,
+      "outputTokens": 157,
+      "latencyMs": 3130,
+      "estimatedUsd": 0.006852,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-05",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1415,
+      "outputTokens": 210,
+      "latencyMs": 4827,
+      "estimatedUsd": 0.007395,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-05",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1603,
+      "outputTokens": 311,
+      "latencyMs": 7116,
+      "estimatedUsd": 0.009474,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "FH-01",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1018,
+      "outputTokens": 38,
+      "latencyMs": 1449,
+      "estimatedUsd": 0.003624,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "FH-01",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1466,
+      "outputTokens": 157,
+      "latencyMs": 3484,
+      "estimatedUsd": 0.006753,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "FH-01",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1375,
+      "outputTokens": 196,
+      "latencyMs": 5071,
+      "estimatedUsd": 0.007065,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "FH-01",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1543,
+      "outputTokens": 246,
+      "latencyMs": 6096,
+      "estimatedUsd": 0.008319,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "FH-02",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 994,
+      "outputTokens": 36,
+      "latencyMs": 1276,
+      "estimatedUsd": 0.003522,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "FH-02",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1428,
+      "outputTokens": 151,
+      "latencyMs": 3102,
+      "estimatedUsd": 0.006549,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "FH-02",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1343,
+      "outputTokens": 224,
+      "latencyMs": 5752,
+      "estimatedUsd": 0.007389,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "FH-02",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1516,
+      "outputTokens": 327,
+      "latencyMs": 7052,
+      "estimatedUsd": 0.009453,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "FH-03",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1023,
+      "outputTokens": 38,
+      "latencyMs": 1550,
+      "estimatedUsd": 0.003639,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "FH-03",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1468,
+      "outputTokens": 146,
+      "latencyMs": 2816,
+      "estimatedUsd": 0.006594,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "FH-03",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1378,
+      "outputTokens": 232,
+      "latencyMs": 6522,
+      "estimatedUsd": 0.007614,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "FH-03",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1551,
+      "outputTokens": 314,
+      "latencyMs": 7530,
+      "estimatedUsd": 0.009363,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "FH-04",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 931,
+      "outputTokens": 39,
+      "latencyMs": 1529,
+      "estimatedUsd": 0.003378,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "FH-04",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1299,
+      "outputTokens": 151,
+      "latencyMs": 2559,
+      "estimatedUsd": 0.006162,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "FH-04",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1207,
+      "outputTokens": 207,
+      "latencyMs": 5034,
+      "estimatedUsd": 0.006726,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "FH-04",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1313,
+      "outputTokens": 303,
+      "latencyMs": 7259,
+      "estimatedUsd": 0.008484,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-01",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1005,
+      "outputTokens": 39,
+      "latencyMs": 1349,
+      "estimatedUsd": 0.0036,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-01",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1445,
+      "outputTokens": 146,
+      "latencyMs": 2540,
+      "estimatedUsd": 0.006525,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-01",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1355,
+      "outputTokens": 215,
+      "latencyMs": 5523,
+      "estimatedUsd": 0.00729,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-01",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1518,
+      "outputTokens": 305,
+      "latencyMs": 7094,
+      "estimatedUsd": 0.009129,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-02",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 989,
+      "outputTokens": 38,
+      "latencyMs": 1214,
+      "estimatedUsd": 0.003537,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-02",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1431,
+      "outputTokens": 150,
+      "latencyMs": 2536,
+      "estimatedUsd": 0.006543,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-02",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1345,
+      "outputTokens": 214,
+      "latencyMs": 5511,
+      "estimatedUsd": 0.007245,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-02",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1513,
+      "outputTokens": 309,
+      "latencyMs": 7660,
+      "estimatedUsd": 0.009174,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-03",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1004,
+      "outputTokens": 38,
+      "latencyMs": 1478,
+      "estimatedUsd": 0.003582,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-03",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1452,
+      "outputTokens": 152,
+      "latencyMs": 4282,
+      "estimatedUsd": 0.006636,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-03",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1361,
+      "outputTokens": 160,
+      "latencyMs": 4435,
+      "estimatedUsd": 0.006483,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-03",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1525,
+      "outputTokens": 313,
+      "latencyMs": 6656,
+      "estimatedUsd": 0.00927,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-04",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 909,
+      "outputTokens": 39,
+      "latencyMs": 2628,
+      "estimatedUsd": 0.003312,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-04",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1269,
+      "outputTokens": 161,
+      "latencyMs": 3549,
+      "estimatedUsd": 0.006222,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-04",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1177,
+      "outputTokens": 234,
+      "latencyMs": 5158,
+      "estimatedUsd": 0.007041,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-04",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1288,
+      "outputTokens": 320,
+      "latencyMs": 7811,
+      "estimatedUsd": 0.008664,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "EN-01",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1038,
+      "outputTokens": 42,
+      "latencyMs": 1659,
+      "estimatedUsd": 0.003744,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "EN-01",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1480,
+      "outputTokens": 152,
+      "latencyMs": 2718,
+      "estimatedUsd": 0.00672,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "EN-01",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1396,
+      "outputTokens": 216,
+      "latencyMs": 4981,
+      "estimatedUsd": 0.007428,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "EN-01",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1585,
+      "outputTokens": 325,
+      "latencyMs": 7680,
+      "estimatedUsd": 0.00963,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "EN-02",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 985,
+      "outputTokens": 38,
+      "latencyMs": 1450,
+      "estimatedUsd": 0.003525,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "EN-02",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1425,
+      "outputTokens": 146,
+      "latencyMs": 2882,
+      "estimatedUsd": 0.006465,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "EN-02",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1335,
+      "outputTokens": 221,
+      "latencyMs": 5499,
+      "estimatedUsd": 0.00732,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "EN-02",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1495,
+      "outputTokens": 319,
+      "latencyMs": 7583,
+      "estimatedUsd": 0.00927,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "EN-03",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 990,
+      "outputTokens": 38,
+      "latencyMs": 1250,
+      "estimatedUsd": 0.00354,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "EN-03",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1438,
+      "outputTokens": 147,
+      "latencyMs": 2687,
+      "estimatedUsd": 0.006519,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "EN-03",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1349,
+      "outputTokens": 201,
+      "latencyMs": 4912,
+      "estimatedUsd": 0.007062,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "EN-03",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1505,
+      "outputTokens": 273,
+      "latencyMs": 6463,
+      "estimatedUsd": 0.00861,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "EN-04",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 919,
+      "outputTokens": 39,
+      "latencyMs": 1459,
+      "estimatedUsd": 0.003342,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "EN-04",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1289,
+      "outputTokens": 151,
+      "latencyMs": 3061,
+      "estimatedUsd": 0.006132,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "EN-04",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1198,
+      "outputTokens": 207,
+      "latencyMs": 4963,
+      "estimatedUsd": 0.006699,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "EN-04",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1298,
+      "outputTokens": 325,
+      "latencyMs": 9481,
+      "estimatedUsd": 0.008769,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "TL-01",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 976,
+      "outputTokens": 39,
+      "latencyMs": 1606,
+      "estimatedUsd": 0.003513,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "TL-01",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1416,
+      "outputTokens": 147,
+      "latencyMs": 3078,
+      "estimatedUsd": 0.006453,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "TL-01",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1327,
+      "outputTokens": 217,
+      "latencyMs": 6189,
+      "estimatedUsd": 0.007236,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "TL-01",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1488,
+      "outputTokens": 319,
+      "latencyMs": 6479,
+      "estimatedUsd": 0.009249,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "TL-02",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 980,
+      "outputTokens": 39,
+      "latencyMs": 1276,
+      "estimatedUsd": 0.003525,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "TL-02",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1420,
+      "outputTokens": 148,
+      "latencyMs": 2610,
+      "estimatedUsd": 0.00648,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "TL-02",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1332,
+      "outputTokens": 206,
+      "latencyMs": 4903,
+      "estimatedUsd": 0.007086,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "TL-02",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1495,
+      "outputTokens": 328,
+      "latencyMs": 7012,
+      "estimatedUsd": 0.009405,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "TL-03",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 977,
+      "outputTokens": 40,
+      "latencyMs": 2572,
+      "estimatedUsd": 0.003531,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "TL-03",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1419,
+      "outputTokens": 145,
+      "latencyMs": 2576,
+      "estimatedUsd": 0.006432,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "TL-03",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1328,
+      "outputTokens": 217,
+      "latencyMs": 5112,
+      "estimatedUsd": 0.007239,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "TL-03",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1488,
+      "outputTokens": 338,
+      "latencyMs": 7241,
+      "estimatedUsd": 0.009534,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "TL-04",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 897,
+      "outputTokens": 37,
+      "latencyMs": 1541,
+      "estimatedUsd": 0.003246,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "TL-04",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1241,
+      "outputTokens": 167,
+      "latencyMs": 2803,
+      "estimatedUsd": 0.006228,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "TL-04",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1148,
+      "outputTokens": 212,
+      "latencyMs": 5088,
+      "estimatedUsd": 0.006624,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "TL-04",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1259,
+      "outputTokens": 326,
+      "latencyMs": 7509,
+      "estimatedUsd": 0.008667,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "ES-01",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1002,
+      "outputTokens": 39,
+      "latencyMs": 1169,
+      "estimatedUsd": 0.003591,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "ES-01",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1442,
+      "outputTokens": 148,
+      "latencyMs": 2422,
+      "estimatedUsd": 0.006546,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "ES-01",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1354,
+      "outputTokens": 203,
+      "latencyMs": 5768,
+      "estimatedUsd": 0.007107,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "ES-01",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1519,
+      "outputTokens": 321,
+      "latencyMs": 6544,
+      "estimatedUsd": 0.009372,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "ES-02",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1005,
+      "outputTokens": 40,
+      "latencyMs": 1278,
+      "estimatedUsd": 0.003615,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "ES-02",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1455,
+      "outputTokens": 165,
+      "latencyMs": 2760,
+      "estimatedUsd": 0.00684,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "ES-02",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1365,
+      "outputTokens": 229,
+      "latencyMs": 24415,
+      "estimatedUsd": 0.00753,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "ES-02",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1534,
+      "outputTokens": 375,
+      "latencyMs": 7271,
+      "estimatedUsd": 0.010227,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "ES-03",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 918,
+      "outputTokens": 38,
+      "latencyMs": 1428,
+      "estimatedUsd": 0.003324,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "ES-03",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1286,
+      "outputTokens": 150,
+      "latencyMs": 2811,
+      "estimatedUsd": 0.006108,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "ES-03",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1196,
+      "outputTokens": 214,
+      "latencyMs": 5044,
+      "estimatedUsd": 0.006798,
+      "error": null,
+      "rejected": true
+    },
+    {
+      "caseId": "ES-03",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1222,
+      "outputTokens": 203,
+      "latencyMs": 4784,
+      "estimatedUsd": 0.006711,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "ES-03",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1301,
+      "outputTokens": 306,
+      "latencyMs": 6672,
+      "estimatedUsd": 0.008493,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "SN-01",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1122,
+      "outputTokens": 196,
+      "latencyMs": 4661,
+      "estimatedUsd": 0.006306,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "SN-01",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1228,
+      "outputTokens": 303,
+      "latencyMs": 6643,
+      "estimatedUsd": 0.008229,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "SN-02",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 901,
+      "outputTokens": 34,
+      "latencyMs": 1242,
+      "estimatedUsd": 0.003213,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "SN-02",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1268,
+      "outputTokens": 160,
+      "latencyMs": 2738,
+      "estimatedUsd": 0.006204,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "SN-02",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1173,
+      "outputTokens": 155,
+      "latencyMs": 3688,
+      "estimatedUsd": 0.005844,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "SN-02",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1283,
+      "outputTokens": 305,
+      "latencyMs": 6926,
+      "estimatedUsd": 0.008424,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "SN-03",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 916,
+      "outputTokens": 41,
+      "latencyMs": 1261,
+      "estimatedUsd": 0.003363,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "SN-03",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1281,
+      "outputTokens": 175,
+      "latencyMs": 3117,
+      "estimatedUsd": 0.006468,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "SN-03",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1188,
+      "outputTokens": 169,
+      "latencyMs": 4045,
+      "estimatedUsd": 0.006099,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "SN-03",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1303,
+      "outputTokens": 332,
+      "latencyMs": 7586,
+      "estimatedUsd": 0.008889,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "AM-01",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1045,
+      "outputTokens": 36,
+      "latencyMs": 1266,
+      "estimatedUsd": 0.003675,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "AM-01",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1493,
+      "outputTokens": 164,
+      "latencyMs": 2767,
+      "estimatedUsd": 0.006939,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "AM-01",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1411,
+      "outputTokens": 254,
+      "latencyMs": 5760,
+      "estimatedUsd": 0.008043,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "AM-01",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1608,
+      "outputTokens": 430,
+      "latencyMs": 8329,
+      "estimatedUsd": 0.011274,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "AM-02",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1024,
+      "outputTokens": 38,
+      "latencyMs": 1393,
+      "estimatedUsd": 0.003642,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "AM-02",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1442,
+      "outputTokens": 167,
+      "latencyMs": 3111,
+      "estimatedUsd": 0.006831,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "AM-02",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1373,
+      "outputTokens": 352,
+      "latencyMs": 6629,
+      "estimatedUsd": 0.009399,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "AM-02",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1619,
+      "outputTokens": 584,
+      "latencyMs": 11492,
+      "estimatedUsd": 0.013617,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "AM-03",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 910,
+      "outputTokens": 39,
+      "latencyMs": 1854,
+      "estimatedUsd": 0.003315,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "AM-03",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1299,
+      "outputTokens": 164,
+      "latencyMs": 2974,
+      "estimatedUsd": 0.006357,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "AM-03",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1205,
+      "outputTokens": 153,
+      "latencyMs": 3909,
+      "estimatedUsd": 0.00591,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "AM-03",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1342,
+      "outputTokens": 308,
+      "latencyMs": 7023,
+      "estimatedUsd": 0.008646,
+      "error": null,
+      "rejected": false
+    }
+  ],
+  "totals": {
+    "cases": 30,
+    "calls": 120,
+    "retries": 2,
+    "rejections": 1,
+    "estimatedUsd": 0.790713,
+    "meanUsdPerCase": 0.026357,
+    "maxUsdPerCase": 0.033489,
+    "meanLatencyMs": 4412,
+    "p95LatencyMs": 7750,
+    "meanWallClockMs": 16175,
+    "p95WallClockMs": 21239,
+    "failedCallUsd": 0.006798
+  }
+}

@@ -13,7 +13,7 @@
  * - Writes docs/evals/personalization-intelligence/run-<timestamp>.{json,md}.
  *   No keys or headers are ever written. Human rubric scores stay empty.
  */
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { EVAL_CASES } from "../server/personalization/intelligence/eval/fixtures";
 import {
@@ -37,7 +37,9 @@ export function renderMarkdown(r: EvalReport): string {
     "",
     `Cases ${r.totals.cases}, calls ${r.totals.calls}, retries ${r.totals.retries}, rejections ${r.totals.rejections}, cost $${r.totals.estimatedUsd} (mean $${r.totals.meanUsdPerCase}, max $${r.totals.maxUsdPerCase}, rejected/failed calls $${r.totals.failedCallUsd}), latency mean ${r.totals.meanLatencyMs} ms, p95 ${r.totals.p95LatencyMs} ms.`,
     "",
-    "| Case | Goal (source) | Audiences | Pillars | Gates | Goal /25 | Audience /20 | Pillars /25 | Specific /15 | Clarity /10 | Evidence /5 | Total | Reviewer notes |",
+    "Niche is scored out of 30 and is not part of the strategy score. Strategy is out of 100: Goal 25, Audience 20, Pillars 25, Specificity 15, Clarity 10, Evidence 5. The gate is the strategy mean, not a sum that includes niche.",
+    "",
+    "| Case | Goal (source) | Audiences | Pillars | Gates | Niche /30 | Goal /25 | Audience /20 | Pillars /25 | Specific /15 | Clarity /10 | Evidence /5 | Strategy /100 | Reviewer notes |",
     "|---|---|---|---|---|---|---|---|---|---|---|---|---|",
   ];
   for (const c of r.cases) {
@@ -56,17 +58,50 @@ export function renderMarkdown(r: EvalReport): string {
       ? `${c.goal.text} (${c.goal.source}${c.goal.question ? `; asked: ${c.goal.question}` : ""})`
       : c.goal.status;
     lines.push(
-      `| ${c.caseId} | ${goal} | ${c.audiences.items.map(a => a.who).join("; ") || c.audiences.status} | ${c.pillars.items.map(p => p.title).join("; ") || c.pillars.status} | ${gates} | | | | | | | | |`
+      `| ${c.caseId} | ${goal} | ${c.audiences.items.map(a => a.who).join("; ") || c.audiences.status} | ${c.pillars.items.map(p => p.title).join("; ") || c.pillars.status} | ${gates} | | | | | | | | | |`
     );
   }
   return lines.join("\n").replace(/—|–/g, ",");
 }
 
+function selectedCases() {
+  const flag = process.argv.find(arg => arg.startsWith("--cases="));
+  if (!flag) return EVAL_CASES;
+  const ids = new Set(
+    flag
+      .slice("--cases=".length)
+      .split(",")
+      .map(id => id.trim())
+      .filter(Boolean)
+  );
+  const cases = EVAL_CASES.filter(item => ids.has(item.id));
+  if (cases.length !== ids.size) {
+    throw new Error("One or more --cases ids are not in the evaluation set.");
+  }
+  return cases;
+}
+
+function outputStem(): string | null {
+  const flag = process.argv.find(arg => arg.startsWith("--out="));
+  return flag ? flag.slice("--out=".length).trim() : null;
+}
+
+function loadLocalEnv(): void {
+  const file = path.resolve(import.meta.dirname, "../.env");
+  if (!existsSync(file)) return;
+  for (const line of readFileSync(file, "utf8").split("\n")) {
+    const match = line.match(/^([A-Z0-9_]+)=(.*)$/);
+    if (!match || process.env[match[1]]) continue;
+    process.env[match[1]] = match[2].replace(/^["']|["']$/g, "");
+  }
+}
+
 async function main() {
+  loadLocalEnv();
   assertRealRunAllowed(process.env, process.argv);
   const { invokeLLM } = await import("../server/_core/llm");
   const report = await runEvaluation({
-    cases: EVAL_CASES,
+    cases: selectedCases(),
     invoker: invokeLLM,
     realModel: true,
     promptVersions: {
@@ -80,13 +115,13 @@ async function main() {
     "../docs/evals/personalization-intelligence"
   );
   mkdirSync(dir, { recursive: true });
-  const stamp = report.startedAt.replace(/[:.]/g, "-");
+  const stamp = outputStem() || `run-${report.startedAt.replace(/[:.]/g, "-")}`;
   writeFileSync(
-    path.join(dir, `run-${stamp}.json`),
+    path.join(dir, `${stamp}.json`),
     JSON.stringify(report, null, 2)
   );
-  writeFileSync(path.join(dir, `run-${stamp}.md`), renderMarkdown(report));
-  console.log(JSON.stringify(report.totals, null, 2));
+  writeFileSync(path.join(dir, `${stamp}.md`), renderMarkdown(report));
+  console.log(JSON.stringify({ file: stamp, totals: report.totals, niches: report.cases.map(c => ({ id: c.caseId, niche: c.niche, cta: c.cta })) }, null, 2));
 }
 
 if (process.argv[1]?.endsWith("personalization-intelligence-eval.ts")) {

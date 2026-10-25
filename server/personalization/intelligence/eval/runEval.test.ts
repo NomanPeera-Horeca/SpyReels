@@ -19,6 +19,7 @@ function fakeModel(over: Partial<Record<string, unknown[]>> = {}) {
     unknown[]
   >;
   const defaults: Record<string, unknown> = {
+    personalization_niche: { label: "Commercial kitchen equipment", category: "Business" },
     personalization_goal_inference: {
       decision: "suggest",
       goal: "Share useful tips with people who follow this account.",

@@ -18,6 +18,7 @@ import { buildCreatorEvidence } from "./evidence";
 import { DEFAULT_CLARIFYING_QUESTION, inferGoal } from "./goalInference";
 import { recommendAudiences } from "./audienceRecommendations";
 import { recommendPillars } from "./pillarRecommendations";
+import { inferNicheLabel } from "./profileBasics";
 import {
   generateRecommendations,
   stepInputsHash,
@@ -42,6 +43,27 @@ function fakeLlm(...responses: Scripted[]) {
   const calls: InvokeParams[] = [];
   const invoker = async (params: InvokeParams): Promise<InvokeResult> => {
     calls.push(params);
+    if (params.operation === "personalization_niche") {
+      return {
+        id: "x",
+        created: 0,
+        model: "claude-sonnet-4-6",
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: "assistant",
+              content: JSON.stringify({
+                label: "Commercial kitchen equipment",
+                category: "Business",
+              }),
+            },
+            finish_reason: "tool_use",
+          },
+        ],
+        usage: { prompt_tokens: 200, completion_tokens: 20, total_tokens: 220 },
+      };
+    }
     const next = responses.shift();
     if (next === undefined) throw new Error("unexpected extra LLM call");
     if (next instanceof Error) throw next;
@@ -622,6 +644,89 @@ describe("Pillar recommendations", () => {
   });
 });
 
+describe("specific niche", () => {
+  it("does not keep a catalog bucket when that is all the model returns", async () => {
+    const bucket = {
+      id: "x",
+      created: 0,
+      model: "claude-sonnet-4-6",
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: "assistant" as const,
+            content: JSON.stringify({
+              label: "Business & Entrepreneurship",
+              category: "Business",
+            }),
+          },
+          finish_reason: "tool_use" as const,
+        },
+      ],
+      usage: { prompt_tokens: 100, completion_tokens: 20, total_tokens: 120 },
+    };
+    const result = await inferNicheLabel({
+      evidence: restaurant,
+      invoker: async () => bucket,
+    });
+    expect(result.niche).toBeNull();
+  });
+
+  it("rejects a placeholder niche instead of saving it", async () => {
+    const placeholder = {
+      id: "x",
+      created: 0,
+      model: "claude-sonnet-4-6",
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: "assistant" as const,
+            content: JSON.stringify({ label: "<UNKNOWN>", category: "unknown" }),
+          },
+          finish_reason: "tool_use" as const,
+        },
+      ],
+      usage: { prompt_tokens: 100, completion_tokens: 20, total_tokens: 120 },
+    };
+    const result = await inferNicheLabel({
+      evidence: restaurant,
+      invoker: async () => placeholder,
+    });
+    expect(result.niche).toBeNull();
+  });
+
+  it("keeps a specific label when the category is not in the taxonomy", async () => {
+    const unmatched = {
+      id: "x",
+      created: 0,
+      model: "claude-sonnet-4-6",
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: "assistant" as const,
+            content: JSON.stringify({
+              label: "Corporate office life comedy sketches",
+              category: "unknown",
+            }),
+          },
+          finish_reason: "tool_use" as const,
+        },
+      ],
+      usage: { prompt_tokens: 100, completion_tokens: 20, total_tokens: 120 },
+    };
+    const result = await inferNicheLabel({
+      evidence: restaurant,
+      invoker: async () => unmatched,
+    });
+    expect(result.niche).toMatchObject({
+      label: "Corporate office life comedy sketches",
+      categoryLabel: null,
+    });
+  });
+});
+
 describe("guards", () => {
   it("flags invented proper nouns but not sentence starts, platform names or evidence names", () => {
     expect(
@@ -816,7 +921,11 @@ describe("generateRecommendations: Goal -> Audience -> Pillars", () => {
       { ctx, socialProfileId: "prof-1", step: "goal" }
     );
     expect(r).toMatchObject({ status: "generated" });
-    expect(store.items.some(i => i.kind === "niche")).toBe(true);
+    expect(store.items.find(i => i.kind === "niche")?.payload).toMatchObject({
+      label: "Commercial kitchen equipment",
+      slug: "business",
+      categoryLabel: "Business",
+    });
     expect(store.items.some(i => i.kind === "language")).toBe(true);
     const g = store.items.find(i => i.kind === "goal") as ItemRecord & {
       generationMeta: GeneratedInsert["generationMeta"];
@@ -857,7 +966,7 @@ describe("generateRecommendations: Goal -> Audience -> Pillars", () => {
       status: "reused",
       dismissedForTheseInputs: false,
     });
-    expect(llm.calls).toHaveLength(1);
+    expect(llm.calls.filter(call => call.operation !== "personalization_niche")).toHaveLength(1);
   });
 
   it("dismissed for the same inputs: not regenerated (no surprise reappearance, no cost)", async () => {
@@ -1109,7 +1218,9 @@ describe("generateRecommendations: Goal -> Audience -> Pillars", () => {
     expect(first).toMatchObject({ status: "failed", kind: "llm_unavailable" });
     expect(store.items.filter(i => i.kind === "goal")).toEqual([]);
     expect(store.items.find(i => i.kind === "niche")?.payload).toMatchObject({
-      slug: "business-entrepreneurship",
+      slug: "business",
+      label: "Commercial kitchen equipment",
+      categoryLabel: "Business",
     });
     expect(store.items.find(i => i.kind === "language")?.payload).toMatchObject({
       code: "en",
@@ -1121,7 +1232,7 @@ describe("generateRecommendations: Goal -> Audience -> Pillars", () => {
     );
     expect(again).toMatchObject({ status: "failed", kind: "llm_unavailable" });
     expect(store.items.filter(i => i.kind === "niche")).toHaveLength(1);
-    expect(llm.calls).toHaveLength(2);
+    expect(llm.calls.filter(call => call.operation !== "personalization_niche")).toHaveLength(2);
   });
 
   it("asks the goal question even after a profile niche was saved", async () => {
@@ -1171,7 +1282,7 @@ describe("generateRecommendations: Goal -> Audience -> Pillars", () => {
       store.items.filter(i => i.kind === "language" && i.status === "confirmed")
     ).toHaveLength(1);
     expect(store.items.filter(i => i.kind === "goal")).toEqual([]);
-    expect(llm.calls).toHaveLength(2);
+    expect(llm.calls.filter(call => call.operation !== "personalization_niche")).toHaveLength(2);
   });
 
   it("insufficient evidence: asks to clarify, no model call, nothing stored", async () => {

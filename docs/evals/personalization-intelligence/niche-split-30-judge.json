@@ -1,0 +1,438 @@
+{
+  "stem": "niche-split-30",
+  "cases": 30,
+  "scored": 30,
+  "estimatedUsd": 0.200016,
+  "mean": {
+    "niche": 23.3,
+    "goal": 19.9,
+    "audience": 15.9,
+    "pillars": 20.4,
+    "specificity": 10.3,
+    "clarity": 8.1,
+    "evidence": 3.4,
+    "total": 101.3
+  },
+  "rows": [
+    {
+      "caseId": "RL-01",
+      "scores": {
+        "niche": 27,
+        "goal": 22,
+        "audience": 18,
+        "pillars": 23,
+        "specificity": 13,
+        "clarity": 9,
+        "evidence": 5,
+        "reason": "Niche is precise and accurate; goal, audiences, and pillars map cleanly to bio and captions with no invented data or unsupported claims."
+      },
+      "costUsd": 0.006765
+    },
+    {
+      "caseId": "RL-02",
+      "scores": {
+        "niche": 27,
+        "goal": 23,
+        "audience": 17,
+        "pillars": 22,
+        "specificity": 12,
+        "clarity": 9,
+        "evidence": 4,
+        "reason": "Niche and goal are accurate and diner-focused; pillars map well to captions; audience lacks local geographic grounding the profile implies."
+      },
+      "costUsd": 0.006777
+    },
+    {
+      "caseId": "RL-03",
+      "scores": {
+        "niche": 26,
+        "goal": 21,
+        "audience": 16,
+        "pillars": 20,
+        "specificity": 10,
+        "clarity": 8,
+        "evidence": 3,
+        "reason": "Niche and goal are accurate and grounded; pillars are solid but \"Client Transformations\" implies before-and-after content not evidenced in the sparse post sample."
+      },
+      "costUsd": 0.006678
+    },
+    {
+      "caseId": "RL-04",
+      "scores": {
+        "niche": 26,
+        "goal": 18,
+        "audience": 16,
+        "pillars": 21,
+        "specificity": 9,
+        "clarity": 8,
+        "evidence": 3,
+        "reason": "Niche and pillars are accurate and well-matched to the bio, but zero post data limits audience and goal confidence; no invented stats penalized lightly."
+      },
+      "costUsd": 0.006465
+    },
+    {
+      "caseId": "RL-05",
+      "scores": {
+        "niche": 26,
+        "goal": 20,
+        "audience": 16,
+        "pillars": 21,
+        "specificity": 12,
+        "clarity": 9,
+        "evidence": 4,
+        "reason": "Niche and pillars are well-matched to captions; gift-giver audience is lightly supported; Ingredient Integrity pillar lacks any caption or bio evidence."
+      },
+      "costUsd": 0.006837
+    },
+    {
+      "caseId": "FH-01",
+      "scores": {
+        "niche": 27,
+        "goal": 22,
+        "audience": 17,
+        "pillars": 21,
+        "specificity": 12,
+        "clarity": 9,
+        "evidence": 4,
+        "reason": "Niche and goal are accurate and specific; pillars align well with captions but \"Coaching Mindset\" is vague and the plateau audience lacks caption support."
+      },
+      "costUsd": 0.006573
+    },
+    {
+      "caseId": "FH-02",
+      "scores": {
+        "niche": 27,
+        "goal": 22,
+        "audience": 16,
+        "pillars": 22,
+        "specificity": 12,
+        "clarity": 9,
+        "evidence": 3,
+        "reason": "Pillars and goal align well with the profile; no CTA or discovery category hurts specificity, and Sub-4 Pacing pillar edges toward prescriptive coaching unsupported by the captions."
+      },
+      "costUsd": 0.006861
+    },
+    {
+      "caseId": "FH-03",
+      "scores": {
+        "niche": 26,
+        "goal": 22,
+        "audience": 16,
+        "pillars": 20,
+        "specificity": 11,
+        "clarity": 8,
+        "evidence": 4,
+        "reason": "Niche and goal are accurate; Mindful Eating strays from observed content, and no discovery category or CTA weakens specificity and pillar grounding."
+      },
+      "costUsd": 0.006702
+    },
+    {
+      "caseId": "FH-04",
+      "scores": {
+        "niche": 26,
+        "goal": 22,
+        "audience": 17,
+        "pillars": 21,
+        "specificity": 11,
+        "clarity": 9,
+        "evidence": 4,
+        "reason": "Niche and goal are well-matched to the profile; pillars align but Breathwork Basics lacks a direct booking bridge; no invented stats penalized."
+      },
+      "costUsd": 0.00648
+    },
+    {
+      "caseId": "PB-01",
+      "scores": {
+        "niche": 26,
+        "goal": 22,
+        "audience": 17,
+        "pillars": 21,
+        "specificity": 12,
+        "clarity": 9,
+        "evidence": 4,
+        "reason": "Niche and goal are accurate and well-grounded; pillars are solid but Brand Building lacks caption evidence; no invented data penalized."
+      },
+      "costUsd": 0.006597
+    },
+    {
+      "caseId": "PB-02",
+      "scores": {
+        "niche": 26,
+        "goal": 18,
+        "audience": 16,
+        "pillars": 21,
+        "specificity": 11,
+        "clarity": 8,
+        "evidence": 3,
+        "reason": "Niche and pillars align well with captions; goal leans inspirational over strategic, audiences are plausible but unverified, and $100 revenue is caption-sourced not a fabricated stat."
+      },
+      "costUsd": 0.00681
+    },
+    {
+      "caseId": "PB-03",
+      "scores": {
+        "niche": 27,
+        "goal": 22,
+        "audience": 17,
+        "pillars": 22,
+        "specificity": 12,
+        "clarity": 9,
+        "evidence": 5,
+        "reason": "Niche and goal are accurate and well-scoped; pillars map cleanly to observed captions; no invented stats or audiences detected."
+      },
+      "costUsd": 0.006528
+    },
+    {
+      "caseId": "PB-04",
+      "scores": {
+        "niche": 18,
+        "goal": 20,
+        "audience": 15,
+        "pillars": 19,
+        "specificity": 9,
+        "clarity": 7,
+        "evidence": 3,
+        "reason": "Niche label fits the content but clashes with the Make Money Online discovery tag; no CTA extracted and pillars lack measurable or tactical hooks given the vague profile."
+      },
+      "costUsd": 0.006519
+    },
+    {
+      "caseId": "EN-01",
+      "scores": {
+        "niche": 27,
+        "goal": 20,
+        "audience": 17,
+        "pillars": 22,
+        "specificity": 12,
+        "clarity": 9,
+        "evidence": 4,
+        "reason": "Niche and goal are accurate and non-commercial; pillars map well to captions but \"Behind the Story\" is speculative with no caption evidence."
+      },
+      "costUsd": 0.00678
+    },
+    {
+      "caseId": "EN-02",
+      "scores": {
+        "niche": 27,
+        "goal": 22,
+        "audience": 17,
+        "pillars": 22,
+        "specificity": 12,
+        "clarity": 9,
+        "evidence": 4,
+        "reason": "Niche and pillars are well-matched to the profile; no CTA or discovery category weakens goal and specificity scores slightly."
+      },
+      "costUsd": 0.006531
+    },
+    {
+      "caseId": "EN-03",
+      "scores": {
+        "niche": 22,
+        "goal": 20,
+        "audience": 13,
+        "pillars": 18,
+        "specificity": 9,
+        "clarity": 8,
+        "evidence": 2,
+        "reason": "Affiliate-only CTA is captured but \"Pet product shoppers\" audience and its implied trust-building role overreaches the thin link-in-bio signal; no discovery category filed."
+      },
+      "costUsd": 0.006696
+    },
+    {
+      "caseId": "EN-04",
+      "scores": {
+        "niche": 26,
+        "goal": 22,
+        "audience": 17,
+        "pillars": 21,
+        "specificity": 11,
+        "clarity": 8,
+        "evidence": 4,
+        "reason": "Niche and goal are accurate and booking-focused; pillars are well-mapped to planner audiences but lack tactical hooks given Mo's very thin posting history."
+      },
+      "costUsd": 0.006504
+    },
+    {
+      "caseId": "TL-01",
+      "scores": {
+        "niche": 22,
+        "goal": 18,
+        "audience": 15,
+        "pillars": 18,
+        "specificity": 9,
+        "clarity": 7,
+        "evidence": 3,
+        "reason": "Niche label is accurate but discovery category misfires badly; no CTA extracted, pillars are solid but audiences lack depth and the mismatched category hurts overall coherence."
+      },
+      "costUsd": 0.006696
+    },
+    {
+      "caseId": "TL-02",
+      "scores": {
+        "niche": 22,
+        "goal": 18,
+        "audience": 15,
+        "pillars": 19,
+        "specificity": 10,
+        "clarity": 8,
+        "evidence": 3,
+        "reason": "Niche is accurate but generic; discovery category mismatch (Personal Finance vs. family life) and invented meal/adventure pillars unsupported by captions hurt evidence discipline."
+      },
+      "costUsd": 0.006729
+    },
+    {
+      "caseId": "TL-03",
+      "scores": {
+        "niche": 26,
+        "goal": 18,
+        "audience": 16,
+        "pillars": 21,
+        "specificity": 10,
+        "clarity": 8,
+        "evidence": 3,
+        "reason": "No CTA or discovery category extracted; affiliate shop ignored per notes; goal omits monetization angle; pillars are solid but lack content-format specificity."
+      },
+      "costUsd": 0.006684
+    },
+    {
+      "caseId": "TL-04",
+      "scores": {
+        "niche": 24,
+        "goal": 18,
+        "audience": 16,
+        "pillars": 21,
+        "specificity": 9,
+        "clarity": 8,
+        "evidence": 4,
+        "reason": "Niche and pillars align well with the bio; goal lacks measurable outcome, audiences are plausible but inferred with no captions or posts to validate them."
+      },
+      "costUsd": 0.006519
+    },
+    {
+      "caseId": "ES-01",
+      "scores": {
+        "niche": 26,
+        "goal": 20,
+        "audience": 16,
+        "pillars": 20,
+        "specificity": 11,
+        "clarity": 9,
+        "evidence": 4,
+        "reason": "Niche and goal are accurate and specific; pillars are well-aligned but Real-World Relevance is unsupported by captions; no invented stats penalize evidence lightly."
+      },
+      "costUsd": 0.00672
+    },
+    {
+      "caseId": "ES-02",
+      "scores": {
+        "niche": 27,
+        "goal": 22,
+        "audience": 17,
+        "pillars": 22,
+        "specificity": 12,
+        "clarity": 9,
+        "evidence": 4,
+        "reason": "Niche is precise and accurate; goal, audiences, and pillars align well with the bio and captions; minor penalty for repeated captions reducing specificity signal."
+      },
+      "costUsd": 0.006687
+    },
+    {
+      "caseId": "ES-03",
+      "scores": {
+        "niche": 27,
+        "goal": 20,
+        "audience": 16,
+        "pillars": 21,
+        "specificity": 11,
+        "clarity": 8,
+        "evidence": 3,
+        "reason": "Discovery category \"Restaurants & Cafes\" is misaligned with an education creator; no CTA was extracted despite an active course offer, and pillars lack content-format specificity."
+      },
+      "costUsd": 0.006582
+    },
+    {
+      "caseId": "SN-01",
+      "scores": {
+        "niche": 0,
+        "goal": 18,
+        "audience": 15,
+        "pillars": 20,
+        "specificity": 7,
+        "clarity": 7,
+        "evidence": 2,
+        "reason": "Niche is absent and no profile data exists; pillars and audiences are coherent but built on a bare goal with no bio, posts, or evidence to validate them."
+      },
+      "costUsd": 0.006456
+    },
+    {
+      "caseId": "SN-02",
+      "scores": {
+        "niche": 0,
+        "goal": 16,
+        "audience": 13,
+        "pillars": 17,
+        "specificity": 5,
+        "clarity": 6,
+        "evidence": 1,
+        "reason": "Niche is absent; goal is usable but vague; pillars are plausible but invented without any evidence from a near-empty profile."
+      },
+      "costUsd": 0.00639
+    },
+    {
+      "caseId": "SN-03",
+      "scores": {
+        "niche": 27,
+        "goal": 21,
+        "audience": 17,
+        "pillars": 22,
+        "specificity": 11,
+        "clarity": 9,
+        "evidence": 4,
+        "reason": "Niche, goal, and pillars align tightly with the profile; no CTA or discovery category, and specificity is limited by the early-stage account."
+      },
+      "costUsd": 0.006561
+    },
+    {
+      "caseId": "AM-01",
+      "scores": {
+        "niche": 22,
+        "goal": 21,
+        "audience": 16,
+        "pillars": 20,
+        "specificity": 10,
+        "clarity": 8,
+        "evidence": 3,
+        "reason": "La etiqueta de nicho es precisa pero omite lo comercial; el pilar de planificación semanal no tiene respaldo en el perfil y penaliza evidencia."
+      },
+      "costUsd": 0.007116
+    },
+    {
+      "caseId": "AM-02",
+      "scores": {
+        "niche": 26,
+        "goal": 18,
+        "audience": 16,
+        "pillars": 20,
+        "specificity": 10,
+        "clarity": 7,
+        "evidence": 3,
+        "reason": "Niche and pillars align well with captions; goal lacks content purpose beyond sharing; no CTA or discovery category weakens strategy completeness."
+      },
+      "costUsd": 0.007458
+    },
+    {
+      "caseId": "AM-03",
+      "scores": {
+        "niche": 14,
+        "goal": 12,
+        "audience": 10,
+        "pillars": 13,
+        "specificity": 4,
+        "clarity": 5,
+        "evidence": 1,
+        "reason": "Profile is ambiguous; draft invents specific audiences, pillars, and a goal rather than flagging missing info and asking clarifying questions."
+      },
+      "costUsd": 0.006315
+    }
+  ]
+}

@@ -17,6 +17,10 @@ import {
   type CreatorEvidence,
 } from "./evidence";
 import {
+  commercialIntentAllowed,
+  inventsCommercialObjective,
+  inventsMonetization,
+  isGenericAudience,
   sanitizeCopy,
   unsupportedDemographics,
   unsupportedNumbers,
@@ -29,7 +33,7 @@ import {
   type ParseResult,
 } from "./structuredLlm";
 
-export const AUDIENCE_PROMPT_VERSION = "audience-v1";
+export const AUDIENCE_PROMPT_VERSION = "audience-v2";
 export const MAX_AUDIENCES = 3;
 
 export type AudienceRecommendation = AudiencePayload & { why: string };
@@ -87,6 +91,9 @@ export function buildAudiencePrompt(
     "- who: a short noun phrase (max 8 words). outcome: what this audience wants to achieve (max 10 words). why: one short sentence on how this audience serves the goal.",
     "- Do not add age, gender, ethnicity, religion, family role or orientation unless the evidence or goal mentions it.",
     "- Do not invent names, numbers or facts about the creator.",
+    "- A link in bio, a favorite product, or an affiliate mention is not a business. Do not recommend shoppers, buyers, or product audiences unless the evidence or the confirmed goal shows the creator sells their own offer.",
+    "- who names a specific role or situation from the evidence or goal. Do not use a generic viewer group such as people, viewers, fans, followers, or social-media browsers.",
+    "- When the evidence is thin, return one or two segments. Do not invent a lifestyle, product, or problem that is not in the evidence.",
     "- Do not repeat audiences the user already confirmed.",
     `- Write in ${e.outputLanguage.label}.`,
   ].join("\n");
@@ -130,6 +137,16 @@ export function parseAudienceOutput(
       return { ok: false, reason: "an audience is empty or too long" };
     }
     const text = `${who} ${outcome} ${why}`;
+    if (isGenericAudience(who)) {
+      return { ok: false, reason: "audience is a generic viewer group" };
+    }
+    const allowed = commercialIntentAllowed(goal, e.commercialSignals);
+    if (inventsCommercialObjective(text, allowed) || inventsMonetization(text, allowed)) {
+      return {
+        ok: false,
+        reason: "audience assumes a business or product offer the evidence does not show",
+      };
+    }
     const demo = unsupportedDemographics(text, corpus);
     if (demo.length)
       return {

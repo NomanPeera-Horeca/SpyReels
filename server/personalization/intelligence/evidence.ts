@@ -97,15 +97,36 @@ const OFFER_PATTERNS: RegExp[] = [
 const BUSINESS_NAME =
   /\b(supply|supplies|realty|accounting|bakery|bakehouse|florist|trattoria|restaurant|cafe|studio|llc|inc|pizza truck|food truck|agency|clinic|salon|& co)\b/i;
 
-/** A bio line that already states an offer or CTA. Nothing is rewritten. */
-export function verbatimCta(bio: string | null | undefined): string | null {
-  const text = (bio ?? "").trim();
-  if (!text) return null;
-  const parts = text.split(/\n+|(?<=[.!?])\s+/);
-  const hit = parts.find(part => OFFER_PATTERNS.some(re => re.test(part)));
+/**
+ * An actual ask. Descriptive offer lines (financing, services, wholesale)
+ * stay in commercial detection and are not treated as the call to action.
+ */
+const CTA_ASK_PATTERNS: RegExp[] = [
+  /\bdm\b/i,
+  /\bbook (a|an|your|now|me|us)\b/i,
+  /\b(shop now|add to cart|get started|sign up|subscribe|enroll|apply now|buy now|start free)\b/i,
+  /\bapply (via|here|now|at|for|through)\b/i,
+  /\bcall (or|us|me|to)\b/i,
+  /\b(link in bio|tap the link|comment below|follow for)\b/i,
+  /\breservations?\b/i,
+  /\border\b[^.]{0,40}\bonline\b/i,
+  /\bfree\b[^.]{0,40}\bconsult/i,
+];
+
+/** The first sentence that asks the viewer to do something. Nothing is rewritten. */
+export function callToActionLine(text: string | null | undefined): string | null {
+  const raw = (text ?? "").trim();
+  if (!raw) return null;
+  const parts = raw.split(/\n+|(?<=[.!?])\s+/);
+  const hit = parts.find(part => CTA_ASK_PATTERNS.some(re => re.test(part)));
   if (!hit) return null;
   const line = hit.replace(/\s+/g, " ").trim();
   return line ? line.slice(0, 180) : null;
+}
+
+/** A bio line that is a call to action. Offer descriptions are not returned. */
+export function verbatimCta(bio: string | null | undefined): string | null {
+  return callToActionLine(bio);
 }
 
 export function detectCommercialSignals(input: {

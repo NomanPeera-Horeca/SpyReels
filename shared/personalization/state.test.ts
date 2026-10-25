@@ -3,10 +3,12 @@ import type { AnalysisAvailability, SocialProfileStatus } from "./model";
 import {
   allowedSuggestionEvidence,
   canCompleteStep,
+  currentInputsHashes,
   deriveReadiness,
   decideAnalysisRequest,
   deriveRunStatus,
   idsToSupersedeOnRegeneration,
+  itemIdentity,
   idsToConfirmForStep,
   initialStepStatuses,
   isPersonalizationComplete,
@@ -20,6 +22,7 @@ import {
   resolveActiveProfileId,
   resolveAnalysisAvailability,
   resolveResumeStep,
+  upstreamInputsHash,
   validateSuggestion,
   type AiSuggestion,
   type ExistingRunSummary,
@@ -692,6 +695,100 @@ describe("edits preserve history and invalidate dependent pillars", () => {
       nextVersion: 3,
       invalidatedKinds: ["audience", "pillar"],
     });
+  });
+
+  it("editing a niche label stales unconfirmed audience and pillars and keeps a confirmed audience", () => {
+    const niche = item({
+      id: "n1",
+      kind: "niche",
+      payload: { slug: "business-entrepreneurship", label: "Business & Entrepreneurship" },
+      status: "confirmed",
+      source: "user_entered",
+      evidence: "user_provided",
+    });
+    const confirmedAudience = item({
+      id: "a-confirmed",
+      kind: "audience",
+      payload: { who: "Chefs", outcome: "learn" },
+      status: "confirmed",
+      source: "user_entered",
+      evidence: "user_provided",
+    });
+    const suggestedAudience = item({
+      id: "a-suggested",
+      kind: "audience",
+      payload: { who: "Owners", outcome: "buy" },
+      basedOnInputsHash: upstreamInputsHash("audience", [niche]),
+    });
+    const suggestedPillar = item({
+      id: "p-suggested",
+      kind: "pillar",
+      payload: { title: "Gear", description: "", viewSharePercent: null },
+      basedOnInputsHash: upstreamInputsHash("pillar", [niche, confirmedAudience]),
+    });
+    const plan = planItemEdit(
+      niche,
+      {
+        slug: "business-entrepreneurship",
+        label: "Commercial kitchen equipment",
+        categoryLabel: "Business & Entrepreneurship",
+      },
+      1
+    );
+    expect(plan.invalidatedKinds).toEqual(["audience", "pillar"]);
+    expect(plan.insert.status).toBe("confirmed");
+    const next = [
+      { ...niche, status: "superseded" as const },
+      { ...plan.insert, id: "n2" },
+      suggestedAudience,
+      confirmedAudience,
+      suggestedPillar,
+    ];
+    const hashes = currentInputsHashes(next);
+    expect(isStaleSuggestion(suggestedAudience, plan.nextVersion, hashes)).toBe(true);
+    expect(isStaleSuggestion(suggestedPillar, plan.nextVersion, hashes)).toBe(true);
+    expect(isStaleSuggestion(confirmedAudience, plan.nextVersion, hashes)).toBe(false);
+  });
+
+  it("a same-category label edit changes the niche hash and stales unconfirmed audience", () => {
+    const niche = item({
+      id: "n1",
+      kind: "niche",
+      payload: {
+        slug: "business",
+        label: "Commercial kitchen equipment sales",
+        categoryLabel: "Business",
+      },
+      status: "confirmed",
+      source: "user_entered",
+      evidence: "user_provided",
+    });
+    const suggestedAudience = item({
+      id: "a-suggested",
+      kind: "audience",
+      payload: { who: "Owners", outcome: "buy" },
+      basedOnInputsHash: upstreamInputsHash("audience", [niche]),
+    });
+    const plan = planItemEdit(
+      niche,
+      {
+        slug: "business",
+        label: "Commercial kitchen equipment supply",
+        categoryLabel: "Business",
+      },
+      4
+    );
+    const nextNiche = { ...plan.insert, id: "n2" };
+    expect(itemIdentity("niche", niche.payload)).not.toBe(itemIdentity("niche", nextNiche.payload));
+    expect(plan.invalidatedKinds).toEqual(["audience", "pillar"]);
+    expect(plan.insert.status).toBe("confirmed");
+    const hashes = currentInputsHashes([
+      { ...niche, status: "superseded" as const },
+      nextNiche,
+      suggestedAudience,
+    ]);
+    expect(upstreamInputsHash("audience", [niche])).not.toBe(hashes.audience);
+    expect(isStaleSuggestion(suggestedAudience, plan.nextVersion, hashes)).toBe(true);
   });
 
   it("editing an audience also invalidates pillar suggestions", () => {

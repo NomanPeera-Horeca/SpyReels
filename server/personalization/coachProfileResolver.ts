@@ -179,8 +179,11 @@ export function resolveCoachPersonalization(input: {
   const nicheTier = pick("niche");
   let nicheSlug: string;
   let nicheSource: FieldSource;
+  let nicheLabel: string | null = null;
   if (nicheTier) {
-    nicheSlug = (nicheTier.items[0].payload as ItemPayloadByKind["niche"]).slug;
+    const payload = nicheTier.items[0].payload as ItemPayloadByKind["niche"];
+    nicheSlug = payload.slug;
+    nicheLabel = payload.label.trim() || null;
     nicheSource = nicheTier.source;
   } else {
     nicheSlug = resolvePrimaryNicheSlug({
@@ -206,7 +209,7 @@ export function resolveCoachPersonalization(input: {
 
   return {
     profile: {
-      niche: formatReelTaxonomyLabel(nicheSlug),
+      niche: nicheLabel || formatReelTaxonomyLabel(nicheSlug),
       nicheSlug,
       targetAudience,
       brandDescription,

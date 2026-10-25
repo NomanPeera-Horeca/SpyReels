@@ -91,6 +91,52 @@ export function inventsCommercialObjective(
   return COMMERCIAL_CLAIM.test(text) && !commercialSignals;
 }
 
+/** A confirmed goal that already states an offer may justify a commercial audience. */
+export function commercialIntentAllowed(goal: string, commercialSignals: boolean): boolean {
+  return commercialSignals || COMMERCIAL_CLAIM.test(goal);
+}
+
+/** Affiliate and product-recommendation language. Not a business the creator runs. */
+const MONETIZATION_ASSUMPTION =
+  /\b(shoppers?|affiliates?|product spotlights?|link in bio|my picks|monetiz\w*)\b/i;
+
+export function inventsMonetization(text: string, allowed: boolean): boolean {
+  return MONETIZATION_ASSUMPTION.test(text) && !allowed;
+}
+
+/** Viewer buckets that do not name the creator's subject. */
+const GENERIC_AUDIENCE =
+  /^(people|users|viewers|fans|followers|everyone|anybody|anyone)$|\b(scroll viewers?|social media browsers?|short-form(?: video)? (?:fans|viewers|enthusiasts)|content viewers|casual browsers)\b/i;
+
+export function isGenericAudience(who: string): boolean {
+  return GENERIC_AUDIENCE.test(who.trim());
+}
+
+const GENERIC_PILLAR_WORD = new Set([
+  "daily",
+  "life",
+  "content",
+  "moments",
+  "tips",
+  "ideas",
+  "lifestyle",
+  "vlog",
+  "vlogs",
+  "updates",
+  "stuff",
+  "things",
+]);
+
+/** A pillar title made only of generic words, with no subject. */
+export function isGenericPillarTitle(title: string): boolean {
+  const words = title
+    .toLowerCase()
+    .replace(/[^a-z\s]/g, "")
+    .split(/\s+/)
+    .filter(Boolean);
+  return words.length > 0 && words.every(word => GENERIC_PILLAR_WORD.has(word));
+}
+
 /**
  * Demographic attributes (age, gender, religion, ethnicity, orientation,
  * family role) are allowed only when the evidence or confirmed answers

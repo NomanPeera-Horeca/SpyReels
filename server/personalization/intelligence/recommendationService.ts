@@ -58,9 +58,11 @@ import {
   recommendPillars,
 } from "./pillarRecommendations";
 import {
-  catalogNiche,
   detectContentLanguage,
   inferNicheLabel,
+  isCatalogBucket,
+  isPlaceholderNiche,
+  NICHE_PROMPT_VERSION,
 } from "./profileBasics";
 import {
   IntelligenceError,
@@ -308,6 +310,43 @@ export function safeValidationReason(message: string): string {
   return stripped;
 }
 
+/**
+ * None, and a weak profile with almost no bio and almost no posts, is not
+ * enough to name a niche. The goal step asks instead.
+ */
+export function evidenceSupportsNiche(evidence: CreatorEvidence): boolean {
+  if (evidence.strength === "none") return false;
+  const bioWords = evidence.snippets
+    .filter(item => item.source === "bio" || item.source === "brand_description")
+    .reduce((sum, item) => sum + item.text.trim().split(/\s+/).filter(Boolean).length, 0);
+  const captions = evidence.snippets.filter(item => item.source === "captions").length;
+  if (evidence.strength === "weak" && bioWords < 5 && captions < 3) return false;
+  return true;
+}
+
+/** An unconfirmed catalog bucket is not a finished specific niche. */
+function freshSpecificNiche(items: ItemRecord[], inputsHash: string): boolean {
+  const live = items.filter(
+    item =>
+      item.kind === "niche" &&
+      item.status !== "superseded" &&
+      item.status !== "dismissed"
+  );
+  return (
+    live.length > 0 &&
+    live.every(item => {
+      const label = (item.payload as NichePayload).label;
+      return (
+        item.source === "ai_suggested" &&
+        item.basedOnInputsHash === inputsHash &&
+        !isCatalogBucket(label) &&
+        !isPlaceholderNiche(label) &&
+        (item.status === "suggested" || item.status === "confirmed")
+      );
+    })
+  );
+}
+
 function freshAiCovers(
   items: ItemRecord[],
   kind: PersonalizationItemKind,
@@ -394,7 +433,7 @@ export async function generateRecommendations(
       versionAtStart,
       profileText: profileTextForBasics(profile, evidence),
       needGoal: !lockedByUser(items, "goal") && !freshAiCovers(items, "goal", inputsHash),
-      needNiche: !lockedByUser(items, "niche") && !freshAiCovers(items, "niche", inputsHash),
+      needNiche: !lockedByUser(items, "niche") && !freshSpecificNiche(items, inputsHash),
       needLanguage:
         !lockedByUser(items, "language") && !freshAiCovers(items, "language", inputsHash),
       noteSaved,
@@ -670,16 +709,27 @@ async function runGoalStep(input: {
     const language = input.needLanguage
       ? detectContentLanguage(input.profileText)
       : null;
-    let niche = input.needNiche ? catalogNiche(input.profileText) : null;
+    let niche: NichePayload | null = null;
     let usage: LlmUsage | null = null;
-    if (input.needNiche && !niche && evidence.strength !== "none") {
+    if (input.needNiche && evidenceSupportsNiche(evidence)) {
       const inferred = await inferNicheLabel({
         evidence,
         invoker: deps.invoker,
         timeoutMs: Math.min(input.timeoutMs ?? 12_000, 12_000),
       });
-      niche = inferred.niche;
       usage = inferred.usage;
+      const specific = inferred.niche;
+      if (
+        specific &&
+        !isCatalogBucket(specific.label) &&
+        !isPlaceholderNiche(specific.label)
+      ) {
+        niche = {
+          label: specific.label,
+          slug: specific.slug,
+          ...(specific.categoryLabel ? { categoryLabel: specific.categoryLabel } : {}),
+        };
+      }
     }
     return { niche, language, usage };
   })();
@@ -736,10 +786,7 @@ async function runGoalStep(input: {
       suggestions: [
         {
           kind: "niche",
-          payload: {
-            slug: basics.niche.slug,
-            label: basics.niche.label,
-          } satisfies NichePayload,
+          payload: basics.niche satisfies NichePayload,
           evidence: "profile_inferred",
           analysisRunId: null,
         },
@@ -748,7 +795,7 @@ async function runGoalStep(input: {
       versionAtStart: input.versionAtStart,
       confidence: "medium",
       evidence,
-      promptVersion: "niche-v1",
+      promptVersion: NICHE_PROMPT_VERSION,
       usage: basics.usage ?? EMPTY_USAGE,
       attempts: basics.usage ? 1 : 0,
     });

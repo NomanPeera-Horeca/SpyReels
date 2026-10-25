@@ -443,8 +443,11 @@ function addExplicitCreatorSignals(
 export function strategyTopicSignals(args: {
   goalText?: string | null;
   audienceText?: string | null;
+  /** Specific niche. Ranking only. It does not choose a pool. */
+  nicheText?: string | null;
 }): ViralPersonalizationSignals {
   const signals = createEmptySignals();
+  addTopicTerms(signals, args.nicheText, 3);
   addTopicTerms(signals, args.goalText, 2);
   addTopicTerms(signals, args.audienceText, 2);
   return signals;

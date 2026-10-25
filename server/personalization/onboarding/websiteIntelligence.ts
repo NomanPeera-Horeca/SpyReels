@@ -10,6 +10,7 @@ import https from "node:https";
 import { lookup } from "node:dns/promises";
 import { BlockList, isIP, type LookupFunction } from "node:net";
 import type { ProfileEvidence, WebsiteBusinessModel, WebsiteIntelligence } from "@shared/personalization/model";
+import { callToActionLine } from "../intelligence/evidence";
 import { publicWebsiteUrl } from "./profileEvidence";
 
 /** No paid provider and no model call. */
@@ -182,14 +183,6 @@ function sentences(text: string): string[] {
     .filter(Boolean);
 }
 
-const CTA_PATTERNS: RegExp[] = [
-  /\bbook (a|an|your|now)\b/i,
-  /\b(shop now|add to cart|get started|sign up|subscribe|enroll|apply now|buy now|start free)\b/i,
-  /\b(order|orders|quote|quotes|consultation|consult)\b/i,
-  /\bwholesale\b/i,
-  /\bdm (me|us|for)\b/i,
-];
-
 const GOAL_PATTERNS: RegExp[] = [
   /\bmore (clients|customers|bookings|covers|sales|leads|students)\b/i,
   /\bfill (more|the|my|our)\b/i,
@@ -261,7 +254,7 @@ export function analyzeWebsitePage(input: {
     businessModel: model,
     customers: uniqueLines(customers, 3),
     callsToAction: uniqueLines(
-      lines.filter(line => CTA_PATTERNS.some(pattern => pattern.test(line))),
+      lines.filter(line => callToActionLine(line) !== null),
       3
     ),
     goalEvidence: uniqueLines(

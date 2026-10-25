@@ -140,7 +140,15 @@ export type PillarPayload = {
   description: string;
   viewSharePercent: number | null;
 };
-export type NichePayload = { slug: string; label: string };
+export type NichePayload = {
+  slug: string;
+  label: string;
+  /**
+   * Validated taxonomy category. Home uses it to choose existing pools.
+   * Missing or unknown does not become Business. The label stays the specific niche.
+   */
+  categoryLabel?: string;
+};
 export type LanguagePayload = { code: string; label: string };
 export type BrandDescriptionPayload = { text: string };
 
@@ -155,7 +163,8 @@ export type ItemPayloadByKind = {
 
 /**
  * Editing these kinds makes AI suggestions built on the old answers stale.
- * Goal, audience and niche feed pillar suggestions.
+ * Goal, audience and niche feed later suggestions.
+ * Editing a niche refreshes unconfirmed audience and pillar suggestions.
  */
 export const INVALIDATES_ON_EDIT: Record<
   PersonalizationItemKind,
@@ -163,7 +172,7 @@ export const INVALIDATES_ON_EDIT: Record<
 > = {
   goal: ["audience", "pillar"],
   audience: ["pillar"],
-  niche: ["pillar"],
+  niche: ["audience", "pillar"],
   pillar: [],
   language: [],
   brand_description: ["pillar"],

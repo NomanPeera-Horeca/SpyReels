@@ -418,8 +418,8 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
     expect(ctx.description).toContain("fitness");
     expect(ctx.goalText).toContain("fitness");
     expect(ctx.pillarTitles).toEqual([]);
-    expect(videoMatchText(ctx)).toBe(ctx.nicheLabel);
-    expect(videoMatchText(ctx)).not.toContain("fitness");
+    expect(videoMatchText(ctx)).toBe("Restaurant business");
+    expect(ctx.nicheLabel).not.toContain("fitness");
   });
 
   it("pillar edits keep subtopic ids and dismissal, and Undo does not resurrect them", async () => {
