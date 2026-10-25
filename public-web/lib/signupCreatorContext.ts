@@ -1,3 +1,9 @@
+import {
+  isValidInstagramHandleNormalized,
+  isValidTikTokHandleNormalized,
+  isValidYouTubeHandleNormalized,
+} from "../../shared/socialHandles";
+
 export type SignupCreatorPlatform = "instagram" | "tiktok" | "youtube";
 
 const AUTH_RETURN_TO_STORAGE_KEY = "spyreels:auth_return_to";
@@ -38,10 +44,10 @@ export function creatorContextFromReturnTo(returnTo: string | null | undefined):
 
   const valid =
     platform === "tiktok"
-      ? /^[a-z0-9._]{2,24}$/.test(handle)
+      ? isValidTikTokHandleNormalized(handle)
       : platform === "youtube"
-        ? /^[a-z0-9._-]{1,100}$/i.test(handle)
-        : /^[a-z0-9._]{1,30}$/.test(handle);
+        ? isValidYouTubeHandleNormalized(handle)
+        : isValidInstagramHandleNormalized(handle);
   if (!valid) return { handle: null, platform: null };
   return { handle, platform };
 }

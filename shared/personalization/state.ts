@@ -6,6 +6,11 @@
  * in state.test.ts.
  */
 import {
+  isValidInstagramHandleNormalized,
+  isValidTikTokHandleNormalized,
+  isValidYouTubeHandleNormalized,
+} from "../socialHandles";
+import {
   ANALYSIS_REFRESH_POLICY,
   ANALYSIS_STAGES,
   INVALIDATES_ON_EDIT,
@@ -46,11 +51,11 @@ export type HandleParseResult =
         | "platform_mismatch";
     };
 
-const HANDLE_RULES: Record<SocialPlatform, RegExp> = {
-  instagram: /^[a-z0-9._]{1,30}$/,
-  tiktok: /^[a-z0-9._]{2,24}$/,
-  youtube: /^[a-z0-9._-]{3,30}$/,
-};
+function isAllowedHandle(platform: SocialPlatform, handle: string): boolean {
+  if (platform === "instagram") return isValidInstagramHandleNormalized(handle);
+  if (platform === "tiktok") return isValidTikTokHandleNormalized(handle);
+  return isValidYouTubeHandleNormalized(handle);
+}
 
 const HOST_PLATFORM: Array<[RegExp, SocialPlatform]> = [
   [/(^|\.)instagram\.com$/, "instagram"],
@@ -107,7 +112,7 @@ export function parseSocialHandle(
   }
 
   const handle = candidate.replace(/^@+/, "").toLowerCase();
-  if (!HANDLE_RULES[platform].test(handle))
+  if (!isAllowedHandle(platform, handle))
     return { ok: false, reason: "invalid_handle" };
   return { ok: true, platform, handle };
 }
