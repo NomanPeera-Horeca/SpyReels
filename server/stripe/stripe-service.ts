@@ -1,6 +1,7 @@
 import {
   getMonthlyUsage,
   getUserSubscription as getBillingSubscription,
+  syncFreePlanFromStripe,
 } from "./stripe-service-core";
 import { getPlanLimits, type PlanId } from "./products";
 import {
@@ -20,7 +21,15 @@ export * from "./stripe-service-core";
  * only raise the effective plan and never rewrites or downgrades Stripe.
  */
 export async function getUserSubscription(userId: number) {
-  const billing = await getBillingSubscription(userId);
+  let billing = await getBillingSubscription(userId);
+  if ((billing.plan as PlanId) === "free") {
+    const { getUserById } = await import("../db");
+    const user = await getUserById(userId);
+    if (user && !hasUnlimitedUsage(user)) {
+      const synced = await syncFreePlanFromStripe(userId, user.email);
+      if (synced) billing = await getBillingSubscription(userId);
+    }
+  }
   const billingPlan = billing.plan as PlanId;
   const grant = await getActiveComplimentaryGrant(userId);
   const complimentaryPlan = grant?.plan ?? null;

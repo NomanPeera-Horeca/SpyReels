@@ -1,8 +1,9 @@
 import Stripe from "stripe";
 import { getDb } from "../db";
-import { subscriptions, monthlyUsage } from "../../drizzle/schema";
+import { subscriptions, monthlyUsage, users } from "../../drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { PlanId, BillingInterval, PLANS, getPlanLimits, STRIPE_PLAN_METADATA_KEY, STRIPE_INTERVAL_METADATA_KEY } from "./products";
+import { planFromStripeSubscription, planRank, type PaidPlanId } from "./stripePlanSync";
 import { sendPaymentConfirmationEmail } from "../utils/email.js";
 import { hasUnlimitedUsage, unlimitedUsageResult } from "../usageBypass";
 import {
@@ -235,21 +236,179 @@ async function upsertSubscription(db: any, userId: number, data: {
   }
 }
 
+const stripeFreePlanMisses = new Map<string, number>();
+const STRIPE_PLAN_MISS_MS = 10 * 60 * 1000;
+const STRIPE_PLAN_ERROR_MS = 60 * 1000;
+
+function rememberStripePlanMiss(email: string, ttlMs: number) {
+  stripeFreePlanMisses.set(email, Date.now() + ttlMs);
+}
+
+async function userIdsForCustomerEmail(email: string): Promise<number[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(sql`lower(${users.email}) = ${email.trim().toLowerCase()}`);
+  return rows.map((row) => row.id);
+}
+
+async function loadCustomerEmail(customer: unknown): Promise<string | null> {
+  if (customer && typeof customer === "object" && "email" in customer) {
+    const email = (customer as { email?: string | null; deleted?: boolean }).email;
+    if (!(customer as { deleted?: boolean }).deleted && email?.trim()) return email.trim();
+  }
+  const customerId = typeof customer === "string" ? customer : null;
+  if (!customerId) return null;
+  try {
+    const loaded = await stripe.customers.retrieve(customerId);
+    if (loaded.deleted || !loaded.email?.trim()) return null;
+    return loaded.email.trim();
+  } catch (error) {
+    console.warn(
+      "[Stripe] Could not load customer email",
+      error instanceof Error ? error.message : error
+    );
+    return null;
+  }
+}
+
+/** User ids that should receive a Stripe subscription when metadata has no user_id. */
+export async function userIdsForUnscopedStripeSubscription(subscription: {
+  metadata?: { user_id?: string | null } | null;
+  customer?: unknown;
+}): Promise<number[]> {
+  const metadataUserId = Number.parseInt(subscription.metadata?.user_id || "0", 10);
+  if (Number.isInteger(metadataUserId) && metadataUserId > 0) return [metadataUserId];
+  const email = await loadCustomerEmail(subscription.customer);
+  if (!email) return [];
+  return userIdsForCustomerEmail(email);
+}
+
+/**
+ * Local free rows do not see a Stripe subscription that was created without
+ * metadata.user_id, or that was written onto a different login for the same
+ * email. Copy an active paid plan onto this user before usage limits run.
+ */
+export async function syncFreePlanFromStripe(
+  userId: number,
+  email: string | null | undefined
+): Promise<boolean> {
+  const normalized = email?.trim().toLowerCase();
+  if (!normalized) return false;
+  const retryAt = stripeFreePlanMisses.get(normalized);
+  if (retryAt && retryAt > Date.now()) return false;
+
+  try {
+    const listedCustomers = await stripe.customers.list({ email: email!.trim(), limit: 10 });
+    let best: {
+      plan: PaidPlanId;
+      interval: BillingInterval;
+      status: "active" | "canceled" | "past_due" | "trialing";
+      customerId: string;
+      subscriptionId: string;
+      cancelAtPeriodEnd: number;
+      currentPeriodEnd: Date | null;
+    } | null = null;
+
+    for (const customer of listedCustomers.data) {
+      const listed = await stripe.subscriptions.list({
+        customer: customer.id,
+        status: "all",
+        limit: 20,
+        expand: ["data.items.data.price.product"],
+      });
+      for (const subscription of listed.data as any[]) {
+        if (subscription.status !== "active" && subscription.status !== "trialing" && subscription.status !== "past_due") {
+          continue;
+        }
+        const price = subscription.items?.data?.[0]?.price;
+        const parsed = planFromStripeSubscription({
+          metadata: subscription.metadata,
+          price: price
+            ? {
+                metadata: price.metadata,
+                unit_amount: price.unit_amount,
+                recurring: price.recurring,
+                product: typeof price.product === "string" ? price.product : price.product,
+              }
+            : null,
+        });
+        if (!parsed) continue;
+        if (best && planRank(parsed.plan) <= planRank(best.plan)) continue;
+        best = {
+          plan: parsed.plan,
+          interval: parsed.interval,
+          status: mapStripeStatus(subscription.status),
+          customerId: customer.id,
+          subscriptionId: subscription.id,
+          cancelAtPeriodEnd: subscription.cancel_at_period_end ? 1 : 0,
+          currentPeriodEnd: parseStripeTimestamp(subscription.current_period_end),
+        };
+      }
+    }
+
+    if (!best) {
+      rememberStripePlanMiss(normalized, STRIPE_PLAN_MISS_MS);
+      if (listedCustomers.data.length > 0) {
+        console.warn(`[Stripe] No recognizable paid plan for user ${userId}`);
+      }
+      return false;
+    }
+
+    const db = await getDb();
+    if (!db) return false;
+    await upsertSubscription(db, userId, {
+      plan: best.plan,
+      billingInterval: best.interval,
+      status: best.status,
+      stripeCustomerId: best.customerId,
+      stripeSubscriptionId: best.subscriptionId,
+      cancelAtPeriodEnd: best.cancelAtPeriodEnd,
+      currentPeriodEnd: best.currentPeriodEnd,
+    });
+    stripeFreePlanMisses.delete(normalized);
+    console.log(`[Stripe] Synced ${best.plan} onto user ${userId} from ${best.customerId}`);
+    return true;
+  } catch (error) {
+    rememberStripePlanMiss(normalized, STRIPE_PLAN_ERROR_MS);
+    console.warn(
+      "[Stripe] Paid plan sync failed",
+      error instanceof Error ? error.message : error
+    );
+    return false;
+  }
+}
+
 // ─── Webhook Handlers ───────────────────────────────────────────
 export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
   switch (event.type) {
     case "checkout.session.completed": {
       const session = event.data.object as Stripe.Checkout.Session;
-      const userId = parseInt(session.metadata?.user_id || session.client_reference_id || "0");
+      const metadataUserId = parseInt(session.metadata?.user_id || session.client_reference_id || "0");
+      const userIds = metadataUserId
+        ? [metadataUserId]
+        : await userIdsForUnscopedStripeSubscription({
+            metadata: session.metadata,
+            customer: session.customer,
+          });
+      const fallbackEmail = session.customer_details?.email || session.metadata?.customer_email;
+      const resolvedUserIds = userIds.length
+        ? userIds
+        : fallbackEmail
+          ? await userIdsForCustomerEmail(fallbackEmail)
+          : [];
       const planId = (session.metadata?.plan_id || "pro") as PlanId;
       const interval = (session.metadata?.billing_interval || "monthly") as BillingInterval;
 
-      if (userId && session.subscription) {
+      if (resolvedUserIds.length && session.subscription) {
         const db = await getDb();
         if (!db) break;
         try {
           const stripeSubscription: any = await stripe.subscriptions.retrieve(session.subscription as string);
           const periodEnd = parseStripeTimestamp(stripeSubscription.current_period_end);
+          for (const userId of resolvedUserIds) {
           await upsertSubscription(db, userId, {
             plan: planId,
             billingInterval: interval,
@@ -270,6 +429,7 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
               $set: { plan: planId },
             },
           });
+          }
           const customerEmail = session.metadata?.customer_email;
           const customerName = session.metadata?.customer_name || "there";
           const firstName = customerName.split(" ")[0];
@@ -291,20 +451,33 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
     case "customer.subscription.created":
     case "customer.subscription.updated": {
       const subscription: any = event.data.object;
-      const userId = parseInt(subscription.metadata?.user_id || "0");
-      if (!userId) {
+      const userIds = await userIdsForUnscopedStripeSubscription(subscription);
+      if (!userIds.length) {
         console.log(`[Stripe Webhook] Skipping ${event.type}: no user_id in metadata`);
         break;
       }
       const db = await getDb();
       if (!db) break;
 
-      const planId = (subscription.metadata?.plan_id || "pro") as PlanId;
-      const interval = (subscription.metadata?.billing_interval || "monthly") as BillingInterval;
+      const price = subscription.items?.data?.[0]?.price;
+      const parsedPlan = planFromStripeSubscription({
+        metadata: subscription.metadata,
+        price: price
+          ? {
+              metadata: price.metadata,
+              unit_amount: price.unit_amount,
+              recurring: price.recurring,
+              product: price.product,
+            }
+          : null,
+      });
+      const planId = (parsedPlan?.plan || subscription.metadata?.plan_id || "pro") as PlanId;
+      const interval = (parsedPlan?.interval || subscription.metadata?.billing_interval || "monthly") as BillingInterval;
       const status = mapStripeStatus(subscription.status);
       const periodEnd = parseStripeTimestamp(subscription.current_period_end);
 
       try {
+        for (const userId of userIds) {
         await upsertSubscription(db, userId, {
           plan: planId,
           billingInterval: interval,
@@ -341,6 +514,7 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
             },
           });
         }
+        }
       } catch (err: any) {
         console.error(`[Stripe Webhook] Error processing ${event.type}: ${err.message}`);
         throw err;
@@ -350,13 +524,20 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
 
     case "customer.subscription.deleted": {
       const subscription: any = event.data.object;
-      const userId = parseInt(subscription.metadata?.user_id || "0");
-      if (!userId) break;
+      const userIds = await userIdsForUnscopedStripeSubscription(subscription);
+      if (!userIds.length) break;
       const dbDel = await getDb();
       if (!dbDel) break;
       const previousPlan = (subscription.metadata?.plan_id || "pro") as PlanId;
 
       try {
+        for (const userId of userIds) {
+        const [existing] = await dbDel
+          .select({ stripeSubscriptionId: subscriptions.stripeSubscriptionId })
+          .from(subscriptions)
+          .where(eq(subscriptions.userId, userId))
+          .limit(1);
+        if (existing?.stripeSubscriptionId && existing.stripeSubscriptionId !== subscription.id) continue;
         await upsertSubscription(dbDel, userId, {
           plan: "free",
           billingInterval: "monthly",
@@ -378,6 +559,7 @@ export async function handleWebhookEvent(event: Stripe.Event): Promise<void> {
             $set: { plan: "free" },
           },
         });
+        }
       } catch (err: any) {
         console.error(`[Stripe Webhook] Error processing customer.subscription.deleted: ${err.message}`);
         throw err;

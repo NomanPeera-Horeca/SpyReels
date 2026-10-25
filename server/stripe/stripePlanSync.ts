@@ -1,0 +1,83 @@
+import { PLANS, type BillingInterval, type PlanId } from "./products";
+
+const PAID_PLAN_IDS = ["starter", "pro", "business", "agency"] as const;
+export type PaidPlanId = (typeof PAID_PLAN_IDS)[number];
+
+type PlanMetadata = {
+  plan_id?: string | null;
+  billing_interval?: string | null;
+} | null | undefined;
+
+export type StripePlanSource = {
+  metadata?: PlanMetadata;
+  price?: {
+    metadata?: PlanMetadata;
+    unit_amount?: number | null;
+    recurring?: { interval?: string | null } | null;
+    product?:
+      | string
+      | { metadata?: { plan_id?: string | null } | null; deleted?: boolean }
+      | null;
+  } | null;
+};
+
+export function isPaidPlanId(value: unknown): value is PaidPlanId {
+  return typeof value === "string" && (PAID_PLAN_IDS as readonly string[]).includes(value);
+}
+
+function billingInterval(
+  metadataInterval: string | null | undefined,
+  recurringInterval: string | null | undefined
+): BillingInterval {
+  if (metadataInterval === "yearly" || recurringInterval === "year") return "yearly";
+  return "monthly";
+}
+
+/**
+ * Read a paid SpyReels plan from a Stripe subscription.
+ * Metadata wins. A catalog price amount is used when metadata is missing.
+ */
+export function planFromStripeSubscription(
+  source: StripePlanSource
+): { plan: PaidPlanId; interval: BillingInterval } | null {
+  const recurring = source.price?.recurring?.interval;
+  if (isPaidPlanId(source.metadata?.plan_id)) {
+    return {
+      plan: source.metadata.plan_id,
+      interval: billingInterval(source.metadata.billing_interval, recurring),
+    };
+  }
+
+  if (isPaidPlanId(source.price?.metadata?.plan_id)) {
+    return {
+      plan: source.price.metadata.plan_id,
+      interval: billingInterval(source.price.metadata.billing_interval, recurring),
+    };
+  }
+
+  const product = source.price?.product;
+  if (product && typeof product === "object" && !product.deleted && isPaidPlanId(product.metadata?.plan_id)) {
+    return {
+      plan: product.metadata.plan_id,
+      interval: billingInterval(null, recurring),
+    };
+  }
+
+  const amount = source.price?.unit_amount;
+  if (typeof amount !== "number") return null;
+  if (recurring !== "month" && recurring !== "year") return null;
+  const interval: BillingInterval = recurring === "year" ? "yearly" : "monthly";
+  const matches = PAID_PLAN_IDS.filter((planId) => {
+    const plan = PLANS[planId];
+    const expected = interval === "yearly" ? plan.yearlyTotal : plan.monthlyPrice;
+    return expected === amount;
+  });
+  if (matches.length !== 1) return null;
+  return { plan: matches[0], interval };
+}
+
+export function planRank(plan: PlanId): number {
+  const order: PlanId[] = ["free", "starter", "pro", "business", "agency"];
+  const index = order.indexOf(plan);
+  return index < 0 ? 0 : index;
+}
