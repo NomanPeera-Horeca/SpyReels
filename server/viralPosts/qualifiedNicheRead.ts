@@ -7,7 +7,7 @@
  * the same qualified supply without assembling Today's Picks.
  */
 import { deriveHook, inferFormat } from "./candidateAdapter";
-import { buildPoolKey } from "./constants";
+import { buildPoolKey, VIRAL_POOL_DEFAULTS } from "./constants";
 import { passesIndexedViralQualification } from "./indexedQualification";
 import {
   chooseIndexedHomeSpecs,
@@ -114,6 +114,23 @@ const defaultDeps: QualifiedNicheReadDeps = {
       maxAgeHours: args.maxAgeHours,
     }),
 };
+
+/**
+ * Published-at window for niche examples. This is the existing recommendation
+ * reservoir (the same one similar-creator supply uses), not a new trend cutoff
+ * and not the 72 hour refresh clock.
+ */
+export function publishedWithinRecommendationReservoir(
+  publishedAt: string | null,
+  now = Date.now()
+): boolean {
+  if (!publishedAt) return false;
+  const ms = Date.parse(publishedAt);
+  if (Number.isNaN(ms)) return false;
+  const ageMs = now - ms;
+  const maxAgeMs = VIRAL_POOL_DEFAULTS.assemblyCandidateMaxAgeHours * 60 * 60 * 1000;
+  return ageMs >= 0 && ageMs <= maxAgeMs;
+}
 
 function normalizeHandle(value: string | null | undefined): string {
   return (value ?? "").trim().toLowerCase().replace(/^@/, "");
@@ -250,20 +267,24 @@ export async function readQualifiedNicheExamples(
   const loaded = poolIds.length
     ? await deps.loadCandidates({ poolIds, limit: 40 })
     : [];
-  const fromPools: SourceRow[] = loaded.map(row => ({
-    platform: row.candidate.platform,
-    sourceId: row.candidate.sourceId,
-    creatorHandle: row.candidate.creatorHandle,
-    caption: row.candidate.caption,
-    views: row.candidate.views,
-    likes: row.candidate.likes,
-    comments: row.candidate.comments,
-    creatorFollowers: row.candidate.creatorFollowers,
-    publishedAt: row.candidate.publishedAt ? row.candidate.publishedAt.toISOString() : null,
-    niche: choices.niche,
-    pillar: row.primaryPillar,
-    qualification: "indexed_pool",
-  }));
+  const fromPools: SourceRow[] = loaded.flatMap(row => {
+    const publishedAt = row.candidate.publishedAt ? row.candidate.publishedAt.toISOString() : null;
+    if (!publishedWithinRecommendationReservoir(publishedAt)) return [];
+    return [{
+      platform: row.candidate.platform,
+      sourceId: row.candidate.sourceId,
+      creatorHandle: row.candidate.creatorHandle,
+      caption: row.candidate.caption,
+      views: row.candidate.views,
+      likes: row.candidate.likes,
+      comments: row.candidate.comments,
+      creatorFollowers: row.candidate.creatorFollowers,
+      publishedAt,
+      niche: choices.niche,
+      pillar: row.primaryPillar,
+      qualification: "indexed_pool" as const,
+    }];
+  });
   let examples = selectQualifiedNicheExamples({
     rows: fromPools,
     excludeHandles: args.excludeHandles,
@@ -276,6 +297,8 @@ export async function readQualifiedNicheExamples(
     if (widerIds.length > 0) {
       const more = await deps.loadCandidates({ poolIds: widerIds, limit: 40 });
       for (const row of more) {
+        const publishedAt = row.candidate.publishedAt ? row.candidate.publishedAt.toISOString() : null;
+        if (!publishedWithinRecommendationReservoir(publishedAt)) continue;
         fromPools.push({
           platform: row.candidate.platform,
           sourceId: row.candidate.sourceId,
@@ -285,7 +308,7 @@ export async function readQualifiedNicheExamples(
           likes: row.candidate.likes,
           comments: row.candidate.comments,
           creatorFollowers: row.candidate.creatorFollowers,
-          publishedAt: row.candidate.publishedAt ? row.candidate.publishedAt.toISOString() : null,
+          publishedAt,
           niche: choices.niche,
           pillar: row.primaryPillar,
           qualification: "indexed_pool",
@@ -301,22 +324,26 @@ export async function readQualifiedNicheExamples(
     const similar = await deps.loadSimilar({
       nicheNames: [choices.niche],
       excludeHandles: args.excludeHandles ?? [],
-      maxAgeHours: 90 * 24,
+      maxAgeHours: VIRAL_POOL_DEFAULTS.assemblyCandidateMaxAgeHours,
     });
-    const extra: SourceRow[] = similar.reels.map(reel => ({
-      platform: "instagram",
-      sourceId: reel.sourceId,
-      creatorHandle: reel.creatorHandle,
-      caption: reel.caption,
-      views: reel.views,
-      likes: reel.likes,
-      comments: reel.comments,
-      creatorFollowers: reel.creatorFollowers,
-      publishedAt: reel.publishedAt ? reel.publishedAt.toISOString() : null,
-      niche: reel.nicheName,
-      pillar: null,
-      qualification: "similar_featured",
-    }));
+    const extra: SourceRow[] = similar.reels.flatMap(reel => {
+      const publishedAt = reel.publishedAt ? reel.publishedAt.toISOString() : null;
+      if (!publishedWithinRecommendationReservoir(publishedAt)) return [];
+      return [{
+        platform: "instagram" as const,
+        sourceId: reel.sourceId,
+        creatorHandle: reel.creatorHandle,
+        caption: reel.caption,
+        views: reel.views,
+        likes: reel.likes,
+        comments: reel.comments,
+        creatorFollowers: reel.creatorFollowers,
+        publishedAt,
+        niche: reel.nicheName,
+        pillar: null,
+        qualification: "similar_featured" as const,
+      }];
+    });
     examples = selectQualifiedNicheExamples({
       rows: [...fromPools, ...extra],
       excludeHandles: args.excludeHandles,

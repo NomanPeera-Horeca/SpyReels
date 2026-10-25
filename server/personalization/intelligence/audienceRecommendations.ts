@@ -111,19 +111,107 @@ const PROBLEM_STOP = new Set([
   "your",
 ]);
 
-function tokenInEvidence(token: string, corpus: string): boolean {
-  if (corpus.includes(token)) return true;
-  if (token.endsWith("s") && token.length > 4 && corpus.includes(token.slice(0, -1))) return true;
-  return corpus.includes(`${token}s`);
+const GENERIC_PROBLEM_WORDS = new Set([
+  "account",
+  "audience",
+  "best",
+  "better",
+  "brand",
+  "brands",
+  "business",
+  "businesses",
+  "client",
+  "clients",
+  "company",
+  "companies",
+  "content",
+  "creator",
+  "creators",
+  "customer",
+  "customers",
+  "easy",
+  "every",
+  "everyone",
+  "first",
+  "followers",
+  "getting",
+  "good",
+  "growth",
+  "hard",
+  "help",
+  "life",
+  "like",
+  "looking",
+  "make",
+  "many",
+  "media",
+  "money",
+  "most",
+  "much",
+  "next",
+  "online",
+  "owner",
+  "owners",
+  "people",
+  "person",
+  "post",
+  "posts",
+  "product",
+  "products",
+  "really",
+  "right",
+  "service",
+  "services",
+  "simple",
+  "social",
+  "some",
+  "someone",
+  "something",
+  "start",
+  "thing",
+  "things",
+  "time",
+  "today",
+  "trying",
+  "user",
+  "users",
+  "using",
+  "video",
+  "videos",
+  "work",
+  "world",
+]);
+
+const MIN_SPECIFIC_PROBLEM_MATCHES = 2;
+
+function wholeWords(text: string): string[] {
+  return text.toLowerCase().match(/[a-z]{4,}/g) ?? [];
 }
 
-/** A problem is stored only when one of its content words is already in the evidence or goal. */
+function wordForms(token: string): string[] {
+  if (token.endsWith("s") && token.length > 4) return [token, token.slice(0, -1)];
+  return [token, `${token}s`];
+}
+
+/**
+ * A problem needs two specific whole words that already appear in the evidence
+ * or the goal. One shared word, a generic word such as "owners", or a
+ * substring of a longer word is not support. Callers omit an unsupported
+ * problem and keep the segment and outcome.
+ */
 export function problemSupportedByEvidence(problem: string, corpus: string): boolean {
-  const tokens = problem.toLowerCase().match(/[a-z]{4,}/g) ?? [];
-  const content = tokens.filter(token => !PROBLEM_STOP.has(token));
-  if (content.length === 0) return false;
-  const hay = corpus.toLowerCase();
-  return content.some(token => tokenInEvidence(token, hay));
+  const hay = new Set(wholeWords(corpus));
+  const tokens = wholeWords(problem).filter(
+    token => !PROBLEM_STOP.has(token) && !GENERIC_PROBLEM_WORDS.has(token)
+  );
+  const matched = new Set<string>();
+  for (const token of tokens) {
+    const hit = wordForms(token).find(
+      form => hay.has(form) && !GENERIC_PROBLEM_WORDS.has(form) && !PROBLEM_STOP.has(form)
+    );
+    if (hit) matched.add(hit);
+  }
+  return matched.size >= MIN_SPECIFIC_PROBLEM_MATCHES;
 }
 
 export function buildAudiencePrompt(

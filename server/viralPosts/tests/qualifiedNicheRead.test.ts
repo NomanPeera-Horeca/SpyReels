@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildPoolKey } from "../constants";
+import { buildPoolKey, VIRAL_POOL_DEFAULTS } from "../constants";
 import { isAnyViralPostsPlatformEnabled, isViralPostsLive } from "../featureFlag";
 import {
   readQualifiedNicheExamples,
@@ -113,7 +113,7 @@ describe("readQualifiedNicheExamples", () => {
               likes: 40,
               comments: 3,
               creatorFollowers: null,
-              publishedAt: new Date("2026-02-01T00:00:00.000Z"),
+              publishedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
             } as never,
             primaryPillar: "Equipment buying",
             secondaryPillar: null,
@@ -189,7 +189,7 @@ describe("readQualifiedNicheExamples", () => {
                 likes: 4000,
                 comments: 400,
                 creatorFollowers: 10000,
-                publishedAt: new Date("2026-10-01T00:00:00.000Z"),
+                publishedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
               } as never,
               primaryPillar: "restaurant marketing",
               secondaryPillar: null,
@@ -240,6 +240,82 @@ describe("readQualifiedNicheExamples", () => {
     expect(rows.map(row => row.sourceId)).toEqual(["indexed"]);
     expect(rows[0]?.qualification).toBe("indexed_pool");
     expect(rows[0]?.niche).toBe("Business & Entrepreneurship");
+  });
+
+  it("drops indexed posts outside the recommendation reservoir", async () => {
+    const stale = new Date(
+      Date.now() - (VIRAL_POOL_DEFAULTS.assemblyCandidateMaxAgeHours + 48) * 60 * 60 * 1000
+    );
+    const key = buildPoolKey({
+      platform: "instagram",
+      niche: "Business & Entrepreneurship",
+      pillar: "Equipment buying",
+    });
+    const rows = await readQualifiedNicheExamples(
+      { nicheText: "restaurant equipment", pillarTitles: ["Equipment buying"] },
+      {
+        choices: () => ({
+          niche: "Business & Entrepreneurship",
+          confirmedSpecs: [
+            {
+              niche: "Business & Entrepreneurship",
+              pillar: "Equipment buying",
+              platform: "instagram",
+            },
+          ],
+          fallbackSpecs: [],
+        }),
+        choose: args => ({
+          source: "confirmed",
+          specs: args.confirmedSpecs.filter(spec =>
+            args.existingKeys.has(
+              buildPoolKey({ platform: spec.platform, niche: spec.niche, pillar: spec.pillar })
+            )
+          ),
+        }),
+        findPools: async () => [{ id: 7, poolKey: key }],
+        loadCandidates: async () => [
+          {
+            candidate: {
+              platform: "instagram",
+              sourceId: "old",
+              creatorHandle: "neighbor",
+              caption: "Stop buying the cheapest fryer for a new kitchen.",
+              views: 80000,
+              likes: 4000,
+              comments: 400,
+              creatorFollowers: 10000,
+              publishedAt: stale,
+            } as never,
+            primaryPillar: "Equipment buying",
+            secondaryPillar: null,
+            pillarConfidence: 0.8,
+            pillarReason: null,
+          },
+        ],
+        loadSimilar: async args => {
+          expect(args.maxAgeHours).toBe(VIRAL_POOL_DEFAULTS.assemblyCandidateMaxAgeHours);
+          return {
+            nicheSlugs: [],
+            creators: [],
+            reels: [
+              {
+                sourceId: "also-old",
+                creatorHandle: "other",
+                caption: "Stop buying the cheapest fryer for a new kitchen.",
+                views: 90000,
+                likes: 5000,
+                comments: 500,
+                creatorFollowers: 20000,
+                publishedAt: stale,
+                nicheName: "Business & Entrepreneurship",
+              } as never,
+            ],
+          };
+        },
+      }
+    );
+    expect(rows).toEqual([]);
   });
 
   it("does not read the catalog when Viral Posts is off", async () => {

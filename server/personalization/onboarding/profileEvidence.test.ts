@@ -132,7 +132,9 @@ describe("profile evidence from lookup", () => {
       },
     });
     expect(built.strength).not.toBe("none");
-    expect(built.sources).toEqual(expect.arrayContaining(["display_name", "category", "website", "captions"]));
+    expect(built.sources).toEqual(expect.arrayContaining(["display_name", "category", "captions"]));
+    expect(built.sources).not.toContain("website");
+    expect(built.websiteUrlOnly).toBe("https://example.com/");
     expect(built.snippets.some(snippet => snippet.text === "Dawn in the marsh")).toBe(true);
   });
 
