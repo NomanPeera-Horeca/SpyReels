@@ -69,7 +69,17 @@ function inferActivePillars(
   niche: string
 ): string[] {
   const t = businessDescription.toLowerCase();
-  if (/restaurant|cafe|food|kitchen|hospitality|menu|chef/.test(t)) {
+  const label = t.trim();
+  // Indexed supply for this catalog label lives on the shared content pillars.
+  // Match the label text itself. inferNiche also defaults other businesses to
+  // that niche, and those keep their own pillar names.
+  const catalogLabel =
+    label === "business & entrepreneurship" ||
+    label === "business and entrepreneurship";
+  if (
+    catalogLabel ||
+    /restaurant|cafe|food|kitchen|hospitality|menu|chef/.test(t)
+  ) {
     return [...DEFAULT_CONTENT_PILLARS];
   }
   return [niche, `${niche} marketing`, `${niche} operations`].slice(0, 4);
@@ -174,6 +184,17 @@ export function indexedHomePoolSpecChoices(args: {
       platforms: args.platforms,
     }),
   };
+}
+
+/**
+ * Pools for this niche that the guessed pillar keys did not already select.
+ * Read only. Used when the guessed pools have no qualified posts.
+ */
+export function remainingIndexedNichePools<T extends { poolKey: string }>(
+  chosenKeys: ReadonlySet<string>,
+  existing: T[]
+): T[] {
+  return existing.filter(pool => !chosenKeys.has(pool.poolKey));
 }
 
 export function chooseIndexedHomeSpecs<

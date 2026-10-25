@@ -125,6 +125,31 @@ const clip = (s: string, n: number) =>
 const clean = (s: string | null | undefined) =>
   (s ?? "").replace(/\s+/g, " ").trim();
 
+/** Offers, customers, and calls to action already stored from the public site. No fetch. */
+export function websiteFactLines(
+  website: ProfileEvidence["website"] | null | undefined
+): string[] {
+  if (!website) return [];
+  const lines = [
+    ...website.offers,
+    ...website.callsToAction,
+    ...website.customers,
+    ...website.goalEvidence,
+  ];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of lines) {
+    const text = clean(raw);
+    if (!text) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(text);
+    if (out.length === 8) break;
+  }
+  return out;
+}
+
 export function buildCreatorEvidence(input: {
   platform: SocialPlatform | null;
   displayName: string | null;
@@ -147,6 +172,10 @@ export function buildCreatorEvidence(input: {
   if (cta) snippets.push({ source: "cta", text: clip(cta, 180) });
   const website = clean(evidence?.websiteUrl);
   if (website) snippets.push({ source: "website", text: clip(website, 200) });
+  const siteFacts = websiteFactLines(evidence?.website);
+  for (const line of siteFacts) {
+    snippets.push({ source: "website", text: clip(line, 180) });
+  }
 
   const live = input.items.filter(
     i => i.status === "confirmed" || i.source !== "ai_suggested"
@@ -230,11 +259,11 @@ export function buildCreatorEvidence(input: {
     ),
     outputLanguage,
     commercialSignals: detectCommercialSignals({
-      bio,
+      bio: [bio, ...siteFacts].filter(Boolean).join("\n") || null,
       brandDescription: brandText || null,
       displayName: name || null,
     }),
-    declaredText: [name, bio, brandText]
+    declaredText: [name, bio, brandText, ...siteFacts]
       .filter(Boolean)
       .join("\n")
       .toLowerCase(),

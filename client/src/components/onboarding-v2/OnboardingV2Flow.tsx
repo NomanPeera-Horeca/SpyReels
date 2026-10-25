@@ -449,6 +449,14 @@ export default function OnboardingV2Flow() {
   useEffect(() => {
     if (typeof recStatus.data?.at === "number") latestRecAt.current = recStatus.data.at;
   }, [recStatus.data]);
+  // Fast rows are saved before niche enrichment finishes. Refresh while that job is open.
+  useEffect(() => {
+    if (!step4 || recStatus.data?.state !== "running") return;
+    const timer = window.setInterval(() => {
+      void utils.onboardingV2.getState.invalidate();
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [step4, recStatus.data?.state, utils]);
   const recFresh =
     recStatus.data != null &&
     recStatus.data.state !== "running" &&

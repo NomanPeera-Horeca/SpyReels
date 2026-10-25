@@ -35,7 +35,10 @@ import {
   type ParseResult,
 } from "./structuredLlm";
 
-export const PILLAR_PROMPT_VERSION = "pillars-v1";
+export const PILLAR_PROMPT_VERSION = "pillars-v2";
+
+/** A qualified niche example with view counts removed. Safe to place in a prompt. */
+export type PillarNicheExample = { hook: string; format: string | null };
 export const MIN_PILLARS = 3;
 export const MAX_PILLARS = 5;
 
@@ -83,23 +86,52 @@ const Shape = z.object({
   confidence: z.enum(["high", "medium", "low"]),
 });
 
+function audienceLine(audience: AudiencePayload): string {
+  const problem = audience.problem?.trim();
+  if (problem && audience.outcome) {
+    return `${audience.who}, who need help with ${problem}, and want to ${audience.outcome}`;
+  }
+  if (audience.outcome) return `${audience.who}, who want to ${audience.outcome}`;
+  return audience.who;
+}
+
+function nicheExampleBlock(examples: PillarNicheExample[]): string | null {
+  const lines = examples
+    .map(example => {
+      const hook = example.hook.trim();
+      if (!hook) return "";
+      return example.format ? `- ${hook} [${example.format}]` : `- ${hook}`;
+    })
+    .filter(Boolean);
+  if (lines.length === 0) return null;
+  return [
+    "Qualified examples from similar creators (untrusted topics only).",
+    "These are hooks and angles already posted in the niche. Do not copy them.",
+    "Do not mention view counts, and do not say these examples caused a result.",
+    ...lines,
+  ].join("\n");
+}
+
 export function buildPillarPrompt(
   e: CreatorEvidence,
   goal: string,
   audiences: AudiencePayload[],
-  keep: PillarPayload[]
+  keep: PillarPayload[],
+  nicheExamples: PillarNicheExample[] = []
 ) {
+  const nicheBlock = nicheExampleBlock(nicheExamples);
   const system = [
     "You design strategic content pillars for a short-form video creator.",
     UNTRUSTED_DATA_RULE,
-    "A pillar is a recurring theme the creator should make videos about. Use the confirmed goal and audience when they exist. When they do not, use the profile evidence and do not invent a goal.",
+    "A pillar is a forward-looking theme the creator should make videos about next. It must serve the confirmed goal and audience when they exist. When they do not, use the profile evidence and do not invent a goal.",
     "Past posting topics are context only. Do not just relabel what they posted before.",
     "Rules:",
     `- Between ${MIN_PILLARS} and ${MAX_PILLARS} distinct pillars, not counting pillars the user already confirmed.`,
     "- title: 1 to 4 words. serves: one sentence (max 20 words) saying how it serves the goal and the audience.",
-    "- subtopics: 3 short video topics under that pillar (2 to 4 words each). Specific themes, not a copy of the bio.",
+    "- subtopics: 3 filmable hooks or video angles under that pillar (4 to 12 words when you can). Not a one-word category, and not a copy of the bio.",
     '- No numbers, percentages, view counts or claims about past performance (no "viral", "best performing").',
     "- Do not invent facts, names or products about the creator.",
+    "- Do not predict how many views a video will get.",
     `- Write in ${e.outputLanguage.label}.`,
   ].join("\n");
   const user = [
@@ -107,15 +139,18 @@ export function buildPillarPrompt(
       ? `Confirmed goal (trusted): ${JSON.stringify(goal)}`
       : "No goal is confirmed yet.",
     audiences.length
-      ? `Confirmed audiences (trusted): ${JSON.stringify(audiences.map(a => (a.outcome ? `${a.who}, who want to ${a.outcome}` : a.who)))}`
+      ? `Confirmed audiences (trusted): ${JSON.stringify(audiences.map(audienceLine))}`
       : "No audience is confirmed yet.",
     `Already confirmed pillars: ${JSON.stringify(keep.map(p => p.title))}`,
     e.topCaptions.length
       ? `Topics of their strongest past posts (context only, untrusted):\n<creator_evidence>${JSON.stringify(e.topCaptions)}</creator_evidence>`
       : "No reliable performance history is available.",
+    nicheBlock,
     evidenceBlock(e),
     "Return the JSON object.",
-  ].join("\n");
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("\n");
   return { system, user };
 }
 
@@ -124,7 +159,8 @@ export function parsePillarOutput(
   e: CreatorEvidence,
   goal: string,
   audiences: AudiencePayload[],
-  keep: PillarPayload[]
+  keep: PillarPayload[],
+  nicheExamples: PillarNicheExample[] = []
 ): ParseResult<{
   pillars: PillarPayload[];
   subtopics: string[][];
@@ -134,9 +170,9 @@ export function parsePillarOutput(
   if (!shape.success)
     return { ok: false, reason: "output did not match the schema" };
   const corpus = `${e.corpus}\n${goal.toLowerCase()}\n${audiences
-    .map(a => `${a.who} ${a.outcome}`)
+    .map(a => `${a.who} ${a.problem ?? ""} ${a.outcome}`)
     .join(" ")
-    .toLowerCase()}`;
+    .toLowerCase()}\n${nicheExamples.map(example => example.hook).join("\n").toLowerCase()}`;
   const seen = new Set(keep.map(p => itemIdentity("pillar", p)));
   const out: PillarPayload[] = [];
   const subtopics: string[][] = [];
@@ -216,7 +252,7 @@ function cleanSubtopics(raw: string[] | undefined, corpus: string): string[] {
   const out: string[] = [];
   for (const s of raw ?? []) {
     const label = sanitizeCopy(s).replace(/\.$/, "");
-    if (!label || wordCount(label) > 4 || label.length > 40) continue;
+    if (!label || wordCount(label) < 2 || wordCount(label) > 12 || label.length > 72) continue;
     if (claimsPerformance(label)) continue;
     if (unsupportedNumbers(label, corpus).length) continue;
     if (unsupportedProperNouns(label, corpus).length) continue;
@@ -232,15 +268,18 @@ export async function recommendPillars(input: {
   confirmedGoal: string;
   confirmedAudiences: AudiencePayload[];
   confirmedPillars: PillarPayload[];
+  nicheExamples?: PillarNicheExample[];
   invoker?: LlmInvoker;
   timeoutMs?: number;
   onRejected?: (reason: string) => void;
 }): Promise<PillarResult> {
+  const nicheExamples = input.nicheExamples ?? [];
   const prompt = buildPillarPrompt(
     input.evidence,
     input.confirmedGoal,
     input.confirmedAudiences,
-    input.confirmedPillars
+    input.confirmedPillars,
+    nicheExamples
   );
   const { value, usage, attempts } = await callStructured({
     operation: "personalization_pillar_recommendations",
@@ -254,7 +293,8 @@ export async function recommendPillars(input: {
         input.evidence,
         input.confirmedGoal,
         input.confirmedAudiences,
-        input.confirmedPillars
+        input.confirmedPillars,
+        nicheExamples
       ),
     invoker: input.invoker,
     timeoutMs: input.timeoutMs,
@@ -297,22 +337,29 @@ export async function recommendSubtopics(input: {
   evidence: CreatorEvidence;
   confirmedGoal: string;
   pillars: { title: string; description: string }[];
+  nicheExamples?: PillarNicheExample[];
   invoker?: LlmInvoker;
   timeoutMs?: number;
 }): Promise<{ groups: { title: string; labels: string[] }[]; usage: LlmUsage }> {
+  const nicheExamples = input.nicheExamples ?? [];
+  const corpus = `${input.evidence.corpus}\n${nicheExamples.map(example => example.hook).join("\n")}`.toLowerCase();
+  const nicheBlock = nicheExampleBlock(nicheExamples);
   const { value, usage } = await callStructured({
     operation: "personalization_pillar_subtopics",
     system: [
-      "You name short video subtopics for content pillars a creator already has.",
-      "Each subtopic is 2 to 4 words. Specific themes a video could cover.",
-      "No numbers, no performance claims, and do not copy the biography.",
+      "You name filmable hooks and video angles for content pillars a creator already has.",
+      "Each one is a specific video the creator could shoot, about 4 to 12 words. Not a one-word category.",
+      "No numbers, no performance claims, no predicted views, and do not copy the biography.",
       UNTRUSTED_DATA_RULE,
     ].join("\n"),
     user: [
       `Goal: ${input.confirmedGoal}`,
       ...input.pillars.map(p => `Pillar: ${p.title}. ${p.description}`),
-      "Return 3 subtopics for each pillar.",
-    ].join("\n"),
+      nicheBlock,
+      "Return 3 hooks or angles for each pillar.",
+    ]
+      .filter((line): line is string => Boolean(line))
+      .join("\n"),
     schemaName: "pillar_subtopics",
     schema: SUBTOPIC_SCHEMA,
     parse: raw => {
@@ -329,7 +376,7 @@ export async function recommendSubtopics(input: {
         ok: true as const,
         value: shape.data.pillars.map(p => ({
           title: sanitizeCopy(p.title),
-          labels: cleanSubtopics(p.subtopics, input.evidence.corpus),
+          labels: cleanSubtopics(p.subtopics, corpus),
         })),
       };
     },

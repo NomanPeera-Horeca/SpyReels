@@ -71,8 +71,14 @@ export async function runRecommendationJob(
   payload: RecommendationPayload
 ): Promise<RecommendationResult> {
   const db = await requireDb();
+  const { loadPromptNicheExamples } = await import("../viralPosts/qualifiedNicheRead");
   return generateRecommendations(
-    { store: createRecommendationStore(db) },
+    {
+      store: createRecommendationStore(db),
+      nicheExamples: {
+        read: input => loadPromptNicheExamples(input),
+      },
+    },
     {
       ctx: {
         user: { id: payload.userId },
@@ -110,12 +116,35 @@ function rememberState(key: string, state: RecommendationJobState) {
  * Changes when stored posts change, so a suggestion built from the biography
  * is not reused after the analysis snapshot arrives. No handle or caption is hashed.
  */
+/**
+ * Post fingerprint, plus a website marker only after useful site facts exist.
+ * Profiles with no website keep the previous key, so a finished job is not rerun.
+ */
+export function recommendationEvidenceToken(
+  postIds: string[],
+  websiteLines: string[]
+): string {
+  const ids = [...postIds].filter(Boolean).sort();
+  const posts =
+    ids.length === 0
+      ? "profile"
+      : stableHash(`${ids.length}:${ids.join(",")}`).slice(0, 16);
+  const lines = websiteLines.map(line => line.trim()).filter(Boolean).sort();
+  if (lines.length === 0) return posts;
+  return `${posts}:w${stableHash(lines.join("|")).slice(0, 12)}`;
+}
+
 export async function recommendationEvidenceKey(profileId: string): Promise<string> {
   const db = await requireDb();
   const snapshot = await createRecommendationStore(db).loadLatestSnapshot(profileId);
-  if (!snapshot || snapshot.posts.length === 0) return "profile";
-  const ids = snapshot.posts.map(post => post.postId).sort().join(",");
-  return stableHash(`${snapshot.posts.length}:${ids}`).slice(0, 16);
+  const site = snapshot?.profileEvidence?.website;
+  const websiteLines = site
+    ? [...site.offers, ...site.callsToAction, ...site.customers, ...site.goalEvidence]
+    : [];
+  return recommendationEvidenceToken(
+    snapshot?.posts.map(post => post.postId) ?? [],
+    websiteLines
+  );
 }
 
 export async function recommendationJobKeyFor(

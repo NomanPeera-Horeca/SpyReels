@@ -82,9 +82,9 @@ function fakeModel(over: Partial<Record<string, unknown[]>> = {}) {
 }
 
 const PROMPTS = {
-  goal: "goal-v1",
-  audience: "audience-v1",
-  pillars: "pillars-v1",
+  goal: "goal-v2",
+  audience: "audience-v2",
+  pillars: "pillars-v2",
 };
 
 describe("evaluation set", () => {

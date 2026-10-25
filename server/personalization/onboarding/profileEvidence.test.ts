@@ -136,6 +136,46 @@ describe("profile evidence from lookup", () => {
     expect(built.snippets.some(snippet => snippet.text === "Dawn in the marsh")).toBe(true);
   });
 
+  it("adds stored website offers and calls to action without a new fetch", () => {
+    const built = buildCreatorEvidence({
+      platform: "instagram",
+      displayName: "Cafe Supply",
+      bio: "Commercial kitchen equipment.",
+      snapshot: null,
+      items: [],
+      profileEvidence: {
+        username: "cafe",
+        displayName: "Cafe Supply",
+        bio: "Commercial kitchen equipment.",
+        category: null,
+        cta: "DM for a quote.",
+        websiteUrl: "https://example.com/menu",
+        captions: [],
+        website: {
+          url: "https://example.com/menu",
+          fetchedAt: "2026-10-24T16:00:00.000Z",
+          title: "Cafe Supply Co",
+          offers: ["Ovens and prep tables"],
+          businessModel: "b2b",
+          customers: ["Restaurant owners"],
+          callsToAction: ["Book a showroom visit"],
+          goalEvidence: ["Helping cafes fill more covers"],
+        },
+      },
+    });
+    expect(built.sources).toContain("website");
+    expect(built.sources).toContain("cta");
+    expect(built.snippets.map(snippet => snippet.text)).toEqual(
+      expect.arrayContaining([
+        "Ovens and prep tables",
+        "Book a showroom visit",
+        "Restaurant owners",
+        "Helping cafes fill more covers",
+      ])
+    );
+    expect(built.commercialSignals).toBe(true);
+  });
+
   it("still treats a supplier as a business, not a restaurant operator", () => {
     const text = [
       "Cafe Supply",

@@ -21,6 +21,7 @@ import {
   unsupportedDemographics,
   unsupportedNumbers,
   unsupportedProperNouns,
+  wordCount,
 } from "./guards";
 import {
   callStructured,
@@ -29,7 +30,7 @@ import {
   type ParseResult,
 } from "./structuredLlm";
 
-export const AUDIENCE_PROMPT_VERSION = "audience-v1";
+export const AUDIENCE_PROMPT_VERSION = "audience-v2";
 export const MAX_AUDIENCES = 3;
 
 export type AudienceRecommendation = AudiencePayload & { why: string };
@@ -53,10 +54,11 @@ const SCHEMA = {
         type: "object",
         properties: {
           who: { type: "string" },
+          problem: { type: "string" },
           outcome: { type: "string" },
           why: { type: "string" },
         },
-        required: ["who", "outcome", "why"],
+        required: ["who", "problem", "outcome", "why"],
         additionalProperties: false,
       },
     },
@@ -68,10 +70,61 @@ const SCHEMA = {
 
 const Shape = z.object({
   audiences: z.array(
-    z.object({ who: z.string(), outcome: z.string(), why: z.string() })
+    z.object({
+      who: z.string(),
+      problem: z.string().optional(),
+      outcome: z.string(),
+      why: z.string(),
+    })
   ),
   confidence: z.enum(["high", "medium", "low"]),
 });
+
+const PROBLEM_STOP = new Set([
+  "about",
+  "after",
+  "also",
+  "and",
+  "are",
+  "because",
+  "before",
+  "but",
+  "can",
+  "does",
+  "from",
+  "have",
+  "into",
+  "just",
+  "more",
+  "need",
+  "over",
+  "than",
+  "that",
+  "their",
+  "them",
+  "they",
+  "this",
+  "very",
+  "want",
+  "when",
+  "with",
+  "your",
+]);
+
+function tokenInEvidence(token: string, corpus: string): boolean {
+  if (corpus.includes(token)) return true;
+  if (token.endsWith("s") && token.length > 4 && corpus.includes(token.slice(0, -1))) return true;
+  return corpus.includes(`${token}s`);
+}
+
+/** A problem is stored only when one of its content words is already in the evidence or goal. */
+export function problemSupportedByEvidence(problem: string, corpus: string): boolean {
+  const tokens = problem.toLowerCase().match(/[a-z]{4,}/g) ?? [];
+  const content = tokens.filter(token => !PROBLEM_STOP.has(token));
+  if (content.length === 0) return false;
+  const hay = corpus.toLowerCase();
+  return content.some(token => tokenInEvidence(token, hay));
+}
 
 export function buildAudiencePrompt(
   e: CreatorEvidence,
@@ -84,7 +137,7 @@ export function buildAudiencePrompt(
     "Recommend INTENDED audiences who help the creator achieve their confirmed goal when one exists. When no goal is confirmed, use the profile evidence. Do not assume their current viewers are the right audience.",
     "Rules:",
     `- Between 1 and ${MAX_AUDIENCES} distinct segments. Fewer, more useful segments beat many.`,
-    "- who: a short noun phrase (max 8 words). outcome: what this audience wants to achieve (max 10 words). why: one short sentence on how this audience serves the goal.",
+    "- who: a short noun phrase (max 8 words). problem: the obstacle this segment has (max 12 words), or empty when the evidence does not show one. outcome: what they want instead (max 10 words). why: one short sentence on how this audience serves the goal.",
     "- Do not add age, gender, ethnicity, religion, family role or orientation unless the evidence or goal mentions it.",
     "- Do not invent names, numbers or facts about the creator.",
     "- Do not repeat audiences the user already confirmed.",
@@ -118,6 +171,7 @@ export function parseAudienceOutput(
   const out: AudienceRecommendation[] = [];
   for (const a of shape.data.audiences) {
     const who = sanitizeCopy(a.who);
+    const problem = sanitizeCopy(a.problem ?? "").replace(/\.$/, "");
     const outcome = sanitizeCopy(a.outcome).replace(/\.$/, "");
     const why = sanitizeCopy(a.why);
     if (
@@ -129,7 +183,10 @@ export function parseAudienceOutput(
     ) {
       return { ok: false, reason: "an audience is empty or too long" };
     }
-    const text = `${who} ${outcome} ${why}`;
+    if (problem && (problem.length > 120 || wordCount(problem) > 16)) {
+      return { ok: false, reason: "an audience problem is too long" };
+    }
+    const text = `${who} ${problem} ${outcome} ${why}`;
     const demo = unsupportedDemographics(text, corpus);
     if (demo.length)
       return {
@@ -148,10 +205,15 @@ export function parseAudienceOutput(
         ok: false,
         reason: `audience names things not in the evidence (${names.join(", ")})`,
       };
+    const problemNames = problem ? unsupportedProperNouns(`${problem}.`, corpus) : [];
+    const supportedProblem =
+      problem && problemNames.length === 0 && problemSupportedByEvidence(problem, corpus)
+        ? problem
+        : "";
     const key = itemIdentity("audience", { who, outcome });
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ who, outcome, why });
+    out.push({ who, outcome, why, ...(supportedProblem ? { problem: supportedProblem } : {}) });
   }
   if (out.length === 0 && keep.length === 0)
     return { ok: false, reason: "no usable audience" };

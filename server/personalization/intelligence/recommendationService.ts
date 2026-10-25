@@ -68,6 +68,10 @@ import {
   type LlmUsage,
 } from "./structuredLlm";
 import { subtopicSaveFailureFields } from "../subtopics";
+import {
+  enrichUnconfirmedPillars,
+  type NicheExampleReader,
+} from "./nicheEnrichment";
 
 export type RecommendationStep = "goal" | "audience" | "pillars";
 
@@ -196,9 +200,9 @@ export function stepInputsHash(
   items: ItemRecord[],
   evidence: CreatorEvidence
 ): string {
-  if (step === "goal") return stableHash(`goal|${evidence.hash}`);
+  if (step === "goal") return stableHash(`goal|${PROMPT_VERSION.goal}|${evidence.hash}`);
   // Keep the upstream hash as a prefix so an evidence refresh is not treated as an edit.
-  return `${upstreamInputsHash(STEP_KIND[step], items)}|${evidence.hash}`;
+  return `${upstreamInputsHash(STEP_KIND[step], items)}|${PROMPT_VERSION[step]}|${evidence.hash}`;
 }
 
 /** Elapsed time from "That's me" to a saved suggestion. Null when the clock is missing or absurd. */
@@ -327,12 +331,68 @@ function freshAiCovers(
   );
 }
 
+function nicheTextFor(items: ItemRecord[], profile: GenerationProfile): string {
+  const niche = items.find(
+    item =>
+      item.kind === "niche" &&
+      item.status !== "superseded" &&
+      item.status !== "dismissed"
+  );
+  const label = niche ? (niche.payload as NichePayload).label.trim() : "";
+  if (label) return label;
+  return [profile.displayName, profile.bio]
+    .filter(text => Boolean(text && text.trim()))
+    .join(". ");
+}
+
+async function safeNicheEnrich(input: {
+  deps: {
+    store: RecommendationStore;
+    invoker?: LlmInvoker;
+    timeoutMs?: number;
+    onRejected?: (reason: string) => void;
+    nicheExamples?: { read: NicheExampleReader };
+  };
+  profile: GenerationProfile;
+  evidence: CreatorEvidence;
+  inputsHash: string;
+  confirmedGoal: string;
+  confirmedAudiences: AudiencePayload[];
+  excludeHandles: string[];
+}): Promise<void> {
+  const read = input.deps.nicheExamples?.read;
+  if (!read) return;
+  try {
+    const items = await input.deps.store.loadItems(input.profile.id);
+    await enrichUnconfirmedPillars({
+      store: input.deps.store,
+      read,
+      profileId: input.profile.id,
+      evidence: input.evidence,
+      inputsHash: input.inputsHash,
+      confirmedGoal: input.confirmedGoal,
+      confirmedAudiences: input.confirmedAudiences,
+      nicheText: nicheTextFor(items, input.profile),
+      excludeHandles: input.excludeHandles,
+      invoker: input.deps.invoker,
+      timeoutMs: input.deps.timeoutMs,
+      onRejected: input.deps.onRejected,
+    });
+  } catch (err) {
+    console.warn("[personalization] niche_enrich_skipped", {
+      code: err instanceof Error ? err.name : "error",
+    });
+  }
+}
+
 export async function generateRecommendations(
   deps: {
     store: RecommendationStore;
     invoker?: LlmInvoker;
     timeoutMs?: number;
     onRejected?: (reason: string) => void;
+    /** Read-only niche supply. Absent in tests. Never blocks the first write. */
+    nicheExamples?: { read: NicheExampleReader };
   },
   input: {
     ctx: PersonalizationCtx;
@@ -411,6 +471,17 @@ export async function generateRecommendations(
       i.basedOnInputsHash === inputsHash
   );
   if (sameInputs.length > 0) {
+    if (input.step === "pillars") {
+      await safeNicheEnrich({
+        deps,
+        profile,
+        evidence,
+        inputsHash,
+        confirmedGoal: goals.map(g => g.text).join(" "),
+        confirmedAudiences: audiences,
+        excludeHandles: snapshot?.handle ? [snapshot.handle] : [],
+      });
+    }
     const live = sameInputs.filter(
       i => i.status === "suggested" || i.status === "confirmed"
     );
@@ -442,7 +513,11 @@ export async function generateRecommendations(
       confidence = r.confidence;
       suggestions = r.audiences.map(a => ({
         kind: "audience" as const,
-        payload: { who: a.who, outcome: a.outcome } satisfies AudiencePayload,
+        payload: {
+          who: a.who,
+          outcome: a.outcome,
+          ...(a.problem ? { problem: a.problem } : {}),
+        } satisfies AudiencePayload,
         evidence: "profile_inferred" as const,
         analysisRunId: null,
       }));
@@ -531,6 +606,17 @@ export async function generateRecommendations(
     } catch (err) {
       console.warn("[personalization] pillar topics not saved; pillars kept", subtopicSaveFailureFields(err));
     }
+  }
+  if (input.step === "pillars" && applied === "applied") {
+    await safeNicheEnrich({
+      deps,
+      profile,
+      evidence,
+      inputsHash,
+      confirmedGoal: goals.map(g => g.text).join(" "),
+      confirmedAudiences: audiences,
+      excludeHandles: snapshot?.handle ? [snapshot.handle] : [],
+    });
   }
   return {
     status: "generated",

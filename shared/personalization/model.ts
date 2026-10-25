@@ -129,8 +129,11 @@ export const ITEM_STATUSES = [
 export type ItemStatus = (typeof ITEM_STATUSES)[number];
 
 export type GoalPayload = { text: string };
-/** "You create content for {who} to help them {outcome}" */
-export type AudiencePayload = { who: string; outcome: string };
+/**
+ * "You create content for {who} to help them {outcome}".
+ * problem is the obstacle that segment has, when the evidence or the goal supports one.
+ */
+export type AudiencePayload = { who: string; outcome: string; problem?: string };
 /**
  * viewSharePercent is the REAL share of the user's views, or null.
  * Only performance_backed pillars may carry a number (also enforced by a DB CHECK).
