@@ -600,6 +600,12 @@ function deadlineMiss(): ProfileLookupResult {
   return { ok: false, kind: "provider", httpStatus: 408, detail: "deadline" };
 }
 
+/**
+ * Second direct profile call for a budgeted lookup. Creator Radar calls
+ * lookupProfileByHandle without a budget and keeps its sequential retries.
+ */
+const DIRECT_PROFILE_HEDGE_AFTER_MS = 6_500;
+
 /** Attempt timing for an interactive budgeted lookup. No profile text or response body. */
 function logBudgetedProfileAttempt(
   budget: LookupBudget | undefined,
@@ -620,43 +626,296 @@ function logBudgetedProfileAttempt(
   );
 }
 
+function profileResultIsTerminal(result: ProfileLookupResult): boolean {
+  return result.ok || result.kind === "not_found" || result.kind === "private";
+}
+
+function hedgeOutcomeLabel(result: ProfileLookupResult): string {
+  if (result.ok) return "ok";
+  if (result.kind === "not_found") return "not_found";
+  if (result.kind === "private") return "private";
+  if (result.detail === "deadline") return "deadline";
+  if (result.httpStatus === 408 || result.detail === "timeout") return "timeout";
+  if (result.httpStatus === 429 || result.detail === "rate_limit") return "rate_limit";
+  return "error";
+}
+
+function logProfileHedge(args: {
+  handle: string;
+  hedge: boolean;
+  outcome: string;
+  winner: number;
+  elapsedMs: number;
+  extraRequests: number;
+}): void {
+  const requested = normalizeInstagramHandle(args.handle).replace(/[^a-z0-9._]/g, "");
+  const outcome = args.outcome.replace(/[^a-z0-9_]/gi, "") || "unknown";
+  console.log(
+    `[Instagram] profile hedge requested=@${requested} hedge=${args.hedge ? 1 : 0} outcome=${outcome} winner=${args.winner} ms=${Math.max(0, Math.round(args.elapsedMs))} extraRequests=${args.extraRequests}`
+  );
+}
+
+function delayForHedge(
+  ms: number,
+  signal: AbortSignal
+): { done: Promise<void>; cancel: () => void } {
+  if (ms <= 0 || signal.aborted) return { done: Promise.resolve(), cancel() {} };
+  let finish: () => void = () => {};
+  const done = new Promise<void>(resolve => {
+    const timer = setTimeout(complete, ms);
+    function complete() {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", complete);
+      resolve();
+    }
+    finish = complete;
+    signal.addEventListener("abort", complete, { once: true });
+  });
+  return { done, cancel: () => finish() };
+}
+
+function childAttemptSignal(parent: AbortSignal): { signal: AbortSignal; cancel: () => void } {
+  const controller = new AbortController();
+  const unlink = linkAbortSignal(controller, parent);
+  return {
+    signal: controller.signal,
+    cancel() {
+      controller.abort();
+      unlink();
+    },
+  };
+}
+
+async function runDirectProfileAttempt(
+  cleanHandle: string,
+  budget: LookupBudget,
+  attempt: number,
+  maxAttempts: number,
+  signal: AbortSignal
+): Promise<ProfileLookupResult> {
+  const logAttempt = (elapsedMs: number, status: number, detail: string) =>
+    logBudgetedProfileAttempt(budget, {
+      handle: cleanHandle,
+      attempt,
+      maxAttempts,
+      elapsedMs,
+      status,
+      detail,
+    });
+
+  if (signal.aborted || budgetExpiredOrTight(budget)) {
+    logAttempt(0, 408, "deadline");
+    return deadlineMiss();
+  }
+
+  const attemptStarted = Date.now();
+  const { status, data } = await scGet(
+    "/v1/instagram/profile",
+    { handle: cleanHandle },
+    {
+      timeoutMs: attemptTimeoutMs(budget, SCRAPECREATORS_FETCH_MS),
+      signal,
+    }
+  );
+  const elapsedMs = Date.now() - attemptStarted;
+
+  if (status === 404) {
+    logAttempt(elapsedMs, status, "not_found");
+    return { ok: false, kind: "not_found", httpStatus: status, detail: "http_404" };
+  }
+  if (status === 408 || data?.error === "scrapecreators_request_timeout") {
+    logAttempt(elapsedMs, status, "timeout");
+    return { ok: false, kind: "provider", httpStatus: 408, detail: "timeout" };
+  }
+  if (status === 429) {
+    logAttempt(elapsedMs, status, "rate_limit");
+    return { ok: false, kind: "provider", httpStatus: status, detail: "rate_limit" };
+  }
+  if (status !== 200 || !data) {
+    const detail = `http_${status}`;
+    logAttempt(elapsedMs, status, detail);
+    return { ok: false, kind: "provider", httpStatus: status, detail };
+  }
+
+  const user = data?.data?.user;
+  if (user) {
+    logAttempt(elapsedMs, status, "ok");
+    return {
+      ok: true,
+      profile: profileFromGraphUser(user, cleanHandle),
+      httpStatus: status,
+      mediaRestricted: hasInstagramMediaRestriction(data),
+    };
+  }
+
+  const failureKind = classifyVendorEnvelopeFailure(data);
+  const { vendorError, vendorMsg } = readVendorEnvelope(data);
+  const lastDetail = `${vendorError} ${vendorMsg}`.trim();
+  if (failureKind === "not_found") {
+    logAttempt(elapsedMs, status, "not_found");
+    return {
+      ok: false,
+      kind: "not_found",
+      httpStatus: status,
+      detail: lastDetail || "vendor_not_found",
+    };
+  }
+  if (failureKind === "private") {
+    logAttempt(elapsedMs, status, "private");
+    return { ok: false, kind: "private", httpStatus: status, detail: lastDetail || "private" };
+  }
+  if (failureKind === "rate_limit" || (failureKind && shouldRetryVendorFailure(failureKind))) {
+    logAttempt(elapsedMs, status, failureKind === "rate_limit" ? "rate_limit" : "vendor_retry");
+    return {
+      ok: false,
+      kind: "provider",
+      httpStatus: status,
+      detail: lastDetail || (failureKind === "rate_limit" ? "rate_limit" : "vendor_retry"),
+    };
+  }
+  logAttempt(elapsedMs, status, "provider");
+  return {
+    ok: false,
+    kind: "provider",
+    httpStatus: status,
+    detail: lastDetail || "missing_user",
+  };
+}
+
+function preferTemporaryProfile(
+  rows: Array<{ attempt: number; result: ProfileLookupResult }>
+): { attempt: number; result: ProfileLookupResult } {
+  const specific = rows.find(row => {
+    if (row.result.ok) return false;
+    return (
+      row.result.detail !== "timeout" &&
+      row.result.detail !== "deadline" &&
+      row.result.httpStatus !== 408
+    );
+  });
+  return specific ?? rows[0] ?? { attempt: 0, result: deadlineMiss() };
+}
+
+/**
+ * One direct profile request immediately. If it is still pending at 6.5s,
+ * one overlapping direct request runs inside the same deadline. A temporary
+ * provider error does not cancel the other request. A public profile, private
+ * account, or not-found does, and outstanding work stops.
+ */
+async function lookupBudgetedDirectProfile(
+  handle: string,
+  budget: LookupBudget
+): Promise<ProfileLookupResult> {
+  const cleanHandle = handle.replace(/^@/, "").trim();
+  const maxAttempts = Math.max(1, budget.maxAttempts ?? 2);
+  const startedAt = Date.now();
+  const jobs: Array<Promise<void>> = [];
+  const cancels = new Map<number, () => void>();
+  let startedCount = 0;
+  let hedgeStarted = false;
+  let firstSettled = false;
+  let resolveFirst: () => void = () => {};
+  const firstSettledPromise = new Promise<void>(resolve => {
+    resolveFirst = resolve;
+  });
+  let terminal: { attempt: number; result: ProfileLookupResult } | null = null;
+  const temporary: Array<{ attempt: number; result: ProfileLookupResult }> = [];
+
+  const accept = (attempt: number, result: ProfileLookupResult) => {
+    if (attempt === 1 && !firstSettled) {
+      firstSettled = true;
+      resolveFirst();
+    }
+    if (terminal) return;
+    if (profileResultIsTerminal(result)) {
+      terminal = { attempt, result };
+      for (const [n, cancel] of cancels) {
+        if (n !== attempt) cancel();
+      }
+      return;
+    }
+    temporary.push({ attempt, result });
+  };
+
+  const startAttempt = (): boolean => {
+    if (terminal || startedCount >= maxAttempts || budgetExpiredOrTight(budget)) return false;
+    const attempt = ++startedCount;
+    const gate = childAttemptSignal(budget.signal);
+    cancels.set(attempt, gate.cancel);
+    jobs.push(
+      runDirectProfileAttempt(cleanHandle, budget, attempt, maxAttempts, gate.signal)
+        .then(result => accept(attempt, result))
+        .catch(() => {
+          accept(attempt, {
+            ok: false,
+            kind: "provider",
+            httpStatus: 0,
+            detail: "provider",
+          });
+        })
+    );
+    return true;
+  };
+
+  const deadlineLeft = budget.deadlineLeft() ?? DIRECT_PROFILE_HEDGE_AFTER_MS;
+  const hedgeDelay = delayForHedge(
+    Math.min(DIRECT_PROFILE_HEDGE_AFTER_MS, Math.max(0, deadlineLeft)),
+    budget.signal
+  );
+  let returned: { attempt: number; result: ProfileLookupResult } = {
+    attempt: 0,
+    result: deadlineMiss(),
+  };
+
+  try {
+    startAttempt();
+    await Promise.race([hedgeDelay.done, firstSettledPromise]);
+    if (!terminal && startedCount < maxAttempts && !budgetExpiredOrTight(budget)) {
+      if (!firstSettled) hedgeStarted = startAttempt();
+      else if (temporary.length > 0) startAttempt();
+    }
+    await Promise.all(jobs);
+    if (terminal) returned = terminal;
+    else if (temporary.length > 0) returned = preferTemporaryProfile(temporary);
+    return returned.result;
+  } finally {
+    hedgeDelay.cancel();
+    if (!terminal) {
+      for (const cancel of cancels.values()) cancel();
+    }
+    logProfileHedge({
+      handle: cleanHandle,
+      hedge: hedgeStarted,
+      outcome: hedgeOutcomeLabel(returned.result),
+      winner: returned.attempt,
+      elapsedMs: Date.now() - startedAt,
+      extraRequests: Math.max(0, startedCount - 1),
+    });
+  }
+}
+
 async function lookupProfileByHandle(
   handle: string,
   budget?: LookupBudget
 ): Promise<ProfileLookupResult> {
+  if (budget) return lookupBudgetedDirectProfile(handle, budget);
+  return lookupUnbudgetedProfileByHandle(handle);
+}
+
+async function lookupUnbudgetedProfileByHandle(handle: string): Promise<ProfileLookupResult> {
   const cleanHandle = handle.replace(/^@/, "").trim();
-  const MAX_TRIES = budget?.maxAttempts ?? 5;
+  const MAX_TRIES = 5;
   const BACKOFF_MS = 600;
   let lastStatus = 0;
   let lastDetail = "";
 
   for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
-    if (budgetExpiredOrTight(budget)) {
-      logBudgetedProfileAttempt(budget, {
-        handle: cleanHandle,
-        attempt,
-        maxAttempts: MAX_TRIES,
-        elapsedMs: 0,
-        status: 408,
-        detail: "deadline",
-      });
-      return deadlineMiss();
-    }
     const attemptStarted = Date.now();
-    const { status, data } = await scGet(
-      "/v1/instagram/profile",
-      { handle: cleanHandle },
-      budget
-        ? {
-            timeoutMs: attemptTimeoutMs(budget, SCRAPECREATORS_FETCH_MS),
-            signal: budget.signal,
-          }
-        : undefined
-    );
+    const { status, data } = await scGet("/v1/instagram/profile", { handle: cleanHandle });
     lastStatus = status;
     const elapsedMs = Date.now() - attemptStarted;
     const logAttempt = (detail: string) =>
-      logBudgetedProfileAttempt(budget, {
+      logBudgetedProfileAttempt(undefined, {
         handle: cleanHandle,
         attempt,
         maxAttempts: MAX_TRIES,
@@ -677,18 +936,16 @@ async function lookupProfileByHandle(
     if (status === 408 || data?.error === "scrapecreators_request_timeout") {
       lastDetail = "timeout";
       logAttempt("timeout");
-      if (attempt < MAX_TRIES && !budgetExpiredOrTight(budget)) {
-        if (budget) await budget.sleep(400);
-        else await sleep(1000 * attempt);
+      if (attempt < MAX_TRIES) {
+        await sleep(1000 * attempt);
         continue;
       }
       return { ok: false, kind: "provider", httpStatus: 408, detail: "timeout" };
     }
     if (status === 429) {
       logAttempt("rate_limit");
-      if (attempt < MAX_TRIES && !budgetExpiredOrTight(budget)) {
-        if (budget) await budget.sleep(400);
-        else await sleep(2000 * attempt);
+      if (attempt < MAX_TRIES) {
+        await sleep(2000 * attempt);
         continue;
       }
       return {
@@ -701,9 +958,8 @@ async function lookupProfileByHandle(
     if (status !== 200 || !data) {
       lastDetail = `http_${status}`;
       logAttempt(`http_${status}`);
-      if (attempt < MAX_TRIES && !budgetExpiredOrTight(budget)) {
-        if (budget) await budget.sleep(400);
-        else await sleep(1000 * attempt);
+      if (attempt < MAX_TRIES) {
+        await sleep(1000 * attempt);
         continue;
       }
       return {
@@ -747,19 +1003,13 @@ async function lookupProfileByHandle(
         detail: lastDetail || "private",
       };
     }
-    if (
-      failureKind &&
-      shouldRetryVendorFailure(failureKind) &&
-      attempt < MAX_TRIES &&
-      !budgetExpiredOrTight(budget)
-    ) {
+    if (failureKind && shouldRetryVendorFailure(failureKind) && attempt < MAX_TRIES) {
       logAttempt(failureKind === "rate_limit" ? "rate_limit" : "vendor_retry");
       console.warn(
         `[Instagram] Vendor ${failureKind} envelope for @${cleanHandle} ` +
           `(attempt ${attempt}/${MAX_TRIES}): ${lastDetail}`
       );
-      if (budget) await budget.sleep(400);
-      else await sleep(BACKOFF_MS * attempt);
+      await sleep(BACKOFF_MS * attempt);
       continue;
     }
     if (failureKind === "rate_limit") {
