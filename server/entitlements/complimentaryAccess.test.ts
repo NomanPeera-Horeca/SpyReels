@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  complimentaryPlanExceptionForEmail,
   isComplimentaryGrantActive,
+  mergeComplimentaryPlans,
   resolveAccessSource,
   resolveEffectivePlan,
 } from "./complimentaryAccess";
@@ -29,6 +31,19 @@ describe("complimentary access entitlement resolution", () => {
   it("returns free when no paid or complimentary entitlement exists", () => {
     expect(resolveEffectivePlan("free", null)).toBe("free");
     expect(resolveAccessSource("free", null)).toBe("free");
+  });
+
+  it("gives the founder email Pro without a Stripe subscription", () => {
+    expect(complimentaryPlanExceptionForEmail("nomanpeera@gmail.com")).toBe("pro");
+    expect(complimentaryPlanExceptionForEmail(" NomanPeera@gmail.com ")).toBe("pro");
+    expect(complimentaryPlanExceptionForEmail("someone@example.com")).toBeNull();
+    expect(resolveEffectivePlan("free", complimentaryPlanExceptionForEmail("nomanpeera@gmail.com"))).toBe("pro");
+    expect(resolveEffectivePlan("business", complimentaryPlanExceptionForEmail("nomanpeera@gmail.com"))).toBe("business");
+  });
+
+  it("keeps the higher complimentary plan when a grant and an email exception both exist", () => {
+    expect(mergeComplimentaryPlans("pro", "business")).toBe("business");
+    expect(mergeComplimentaryPlans(null, "pro")).toBe("pro");
   });
 });
 

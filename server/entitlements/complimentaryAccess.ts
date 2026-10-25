@@ -14,6 +14,30 @@ const PLAN_RANK: Record<PlanId, number> = {
   agency: 4,
 };
 
+/** Founder login. Effective plan is at least Pro, with no Stripe charge. */
+const COMPLIMENTARY_PRO_EMAILS = ["nomanpeera@gmail.com"] as const;
+
+export function complimentaryPlanExceptionForEmail(
+  email: string | null | undefined
+): ComplimentaryPlan | null {
+  const normalized = email?.trim().toLowerCase();
+  if (!normalized) return null;
+  return (COMPLIMENTARY_PRO_EMAILS as readonly string[]).includes(normalized)
+    ? "pro"
+    : null;
+}
+
+export function mergeComplimentaryPlans(
+  ...plans: Array<ComplimentaryPlan | null | undefined>
+): ComplimentaryPlan | null {
+  let best: ComplimentaryPlan | null = null;
+  for (const plan of plans) {
+    if (!plan) continue;
+    if (!best || PLAN_RANK[plan] > PLAN_RANK[best]) best = plan;
+  }
+  return best;
+}
+
 export function resolveEffectivePlan(
   billingPlan: PlanId,
   complimentaryPlan?: ComplimentaryPlan | null
