@@ -783,7 +783,14 @@ export function AudienceStep({
         onSaveDraft={(text, id) => {
           // One visible field. The stored outcome is kept as it was, never discarded.
           const existing = id ? audiences.find(a => a.id === id)?.payload : undefined;
-          return onSave({ who: text, outcome: existing?.outcome ?? "" }, id);
+          return onSave(
+            {
+              who: text,
+              outcome: existing?.outcome ?? "",
+              ...(existing?.problem ? { problem: existing.problem } : {}),
+            },
+            id
+          );
         }}
         onRemove={onRemove}
       />

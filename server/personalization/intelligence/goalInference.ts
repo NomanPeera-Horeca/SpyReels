@@ -31,7 +31,7 @@ import {
   type ParseResult,
 } from "./structuredLlm";
 
-export const GOAL_PROMPT_VERSION = "goal-v1";
+export const GOAL_PROMPT_VERSION = "goal-v2";
 export const DEFAULT_CLARIFYING_QUESTION =
   "In one sentence, why do you create content? For example: to grow your business, teach a skill, or entertain people.";
 
@@ -65,6 +65,9 @@ const SCHEMA = {
         enum: [
           "display_name",
           "bio",
+          "category",
+          "cta",
+          "website",
           "captions",
           "brand_description",
           "niche",
@@ -94,6 +97,9 @@ const Shape = z.object({
     z.enum([
       "display_name",
       "bio",
+      "category",
+      "cta",
+      "website",
       "captions",
       "brand_description",
       "niche",
@@ -121,6 +127,8 @@ export function buildGoalPrompt(e: CreatorEvidence): {
     "You help short-form video creators state why they create content.",
     UNTRUSTED_DATA_RULE,
     "Write the creator's PURPOSE (why they create), not a description of what they posted.",
+    "Use the biography, a stated call to action, retrieved website facts (offers, customers, and calls to action), and confirmed answers. Do not invent an outcome those sources do not support.",
+    "Cite website only when those retrieved facts are present. A website address alone is not page content.",
     "Rules:",
     "- One sentence, at most 18 words, starting with a verb such as Help, Teach, Share, Entertain, Inspire, Show.",
     "- Only use facts present in the evidence. Do not invent products, places, names, numbers or audiences.",

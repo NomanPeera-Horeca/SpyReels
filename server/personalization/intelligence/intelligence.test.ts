@@ -30,6 +30,10 @@ import {
   unsupportedDemographics,
   unsupportedProperNouns,
 } from "./guards";
+import { SubtopicStoreError } from "../subtopics";
+import { chooseIndexedHomeSpecs, indexedHomePoolSpecChoices } from "../../viralPosts/browseService";
+import { buildPoolKey } from "../../viralPosts/constants";
+import { readQualifiedNicheExamples } from "../../viralPosts/qualifiedNicheRead";
 
 /* ------------------------------------------------------------------ */
 /* Fakes                                                               */
@@ -695,8 +699,9 @@ class MemoryRecoStore implements RecommendationStore {
           )
         : upstreamInputsHash(input.kind, this.items) === input.guard.expected;
     if (!ok) return "stale" as const;
-    for (const i of this.items)
-      if (input.supersedeIds.includes(i.id)) i.status = "superseded";
+    for (const i of this.items) {
+      if (input.supersedeIds.includes(i.id) && i.status === "suggested") i.status = "superseded";
+    }
     for (const ins of input.inserts as GeneratedInsert[])
       this.items.push({ ...ins, id: `ai${++n}` });
     this.writes++;
@@ -787,6 +792,262 @@ describe("generateRecommendations: Goal -> Audience -> Pillars", () => {
     expect(pillars).toHaveLength(3);
   });
 
+  it("replaces unconfirmed pillars with niche hooks and leaves a confirmed pillar", async () => {
+    const store = new MemoryRecoStore();
+    store.items.push(item("goal", { text: "Help restaurant owners choose the right equipment." }));
+    store.items.push(item("audience", { who: "Restaurant owners", outcome: "buy the right gear" }));
+    store.items.push(
+      item("pillar", { title: "Old menus", description: "Already chosen.", viewSharePercent: null })
+    );
+    const llm = fakeLlm(pillarOut, {
+      pillars: [
+        {
+          title: "Quote walkthroughs",
+          serves: "Shows owners the questions to ask before they buy.",
+          subtopics: ["Ask for the install quote first"],
+        },
+        {
+          title: "First kitchen budget",
+          serves: "Helps founders spend on the gear that matters.",
+          subtopics: ["Price the oven before the dining room"],
+        },
+        {
+          title: "Old menus",
+          serves: "This confirmed pillar must stay out of the new list.",
+          subtopics: ["Keep the old menu names"],
+        },
+      ],
+      confidence: "high",
+    });
+    const saved: string[] = [];
+    (store as unknown as {
+      saveSubtopics: (id: string, groups: { labels: string[] }[]) => Promise<void>;
+    }).saveSubtopics = async (_id, groups) => {
+      for (const group of groups) saved.push(...group.labels);
+    };
+    const reads: string[] = [];
+    const r = await generateRecommendations(
+      {
+        store,
+        invoker: llm.invoker,
+        nicheExamples: {
+          read: async input => {
+            reads.push(input.nicheText);
+            return [{ hook: "Stop buying the cheapest fryer", format: "talking-head" }];
+          },
+        },
+      },
+      { ctx, socialProfileId: "prof-1", step: "pillars" }
+    );
+    expect(r.status).toBe("generated");
+    expect(llm.calls).toHaveLength(2);
+    expect(reads).toHaveLength(1);
+    const second = String(llm.calls[1]?.messages[1]?.content ?? "");
+    expect(second).toContain("Stop buying the cheapest fryer");
+    expect(second).not.toMatch(/\d{3,}/);
+    const live = store.items.filter(
+      row => row.kind === "pillar" && row.status !== "superseded" && row.status !== "dismissed"
+    );
+    expect(
+      live.some(
+        row =>
+          row.status === "confirmed" &&
+          (row.payload as ItemPayloadByKind["pillar"]).title === "Old menus"
+      )
+    ).toBe(true);
+    const suggested = live.filter(row => row.status === "suggested");
+    expect(suggested.map(row => (row.payload as ItemPayloadByKind["pillar"]).title)).toEqual([
+      "Quote walkthroughs",
+      "First kitchen budget",
+    ]);
+    expect(
+      suggested.every(row => row.generationMeta?.evidenceBasis.includes("niche_examples"))
+    ).toBe(true);
+    expect(saved).toContain("Ask for the install quote first");
+    const again = await generateRecommendations(
+      {
+        store,
+        invoker: llm.invoker,
+        nicheExamples: { read: async () => [{ hook: "Should not run again", format: null }] },
+      },
+      { ctx, socialProfileId: "prof-1", step: "pillars" }
+    );
+    expect(again.status).toBe("reused");
+    expect(llm.calls).toHaveLength(2);
+    expect(reads).toHaveLength(1);
+  });
+
+  it("does not spend a second model call when the niche read is empty", async () => {
+    const store = new MemoryRecoStore();
+    store.items.push(item("goal", { text: "Help restaurant owners choose the right equipment." }));
+    store.items.push(item("audience", { who: "Restaurant owners", outcome: "save money" }));
+    const llm = fakeLlm(pillarOut);
+    const reads: string[] = [];
+    const r = await generateRecommendations(
+      {
+        store,
+        invoker: llm.invoker,
+        nicheExamples: {
+          read: async input => {
+            reads.push(input.nicheText);
+            return [];
+          },
+        },
+      },
+      { ctx, socialProfileId: "prof-1", step: "pillars" }
+    );
+    expect(r.status).toBe("generated");
+    expect(llm.calls).toHaveLength(1);
+    expect(reads).toHaveLength(1);
+    expect(store.items.filter(row => row.kind === "pillar" && row.status === "suggested")).toHaveLength(3);
+  });
+
+  it("keeps profile pillars and skips the second model call when no relevant inventory exists", async () => {
+    const store = new MemoryRecoStore();
+    store.items.push(item("niche", { slug: "business-entrepreneurship", label: "Business & Entrepreneurship" }));
+    store.items.push(item("goal", { text: "Sell more outfits." }));
+    store.items.push(item("audience", { who: "People comparing clothes", outcome: "find a style" }));
+    const kept = item("pillar", {
+      title: "Lookbook notes",
+      description: "Chosen by the creator.",
+      viewSharePercent: null,
+    });
+    store.items.push(kept);
+    const llm = fakeLlm({
+      pillars: [
+        { title: "Outfit comparisons", serves: "Helps shoppers choose between two looks." },
+        { title: "Fit notes", serves: "Shows how a piece sits on different bodies." },
+        { title: "Closet edits", serves: "Helps people retire pieces they do not wear." },
+      ],
+      confidence: "high",
+    });
+    const r = await generateRecommendations(
+      {
+        store,
+        invoker: llm.invoker,
+        nicheExamples: {
+          read: input =>
+            readQualifiedNicheExamples(input, {
+              choices: indexedHomePoolSpecChoices,
+              choose: chooseIndexedHomeSpecs,
+              findPools: async () => [],
+              loadCandidates: async ({ poolIds }) => {
+                if (!poolIds.includes(900)) return [];
+                return [
+                  {
+                    candidate: {
+                      platform: "tiktok",
+                      sourceId: "restaurant-hook",
+                      creatorHandle: "operator",
+                      caption: "Price the menu before the next dinner service.",
+                      views: 80000,
+                      likes: 4000,
+                      comments: 400,
+                      creatorFollowers: 10000,
+                      publishedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+                    } as never,
+                    primaryPillar: "restaurant marketing",
+                    secondaryPillar: null,
+                    pillarConfidence: 0.8,
+                    pillarReason: null,
+                  },
+                ];
+              },
+              listNichePools: async () => [
+                {
+                  id: 900,
+                  poolKey: buildPoolKey({
+                    platform: "tiktok",
+                    niche: "Business & Entrepreneurship",
+                    pillar: "restaurant marketing",
+                  }),
+                },
+              ],
+              loadSimilar: async () => ({ nicheSlugs: [], creators: [], reels: [] }),
+            }),
+        },
+      },
+      { ctx, socialProfileId: "prof-1", step: "pillars" }
+    );
+    expect(r.status).toBe("generated");
+    expect(llm.calls).toHaveLength(1);
+    expect(store.items.find(row => row.id === kept.id)?.status).toBe("confirmed");
+    expect((store.items.find(row => row.id === kept.id)?.payload as ItemPayloadByKind["pillar"]).title).toBe(
+      "Lookbook notes"
+    );
+  });
+
+  it("keeps the saved pillars when the subtopic table is missing", async () => {
+    const store = new MemoryRecoStore();
+    store.items.push(item("goal", { text: "Help restaurant owners choose the right equipment." }));
+    store.items.push(item("audience", { who: "Restaurant owners", outcome: "save money" }));
+    const kept = item("pillar", {
+      title: "Old menus",
+      description: "Already chosen.",
+      viewSharePercent: null,
+    });
+    store.items.push(kept);
+    const llm = fakeLlm(pillarOut, {
+      pillars: [
+        {
+          title: "Quote walkthroughs",
+          serves: "Shows owners the questions to ask before they buy.",
+          subtopics: ["Ask for the install quote first"],
+        },
+        {
+          title: "First kitchen budget",
+          serves: "Helps founders spend on the gear that matters.",
+          subtopics: ["Price the oven before the dining room"],
+        },
+        {
+          title: "Opening checks",
+          serves: "Gives new owners a simple order for the first week.",
+          subtopics: ["Walk the line before the first service"],
+        },
+      ],
+      confidence: "high",
+    });
+    (store as unknown as { saveSubtopics: () => Promise<void> }).saveSubtopics = async () => {
+      throw new SubtopicStoreError(["migration 0104: table pillar_subtopics is missing"]);
+    };
+    const r = await generateRecommendations(
+      {
+        store,
+        invoker: llm.invoker,
+        nicheExamples: {
+          read: async () => [{ hook: "Stop buying the cheapest fryer", format: "talking-head" }],
+        },
+      },
+      { ctx, socialProfileId: "prof-1", step: "pillars" }
+    );
+    expect(r.status).toBe("generated");
+    expect(store.items.find(row => row.id === kept.id)?.status).toBe("confirmed");
+    const suggested = store.items.filter(row => row.kind === "pillar" && row.status === "suggested");
+    expect(suggested.map(row => (row.payload as ItemPayloadByKind["pillar"]).title)).toEqual([
+      "Quote walkthroughs",
+      "First kitchen budget",
+      "Opening checks",
+    ]);
+  });
+
+  it("does not replace a confirmed pillar when its id is passed to a later write", async () => {
+    const store = new MemoryRecoStore();
+    const kept = item("pillar", {
+      title: "Old menus",
+      description: "Already chosen.",
+      viewSharePercent: null,
+    });
+    store.items.push(kept);
+    const applied = await store.applyGeneratedSuggestions("prof-1", {
+      kind: "pillar",
+      guard: { type: "inputs_unchanged", expected: upstreamInputsHash("pillar", store.items) },
+      supersedeIds: [kept.id],
+      inserts: [],
+    });
+    expect(applied).toBe("applied");
+    expect(store.items.find(row => row.id === kept.id)?.status).toBe("confirmed");
+  });
+
   it("never regenerates over a confirmed goal", async () => {
     const store = new MemoryRecoStore();
     store.items.push(item("goal", { text: "My own goal." }));
@@ -829,7 +1090,7 @@ describe("generateRecommendations: Goal -> Audience -> Pillars", () => {
     });
     expect(g.basedOnInputsHash).toMatch(/^[a-f0-9]{16}$/);
     expect(g.generationMeta).toMatchObject({
-      promptVersion: "goal-v1",
+      promptVersion: "goal-v2",
       model: "claude-sonnet-4-6",
       inputTokens: 900,
       outputTokens: 120,

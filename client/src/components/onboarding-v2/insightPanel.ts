@@ -24,12 +24,14 @@ export function insightCardLines(
     return { eyebrow: null, figureLine: figure, detail: panel.headline };
   }
   const baseline = comparison.baselineLabel.trim();
-  const detail = comparison.groupLabel.trim() || panel.headline;
+  const phrase = comparison.groupLabel.trim();
   return {
     eyebrow: baseline ? `Compared with ${comparison.baselineCount} ${baseline}` : null,
     figureLine:
       comparison.metric === "views" ? `${figure} more views` : `${figure} higher engagement`,
-    detail,
+    detail: phrase
+      ? `Try videos ${phrase}. This is a comparison, not a prediction.`
+      : panel.headline,
   };
 }
 

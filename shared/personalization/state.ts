@@ -23,6 +23,7 @@ import {
   type AnalysisRunStatus,
   type AnalysisStage,
   type AnalysisStageStatus,
+  type GenerationMeta,
   type ItemEvidence,
   type ItemPayloadByKind,
   type ItemSource,
@@ -276,6 +277,8 @@ export type ItemRecord<
   basedOnInputsHash?: string | null;
   /** AI rows: how well the evidence supports it. */
   confidence?: SuggestionConfidence | null;
+  /** AI rows: prompt and evidence notes. Absent on older reads. */
+  generationMeta?: GenerationMeta | null;
 };
 
 export type NewItem<

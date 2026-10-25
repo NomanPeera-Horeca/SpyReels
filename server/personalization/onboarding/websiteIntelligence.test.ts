@@ -300,6 +300,7 @@ describe("website scheduling", () => {
 
   it("stores a finished read after the profile evidence is already saved", async () => {
     let savedTitle: string | null = null;
+    let followedUp = false;
     const store: WebsiteIntelligenceStore = {
       async loadRunProfileEvidence() {
         return evidence();
@@ -312,6 +313,9 @@ describe("website scheduling", () => {
       runId: "run-1",
       url: "https://example.com/menu",
       store,
+      onStored: () => {
+        followedUp = true;
+      },
       read: async () => ({
         ok: true,
         bytes: 120,
@@ -323,7 +327,8 @@ describe("website scheduling", () => {
         }),
       }),
     });
-    await vi.waitFor(() => expect(savedTitle).toBe("Cafe Supply Co"));
+    await vi.waitFor(() => expect(followedUp).toBe(true));
+    expect(savedTitle).toBe("Cafe Supply Co");
   });
 
   it("does not start a second read while the same run is already reading", async () => {

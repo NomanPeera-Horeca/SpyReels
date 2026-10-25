@@ -46,6 +46,11 @@ export type CreatorEvidence = {
   /** Lowercased bio + brand description + display name: where an offer must be stated. */
   declaredText: string;
   postsWithViews: number;
+  /**
+   * The public address when no page facts were retrieved.
+   * It is not website content and cannot support a website citation.
+   */
+  websiteUrlOnly: string | null;
 };
 
 const MAX_CAPTIONS = 12;
@@ -125,6 +130,31 @@ const clip = (s: string, n: number) =>
 const clean = (s: string | null | undefined) =>
   (s ?? "").replace(/\s+/g, " ").trim();
 
+/** Offers, customers, and calls to action already stored from the public site. No fetch. */
+export function websiteFactLines(
+  website: ProfileEvidence["website"] | null | undefined
+): string[] {
+  if (!website) return [];
+  const lines = [
+    ...website.offers,
+    ...website.callsToAction,
+    ...website.customers,
+    ...website.goalEvidence,
+  ];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of lines) {
+    const text = clean(raw);
+    if (!text) continue;
+    const key = text.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(text);
+    if (out.length === 8) break;
+  }
+  return out;
+}
+
 export function buildCreatorEvidence(input: {
   platform: SocialPlatform | null;
   displayName: string | null;
@@ -145,8 +175,12 @@ export function buildCreatorEvidence(input: {
   if (category) snippets.push({ source: "category", text: clip(category, 80) });
   const cta = clean(evidence?.cta);
   if (cta) snippets.push({ source: "cta", text: clip(cta, 180) });
-  const website = clean(evidence?.websiteUrl);
-  if (website) snippets.push({ source: "website", text: clip(website, 200) });
+  const siteFacts = websiteFactLines(evidence?.website);
+  for (const line of siteFacts) {
+    snippets.push({ source: "website", text: clip(line, 180) });
+  }
+  const websiteUrl = clean(evidence?.websiteUrl);
+  const websiteUrlOnly = siteFacts.length === 0 && websiteUrl ? websiteUrl : null;
 
   const live = input.items.filter(
     i => i.status === "confirmed" || i.source !== "ai_suggested"
@@ -226,19 +260,20 @@ export function buildCreatorEvidence(input: {
     sources,
     corpus,
     hash: stableHash(
-      JSON.stringify([snippets, topCaptions, outputLanguage.code])
+      JSON.stringify([snippets, topCaptions, outputLanguage.code, websiteUrlOnly])
     ),
     outputLanguage,
     commercialSignals: detectCommercialSignals({
-      bio,
+      bio: [bio, ...siteFacts].filter(Boolean).join("\n") || null,
       brandDescription: brandText || null,
       displayName: name || null,
     }),
-    declaredText: [name, bio, brandText]
+    declaredText: [name, bio, brandText, ...siteFacts]
       .filter(Boolean)
       .join("\n")
       .toLowerCase(),
     postsWithViews: withViews.length,
+    websiteUrlOnly,
   };
 }
 
@@ -247,12 +282,21 @@ export function buildCreatorEvidence(input: {
  * contain instructions ("ignore previous instructions..."); the system prompt
  * tells the model to treat this block as data only.
  */
+/**
+ * Untrusted text inside the same boundary as profile evidence.
+ * `<` is escaped so a caption or hook cannot close the block.
+ */
+export function untrustedEvidenceBlock(payload: unknown): string {
+  const body = JSON.stringify(payload).replace(/</g, "\\u003c");
+  return ["<creator_evidence>", body, "</creator_evidence>"].join("\n");
+}
+
 export function evidenceBlock(e: CreatorEvidence): string {
-  return [
-    "<creator_evidence>",
-    JSON.stringify({ platform: e.platform, items: e.snippets }, null, 0),
-    "</creator_evidence>",
-  ].join("\n");
+  return untrustedEvidenceBlock({
+    platform: e.platform,
+    items: e.snippets,
+    ...(e.websiteUrlOnly ? { websiteUrlOnly: e.websiteUrlOnly } : {}),
+  });
 }
 
 export const UNTRUSTED_DATA_RULE =
