@@ -31,6 +31,9 @@ import {
   unsupportedProperNouns,
 } from "./guards";
 import { SubtopicStoreError } from "../subtopics";
+import { chooseIndexedHomeSpecs, indexedHomePoolSpecChoices } from "../../viralPosts/browseService";
+import { buildPoolKey } from "../../viralPosts/constants";
+import { readQualifiedNicheExamples } from "../../viralPosts/qualifiedNicheRead";
 
 /* ------------------------------------------------------------------ */
 /* Fakes                                                               */
@@ -897,6 +900,81 @@ describe("generateRecommendations: Goal -> Audience -> Pillars", () => {
     expect(llm.calls).toHaveLength(1);
     expect(reads).toHaveLength(1);
     expect(store.items.filter(row => row.kind === "pillar" && row.status === "suggested")).toHaveLength(3);
+  });
+
+  it("keeps profile pillars and skips the second model call when no relevant inventory exists", async () => {
+    const store = new MemoryRecoStore();
+    store.items.push(item("niche", { slug: "business-entrepreneurship", label: "Business & Entrepreneurship" }));
+    store.items.push(item("goal", { text: "Sell more outfits." }));
+    store.items.push(item("audience", { who: "People comparing clothes", outcome: "find a style" }));
+    const kept = item("pillar", {
+      title: "Lookbook notes",
+      description: "Chosen by the creator.",
+      viewSharePercent: null,
+    });
+    store.items.push(kept);
+    const llm = fakeLlm({
+      pillars: [
+        { title: "Outfit comparisons", serves: "Helps shoppers choose between two looks." },
+        { title: "Fit notes", serves: "Shows how a piece sits on different bodies." },
+        { title: "Closet edits", serves: "Helps people retire pieces they do not wear." },
+      ],
+      confidence: "high",
+    });
+    const r = await generateRecommendations(
+      {
+        store,
+        invoker: llm.invoker,
+        nicheExamples: {
+          read: input =>
+            readQualifiedNicheExamples(input, {
+              choices: indexedHomePoolSpecChoices,
+              choose: chooseIndexedHomeSpecs,
+              findPools: async () => [],
+              loadCandidates: async ({ poolIds }) => {
+                if (!poolIds.includes(900)) return [];
+                return [
+                  {
+                    candidate: {
+                      platform: "tiktok",
+                      sourceId: "restaurant-hook",
+                      creatorHandle: "operator",
+                      caption: "Price the menu before the next dinner service.",
+                      views: 80000,
+                      likes: 4000,
+                      comments: 400,
+                      creatorFollowers: 10000,
+                      publishedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+                    } as never,
+                    primaryPillar: "restaurant marketing",
+                    secondaryPillar: null,
+                    pillarConfidence: 0.8,
+                    pillarReason: null,
+                  },
+                ];
+              },
+              listNichePools: async () => [
+                {
+                  id: 900,
+                  poolKey: buildPoolKey({
+                    platform: "tiktok",
+                    niche: "Business & Entrepreneurship",
+                    pillar: "restaurant marketing",
+                  }),
+                },
+              ],
+              loadSimilar: async () => ({ nicheSlugs: [], creators: [], reels: [] }),
+            }),
+        },
+      },
+      { ctx, socialProfileId: "prof-1", step: "pillars" }
+    );
+    expect(r.status).toBe("generated");
+    expect(llm.calls).toHaveLength(1);
+    expect(store.items.find(row => row.id === kept.id)?.status).toBe("confirmed");
+    expect((store.items.find(row => row.id === kept.id)?.payload as ItemPayloadByKind["pillar"]).title).toBe(
+      "Lookbook notes"
+    );
   });
 
   it("keeps the saved pillars when the subtopic table is missing", async () => {

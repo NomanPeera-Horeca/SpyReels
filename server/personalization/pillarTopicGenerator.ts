@@ -2,7 +2,7 @@
  * Model call for one pillar's topic ideas. Used only by requestPillarSubtopics,
  * which runs on the user's explicit request. Errors are thrown; the job records them.
  */
-import type { GoalPayload, NichePayload, PillarPayload } from "@shared/personalization/model";
+import type { AudiencePayload, GoalPayload, NichePayload, PillarPayload } from "@shared/personalization/model";
 import { buildCreatorEvidence } from "./intelligence/evidence";
 import { recommendSubtopics } from "./intelligence/pillarRecommendations";
 import { createRecommendationStore, type Db } from "./db/analysisStore";
@@ -39,10 +39,19 @@ export function createPillarTopicGenerator(db: Db): TopicGenerator {
       (niche ? (niche.payload as NichePayload).label : "") ||
       [profile.displayName, profile.bio].filter(Boolean).join(". ");
     const { loadPromptNicheExamples } = await import("../viralPosts/qualifiedNicheRead");
+    const audienceText = items
+      .filter(item => item.kind === "audience" && item.status === "confirmed")
+      .map(item => {
+        const audience = item.payload as AudiencePayload;
+        return [audience.who, audience.outcome, audience.problem].filter(Boolean).join(" ");
+      })
+      .join("\n");
     const nicheExamples = nicheText.trim()
       ? await loadPromptNicheExamples({
           nicheText,
           pillarTitles: [payload.title],
+          goalText: goal,
+          audienceText,
           excludeHandles: snapshot?.handle ? [snapshot.handle] : [],
           timeoutMs: 1_200,
         })

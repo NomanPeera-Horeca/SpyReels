@@ -26,6 +26,8 @@ export type NicheExampleReader = (input: {
   nicheText: string;
   pillarTitles: string[];
   excludeHandles: string[];
+  goalText?: string | null;
+  audienceText?: string | null;
 }) => Promise<PillarNicheExample[]>;
 
 const NICHE_BASIS = "niche_examples";
@@ -75,6 +77,10 @@ export async function enrichUnconfirmedPillars(input: {
         .filter(item => item.kind === "pillar" && item.status !== "superseded" && item.status !== "dismissed")
         .map(item => (item.payload as PillarPayload).title),
       excludeHandles: input.excludeHandles,
+      goalText: input.confirmedGoal,
+      audienceText: input.confirmedAudiences
+        .map(audience => [audience.who, audience.outcome, audience.problem].filter(Boolean).join(" "))
+        .join("\n"),
     });
   } catch {
     return "skipped";

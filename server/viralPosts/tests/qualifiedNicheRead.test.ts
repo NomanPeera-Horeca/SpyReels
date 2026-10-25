@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { buildPoolKey, VIRAL_POOL_DEFAULTS } from "../constants";
+import { chooseIndexedHomeSpecs, indexedHomePoolSpecChoices } from "../browseService";
+import { buildPoolKey, DEFAULT_CONTENT_PILLARS, VIRAL_POOL_DEFAULTS } from "../constants";
 import { isAnyViralPostsPlatformEnabled, isViralPostsLive } from "../featureFlag";
 import {
   readQualifiedNicheExamples,
@@ -67,6 +68,86 @@ describe("selectQualifiedNicheExamples", () => {
     expect(JSON.stringify(prompt)).not.toContain("50000");
   });
 });
+
+const INDEXED_PILLARS = new Set<string>(DEFAULT_CONTENT_PILLARS);
+
+async function readStrategy(input: {
+  nicheText: string;
+  pillarTitles: string[];
+  goalText: string;
+  audienceText: string;
+  extra: Array<{ id: number; niche: string; pillar: string }>;
+  /** When false, indexed pillars found in the first selection contribute no videos. */
+  initialIndexedVideos?: boolean;
+}) {
+  const pillarById = new Map<number, string>();
+  const ids: number[] = [];
+  let nextId = 1;
+  let similar = false;
+  const rows = await readQualifiedNicheExamples(
+    {
+      nicheText: input.nicheText,
+      pillarTitles: input.pillarTitles,
+      goalText: input.goalText,
+      audienceText: input.audienceText,
+    },
+    {
+      choices: indexedHomePoolSpecChoices,
+      choose: chooseIndexedHomeSpecs,
+      findPools: async specs =>
+        specs.map(spec => {
+          const id = nextId++;
+          pillarById.set(id, spec.pillar);
+          return { id, poolKey: buildPoolKey(spec) };
+        }),
+      loadCandidates: async ({ poolIds }) => {
+        ids.push(...poolIds);
+        const hit = poolIds.find(id => INDEXED_PILLARS.has((pillarById.get(id) ?? "").toLowerCase()));
+        if (hit == null) return [];
+        const fromExtra = input.extra.some(pool => pool.id === hit);
+        if (input.initialIndexedVideos === false && !fromExtra) return [];
+        return [
+          {
+            candidate: {
+              platform: "tiktok",
+              sourceId: "restaurant-hook",
+              creatorHandle: "operator",
+              caption: "Price the menu before the next dinner service.",
+              views: 80000,
+              likes: 4000,
+              comments: 400,
+              creatorFollowers: 10000,
+              publishedAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000),
+            } as never,
+            primaryPillar: pillarById.get(hit) ?? "restaurant marketing",
+            secondaryPillar: null,
+            pillarConfidence: 0.8,
+            pillarReason: null,
+          },
+        ];
+      },
+      listNichePools: async niche =>
+        input.extra
+          .filter(pool => pool.niche === niche)
+          .map(pool => {
+            pillarById.set(pool.id, pool.pillar);
+            return {
+              id: pool.id,
+              poolKey: buildPoolKey({
+                platform: "tiktok",
+                niche: pool.niche,
+                pillar: pool.pillar,
+              }),
+            };
+          }),
+      loadSimilar: async () => {
+        similar = true;
+        return { nicheSlugs: [], creators: [], reels: [] };
+      },
+    }
+  );
+  return { rows, ids, similar, pillars: ids.map(id => pillarById.get(id) ?? "") };
+}
 
 describe("readQualifiedNicheExamples", () => {
   it("reads existing pools and does not create or rank a feed", async () => {
@@ -140,7 +221,7 @@ describe("readQualifiedNicheExamples", () => {
     expect(rows[0]?.qualification).toBe("indexed_pool");
   });
 
-  it("reads the niche's other indexed pools when the guessed pools are empty", async () => {
+  it("does not read unrelated pools in the same niche when the guessed pools are empty", async () => {
     const calls: string[] = [];
     const deps: QualifiedNicheReadDeps = {
       choices: () => ({
@@ -234,12 +315,81 @@ describe("readQualifiedNicheExamples", () => {
       "findPools",
       "load:1",
       "listNiche:Business & Entrepreneurship",
-      "load:9",
-      "loadSimilar",
     ]);
-    expect(rows.map(row => row.sourceId)).toEqual(["indexed"]);
-    expect(rows[0]?.qualification).toBe("indexed_pool");
-    expect(rows[0]?.niche).toBe("Business & Entrepreneurship");
+    expect(rows).toEqual([]);
+  });
+
+  it("gives a restaurant creator qualified restaurant hooks", async () => {
+    const loaded = await readStrategy({
+      nicheText: "Business & Entrepreneurship",
+      pillarTitles: ["Kitchen buildouts"],
+      goalText: "Help restaurant owners",
+      audienceText: "Independent cafe operators",
+      extra: [],
+    });
+    expect(loaded.pillars).toContain("Kitchen buildouts");
+    expect(loaded.rows.map(row => row.sourceId)).toContain("restaurant-hook");
+    expect(loaded.rows[0]?.hook).toContain("menu");
+  });
+
+  it("reads another relevant restaurant pool when the first selection has no videos", async () => {
+    const loaded = await readStrategy({
+      nicheText: "Business & Entrepreneurship",
+      pillarTitles: ["Kitchen buildouts"],
+      goalText: "Help restaurant owners",
+      audienceText: "Independent cafe operators",
+      initialIndexedVideos: false,
+      extra: [
+        { id: 910, niche: "Business & Entrepreneurship", pillar: "restaurant marketing" },
+        { id: 911, niche: "Business & Entrepreneurship", pillar: "Fashion and Grooming Picks" },
+      ],
+    });
+    expect(loaded.ids).toContain(910);
+    expect(loaded.ids).not.toContain(911);
+    expect(loaded.rows.map(row => row.sourceId)).toContain("restaurant-hook");
+  });
+
+  it("does not give a fashion creator restaurant hooks", async () => {
+    const loaded = await readStrategy({
+      nicheText: "Business & Entrepreneurship",
+      pillarTitles: ["Fashion and Grooming Picks"],
+      goalText: "Sell more outfits",
+      audienceText: "People comparing clothes",
+      extra: [{ id: 900, niche: "Business & Entrepreneurship", pillar: "restaurant marketing" }],
+    });
+    expect(loaded.ids).not.toContain(900);
+    expect(loaded.rows.map(row => row.sourceId)).not.toContain("restaurant-hook");
+    expect(loaded.similar).toBe(false);
+  });
+
+  it("does not give a home goods creator restaurant operations hooks", async () => {
+    const loaded = await readStrategy({
+      nicheText: "Business & Entrepreneurship",
+      pillarTitles: ["Home and Sleep Goods"],
+      goalText: "Help people furnish a bedroom",
+      audienceText: "Homeowners",
+      extra: [{ id: 901, niche: "Business & Entrepreneurship", pillar: "restaurant operations" }],
+    });
+    expect(loaded.ids).not.toContain(901);
+    expect(loaded.rows.map(row => row.pillar)).not.toContain("restaurant operations");
+    expect(loaded.similar).toBe(false);
+  });
+
+  it("does not classify a real estate creator serving restaurant tenants as restaurant content", async () => {
+    const loaded = await readStrategy({
+      nicheText: "Real Estate",
+      pillarTitles: ["Tenant outreach"],
+      goalText: "Fill vacant storefronts",
+      audienceText: "Restaurant tenants",
+      extra: [
+        { id: 902, niche: "Real Estate", pillar: "restaurant operations" },
+        { id: 903, niche: "Business & Entrepreneurship", pillar: "menu engineering" },
+      ],
+    });
+    expect(loaded.ids).not.toContain(902);
+    expect(loaded.ids).not.toContain(903);
+    expect(loaded.pillars.some(pillar => INDEXED_PILLARS.has(pillar.toLowerCase()))).toBe(false);
+    expect(loaded.rows.map(row => row.sourceId)).not.toContain("restaurant-hook");
   });
 
   it("drops indexed posts outside the recommendation reservoir", async () => {

@@ -13,9 +13,15 @@ import { getDb } from "../db";
 import {
   chooseIndexedHomeSpecs,
   indexedHomePoolSpecChoices,
+  strategyUsesIndexedContentPillars,
 } from "./browseService";
 import { deriveHook, inferFormat } from "./candidateAdapter";
-import { buildPoolKey, VIRAL_POOL_DEFAULTS } from "./constants";
+import {
+  buildPoolKey,
+  DEFAULT_CONTENT_PILLARS,
+  VIRAL_POOL_DEFAULTS,
+  VIRAL_SEED_POOL_PILLAR,
+} from "./constants";
 import { passesIndexedViralQualification } from "./indexedQualification";
 import {
   findExistingPools,
@@ -94,12 +100,54 @@ export function viralPostsCatalogReadable(): boolean {
   return isViralPostsLive && isAnyViralPostsPlatformEnabled;
 }
 
-/** Pools already chosen by the shared Home spec are not loaded again. */
-function poolsNotAlreadyChosen<T extends { poolKey: string }>(
-  chosenKeys: ReadonlySet<string>,
-  existing: T[]
-): T[] {
-  return existing.filter(pool => !chosenKeys.has(pool.poolKey));
+const INDEXED_CONTENT_PILLARS = new Set(
+  DEFAULT_CONTENT_PILLARS.map(pillar => pillar.toLowerCase())
+);
+
+/**
+ * Restaurant supply is stored under Business & Entrepreneurship. Home already
+ * decides when that supply matches a strategy. A different confirmed niche,
+ * including one whose clients are restaurants, does not switch onto it.
+ */
+function restaurantSupplyMatches(args: {
+  niche: string;
+  nicheText: string;
+  confirmedPillars: string[];
+  goalText?: string | null;
+  audienceText?: string | null;
+}): boolean {
+  if (args.niche !== "Business & Entrepreneurship") return false;
+  return strategyUsesIndexedContentPillars({
+    nicheText: args.nicheText,
+    confirmedPillars: args.confirmedPillars,
+    goalText: args.goalText,
+    audienceText: args.audienceText,
+  });
+}
+
+/** Home spec pillars that match this creator. Indexed restaurant pillars stay out unless the strategy matches. */
+function relevantPoolKeys(
+  specs: Array<{ niche: string; pillar: string; platform?: string }>,
+  restaurantSupply: boolean
+): Set<string> {
+  const keys = new Set<string>();
+  for (const spec of specs) {
+    const pillar = spec.pillar.trim().toLowerCase();
+    if (!pillar) continue;
+    const indexed = INDEXED_CONTENT_PILLARS.has(pillar);
+    const seed = pillar === VIRAL_SEED_POOL_PILLAR.toLowerCase();
+    if (!restaurantSupply && (indexed || seed)) continue;
+    keys.add(
+      buildPoolKey({ platform: spec.platform, niche: spec.niche, pillar: spec.pillar })
+    );
+  }
+  return keys;
+}
+
+function rowMatchesStrategy(pillar: string | null, restaurantSupply: boolean): boolean {
+  const name = (pillar ?? "").trim().toLowerCase();
+  if (!name || !INDEXED_CONTENT_PILLARS.has(name)) return true;
+  return restaurantSupply;
 }
 
 /** Read-only. Does not insert a pool. Lives with niche evidence so Home can change separately. */
@@ -263,6 +311,8 @@ export async function readQualifiedNicheExamples(
   args: {
     nicheText: string;
     pillarTitles: string[];
+    goalText?: string | null;
+    audienceText?: string | null;
     excludeHandles?: string[];
   },
   deps: QualifiedNicheReadDeps = defaultDeps
@@ -270,22 +320,48 @@ export async function readQualifiedNicheExamples(
   if (deps.accessAllowed && !deps.accessAllowed()) return [];
   const nicheText = args.nicheText.trim();
   if (!nicheText) return [];
-  const choices = deps.choices({
+  const confirmedPillars = args.pillarTitles.map(title => title.trim()).filter(Boolean).slice(0, 6);
+  const nicheOnly = deps.choices({ nicheText, confirmedPillars });
+  const choices =
+    nicheOnly.niche === "Business & Entrepreneurship"
+      ? deps.choices({
+          nicheText,
+          confirmedPillars,
+          goalText: args.goalText,
+          audienceText: args.audienceText,
+        })
+      : nicheOnly;
+  const restaurantSupply = restaurantSupplyMatches({
+    niche: choices.niche,
     nicheText,
-    confirmedPillars: args.pillarTitles.filter(title => title.trim()).slice(0, 6),
+    confirmedPillars,
+    goalText: args.goalText,
+    audienceText: args.audienceText,
   });
-  const specs = [...choices.confirmedSpecs, ...choices.fallbackSpecs];
+  const allowed = relevantPoolKeys(
+    [...choices.confirmedSpecs, ...choices.fallbackSpecs],
+    restaurantSupply
+  );
+  const confirmedSpecs = choices.confirmedSpecs.filter(spec =>
+    allowed.has(buildPoolKey({ platform: spec.platform, niche: spec.niche, pillar: spec.pillar }))
+  );
+  const fallbackSpecs = choices.fallbackSpecs.filter(spec =>
+    allowed.has(buildPoolKey({ platform: spec.platform, niche: spec.niche, pillar: spec.pillar }))
+  );
+  const specs = [...confirmedSpecs, ...fallbackSpecs];
   const pools = specs.length ? await deps.findPools(specs) : [];
   const existingKeys = new Set(pools.map(pool => pool.poolKey));
   const chosen = deps.choose({
-    confirmedSpecs: choices.confirmedSpecs,
-    fallbackSpecs: choices.fallbackSpecs,
+    confirmedSpecs,
+    fallbackSpecs,
     existingKeys,
   });
   const chosenKeys = new Set(
-    chosen.specs.map(spec =>
-      buildPoolKey({ platform: spec.platform, niche: spec.niche, pillar: spec.pillar })
-    )
+    chosen.specs
+      .map(spec =>
+        buildPoolKey({ platform: spec.platform, niche: spec.niche, pillar: spec.pillar })
+      )
+      .filter(key => allowed.has(key))
   );
   const poolIds = pools.filter(pool => chosenKeys.has(pool.poolKey)).map(pool => pool.id);
   const loaded = poolIds.length
@@ -294,6 +370,7 @@ export async function readQualifiedNicheExamples(
   const fromPools: SourceRow[] = loaded.flatMap(row => {
     const publishedAt = row.candidate.publishedAt ? row.candidate.publishedAt.toISOString() : null;
     if (!publishedWithinRecommendationReservoir(publishedAt)) return [];
+    if (!rowMatchesStrategy(row.primaryPillar, restaurantSupply)) return [];
     return [{
       platform: row.candidate.platform,
       sourceId: row.candidate.sourceId,
@@ -315,14 +392,15 @@ export async function readQualifiedNicheExamples(
   });
   if (examples.length < 3 && deps.listNichePools) {
     const nichePools = await deps.listNichePools(choices.niche);
-    const widerIds = poolsNotAlreadyChosen(chosenKeys, nichePools)
-      .map(pool => pool.id)
-      .filter(id => !poolIds.includes(id));
+    const widerIds = nichePools
+      .filter(pool => allowed.has(pool.poolKey) && !poolIds.includes(pool.id))
+      .map(pool => pool.id);
     if (widerIds.length > 0) {
       const more = await deps.loadCandidates({ poolIds: widerIds, limit: 40 });
       for (const row of more) {
         const publishedAt = row.candidate.publishedAt ? row.candidate.publishedAt.toISOString() : null;
         if (!publishedWithinRecommendationReservoir(publishedAt)) continue;
+        if (!rowMatchesStrategy(row.primaryPillar, restaurantSupply)) continue;
         fromPools.push({
           platform: row.candidate.platform,
           sourceId: row.candidate.sourceId,
@@ -344,7 +422,9 @@ export async function readQualifiedNicheExamples(
       });
     }
   }
-  if (examples.length < 3) {
+  const similarNicheIsBroadBusiness =
+    choices.niche === "Business & Entrepreneurship" && !restaurantSupply;
+  if (examples.length < 3 && !similarNicheIsBroadBusiness) {
     const similar = await deps.loadSimilar({
       nicheNames: [choices.niche],
       excludeHandles: args.excludeHandles ?? [],
@@ -380,6 +460,8 @@ export async function readQualifiedNicheExamples(
 export async function loadPromptNicheExamples(input: {
   nicheText: string;
   pillarTitles: string[];
+  goalText?: string | null;
+  audienceText?: string | null;
   excludeHandles?: string[];
   timeoutMs?: number;
 }): Promise<PromptNicheExample[]> {
