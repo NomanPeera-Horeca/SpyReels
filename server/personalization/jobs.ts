@@ -118,13 +118,66 @@ export async function recommendationEvidenceKey(profileId: string): Promise<stri
   return stableHash(`${snapshot.posts.length}:${ids}`).slice(0, 16);
 }
 
+/**
+ * Confirmed goal text, plus confirmed audiences when drafting pillars.
+ * Suggested rows are excluded so a finished abstention stays on one key.
+ * A later confirmed answer changes the key once, which lets niche and the
+ * next step run. Reloading the same answers does not.
+ */
+export function confirmedAnswerKey(
+  step: RecommendationStep,
+  items: Array<{ kind: string; status: string; payload: unknown }>
+): string {
+  const line = (item: { kind: string; payload: unknown }) => {
+    const payload = item.payload as { text?: string; who?: string; outcome?: string };
+    if (item.kind === "goal") return payload.text?.trim() ?? "";
+    if (item.kind === "audience") return `${payload.who?.trim() ?? ""}|${payload.outcome?.trim() ?? ""}`;
+    return "";
+  };
+  const goals = items
+    .filter(item => item.kind === "goal" && item.status === "confirmed")
+    .map(line)
+    .filter(Boolean)
+    .sort();
+  const audiences =
+    step === "pillars"
+      ? items
+          .filter(item => item.kind === "audience" && item.status === "confirmed")
+          .map(line)
+          .filter(Boolean)
+          .sort()
+      : [];
+  const body = [...goals.map(goal => `g:${goal}`), ...audiences.map(audience => `a:${audience}`)].join(
+    "\n"
+  );
+  return body ? stableHash(body).slice(0, 16) : "open";
+}
+
+export function recommendationJobKey(input: {
+  profileId: string;
+  step: RecommendationStep;
+  version: number;
+  evidence: string;
+  answerKey: string;
+}): string {
+  return `personalization_recommendations:${input.profileId}:${input.step}:v${input.version}:${input.evidence}:a${input.answerKey}`;
+}
+
 export async function recommendationJobKeyFor(
   profileId: string,
   step: RecommendationStep,
   version: number
 ) {
   const evidence = await recommendationEvidenceKey(profileId);
-  return `personalization_recommendations:${profileId}:${step}:v${version}:${evidence}`;
+  const db = await requireDb();
+  const items = await createRecommendationStore(db).loadItems(profileId);
+  return recommendationJobKey({
+    profileId,
+    step,
+    version,
+    evidence,
+    answerKey: confirmedAnswerKey(step, items),
+  });
 }
 
 function stateFromResult(r: RecommendationResult): RecommendationJobState {
@@ -357,8 +410,9 @@ export async function enqueuePreliminarySuggestions(input: {
 
 /**
  * Starts (or reuses) a recommendation generation for one step. The key
- * includes the personalization version, so an edit upstream starts a new
- * job while repeated taps for the same answers collapse into one.
+ * includes the personalization version and any confirmed goal or audience,
+ * so an edit upstream starts a new job while a reload of the same answers
+ * collapses into the finished job.
  */
 export async function enqueueRecommendations(
   payload: RecommendationPayload,
