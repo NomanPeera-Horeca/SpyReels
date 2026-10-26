@@ -145,6 +145,26 @@ function reportExisting(stem: string): void {
   }, null, 2));
 }
 
+/** Conservative Sonnet 4.6 reservation: maximum output tokens plus a generous
+ * input/tokenization allowance. This is an estimate, not provider invoicing. */
+export function judgeCallReserveUsd(profile: string, output: string): number {
+  const inputTokens = Math.ceil((profile.length + output.length + 1500) / 2) + 500;
+  return estimateLlmCost({
+    model: "claude-sonnet-4-6",
+    inputTokens,
+    outputTokens: 500,
+  }).costUsd;
+}
+
+export function judgeFitsBudget(
+  spentUsd: number,
+  capUsd: number,
+  profile: string,
+  output: string
+): boolean {
+  return spentUsd + judgeCallReserveUsd(profile, output) <= capUsd + 0.0000001;
+}
+
 async function main() {
   const inputFlag = process.argv.find(arg => arg.startsWith("--in="));
   if (!inputFlag) throw new Error("Pass --in=<artifact stem>.");
@@ -156,6 +176,14 @@ async function main() {
   loadLocalEnv();
   if (!process.env.ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not configured.");
   if (!process.argv.includes("--confirm-spend")) throw new Error("Pass --confirm-spend.");
+  // Paid judging requires an explicit per-run cap; the approved generation
+  // and judging caps must add up to no more than $1.50 across this evaluation.
+  const capFlag = process.argv.find(arg => arg.startsWith("--cap="));
+  if (!capFlag) throw new Error("Paid judging requires --cap=<dollar amount>.");
+  const capUsd = Number(capFlag.slice("--cap=".length));
+  if (!Number.isFinite(capUsd) || capUsd <= 0 || capUsd > 5) {
+    throw new Error("Invalid judge cap; must be greater than 0 and at most $5.");
+  }
   const dir = path.resolve(import.meta.dirname, "../docs/evals/personalization-intelligence");
   const report = JSON.parse(readFileSync(path.join(dir, `${stem}.json`), "utf8")) as EvalReport;
   const { invokeLLM } = await import("../server/_core/llm");
@@ -163,6 +191,7 @@ async function main() {
   const only = onlyFlag ? new Set(onlyFlag.slice("--only=".length).split(",")) : null;
   const scored = [];
   let estimatedUsd = 0;
+  let stoppedByCap = false;
   for (const row of report.cases) {
     if (only && !only.has(row.caseId)) continue;
     const fixture = EVAL_CASES.find(item => item.id === row.caseId);
@@ -180,10 +209,15 @@ async function main() {
       `Audiences: ${row.audiences.items.map(item => `${item.who} -> ${item.outcome}`).join("; ") || row.audiences.status}`,
       `Pillars: ${row.pillars.items.map(item => `${item.title}: ${item.description}`).join("; ") || row.pillars.status}`,
     ].join("\n");
+    if (!judgeFitsBudget(estimatedUsd, capUsd, profile, output)) {
+      stoppedByCap = true;
+      console.warn("Judge stopped before an estimated-cost cap breach.");
+      break;
+    }
     const result = await invokeLLM({
       operation: "personalization_quality_judge",
       temperature: 0,
-      maxTokens: 800,
+      maxTokens: 500,
       timeoutMs: 30_000,
       messages: [
         {
@@ -229,6 +263,8 @@ async function main() {
     nums.length ? Math.round((nums.reduce((sum, row) => sum + Number(row[key]), 0) / nums.length) * 10) / 10 : 0;
   const summary = {
     stem,
+    capUsd,
+    stoppedByCap,
     cases: scored.length,
     scored: nums.length,
     estimatedUsd: Math.round(estimatedUsd * 1_000_000) / 1_000_000,
@@ -248,6 +284,7 @@ async function main() {
   };
   if (!only) writeFileSync(path.join(dir, `${stem}-judge.json`), JSON.stringify(summary, null, 2));
   console.log(JSON.stringify(summary.mean));
+  if (stoppedByCap) throw new Error("Judge stopped at its approved estimated spend cap.");
 }
 
 if (process.argv[1]?.endsWith("personalization-quality-judge.ts")) {
