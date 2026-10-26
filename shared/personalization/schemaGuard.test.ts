@@ -277,7 +277,7 @@ describe("migration gate: drafts cannot reach a database by accident", () => {
       "utf8"
     );
     expect(stored).toContain("eq(workspaceMemberActiveProfiles.userId, userId)");
-    expect(stored).toContain("eq(workspaceMemberActiveProfiles.workspaceId, workspaceId)");
+    expect(stored).toContain("eq(workspaceMemberActiveProfiles.workspaceId, scopedWorkspaceId)");
     expect(stored).toContain('eq(personalizationItems.status, "confirmed")');
 
     const viralRouter = readFileSync(path.join(root, "server/viralPosts/router.ts"), "utf8");
