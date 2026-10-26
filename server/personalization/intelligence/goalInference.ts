@@ -4,9 +4,8 @@
  *
  * Never invents a business objective: a commercial goal needs commercial
  * evidence. With no evidence it does not call the model and asks the user.
- * With weak evidence and low model confidence it also asks the user.
- * A bio that names the subject is moderate even with zero posts, and a
- * low-confidence purpose on that evidence is kept.
+ * When the model is called, its suggest or clarify decision stands. Evidence
+ * strength only caps confidence. It does not override that decision.
  */
 import { z } from "zod";
 import type { SuggestionConfidence } from "@shared/personalization/model";
@@ -242,18 +241,9 @@ export async function inferGoal(input: {
       attempts,
     };
   }
-  // A short or vague bio plus low confidence: ask instead of guessing.
-  // A subject bio is moderate, so a low-confidence purpose there is kept.
-  if (e.strength === "weak" && value.confidence === "low") {
-    return {
-      status: "needs_clarification",
-      reason: "insufficient_evidence",
-      question: DEFAULT_CLARIFYING_QUESTION,
-      usage,
-      attempts,
-    };
-  }
-  // Confidence can never exceed what the evidence supports.
+  // Confidence can never exceed what the evidence quantity supports.
+  // A low-confidence suggestion is still a suggestion. The model already
+  // chose suggest rather than clarify.
   const cap: Record<CreatorEvidence["strength"], SuggestionConfidence> = {
     none: "low",
     weak: "low",

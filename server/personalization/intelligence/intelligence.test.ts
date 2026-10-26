@@ -195,10 +195,24 @@ const privateAccount = buildCreatorEvidence({
   snapshot: null,
   items: [],
 });
-const clearBioNoPosts = buildCreatorEvidence({
+const weddingPhotographer = buildCreatorEvidence({
   platform: "instagram",
-  displayName: "Field Notes",
-  bio: "Neighborhood bird walks and field notes.",
+  displayName: "Ava Cole",
+  bio: "Wedding photographer",
+  snapshot: null,
+  items: [],
+});
+const mathTutor = buildCreatorEvidence({
+  platform: "instagram",
+  displayName: "Ms. Patel",
+  bio: "Math tutor",
+  snapshot: null,
+  items: [],
+});
+const vagueBio = buildCreatorEvidence({
+  platform: "instagram",
+  displayName: "Sam Rivera",
+  bio: "Just figuring things out and enjoying life",
   snapshot: null,
   items: [],
 });
@@ -227,8 +241,10 @@ describe("evidence", () => {
     expect(restaurant.strength).toBe("strong");
     expect(storyteller.strength).toBe("strong");
     expect(travel.strength).toBe("moderate");
-    expect(privateAccount.strength).toBe("moderate");
-    expect(clearBioNoPosts.strength).toBe("moderate");
+    expect(privateAccount.strength).toBe("weak");
+    expect(weddingPhotographer.strength).toBe("weak");
+    expect(mathTutor.strength).toBe("weak");
+    expect(vagueBio.strength).toBe("weak");
     expect(thinAccount.strength).toBe("weak");
     expect(beginner.strength).toBe("none");
   });
@@ -306,43 +322,45 @@ describe("Goal inference", () => {
       evidence: privateAccount,
       invoker: llm.invoker,
     });
-    expect(r).toMatchObject({ status: "suggested", confidence: "medium" });
+    expect(r).toMatchObject({ status: "suggested", confidence: "low" });
   });
 
-  it("a clear bio with zero posts keeps a low-confidence purpose", async () => {
-    const prompt = buildGoalPrompt(clearBioNoPosts);
-    expect(prompt.user).toContain("Evidence strength: moderate.");
-    expect(prompt.system).toContain("even when there are no posts");
-    expect(prompt.system).toContain("choose the most direct one");
-    const llm = fakeLlm(
-      goalOut("Help neighbors find nearby bird walks.", {
-        confidence: "low",
-        evidence_basis: ["bio"],
-      })
-    );
-    const r = await inferGoal({
-      evidence: clearBioNoPosts,
-      invoker: llm.invoker,
-    });
-    expect(r).toMatchObject({
-      status: "suggested",
+  it("keeps a useful suggestion for a short clear bio", async () => {
+    for (const [evidence, goal] of [
+      [weddingPhotographer, "Help couples remember their wedding day."],
+      [mathTutor, "Help students practice math."],
+    ] as const) {
+      const prompt = buildGoalPrompt(evidence);
+      expect(prompt.user).toContain("Evidence strength: weak.");
+      expect(prompt.system).toContain("even when there are no posts");
+      const llm = fakeLlm(
+        goalOut(goal, { confidence: "low", evidence_basis: ["bio"] })
+      );
+      const r = await inferGoal({ evidence, invoker: llm.invoker });
+      expect(r).toMatchObject({ status: "suggested", confidence: "low", goal });
+      expect(llm.calls).toHaveLength(1);
+    }
+  });
+
+  it("does not treat a longer vague bio as clear when the model asks", async () => {
+    const prompt = buildGoalPrompt(vagueBio);
+    expect(prompt.user).toContain("Evidence strength: weak.");
+    expect(vagueBio.strength).toBe(weddingPhotographer.strength);
+    const llm = fakeLlm({
+      decision: "clarify",
+      goal: "",
       confidence: "low",
-      goal: "Help neighbors find nearby bird walks.",
+      evidence_basis: ["bio"],
+      clarifying_question: "What do you most want these videos to do for people?",
+      offer_quote: "",
     });
-  });
-
-  it("weak evidence + low model confidence asks the user instead of guessing", async () => {
-    const llm = fakeLlm(
-      goalOut("Share dental tips.", {
-        confidence: "low",
-        evidence_basis: ["bio"],
-      })
-    );
-    const r = await inferGoal({
-      evidence: thinAccount,
-      invoker: llm.invoker,
+    const r = await inferGoal({ evidence: vagueBio, invoker: llm.invoker });
+    expect(r).toMatchObject({
+      status: "needs_clarification",
+      reason: "ambiguous",
+      question: "What do you most want these videos to do for people?",
     });
-    expect(r.status).toBe("needs_clarification");
+    expect(llm.calls).toHaveLength(1);
   });
 
   it("ambiguous evidence: the model's clarifying question is passed through", async () => {
@@ -1333,6 +1351,122 @@ describe("generateRecommendations: Goal -> Audience -> Pillars", () => {
     expect(
       store.items.find(i => i.kind === "goal" && i.status === "confirmed")?.payload
     ).toMatchObject({ text: "Share neighborhood bird walks with beginners." });
+  });
+
+  it("a short clear bio with zero posts gets a goal, then audience and pillars", async () => {
+    const store = new MemoryRecoStore();
+    store.profile = {
+      ...store.profile,
+      displayName: "Ava Cole",
+      bio: "Wedding photographer",
+    };
+    store.snapshot = null;
+    const goalLlm = fakeLlm(
+      goalOut("Help couples remember their wedding day.", {
+        confidence: "low",
+        evidence_basis: ["bio"],
+      })
+    );
+    const goal = await generateRecommendations(
+      { store, invoker: goalLlm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "goal" }
+    );
+    expect(goal.status).toBe("generated");
+    expect(goalLlm.calls.map(call => call.operation)).toEqual([
+      "personalization_goal_inference",
+    ]);
+    const goalRow = store.items.find(i => i.kind === "goal");
+    expect(goalRow).toMatchObject({
+      status: "suggested",
+      payload: { text: "Help couples remember their wedding day." },
+    });
+    goalRow!.status = "confirmed";
+    const llm = fakeLlm(
+      {
+        audiences: [
+          {
+            who: "Couples planning a wedding",
+            outcome: "remember the wedding day",
+            why: "The bio says wedding photographer.",
+          },
+        ],
+        confidence: "low",
+      },
+      {
+        pillars: [
+          { title: "Wedding day timeline", serves: "Shows couples how the day unfolds." },
+          { title: "Getting ready photos", serves: "Gives couples ideas for the morning." },
+          { title: "Family portraits", serves: "Helps couples plan the people pictures." },
+        ],
+        confidence: "low",
+      }
+    );
+    const audience = await generateRecommendations(
+      { store, invoker: llm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "audience" }
+    );
+    expect(audience.status).toBe("generated");
+    for (const row of store.items) {
+      if (row.kind === "audience") row.status = "confirmed";
+    }
+    const pillars = await generateRecommendations(
+      { store, invoker: llm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "pillars" }
+    );
+    expect(pillars.status).toBe("generated");
+    expect(store.items.filter(i => i.kind === "pillar" && i.status === "suggested")).toHaveLength(3);
+  });
+
+  it("a longer vague bio asks, then a user answer continues the strategy", async () => {
+    const store = new MemoryRecoStore();
+    store.profile = {
+      ...store.profile,
+      displayName: "Sam Rivera",
+      bio: "Just figuring things out and enjoying life",
+    };
+    store.snapshot = null;
+    const asked = await generateRecommendations(
+      {
+        store,
+        invoker: fakeLlm({
+          decision: "clarify",
+          goal: "",
+          confidence: "low",
+          evidence_basis: ["bio"],
+          clarifying_question: "What do you most want these videos to do for people?",
+          offer_quote: "",
+        }).invoker,
+      },
+      { ctx, socialProfileId: "prof-1", step: "goal" }
+    );
+    expect(asked).toMatchObject({
+      status: "needs_clarification",
+      question: "What do you most want these videos to do for people?",
+    });
+    expect(store.items.filter(i => i.kind === "goal")).toEqual([]);
+    expect(store.items.filter(i => i.kind === "audience")).toEqual([]);
+    store.items.push(
+      item("goal", { text: "Share everyday moments that help people slow down." })
+    );
+    const llm = fakeLlm(audienceOut, pillarOut);
+    const audience = await generateRecommendations(
+      { store, invoker: llm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "audience" }
+    );
+    expect(audience.status).toBe("generated");
+    for (const row of store.items) {
+      if (row.kind === "audience") row.status = "confirmed";
+    }
+    const pillars = await generateRecommendations(
+      { store, invoker: llm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "pillars" }
+    );
+    expect(pillars.status).toBe("generated");
+    expect(
+      store.items.find(i => i.kind === "goal" && i.status === "confirmed")?.payload
+    ).toMatchObject({
+      text: "Share everyday moments that help people slow down.",
+    });
   });
 
   it("keeps confirmed niche and language when a later post analysis retries the goal", async () => {

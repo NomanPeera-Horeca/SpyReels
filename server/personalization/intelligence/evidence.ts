@@ -209,9 +209,9 @@ export function buildCreatorEvidence(input: {
       : [];
 
   let score = 0;
-  // Five or more bio words name a subject. That is enough for an initial
-  // draft, so zero posts do not leave the profile in the weak band.
-  if (bio.split(" ").filter(Boolean).length >= 5) score += 3;
+  // More bio text is more evidence. Word count does not decide whether the
+  // subject is recognizable. The goal call makes that decision.
+  if (bio.split(" ").filter(Boolean).length >= 5) score += 2;
   else if (bio) score += 1;
   else if (name.split(" ").filter(Boolean).length >= 2) score += 1;
   if (!bio && category) score += 1;
