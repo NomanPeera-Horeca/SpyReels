@@ -36,6 +36,7 @@ import {
 } from "@shared/personalization/state";
 import type { InvokeParams, InvokeResult } from "../../../_core/llm";
 import type { PersonalizationCtx } from "../../authorization";
+import { EVAL_CASES } from "./fixtures";
 import { buildCreatorEvidence, verbatimCta } from "../evidence";
 import {
   inventsCommercialObjective,
@@ -133,6 +134,19 @@ export type CaseRecord = {
   humanScores: null;
 };
 
+export type BenchmarkDecision = {
+  /** First-pass model suggestions. Fixture answers are not included. */
+  suggested: string[];
+  /** The model or the evidence gate asked a question. */
+  clarification: string[];
+  /** Failed or unfinished for another reason. */
+  other: string[];
+  requiredClarificationCorrect: number;
+  requiredClarification: number;
+  answerableSuggested: number;
+  answerable: number;
+};
+
 export type EvalReport = {
   realModel: boolean;
   startedAt: string;
@@ -155,7 +169,40 @@ export type EvalReport = {
     p95WallClockMs: number;
     failedCallUsd: number;
   };
+  decision: BenchmarkDecision;
 };
+
+/**
+ * Separates first-pass suggestion, clarification, and answerable profiles.
+ * A stored fallback goal does not count as a suggestion.
+ */
+export function benchmarkDecision(
+  cases: Array<{ caseId: string; goal: { status: string; source: string } }>,
+  fixtures: Array<{ id: string; expect: { clarification: "required" | "allowed" | "no" } }> = EVAL_CASES
+): BenchmarkDecision {
+  const expectById = new Map(fixtures.map(item => [item.id, item.expect.clarification]));
+  const suggested = cases
+    .filter(item => item.goal.status === "generated" && item.goal.source === "ai")
+    .map(item => item.caseId);
+  const clarification = cases
+    .filter(item => item.goal.status === "needs_clarification")
+    .map(item => item.caseId);
+  const known = new Set([...suggested, ...clarification]);
+  const other = cases.filter(item => !known.has(item.caseId)).map(item => item.caseId);
+  const required = cases.filter(item => expectById.get(item.caseId) === "required");
+  const answerable = cases.filter(item => expectById.get(item.caseId) !== "required");
+  return {
+    suggested,
+    clarification,
+    other,
+    requiredClarificationCorrect: required.filter(item =>
+      clarification.includes(item.caseId)
+    ).length,
+    requiredClarification: required.length,
+    answerableSuggested: answerable.filter(item => suggested.includes(item.caseId)).length,
+    answerable: answerable.length,
+  };
+}
 
 const WS = "eval-workspace";
 const ctx: PersonalizationCtx = {
@@ -563,6 +610,7 @@ export async function runEvaluation(input: {
             .reduce((sum, x) => sum + x.estimatedUsd, 0) * 1_000_000
         ) / 1_000_000,
     },
+    decision: benchmarkDecision(cases),
   };
 }
 

@@ -8,7 +8,10 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { estimateLlmCost } from "../server/analytics/aiCostModel";
 import { EVAL_CASES } from "../server/personalization/intelligence/eval/fixtures";
-import type { EvalReport } from "../server/personalization/intelligence/eval/runEval";
+import {
+  benchmarkDecision,
+  type EvalReport,
+} from "../server/personalization/intelligence/eval/runEval";
 
 function loadLocalEnv(): void {
   const file = path.resolve(import.meta.dirname, "../.env");
@@ -86,13 +89,73 @@ function parseScores(raw: string): Scores | null {
   }
 }
 
+function strategyPoints(scores: Scores): number {
+  return (
+    scores.goal +
+    scores.audience +
+    scores.pillars +
+    scores.specificity +
+    scores.clarity +
+    scores.evidence
+  );
+}
+
+function reportExisting(stem: string): void {
+  const dir = path.resolve(import.meta.dirname, "../docs/evals/personalization-intelligence");
+  const report = JSON.parse(readFileSync(path.join(dir, `${stem}.json`), "utf8")) as EvalReport;
+  const judged = JSON.parse(readFileSync(path.join(dir, `${stem}-judge.json`), "utf8")) as {
+    rows: Array<{ caseId: string; scores: Scores | null }>;
+  };
+  const decision = benchmarkDecision(
+    report.cases.map(item => ({ caseId: item.caseId, goal: item.goal }))
+  );
+  const byId = new Map(judged.rows.map(row => [row.caseId, row.scores]));
+  const meanOf = (ids: string[]) => {
+    const points = ids.flatMap(id => {
+      const scores = byId.get(id);
+      return scores ? [strategyPoints(scores)] : [];
+    });
+    const mean = points.length
+      ? Math.round((points.reduce((sum, value) => sum + value, 0) / points.length) * 10) / 10
+      : 0;
+    return {
+      cases: ids.length,
+      scored: points.length,
+      mean,
+      atLeast75: points.filter(value => value >= 75).length,
+    };
+  };
+  const required = new Set(
+    EVAL_CASES.filter(item => item.expect.clarification === "required").map(item => item.id)
+  );
+  console.log(JSON.stringify({
+    stem,
+    decision: {
+      suggested: decision.suggested.length,
+      clarification: decision.clarification.length,
+      other: decision.other.length,
+      requiredClarificationCorrect: `${decision.requiredClarificationCorrect}/${decision.requiredClarification}`,
+      answerableSuggested: `${decision.answerableSuggested}/${decision.answerable}`,
+      clarificationIds: decision.clarification,
+    },
+    suggestionQuality: meanOf(decision.suggested),
+    clarificationQuality: meanOf(decision.clarification),
+    answerableQuality: meanOf(report.cases.map(item => item.caseId).filter(id => !required.has(id))),
+    allQuality: meanOf(report.cases.map(item => item.caseId)),
+  }, null, 2));
+}
+
 async function main() {
-  loadLocalEnv();
-  if (!process.env.ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not configured.");
-  if (!process.argv.includes("--confirm-spend")) throw new Error("Pass --confirm-spend.");
   const inputFlag = process.argv.find(arg => arg.startsWith("--in="));
   if (!inputFlag) throw new Error("Pass --in=<artifact stem>.");
   const stem = inputFlag.slice("--in=".length);
+  if (process.argv.includes("--report-only")) {
+    reportExisting(stem);
+    return;
+  }
+  loadLocalEnv();
+  if (!process.env.ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not configured.");
+  if (!process.argv.includes("--confirm-spend")) throw new Error("Pass --confirm-spend.");
   const dir = path.resolve(import.meta.dirname, "../docs/evals/personalization-intelligence");
   const report = JSON.parse(readFileSync(path.join(dir, `${stem}.json`), "utf8")) as EvalReport;
   const { invokeLLM } = await import("../server/_core/llm");

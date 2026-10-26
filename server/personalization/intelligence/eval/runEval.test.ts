@@ -233,6 +233,10 @@ describe("runner mechanics (fake model)", () => {
     expect(r.calls.some(call => call.operation.includes("pillar"))).toBe(false);
     expect(r.cases[0].gates.clarificationExpectationMet).toBe(true);
     expect(r.cases[0].gates.confirmedPreserved).toBe(true);
+    expect(r.decision.clarification).toContain(zeroPost.id);
+    expect(r.decision.suggested).not.toContain(zeroPost.id);
+    expect(r.decision.requiredClarificationCorrect).toBe(1);
+    expect(r.decision.requiredClarification).toBe(1);
   });
 
   it("AI outage is recorded as a failure, not a crash, and the run continues", async () => {

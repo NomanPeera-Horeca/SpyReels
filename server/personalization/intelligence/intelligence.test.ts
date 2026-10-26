@@ -15,7 +15,11 @@ import {
 } from "@shared/personalization/state";
 import type { PersonalizationCtx } from "../authorization";
 import { buildCreatorEvidence } from "./evidence";
-import { DEFAULT_CLARIFYING_QUESTION, inferGoal } from "./goalInference";
+import {
+  buildGoalPrompt,
+  DEFAULT_CLARIFYING_QUESTION,
+  inferGoal,
+} from "./goalInference";
 import { recommendAudiences } from "./audienceRecommendations";
 import { recommendPillars } from "./pillarRecommendations";
 import { inferNicheLabel } from "./profileBasics";
@@ -191,6 +195,20 @@ const privateAccount = buildCreatorEvidence({
   snapshot: null,
   items: [],
 });
+const clearBioNoPosts = buildCreatorEvidence({
+  platform: "instagram",
+  displayName: "Field Notes",
+  bio: "Neighborhood bird walks and field notes.",
+  snapshot: null,
+  items: [],
+});
+const thinAccount = buildCreatorEvidence({
+  platform: "tiktok",
+  displayName: "kai.makes",
+  bio: "just starting out",
+  snapshot: snap(["first video lol", "trying a new camera"]),
+  items: [],
+});
 
 const goalOut = (goal: string, over: Record<string, unknown> = {}) => ({
   decision: "suggest",
@@ -209,7 +227,9 @@ describe("evidence", () => {
     expect(restaurant.strength).toBe("strong");
     expect(storyteller.strength).toBe("strong");
     expect(travel.strength).toBe("moderate");
-    expect(privateAccount.strength).toBe("weak");
+    expect(privateAccount.strength).toBe("moderate");
+    expect(clearBioNoPosts.strength).toBe("moderate");
+    expect(thinAccount.strength).toBe("weak");
     expect(beginner.strength).toBe("none");
   });
 
@@ -286,7 +306,29 @@ describe("Goal inference", () => {
       evidence: privateAccount,
       invoker: llm.invoker,
     });
-    expect(r).toMatchObject({ status: "suggested", confidence: "low" });
+    expect(r).toMatchObject({ status: "suggested", confidence: "medium" });
+  });
+
+  it("a clear bio with zero posts keeps a low-confidence purpose", async () => {
+    const prompt = buildGoalPrompt(clearBioNoPosts);
+    expect(prompt.user).toContain("Evidence strength: moderate.");
+    expect(prompt.system).toContain("even when there are no posts");
+    expect(prompt.system).toContain("choose the most direct one");
+    const llm = fakeLlm(
+      goalOut("Help neighbors find nearby bird walks.", {
+        confidence: "low",
+        evidence_basis: ["bio"],
+      })
+    );
+    const r = await inferGoal({
+      evidence: clearBioNoPosts,
+      invoker: llm.invoker,
+    });
+    expect(r).toMatchObject({
+      status: "suggested",
+      confidence: "low",
+      goal: "Help neighbors find nearby bird walks.",
+    });
   });
 
   it("weak evidence + low model confidence asks the user instead of guessing", async () => {
@@ -297,7 +339,7 @@ describe("Goal inference", () => {
       })
     );
     const r = await inferGoal({
-      evidence: privateAccount,
+      evidence: thinAccount,
       invoker: llm.invoker,
     });
     expect(r.status).toBe("needs_clarification");
@@ -938,7 +980,7 @@ describe("generateRecommendations: Goal -> Audience -> Pillars", () => {
     });
     expect(g.basedOnInputsHash).toMatch(/^[a-f0-9]{16}$/);
     expect(g.generationMeta).toMatchObject({
-      promptVersion: "goal-v1",
+      promptVersion: "goal-v2",
       model: "claude-sonnet-4-6",
       inputTokens: 900,
       outputTokens: 120,
@@ -1253,6 +1295,44 @@ describe("generateRecommendations: Goal -> Audience -> Pillars", () => {
     expect(result.status).toBe("needs_clarification");
     expect(store.items.some(i => i.kind === "niche")).toBe(true);
     expect(store.items.some(i => i.kind === "goal")).toBe(false);
+  });
+
+  it("a user answer after clarification produces audience and pillar suggestions", async () => {
+    const store = new MemoryRecoStore();
+    store.profile = { ...store.profile, bio: null, displayName: null };
+    store.snapshot = null;
+    const asked = await generateRecommendations(
+      { store, invoker: fakeLlm().invoker },
+      { ctx, socialProfileId: "prof-1", step: "goal" }
+    );
+    expect(asked).toMatchObject({
+      status: "needs_clarification",
+      reason: "insufficient_evidence",
+    });
+    expect(store.items.filter(i => i.kind === "audience")).toEqual([]);
+    expect(store.items.filter(i => i.kind === "pillar")).toEqual([]);
+    store.items.push(
+      item("goal", { text: "Share neighborhood bird walks with beginners." })
+    );
+    const llm = fakeLlm(audienceOut, pillarOut);
+    const audience = await generateRecommendations(
+      { store, invoker: llm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "audience" }
+    );
+    expect(audience.status).toBe("generated");
+    expect(store.items.some(i => i.kind === "audience" && i.status === "suggested")).toBe(true);
+    for (const row of store.items) {
+      if (row.kind === "audience") row.status = "confirmed";
+    }
+    const pillars = await generateRecommendations(
+      { store, invoker: llm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "pillars" }
+    );
+    expect(pillars.status).toBe("generated");
+    expect(store.items.some(i => i.kind === "pillar" && i.status === "suggested")).toBe(true);
+    expect(
+      store.items.find(i => i.kind === "goal" && i.status === "confirmed")?.payload
+    ).toMatchObject({ text: "Share neighborhood bird walks with beginners." });
   });
 
   it("keeps confirmed niche and language when a later post analysis retries the goal", async () => {
