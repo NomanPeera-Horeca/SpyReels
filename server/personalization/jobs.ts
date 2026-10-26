@@ -309,38 +309,117 @@ async function loadJobRow(
 }
 
 /**
- * Writes the outcome where every web instance can read it.
- * Inline inserts a finished row. It never inserts `queued`, so a worker that
- * does not yet know this job type cannot claim it.
+ * Inserts a running row before any model call. The unique idempotency key
+ * lets only one web process own the job. A second process sees the fresh
+ * lease and does not start another paid call. An expired lease can be taken
+ * once attempt is still under maxAttempts. Succeeded, failed, dead, and
+ * queued rows are left alone.
+ */
+export async function claimInlineRecommendation(
+  key: string,
+  payload: unknown
+): Promise<{ owned: boolean; token: string }> {
+  const db = await requireDb();
+  const { sql } = await import("drizzle-orm");
+  const { randomUUID } = await import("node:crypto");
+  const { DEFAULT_LEASE_SECONDS } = await import("../durableJobs/policy");
+  const token = `inline:${randomUUID()}`;
+  const body = JSON.stringify(payload);
+  await db.execute(sql`
+    INSERT INTO durable_jobs
+      (jobType, idempotencyKey, payload, status, attempt, maxAttempts, lockedBy, leaseExpiresAt, availableAt)
+    VALUES
+      (
+        'personalization_recommendations',
+        ${key},
+        ${body},
+        'running',
+        1,
+        ${RECOMMENDATION_MAX_ATTEMPTS},
+        ${token},
+        DATE_ADD(NOW(3), INTERVAL ${DEFAULT_LEASE_SECONDS} SECOND),
+        NOW(3)
+      )
+    ON DUPLICATE KEY UPDATE
+      lockedBy = IF(
+        status = 'running'
+          AND leaseExpiresAt IS NOT NULL
+          AND leaseExpiresAt < NOW(3)
+          AND attempt < maxAttempts,
+        VALUES(lockedBy),
+        lockedBy
+      ),
+      leaseExpiresAt = IF(
+        status = 'running'
+          AND leaseExpiresAt IS NOT NULL
+          AND leaseExpiresAt < NOW(3)
+          AND attempt < maxAttempts,
+        VALUES(leaseExpiresAt),
+        leaseExpiresAt
+      ),
+      attempt = IF(
+        status = 'running'
+          AND leaseExpiresAt IS NOT NULL
+          AND leaseExpiresAt < NOW(3)
+          AND attempt < maxAttempts,
+        attempt + 1,
+        attempt
+      )
+  `);
+  const res = await db.execute(
+    sql`SELECT lockedBy, status FROM durable_jobs WHERE idempotencyKey = ${key} LIMIT 1`
+  );
+  const row = (
+    (res as unknown as [Array<{ lockedBy: string | null; status: string }>])[0] ?? []
+  )[0];
+  return {
+    owned: row?.status === "running" && row.lockedBy === token,
+    token,
+  };
+}
+
+/** Writes the outcome only while this token still owns the running row. */
+export async function finishInlineRecommendation(
+  key: string,
+  token: string,
+  payload: RecommendationPayload,
+  result: RecommendationResult
+): Promise<boolean> {
+  const db = await requireDb();
+  const { sql } = await import("drizzle-orm");
+  const body = JSON.stringify({ ...payload, outcome: outcomeFromResult(result) });
+  const status = result.status === "failed" ? "failed" : "succeeded";
+  const updated = await db.execute(sql`
+    UPDATE durable_jobs
+    SET
+      payload = ${body},
+      status = ${status},
+      lastError = ${recommendationFailureDetail(result)},
+      completedAt = NOW(3),
+      lockedBy = NULL,
+      leaseExpiresAt = NULL
+    WHERE
+      idempotencyKey = ${key}
+      AND jobType = 'personalization_recommendations'
+      AND lockedBy = ${token}
+      AND status = 'running'
+  `);
+  return Number((updated[0] as { affectedRows?: number }).affectedRows ?? 0) === 1;
+}
+
+/**
  * The durable handler only updates payload. The worker still owns status,
  * retries, and the lease.
  */
 async function persistRecommendationOutcome(
   key: string,
   payload: RecommendationPayload,
-  result: RecommendationResult,
-  mode: "inline" | "attached"
+  result: RecommendationResult
 ): Promise<void> {
   const db = await requireDb();
   const { sql } = await import("drizzle-orm");
   const body = JSON.stringify({ ...payload, outcome: outcomeFromResult(result) });
-  if (mode === "attached") {
-    await db.execute(sql`UPDATE durable_jobs SET payload = ${body} WHERE idempotencyKey = ${key}`);
-    return;
-  }
-  const status = result.status === "failed" ? "failed" : "succeeded";
-  const lastError = recommendationFailureDetail(result);
-  await db.execute(sql`
-    INSERT INTO durable_jobs
-      (jobType, idempotencyKey, payload, status, attempt, maxAttempts, completedAt, lastError)
-    VALUES
-      ('personalization_recommendations', ${key}, ${body}, ${status}, 1, ${RECOMMENDATION_MAX_ATTEMPTS}, NOW(3), ${lastError})
-    ON DUPLICATE KEY UPDATE
-      payload = VALUES(payload),
-      lastError = IF(status IN ('queued', 'running'), lastError, VALUES(lastError)),
-      completedAt = IF(status IN ('queued', 'running'), completedAt, NOW(3)),
-      status = IF(status IN ('queued', 'running'), status, VALUES(status))
-  `);
+  await db.execute(sql`UPDATE durable_jobs SET payload = ${body} WHERE idempotencyKey = ${key}`);
 }
 
 async function suggestionFlagsFor(
@@ -455,14 +534,28 @@ export async function enqueueRecommendations(
     });
     return "durable";
   }
-  const existing = await loadJobRow(key).catch(() => null);
-  if (existing && !shouldStartRecommendationJob(existing.status)) return "inline";
-  if (!inlineRunning.has(key)) rememberState(key, { state: "running", at: Date.now() });
+  let claim: { owned: boolean; token: string } | null = null;
+  try {
+    claim = await claimInlineRecommendation(key, payload);
+  } catch (err) {
+    console.error(
+      "[personalization] recommendation ownership unavailable",
+      err instanceof Error ? err.message : err
+    );
+    return "inline";
+  }
+  if (!claim.owned) return "inline";
+  rememberState(key, { state: "running", at: Date.now() });
+  const token = claim.token;
   runInlineOnce(key, async () => {
     try {
       const result = await runRecommendationJob(payload);
       logRecommendationFailure(payload, result);
-      await persistRecommendationOutcome(key, payload, result, "inline");
+      const saved = await finishInlineRecommendation(key, token, payload, result);
+      if (!saved) {
+        console.warn("[personalization] recommendation result discarded after lease loss");
+        return;
+      }
       rememberState(key, stateFromResult(result));
     } catch (err) {
       rememberState(key, { state: "failed", at: Date.now() });
@@ -502,7 +595,7 @@ export function registerPersonalizationJobHandlers(): void {
     const payload = job.payload as RecommendationPayload;
     const result = await runRecommendationJob(payload);
     logRecommendationFailure(payload, result);
-    await persistRecommendationOutcome(job.idempotencyKey, payload, result, "attached");
+    await persistRecommendationOutcome(job.idempotencyKey, payload, result);
     // Model timeouts / outages: let the durable queue retry the same job.
     if (result.status === "failed" && result.kind !== "invalid_output") {
       throw new Error(`recommendations_${result.kind}`);

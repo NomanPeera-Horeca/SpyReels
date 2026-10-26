@@ -6,11 +6,11 @@ This note has two separate subjects. The release check is whether the current pr
 
 `personalization_items.payload` is already `json NOT NULL`. The specific niche stays in `label`. The taxonomy category is the optional `categoryLabel` field on that same JSON object. No new column, table, or check is required for it. The existing pillar check reads only `$.viewSharePercent`. Production already expects `personalization_items.dismissedFromStatus` (`server/schemaDrift.ts`). This branch adds no file under `drizzle/`.
 
+Recommendation ownership uses the existing `durable_jobs` table from `drizzle/0096b_durable_jobs.sql`: `idempotencyKey` is already unique, and `lockedBy` plus `leaseExpiresAt` already exist. The claim change is SQL in the worker, not a new column. This was checked against that file only. It was not applied to production, and production was not queried.
+
 ## Historical migration-chain issue
 
 The defects below were found while trying to build a local database from the numbered SQL chain. They stay a separate repair issue. They do not block storing `categoryLabel` in the existing payload.
-
-The half-applied local database used during an earlier browser pass is not a compatibility claim. `drizzle-kit migrate` did not finish that chain. Two files were skipped by hand, and one column was added with a local `ALTER`. Do not treat that database as proof that production schema and the SQL files agree.
 
 The half-applied local database used during an earlier browser pass is not a compatibility claim. `drizzle-kit migrate` did not finish that chain. Two files were skipped by hand, and one column was added with a local `ALTER`. Do not treat that database as proof that production schema and the SQL files agree.
 

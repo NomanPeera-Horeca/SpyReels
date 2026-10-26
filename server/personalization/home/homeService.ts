@@ -8,7 +8,9 @@
  * - creators: the same indexed Viral Posts inventory as videos. Home groups
  *   qualified posts by creator. The featured catalog is not that source.
  * - videos: indexed Viral Posts pools that already exist (no new pools, no
- *   refresh), see browseIndexedViralPosts.
+ *   refresh), see browseIndexedViralPosts. A stored category selects those
+ *   pools in the Home router. A profile with no category stays on the legacy
+ *   label match.
  */
 import { inferNicheFromText } from "@shared/creatorContextInference";
 import type {

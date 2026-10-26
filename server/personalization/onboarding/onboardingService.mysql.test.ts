@@ -36,6 +36,8 @@ import {
   switchActiveProfile,
 } from "./onboardingService";
 import { homeContextFromState, videoMatchText } from "../home/homeService";
+import { contentInventoryPlan } from "../home/inventoryMatch";
+import { browseIndexedViralPosts } from "../../viralPosts/browseService";
 import {
   lookupPublicProfile,
   resetLookupLimiterForTests,
@@ -844,6 +846,34 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
     expect(home.pillarTitles).toEqual(["Weeknight dinners", "Grocery shortcuts", "Kid friendly plates"]);
     expect(videoMatchText(home)).toBe("weeknight dinners");
     expect(videoMatchText(home)).not.toBe("Food");
+    const unmatched = contentInventoryPlan({
+      categoryLabel: home.categoryLabel,
+      nicheLabel: home.nicheLabel,
+      pillarTitles: home.pillarTitles,
+      goalText: home.goalText,
+      audienceText: home.audienceText,
+    });
+    expect(unmatched.mode).toBe("taxonomy");
+    if (unmatched.mode === "taxonomy") expect(unmatched.plan.niche).toBe("");
+    const browse = await browseIndexedViralPosts({
+      userId: A.userId,
+      description: home.nicheLabel,
+      pillars: home.pillarTitles,
+      goalText: home.goalText,
+      audienceText: home.audienceText,
+      matchMode: "taxonomy",
+      categoryLabel: home.categoryLabel,
+      specificNiche: home.nicheLabel,
+      limit: 4,
+      creatorLimit: 3,
+      recentDays: 90,
+    });
+    expect(browse).toMatchObject({
+      items: [],
+      creators: [],
+      niche: "",
+      poolRefreshStarted: false,
+    });
     const secondLoad = await loadOnboardingState(db, A);
     expect(secondLoad.items.map(i => i.id)).toEqual(reloaded.items.map(i => i.id));
   });

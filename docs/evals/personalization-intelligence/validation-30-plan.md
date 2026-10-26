@@ -1,6 +1,6 @@
 # 30-profile benchmark plan
 
-Prepared against `e2587743b8e47fe6e6c4c1776b982a8a48974e29` on `fix/precise-niche-split`. Do not run this until a new budget is approved. No paid call is part of this plan.
+Prepared on `fix/precise-niche-split` after the Home taxonomy routing and job-ownership fixes. Do not run this until a new budget is approved. No paid call is part of this plan. Strategy quality, niche accuracy, clarification correctness, and recovery are not measured until that run. Do not copy fixture answers into the first pass.
 
 Frozen prompts, unchanged by this plan:
 
@@ -24,7 +24,7 @@ pnpm exec tsx scripts/personalization-intelligence-eval.ts \
   --out=validation-30
 ```
 
-The local recovery recorder in `server/personalization/intelligence/eval/runEval.ts` is not in `e258774`. Keep it out of the job-key commit. A later approved run should pass fixture `fallbackGoal` only after a real `needs_clarification`, and store that result on `recovery`. The first-pass goal, audience, pillar, and niche fields stay unanswered.
+A later approved run should pass fixture `fallbackGoal` only after a real `needs_clarification`, and store that result on `recovery`. The first-pass goal, audience, pillar, and niche fields stay unanswered. Do not treat a fixture answer as a first-pass result.
 
 ## Separate scores
 

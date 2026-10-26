@@ -26,10 +26,14 @@ import {
   remakeabilityScoreForCandidate,
 } from "./rankingSignals";
 import {
+  buildPoolKey,
   DEFAULT_CONTENT_PILLARS,
   VIRAL_POOL_DEFAULTS,
   VIRAL_SEED_POOL_PILLAR,
 } from "./constants";
+import { chooseIndexedHomeSpecs } from "./browseService";
+import { dailyFeedInventoryDecision } from "../personalization/home/inventoryMatch";
+import { loadStoredContentInventory } from "../personalization/home/storedInventory";
 import { selectTieredDailyFeed } from "./diversity";
 import {
   isAnyViralPostsPlatformEnabled,
@@ -612,11 +616,72 @@ export async function getOrCreateDailyFeed(args: {
   }
 
   try {
-    const profile = await loadUserProfile(args.userId);
-    const niche = inferNiche(profile.businessDescription);
-    const pillars = inferActivePillars(profile.businessDescription, niche);
-    const [pools, hidden, dismissed, recentlyShown] = await Promise.all([
-      ensureUserViralPools({ niche, pillars }),
+    const emptyTaxonomyFeed = async (): Promise<ViralDailyFeedResponse> => {
+      await repo.insertFeedItems([]);
+      await repo.updateDailyFeedStatus({
+        feedId: feed.id,
+        status: "ready",
+        generationReason: "taxonomy_empty",
+        errorMessage: null,
+        scCallCount: 0,
+        costEstimateUsd: 0,
+      });
+      return {
+        feedId: feed.id,
+        localDate: args.localDate,
+        timezone: args.timezone,
+        generatedAt: new Date().toISOString(),
+        status: "ready",
+        fromCache: false,
+        generationReason: "taxonomy_empty",
+        items: [],
+        poolRefreshStarted: false,
+        serverDurationMs: Date.now() - requestStarted,
+      };
+    };
+
+    const stored = await loadStoredContentInventory(args.userId);
+    const decision = dailyFeedInventoryDecision(stored);
+    let niche: string;
+    let pillars: string[];
+    let pools: Awaited<ReturnType<typeof ensureUserViralPools>>;
+    if (decision.mode === "taxonomy") {
+      if (!decision.niche) return emptyTaxonomyFeed();
+      const existing = await poolRepo.findExistingPools([
+        ...decision.confirmedSpecs,
+        ...decision.fallbackSpecs,
+      ]);
+      const chosen = chooseIndexedHomeSpecs({
+        confirmedSpecs: decision.confirmedSpecs,
+        fallbackSpecs: decision.fallbackSpecs,
+        existingKeys: new Set(existing.map((pool) => pool.poolKey)),
+      });
+      const chosenKeys = new Set(
+        chosen.specs.map((spec) =>
+          buildPoolKey({
+            platform: spec.platform,
+            niche: spec.niche,
+            pillar: spec.pillar,
+          })
+        )
+      );
+      pools = existing.filter((pool) => chosenKeys.has(pool.poolKey));
+      if (pools.length === 0) return emptyTaxonomyFeed();
+      const supply = await poolRepo.loadPoolCandidatesForAssembly({
+        poolIds: pools.map((pool) => pool.id),
+        limit: 1,
+      });
+      if (supply.length === 0) return emptyTaxonomyFeed();
+      niche = decision.niche;
+      pillars = [...new Set(chosen.specs.map((spec) => spec.pillar))];
+    } else {
+      const profile = await loadUserProfile(args.userId);
+      niche = inferNiche(profile.businessDescription);
+      pillars = inferActivePillars(profile.businessDescription, niche);
+      pools = await ensureUserViralPools({ niche, pillars });
+    }
+    const indexedOnly = decision.mode === "taxonomy";
+    const [hidden, dismissed, recentlyShown] = await Promise.all([
       repo.getHiddenCreatorKeys(args.userId),
       repo.getRecentlyDismissedCandidateIds(args.userId),
       repo.getRecentlyShownCandidateIds(args.userId),
@@ -651,9 +716,8 @@ export async function getOrCreateDailyFeed(args: {
     picked = pillarRanked as typeof picked;
 
     const enough = picked.length >= VIRAL_DAILY_FEED_MIN;
-    const poolRefreshStarted = !enough
-      ? scheduleDailyFeedRecovery(pools)
-      : false;
+    const poolRefreshStarted =
+      indexedOnly || enough ? false : scheduleDailyFeedRecovery(pools);
 
     await repo.insertFeedItems(
       picked.map((p, index) => ({
@@ -675,10 +739,12 @@ export async function getOrCreateDailyFeed(args: {
       workspaceId,
     });
 
-    const status = !enough ? "refreshing" : "ready";
-    const generationReason = enough
-      ? "pool_assembly"
-      : "cold_start_pool_refresh";
+    const status = indexedOnly || enough ? "ready" : "refreshing";
+    const generationReason = indexedOnly
+      ? "taxonomy_indexed"
+      : enough
+        ? "pool_assembly"
+        : "cold_start_pool_refresh";
 
     const [, saved, mirroredVideos] = await Promise.all([
       repo.updateDailyFeedStatus({
@@ -686,9 +752,9 @@ export async function getOrCreateDailyFeed(args: {
         status,
         generationReason,
         errorMessage:
-          picked.length === 0
-            ? "We couldn't find enough strong matches yet. Refreshing your niche pool."
-            : null,
+          indexedOnly || picked.length > 0
+            ? null
+            : "We couldn't find enough strong matches yet. Refreshing your niche pool.",
         scCallCount: 0,
         costEstimateUsd: 0,
       }),
@@ -755,14 +821,14 @@ export async function getOrCreateDailyFeed(args: {
       localDate: args.localDate,
       timezone: args.timezone,
       generatedAt: new Date().toISOString(),
-      status: items.length === 0 ? "refreshing" : enough ? "ready" : "refreshing",
+      status: indexedOnly ? "ready" : items.length === 0 || !enough ? "refreshing" : "ready",
       fromCache: false,
       generationReason,
       items,
       errorMessage:
-        items.length === 0
-          ? "We couldn't find enough strong matches yet. Refreshing your niche pool."
-          : null,
+        indexedOnly || items.length > 0
+          ? null
+          : "We couldn't find enough strong matches yet. Refreshing your niche pool.",
       poolRefreshStarted,
       serverDurationMs: durationMs,
     };
