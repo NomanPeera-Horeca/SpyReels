@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   final-evaluation:
-    if: ${{ github.event.head_commit.message == 'eval: [authorized-30-profile-run] execute capped final benchmark' }}
+    if: ${{ contains(github.event.head_commit.message, '[authorized-30-profile-run]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 40
     env:
