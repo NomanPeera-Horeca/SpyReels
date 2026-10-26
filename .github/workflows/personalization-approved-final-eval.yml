@@ -1,0 +1,94 @@
+# One-time, explicitly authorized, synthetic-only final strategy evaluation.
+# No deployment, no production DB/provider access, and no auto-run on PRs.
+name: SpyReels Authorized Personalization Evaluation
+
+on:
+  push:
+    branches:
+      - fix/precise-niche-split
+
+permissions:
+  contents: read
+
+jobs:
+  final-evaluation:
+    if: ${{ github.event.head_commit.message == 'eval: [authorized-30-profile-run] execute capped final benchmark' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+
+    steps:
+      - name: Checkout frozen feature branch
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Require privately connected test credential
+        shell: bash
+        run: |
+          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "Cannot run real-model evaluation: ANTHROPIC_API_KEY GitHub secret is not configured."
+            exit 1
+          fi
+
+      - name: Run all 30 synthetic profiles, max $1.00 estimate
+        run: |
+          pnpm exec tsx scripts/personalization-intelligence-eval.ts \
+            --confirm-spend --cap=1.00 --out=validation-30
+
+      - name: Require complete real-model generation before judging
+        shell: bash
+        run: |
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const r=JSON.parse(fs.readFileSync("docs/evals/personalization-intelligence/validation-30.json","utf8"));
+            if (!r.realModel || r.stoppedByCap || r.totals.cases !== 30 || r.totals.estimatedUsd > 1.00) {
+              console.error("STOP: incomplete or over-budget generated evaluation");
+              process.exit(1);
+            }
+            console.log("30 first-pass cases complete; estimated generation cost",r.totals.estimatedUsd);
+          '
+
+      - name: Independent judge, max additional $0.50 estimate
+        run: |
+          pnpm exec tsx scripts/personalization-quality-judge.ts \
+            --confirm-spend --in=validation-30 --cap=0.50
+
+      - name: Require 30 independent scores and print separated metrics
+        shell: bash
+        run: |
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const x=JSON.parse(fs.readFileSync("docs/evals/personalization-intelligence/validation-30-judge.json","utf8"));
+            if (x.stoppedByCap || x.scored !== 30 || x.estimatedUsd > 0.50) {
+              console.error("STOP: incomplete or over-budget independent judging");
+              process.exit(1);
+            }
+          '
+          pnpm exec tsx scripts/personalization-quality-judge.ts \
+            --in=validation-30 --report-only \
+            > docs/evals/personalization-intelligence/validation-30-summary.json
+
+      - name: Upload synthetic-only artifacts for CTO review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spyreels-personalization-validation-30
+          path: |
+            docs/evals/personalization-intelligence/validation-30.json
+            docs/evals/personalization-intelligence/validation-30.md
+            docs/evals/personalization-intelligence/validation-30-judge.json
+            docs/evals/personalization-intelligence/validation-30-summary.json
+          if-no-files-found: warn
+          retention-days: 30
