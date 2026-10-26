@@ -37,6 +37,12 @@ import {
 } from "./onboardingService";
 import { homeContextFromState, videoMatchText } from "../home/homeService";
 import {
+  lookupPublicProfile,
+  resetLookupLimiterForTests,
+  resetProfileLookupCacheForTests,
+  type ProfileLookupDeps,
+} from "./profileLookup";
+import {
   addPillarSubtopic,
   dismissPillarSubtopic,
   restorePillarSubtopic,
@@ -105,6 +111,15 @@ const AUDIENCE_OUT = {
   ],
   confidence: "medium",
 };
+const PILLAR_OUT = {
+  pillars: [
+    { title: "Weeknight dinners", serves: "Show meals busy parents can cook after work.", subtopics: ["One pan pasta", "Sheet pan chicken", "Rice bowls"] },
+    { title: "Grocery shortcuts", serves: "Help parents shop once and cook all week.", subtopics: ["Sunday prep", "Freezer meals", "Pantry staples"] },
+    { title: "Kid friendly plates", serves: "Give parents dinners children will actually eat.", subtopics: ["Hidden vegetables", "Build your own", "Ten minute sides"] },
+  ],
+  confidence: "medium",
+};
+const NICHE_OUT = { label: "weeknight dinners", category: "Food" };
 
 describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
   let conn: mysql.Connection;
@@ -650,6 +665,187 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
     } finally {
       await q(readFileSync(path.join(root, "drizzle/0104_pillar_subtopics.sql"), "utf8"));
     }
+  });
+
+  it("walks a mocked Instagram profile from That's me through Home", async () => {
+    resetLookupLimiterForTests();
+    resetProfileLookupCacheForTests();
+    const lookupDeps: ProfileLookupDeps = {
+      instagram: async () => ({
+        username: "Test.Kitchen",
+        fullName: "Test Kitchen",
+        biography: "Easy weeknight dinners for busy parents",
+        profilePicUrl: "https://cdn.example/pic.jpg",
+        followerCount: 1200,
+        followingCount: 10,
+        postCount: 40,
+        isVerified: false,
+        isPrivate: false,
+        category: "",
+        externalUrl: "",
+        userId: "ig-1",
+        recentMedia: [
+          { shortcode: "pasta1", thumbnailUrl: "https://cdn.example/pasta.jpg", viewCount: 900, isPinned: false },
+        ],
+      }),
+      tiktok: async () => {
+        throw new Error("not used");
+      },
+      youtube: async () => {
+        throw new Error("not used");
+      },
+      mirrorAvatar: async (_handle, avatarUrl) => avatarUrl,
+      mirrorThumbnails: async items => new Map(items.map(item => [item.shortcode, item.thumbnailUrl])),
+      classify: () => "error",
+    };
+    const looked = await lookupPublicProfile({
+      userId: A.userId,
+      platform: "instagram",
+      handle: "test.kitchen",
+      deps: lookupDeps,
+    });
+    expect(looked.ok).toBe(true);
+    if (!looked.ok) return;
+    expect(looked.profile).toMatchObject({
+      platform: "instagram",
+      handle: "test.kitchen",
+      bio: "Easy weeknight dinners for busy parents",
+    });
+
+    const { profileId } = await confirmProfile(db, A, looked.profile);
+    const analysisDeps = {
+      store: createAnalysisStore(db),
+      enqueue: async () => 1,
+      newId: randomUUID,
+      now: () => new Date(),
+    };
+    const started = await requestProfileAnalysis(analysisDeps, {
+      ctx: authCtx(A),
+      socialProfileId: profileId,
+      requestKind: "initial",
+    });
+    const repeated = await requestProfileAnalysis(analysisDeps, {
+      ctx: authCtx(A),
+      socialProfileId: profileId,
+      requestKind: "initial",
+    });
+    expect(started.status).toBe("started");
+    expect(repeated).toMatchObject({ status: "reused" });
+    await runProfileAnalysis(
+      {
+        payload: {
+          runId: (started as { runId: string }).runId,
+          workspaceId: WS_A,
+          socialProfileId: profileId,
+          requestKind: "initial",
+        },
+        attempt: 1,
+        maxAttempts: 1,
+      },
+      {
+        store: createAnalysisStore(db),
+        source: {
+          fetchPosts: async ({ platform, handle, windowStart, windowEnd }) => ({
+            snapshot: {
+              version: 1,
+              platform,
+              handle,
+              followerCount: 1200,
+              windowStart: windowStart.toISOString(),
+              windowEnd: windowEnd.toISOString(),
+              posts: [
+                {
+                  postId: "pasta1",
+                  url: null,
+                  publishedAt: windowEnd.toISOString(),
+                  views: 900,
+                  likes: 20,
+                  comments: 2,
+                  durationSec: 20,
+                  caption: "15 minute pasta for busy parents",
+                },
+              ],
+            },
+            meter: { requests: 1, blockedByBudget: 0, byStatus: { "200": 1 }, budget: 25, estimatedUsd: 0 },
+          }),
+        },
+        suggestions: null,
+        now: () => new Date(),
+      }
+    );
+
+    await saveUseCase(db, A, "find_viral_videos");
+    await saveAttribution(db, A, null);
+    const calls: string[] = [];
+    const invoker = async (p: InvokeParams): Promise<InvokeResult> => {
+      calls.push(p.operation ?? "");
+      return fakeInvoker({
+        personalization_niche: NICHE_OUT,
+        personalization_goal_inference: GOAL_OUT,
+        personalization_audience_recommendations: AUDIENCE_OUT,
+        personalization_pillar_recommendations: PILLAR_OUT,
+      })(p);
+    };
+    const store = createRecommendationStore(db);
+    const goal = await generateRecommendations(
+      { store, invoker },
+      { ctx: authCtx(A), socialProfileId: profileId, step: "goal" }
+    );
+    expect(goal.status).toBe("generated");
+    expect(calls.slice().sort()).toEqual(["personalization_goal_inference", "personalization_niche"]);
+    await resolveStep(db, A, "goal", "confirm");
+    let state = await loadOnboardingState(db, A);
+    const confirmedGoal = state.items.find(i => i.kind === "goal" && i.status === "confirmed");
+    const confirmedNiche = state.items.find(i => i.kind === "niche" && i.status === "confirmed");
+    expect(confirmedGoal?.payload).toMatchObject({ text: GOAL_OUT.goal });
+    expect(confirmedNiche?.payload).toMatchObject({ label: "weeknight dinners", categoryLabel: "Food" });
+
+    const protectedGoal = await generateRecommendations(
+      { store, invoker },
+      { ctx: authCtx(A), socialProfileId: profileId, step: "goal" }
+    );
+    expect(protectedGoal).toMatchObject({ status: "already_confirmed" });
+    expect(calls.slice().sort()).toEqual(["personalization_goal_inference", "personalization_niche"]);
+
+    const audience = await generateRecommendations(
+      { store, invoker },
+      { ctx: authCtx(A), socialProfileId: profileId, step: "audience" }
+    );
+    expect(audience.status).toBe("generated");
+    await resolveStep(db, A, "audience", "confirm");
+    const pillars = await generateRecommendations(
+      { store, invoker },
+      { ctx: authCtx(A), socialProfileId: profileId, step: "pillars" }
+    );
+    expect(pillars.status).toBe("generated");
+    await resolveStep(db, A, "pillars", "confirm");
+
+    const reloaded = await loadOnboardingState(db, A);
+    expect(reloaded.profile).toMatchObject({ id: profileId, handle: "test.kitchen", platform: "instagram" });
+    expect(reloaded.items.filter(i => i.status === "confirmed").map(i => i.kind).sort()).toEqual([
+      "audience",
+      "audience",
+      "goal",
+      "language",
+      "niche",
+      "pillar",
+      "pillar",
+      "pillar",
+    ]);
+    const home = homeContextFromState(reloaded);
+    expect(home).toMatchObject({
+      hasProfile: true,
+      nicheLabel: "weeknight dinners",
+      categoryLabel: "Food",
+      goalText: GOAL_OUT.goal,
+      personalizationComplete: true,
+      nextStep: null,
+    });
+    expect(home.pillarTitles).toEqual(["Weeknight dinners", "Grocery shortcuts", "Kid friendly plates"]);
+    expect(videoMatchText(home)).toBe("weeknight dinners");
+    expect(videoMatchText(home)).not.toBe("Food");
+    const secondLoad = await loadOnboardingState(db, A);
+    expect(secondLoad.items.map(i => i.id)).toEqual(reloaded.items.map(i => i.id));
   });
 
   it("does not restore a superseded row that the user did not delete", async () => {
