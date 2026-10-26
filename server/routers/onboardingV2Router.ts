@@ -93,7 +93,11 @@ const itemPayload = z.discriminatedUnion("kind", [
     kind: z.literal("audience"),
     // outcome is optional: the single-field editor saves who only. An existing
     // outcome is kept by the client, never discarded.
-    payload: z.object({ who: text(120), outcome: z.string().trim().max(160) }),
+    payload: z.object({
+      who: text(120),
+      outcome: z.string().trim().max(160),
+      problem: z.string().trim().max(160).optional(),
+    }),
   }),
   z.object({
     kind: z.literal("pillar"),
@@ -207,6 +211,24 @@ export const onboardingV2Router = router({
                 runId: analysis.runId,
                 url,
                 store,
+                onStored: () => {
+                  void store
+                    .loadPersonalizationVersion(profileId)
+                    .then(version =>
+                      enqueuePreliminarySuggestions({
+                        workspaceId: ctx.workspaceId,
+                        userId: ctx.user.id,
+                        socialProfileId: profileId,
+                        version,
+                      })
+                    )
+                    .catch(err => {
+                      console.warn("[personalization] website_suggestions_not_started", {
+                        profileId,
+                        reason: err instanceof Error ? err.name : "error",
+                      });
+                    });
+                },
               }),
           });
         } catch (err) {

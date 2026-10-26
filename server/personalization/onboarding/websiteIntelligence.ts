@@ -470,11 +470,23 @@ export function productionWebsiteRequest(input: {
   });
 }
 
+function websiteHasFacts(website: {
+  offers: string[];
+  callsToAction: string[];
+  customers: string[];
+  goalEvidence: string[];
+}): boolean {
+  return [...website.offers, ...website.callsToAction, ...website.customers, ...website.goalEvidence].some(
+    line => line.trim()
+  );
+}
+
 async function readAndStore(input: {
   runId: string;
   url: string;
   store: WebsiteIntelligenceStore;
   read: (url: string) => Promise<WebsiteReadResult>;
+  onStored?: () => void;
 }): Promise<void> {
   const existing = await input.store.loadRunProfileEvidence(input.runId);
   if (!existing) {
@@ -492,6 +504,7 @@ async function readAndStore(input: {
     return;
   }
   await input.store.saveWebsiteIntelligence(input.runId, result.website);
+  if (websiteHasFacts(result.website)) input.onStored?.();
   console.info("[personalization] website_intelligence", {
     code: "stored",
     ms: result.ms,
@@ -513,6 +526,8 @@ export function startWebsiteIntelligence(input: {
   url: string;
   store: WebsiteIntelligenceStore;
   read?: (url: string) => Promise<WebsiteReadResult>;
+  /** After useful website facts are stored. Must not block confirmation. */
+  onStored?: () => void;
 }): void {
   if (readsInFlight.has(input.runId)) return;
   readsInFlight.add(input.runId);
@@ -520,7 +535,7 @@ export function startWebsiteIntelligence(input: {
     resolve: resolveWebsiteHost,
     request: productionWebsiteRequest,
   }));
-  void readAndStore({ ...input, read })
+  void readAndStore({ ...input, read, onStored: input.onStored })
     .catch(err => {
       console.warn("[personalization] website_intelligence", {
         code: err instanceof Error ? err.name : "error",

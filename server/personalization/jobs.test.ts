@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   confirmedAnswerKey,
+  recommendationEvidenceToken,
   recommendationJobKey,
   recommendationStateFromSources,
   shouldStartRecommendationJob,
@@ -196,5 +197,18 @@ describe("recommendationStateFromSources", () => {
         suggestionsSaved: false,
       })
     ).toEqual({ state: "running", at: 5 });
+  });
+});
+
+describe("recommendationEvidenceToken", () => {
+  it("keeps the post key until website facts exist", () => {
+    expect(recommendationEvidenceToken([], [])).toBe("profile");
+    expect(recommendationEvidenceToken(["b", "a"], [])).toBe(
+      recommendationEvidenceToken(["a", "b"], [])
+    );
+    const posts = recommendationEvidenceToken(["post-1"], []);
+    const withSite = recommendationEvidenceToken(["post-1"], ["Book a workshop"]);
+    expect(withSite.startsWith(`${posts}:w`)).toBe(true);
+    expect(withSite).not.toBe(posts);
   });
 });

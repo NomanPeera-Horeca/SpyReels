@@ -74,17 +74,18 @@ describe("insightCardLines", () => {
   });
 
   it("builds the three lines from the stored views comparison", () => {
-    expect(
-      insightCardLines({
-        figure: "2.4x",
-        headline: "Videos starting with a question average 2.4x more views.",
-        comparison,
-      })
-    ).toEqual({
+    const lines = insightCardLines({
+      figure: "2.4x",
+      headline: "Videos starting with a question average 2.4x more views.",
+      comparison,
+    });
+    expect(lines).toEqual({
       eyebrow: "Compared with 8 other videos",
       figureLine: "2.4x more views",
-      detail: "starting with a question",
+      detail: "Try videos starting with a question. This is a comparison, not a prediction.",
     });
+    expect(lines?.detail).not.toMatch(/\b(will|expected|caused|because)\b/i);
+    expect(lines?.detail).not.toMatch(/\d/);
   });
 
   it("uses the engagement wording when that is the stored metric", () => {
@@ -97,7 +98,8 @@ describe("insightCardLines", () => {
     ).toEqual({
       eyebrow: "Compared with 8 other videos",
       figureLine: "60% higher engagement",
-      detail: "filmed as talking head",
+      detail:
+        "Try videos filmed as talking head. This is a comparison, not a prediction.",
     });
   });
 

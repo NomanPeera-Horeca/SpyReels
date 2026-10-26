@@ -16,6 +16,7 @@ export function toItemRecord(row: PersonalizationItemRow): ItemRecord {
     supersedesItemId: row.supersedesItemId,
     basedOnInputsHash: row.basedOnInputsHash,
     confidence: row.confidence,
+    generationMeta: row.generationMeta ?? null,
   };
 }
 

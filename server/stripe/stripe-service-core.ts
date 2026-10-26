@@ -3,7 +3,14 @@ import { getDb } from "../db";
 import { subscriptions, monthlyUsage, users } from "../../drizzle/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { PlanId, BillingInterval, PLANS, getPlanLimits, STRIPE_PLAN_METADATA_KEY, STRIPE_INTERVAL_METADATA_KEY } from "./products";
-import { planFromStripeSubscription, planRank, type PaidPlanId } from "./stripePlanSync";
+import {
+  planFromStripeSubscription,
+  planRank,
+  productIdForPlanFallback,
+  STRIPE_SUBSCRIPTION_LIST_PRICE_EXPAND,
+  type PaidPlanId,
+  type StripePlanSource,
+} from "./stripePlanSync";
 import { sendPaymentConfirmationEmail } from "../utils/email.js";
 import { hasUnlimitedUsage, unlimitedUsageResult } from "../usageBypass";
 import {
@@ -238,7 +245,6 @@ async function upsertSubscription(db: any, userId: number, data: {
 
 const stripeFreePlanMisses = new Map<string, number>();
 const STRIPE_PLAN_MISS_MS = 10 * 60 * 1000;
-const STRIPE_PLAN_ERROR_MS = 60 * 1000;
 
 function rememberStripePlanMiss(email: string, ttlMs: number) {
   stripeFreePlanMisses.set(email, Date.now() + ttlMs);
@@ -317,24 +323,13 @@ export async function syncFreePlanFromStripe(
         customer: customer.id,
         status: "all",
         limit: 20,
-        expand: ["data.items.data.price.product"],
+        expand: [STRIPE_SUBSCRIPTION_LIST_PRICE_EXPAND],
       });
       for (const subscription of listed.data as any[]) {
         if (subscription.status !== "active" && subscription.status !== "trialing" && subscription.status !== "past_due") {
           continue;
         }
-        const price = subscription.items?.data?.[0]?.price;
-        const parsed = planFromStripeSubscription({
-          metadata: subscription.metadata,
-          price: price
-            ? {
-                metadata: price.metadata,
-                unit_amount: price.unit_amount,
-                recurring: price.recurring,
-                product: typeof price.product === "string" ? price.product : price.product,
-              }
-            : null,
-        });
+        const parsed = await paidPlanFromListedSubscription(subscription);
         if (!parsed) continue;
         if (best && planRank(parsed.plan) <= planRank(best.plan)) continue;
         best = {
@@ -372,13 +367,51 @@ export async function syncFreePlanFromStripe(
     console.log(`[Stripe] Synced ${best.plan} onto user ${userId} from ${best.customerId}`);
     return true;
   } catch (error) {
-    rememberStripePlanMiss(normalized, STRIPE_PLAN_ERROR_MS);
     console.warn(
       "[Stripe] Paid plan sync failed",
       error instanceof Error ? error.message : error
     );
     return false;
   }
+}
+
+function priceSourceFromStripePrice(price: any): StripePlanSource["price"] {
+  if (!price || typeof price === "string") return null;
+  const product = price.product;
+  return {
+    metadata: price.metadata,
+    unit_amount: price.unit_amount,
+    recurring: price.recurring,
+    product:
+      typeof product === "string" || product == null
+        ? product
+        : { metadata: product.metadata, deleted: Boolean(product.deleted) },
+  };
+}
+
+async function paidPlanFromListedSubscription(subscription: {
+  metadata?: StripePlanSource["metadata"];
+  items?: { data?: Array<{ price?: unknown }> };
+}): Promise<{ plan: PaidPlanId; interval: BillingInterval } | null> {
+  const price = priceSourceFromStripePrice(subscription.items?.data?.[0]?.price);
+  const source: StripePlanSource = {
+    metadata: subscription.metadata,
+    price,
+  };
+  const parsed = planFromStripeSubscription(source);
+  if (parsed) return parsed;
+
+  const productId = productIdForPlanFallback(source);
+  if (!productId || !price) return null;
+  const product = await stripe.products.retrieve(productId);
+  if (product.deleted) return null;
+  return planFromStripeSubscription({
+    metadata: subscription.metadata,
+    price: {
+      ...price,
+      product: { metadata: product.metadata, deleted: false },
+    },
+  });
 }
 
 // ─── Webhook Handlers ───────────────────────────────────────────

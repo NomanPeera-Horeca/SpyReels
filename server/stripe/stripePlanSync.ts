@@ -3,6 +3,16 @@ import { PLANS, type BillingInterval, type PlanId } from "./products";
 const PAID_PLAN_IDS = ["starter", "pro", "business", "agency"] as const;
 export type PaidPlanId = (typeof PAID_PLAN_IDS)[number];
 
+/**
+ * Expand a subscription price on a list call.
+ * Stripe allows four levels. data.items.data.price.product is five and is rejected.
+ */
+export const STRIPE_SUBSCRIPTION_LIST_PRICE_EXPAND = "data.items.data.price";
+
+export function stripeExpandDepth(path: string): number {
+  return path.split(".").filter((part) => part.length > 0).length;
+}
+
 type PlanMetadata = {
   plan_id?: string | null;
   billing_interval?: string | null;
@@ -74,6 +84,15 @@ export function planFromStripeSubscription(
   });
   if (matches.length !== 1) return null;
   return { plan: matches[0], interval };
+}
+
+/** Product id to load when subscription metadata, price metadata, and amount do not name a plan. */
+export function productIdForPlanFallback(source: StripePlanSource): string | null {
+  if (planFromStripeSubscription(source)) return null;
+  const product = source.price?.product;
+  if (typeof product !== "string") return null;
+  const id = product.trim();
+  return id.length > 0 ? id : null;
 }
 
 export function planRank(plan: PlanId): number {

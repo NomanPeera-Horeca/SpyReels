@@ -5,7 +5,9 @@ import {
 } from "./stripe-service-core";
 import { getPlanLimits, type PlanId } from "./products";
 import {
+  complimentaryPlanExceptionForEmail,
   getActiveComplimentaryGrant,
+  mergeComplimentaryPlans,
   resolveAccessSource,
   resolveEffectivePlan,
 } from "../entitlements/complimentaryAccess";
@@ -22,17 +24,18 @@ export * from "./stripe-service-core";
  */
 export async function getUserSubscription(userId: number) {
   let billing = await getBillingSubscription(userId);
-  if ((billing.plan as PlanId) === "free") {
-    const { getUserById } = await import("../db");
-    const user = await getUserById(userId);
-    if (user && !hasUnlimitedUsage(user)) {
-      const synced = await syncFreePlanFromStripe(userId, user.email);
-      if (synced) billing = await getBillingSubscription(userId);
-    }
+  const { getUserById } = await import("../db");
+  const user = await getUserById(userId);
+  if ((billing.plan as PlanId) === "free" && user && !hasUnlimitedUsage(user)) {
+    const synced = await syncFreePlanFromStripe(userId, user.email);
+    if (synced) billing = await getBillingSubscription(userId);
   }
   const billingPlan = billing.plan as PlanId;
   const grant = await getActiveComplimentaryGrant(userId);
-  const complimentaryPlan = grant?.plan ?? null;
+  const complimentaryPlan = mergeComplimentaryPlans(
+    grant?.plan ?? null,
+    complimentaryPlanExceptionForEmail(user?.email)
+  );
   const plan = resolveEffectivePlan(billingPlan, complimentaryPlan);
 
   return {
