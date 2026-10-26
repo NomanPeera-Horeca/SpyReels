@@ -325,6 +325,11 @@ export async function claimInlineRecommendation(
   const { DEFAULT_LEASE_SECONDS } = await import("../durableJobs/policy");
   const token = `inline:${randomUUID()}`;
   const body = JSON.stringify(payload);
+  // A duplicate insert must not take ownership. MySQL evaluates SET
+  // expressions left to right, so putting leaseExpiresAt before attempt in
+  // the same UPDATE makes the attempt check see the new unexpired lease and
+  // skip the increment. Reclaim is a separate UPDATE. Its WHERE clause reads
+  // the original row, then assigns attempt, owner, and lease together.
   await db.execute(sql`
     INSERT INTO durable_jobs
       (jobType, idempotencyKey, payload, status, attempt, maxAttempts, lockedBy, leaseExpiresAt, availableAt)
@@ -341,30 +346,21 @@ export async function claimInlineRecommendation(
         NOW(3)
       )
     ON DUPLICATE KEY UPDATE
-      lockedBy = IF(
-        status = 'running'
-          AND leaseExpiresAt IS NOT NULL
-          AND leaseExpiresAt < NOW(3)
-          AND attempt < maxAttempts,
-        VALUES(lockedBy),
-        lockedBy
-      ),
-      leaseExpiresAt = IF(
-        status = 'running'
-          AND leaseExpiresAt IS NOT NULL
-          AND leaseExpiresAt < NOW(3)
-          AND attempt < maxAttempts,
-        VALUES(leaseExpiresAt),
-        leaseExpiresAt
-      ),
-      attempt = IF(
-        status = 'running'
-          AND leaseExpiresAt IS NOT NULL
-          AND leaseExpiresAt < NOW(3)
-          AND attempt < maxAttempts,
-        attempt + 1,
-        attempt
-      )
+      idempotencyKey = idempotencyKey
+  `);
+  await db.execute(sql`
+    UPDATE durable_jobs
+    SET
+      attempt = attempt + 1,
+      lockedBy = ${token},
+      leaseExpiresAt = DATE_ADD(NOW(3), INTERVAL ${DEFAULT_LEASE_SECONDS} SECOND)
+    WHERE
+      idempotencyKey = ${key}
+      AND jobType = 'personalization_recommendations'
+      AND status = 'running'
+      AND leaseExpiresAt IS NOT NULL
+      AND leaseExpiresAt < NOW(3)
+      AND attempt < maxAttempts
   `);
   const res = await db.execute(
     sql`SELECT lockedBy, status FROM durable_jobs WHERE idempotencyKey = ${key} LIMIT 1`

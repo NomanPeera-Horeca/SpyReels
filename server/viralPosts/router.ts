@@ -251,6 +251,7 @@ export const viralPostsRouter = router({
 
       const request = {
         userId: ctx.user.id,
+        workspaceId: ctx.workspaceId,
         localDate: input.localDate,
         timezone: input.timezone,
       };

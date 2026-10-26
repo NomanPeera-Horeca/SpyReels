@@ -32,8 +32,17 @@ import {
   VIRAL_SEED_POOL_PILLAR,
 } from "./constants";
 import { chooseIndexedHomeSpecs } from "./browseService";
-import { dailyFeedInventoryDecision } from "../personalization/home/inventoryMatch";
-import { loadStoredContentInventory } from "../personalization/home/storedInventory";
+import {
+  dailyFeedCacheMatches,
+  dailyFeedInventoryDecision,
+  dailyFeedStrategyKey,
+  stampFeedStrategy,
+  strategyKeyFromGenerationReason,
+} from "../personalization/home/inventoryMatch";
+import {
+  loadStoredContentInventory,
+  readPersonalWorkspaceId,
+} from "../personalization/home/storedInventory";
 import { selectTieredDailyFeed } from "./diversity";
 import {
   isAnyViralPostsPlatformEnabled,
@@ -523,6 +532,8 @@ export async function getOrCreateDailyFeed(args: {
   userId: number;
   localDate: string;
   timezone: string;
+  /** Request workspace. Omitted callers use the personal workspace only. */
+  workspaceId?: string | null;
   /** When true, delete any existing feed for this day and assemble fresh. */
   force?: boolean;
 }): Promise<ViralDailyFeedResponse> {
@@ -544,13 +555,63 @@ export async function getOrCreateDailyFeed(args: {
     };
   }
 
+  const workspaceId =
+    args.workspaceId?.trim() || (await readPersonalWorkspaceId(args.userId)) || "";
+  const stored = workspaceId
+    ? await loadStoredContentInventory(args.userId, workspaceId)
+    : null;
+  const strategyKey = dailyFeedStrategyKey({
+    workspaceId,
+    categoryLabel: stored?.categoryLabel,
+    nicheLabel: stored?.nicheLabel,
+    goalText: stored?.goalText,
+    audienceText: stored?.audienceText,
+    pillarTitles: stored?.pillarTitles,
+  });
+  const hasStoredCategory = Boolean(stored?.categoryLabel);
+  const reason = (base: string) => stampFeedStrategy(base, strategyKey);
+
   if (args.force) {
     await repo.deleteDailyFeedByUserDate(args.userId, args.localDate);
   }
 
-  const existing = args.force
+  let existing = args.force
     ? null
     : await repo.getDailyFeedByUserDate(args.userId, args.localDate);
+  if (
+    existing &&
+    !dailyFeedCacheMatches(existing.generationReason, strategyKey, hasStoredCategory)
+  ) {
+    if (existing.status === "assembling") {
+      const waited = await waitForFeedReady(
+        args.userId,
+        args.localDate,
+        VIRAL_POOL_DEFAULTS.concurrentAssembleWaitMs
+      );
+      if (
+        waited &&
+        dailyFeedCacheMatches(waited.generationReason, strategyKey, hasStoredCategory)
+      ) {
+        return {
+          ...(await loadFeedResponse(waited, args.userId, true)),
+          serverDurationMs: Date.now() - requestStarted,
+        };
+      }
+      if (waited && waited.status !== "assembling") {
+        await repo.deleteDailyFeedByUserDate(args.userId, args.localDate);
+        existing = null;
+      } else {
+        return {
+          ...(await loadFeedResponse(waited ?? existing, args.userId, true)),
+          serverDurationMs: Date.now() - requestStarted,
+        };
+      }
+    } else {
+      // Today only. Other local dates stay in history.
+      await repo.deleteDailyFeedByUserDate(args.userId, args.localDate);
+      existing = null;
+    }
+  }
   if (existing) {
     if (existing.status === "assembling") {
       const waited = await waitForFeedReady(
@@ -588,7 +649,7 @@ export async function getOrCreateDailyFeed(args: {
       localDate: args.localDate,
       timezone: args.timezone,
       status: "assembling",
-      generationReason: "pool_assembly",
+      generationReason: reason("pool_assembly"),
       scCallCount: 0,
       costEstimateUsd: 0,
     });
@@ -621,7 +682,7 @@ export async function getOrCreateDailyFeed(args: {
       await repo.updateDailyFeedStatus({
         feedId: feed.id,
         status: "ready",
-        generationReason: "taxonomy_empty",
+        generationReason: reason("taxonomy_empty"),
         errorMessage: null,
         scCallCount: 0,
         costEstimateUsd: 0,
@@ -633,14 +694,13 @@ export async function getOrCreateDailyFeed(args: {
         generatedAt: new Date().toISOString(),
         status: "ready",
         fromCache: false,
-        generationReason: "taxonomy_empty",
+        generationReason: reason("taxonomy_empty"),
         items: [],
         poolRefreshStarted: false,
         serverDurationMs: Date.now() - requestStarted,
       };
     };
 
-    const stored = await loadStoredContentInventory(args.userId);
     const decision = dailyFeedInventoryDecision(stored);
     let niche: string;
     let pillars: string[];
@@ -740,11 +800,9 @@ export async function getOrCreateDailyFeed(args: {
     });
 
     const status = indexedOnly || enough ? "ready" : "refreshing";
-    const generationReason = indexedOnly
-      ? "taxonomy_indexed"
-      : enough
-        ? "pool_assembly"
-        : "cold_start_pool_refresh";
+    const generationReason = reason(
+      indexedOnly ? "taxonomy_indexed" : enough ? "pool_assembly" : "cold_start_pool_refresh"
+    );
 
     const [, saved, mirroredVideos] = await Promise.all([
       repo.updateDailyFeedStatus({
@@ -841,7 +899,7 @@ export async function getOrCreateDailyFeed(args: {
     await repo.updateDailyFeedStatus({
       feedId: feed.id,
       status: "error",
-      generationReason: "assembly_error",
+      generationReason: reason("assembly_error"),
       errorMessage: message,
       scCallCount: 0,
     });
@@ -852,7 +910,7 @@ export async function getOrCreateDailyFeed(args: {
       generatedAt: new Date().toISOString(),
       status: "error",
       fromCache: false,
-      generationReason: "assembly_error",
+      generationReason: reason("assembly_error"),
       items: [],
       errorMessage: message,
       serverDurationMs: Date.now() - requestStarted,
@@ -1122,7 +1180,10 @@ async function tryUpgradeRefreshingFeed(args: {
   await repo.updateDailyFeedStatus({
     feedId: args.feed.id,
     status: "ready",
-    generationReason: "pool_assembly_upgrade",
+    generationReason: (() => {
+      const previous = strategyKeyFromGenerationReason(args.feed.generationReason);
+      return previous ? stampFeedStrategy("pool_assembly_upgrade", previous) : "pool_assembly_upgrade";
+    })(),
     errorMessage: null,
     scCallCount: 0,
     costEstimateUsd: 0,

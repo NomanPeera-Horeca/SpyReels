@@ -8,6 +8,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import mysql from "mysql2/promise";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { PILOT_JOB_TYPES } from "./types";
 import {
   claimNextDurableJob,
   completeDurableJob,
@@ -210,5 +211,96 @@ describe.skipIf(!source)("durable claim ownership", () => {
     const confirmed = await claimInlineRecommendation(nextKey, payload);
     expect(confirmed.owned).toBe(true);
     expect(await rows()).toHaveLength(2);
+  });
+
+  it("reclaims an expired inline lease once and blocks the old owner", async () => {
+    await reset();
+    const key = "personalization_recommendations:profile-1:goal:v1:evidence:alease";
+    const first = await claimInlineRecommendation(key, payload);
+    expect(first.owned).toBe(true);
+    const firstRow = (await rows())[0];
+    expect(Number(firstRow?.attempt)).toBe(1);
+
+    await admin.query(
+      `UPDATE \`${DB_NAME}\`.durable_jobs SET leaseExpiresAt = DATE_SUB(NOW(3), INTERVAL 5 SECOND) WHERE idempotencyKey = ?`,
+      [key]
+    );
+    const second = await claimInlineRecommendation(key, payload);
+    expect(second.owned).toBe(true);
+    expect(second.token).not.toBe(first.token);
+    const reclaimed = (await rows())[0];
+    expect(reclaimed?.status).toBe("running");
+    expect(reclaimed?.lockedBy).toBe(second.token);
+    expect(Number(reclaimed?.attempt)).toBe(2);
+    expect(
+      await finishInlineRecommendation(key, first.token, payload, { status: "already_confirmed" })
+    ).toBe(false);
+    expect((await rows())[0]?.status).toBe("running");
+    expect((await rows())[0]?.lockedBy).toBe(second.token);
+
+    await admin.query(
+      `UPDATE \`${DB_NAME}\`.durable_jobs SET leaseExpiresAt = DATE_SUB(NOW(3), INTERVAL 5 SECOND) WHERE idempotencyKey = ?`,
+      [key]
+    );
+    const third = await claimInlineRecommendation(key, payload);
+    expect(third.owned).toBe(false);
+    const capped = (await rows())[0];
+    expect(Number(capped?.attempt)).toBe(2);
+    expect(capped?.lockedBy).toBe(second.token);
+    expect(
+      await finishInlineRecommendation(key, second.token, payload, { status: "already_confirmed" })
+    ).toBe(true);
+    expect((await rows())[0]?.status).toBe("succeeded");
+    expect((await rows())[0]?.lockedBy).toBeNull();
+  });
+
+  it("claims each durable job type once and keeps type filters", async () => {
+    await reset();
+    for (const jobType of PILOT_JOB_TYPES) {
+      await enqueueDurableJob({
+        jobType,
+        idempotencyKey: `type:${jobType}`,
+        payload: { jobType },
+        maxAttempts: 2,
+        requeueIfTerminal: false,
+      });
+    }
+    const claimed = await Promise.all(
+      PILOT_JOB_TYPES.map((jobType, index) =>
+        claimNextDurableJob({ workerId: `worker-${index}`, leaseSeconds: 300 })
+      )
+    );
+    const types = claimed.map((job) => job?.jobType);
+    expect(types.filter(Boolean)).toHaveLength(PILOT_JOB_TYPES.length);
+    expect(new Set(types)).toEqual(new Set(PILOT_JOB_TYPES));
+    expect(new Set(claimed.map((job) => job?.id)).size).toBe(PILOT_JOB_TYPES.length);
+
+    await reset();
+    await enqueueDurableJob({
+      jobType: "creator_radar_refresh",
+      idempotencyKey: "type:radar",
+      payload: {},
+      maxAttempts: 2,
+    });
+    await enqueueDurableJob({
+      jobType: "script_generation",
+      idempotencyKey: "type:script",
+      payload: {},
+      maxAttempts: 2,
+    });
+    const script = await claimNextDurableJob({
+      workerId: "filtered",
+      leaseSeconds: 300,
+      excludeJobTypes: ["creator_radar_refresh"],
+    });
+    expect(script?.jobType).toBe("script_generation");
+    const radar = (await rows()).find((row) => row.jobType === "creator_radar_refresh");
+    expect(radar?.status).toBe("queued");
+    const onlyAnalysis = await claimNextDurableJob({
+      workerId: "analysis",
+      leaseSeconds: 300,
+      includeJobTypes: ["profile_analysis"],
+    });
+    expect(onlyAnalysis).toBeNull();
   });
 });

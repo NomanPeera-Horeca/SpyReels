@@ -37,6 +37,7 @@ import {
 } from "./onboardingService";
 import { homeContextFromState, videoMatchText } from "../home/homeService";
 import { contentInventoryPlan } from "../home/inventoryMatch";
+import { loadStoredContentInventory } from "../home/storedInventory";
 import { browseIndexedViralPosts } from "../../viralPosts/browseService";
 import {
   lookupPublicProfile,
@@ -906,5 +907,35 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
       who: "Restaurant owners in Texas",
       outcome: "cut food cost",
     });
+  });
+
+  it("loads the active profile for the requested workspace only", async () => {
+    await q(
+      "INSERT INTO workspace_members (id, workspaceId, userId, role) VALUES (UUID(), ?, 1, 'member')",
+      [WS_B]
+    );
+    const cook = await confirmProfile(db, A, preview("weeknight.cook"));
+    const coach = await confirmProfile(db, { userId: 1, workspaceId: WS_B }, preview("fitness.coach"));
+    const niche = async (workspaceId: string, profileId: string, label: string, category: string) => {
+      await q(
+        `INSERT INTO personalization_items
+          (id, workspaceId, socialProfileId, kind, payload, source, status, evidence, basedOnVersion)
+         VALUES (?, ?, ?, 'niche', ?, 'user_entered', 'confirmed', 'user_provided', 1)`,
+        [randomUUID(), workspaceId, profileId, JSON.stringify({ label, categoryLabel: category })]
+      );
+    };
+    await niche(WS_A, cook.profileId, "weeknight dinners", "Food");
+    await niche(WS_B, coach.profileId, "fitness coaching", "Fitness");
+    await q(
+      "UPDATE workspace_member_active_profiles SET updatedAt = '2020-01-01 00:00:00' WHERE workspaceId = ? AND userId = 1",
+      [WS_A]
+    );
+
+    const inA = await loadStoredContentInventory(1, WS_A, db);
+    const inB = await loadStoredContentInventory(1, WS_B, db);
+    expect(inA).toMatchObject({ categoryLabel: "Food", nicheLabel: "weeknight dinners" });
+    expect(inB).toMatchObject({ categoryLabel: "Fitness", nicheLabel: "fitness coaching" });
+    expect(await loadStoredContentInventory(2, WS_A, db)).toBeNull();
+    expect(await loadStoredContentInventory(1, "", db)).toBeNull();
   });
 });

@@ -6,8 +6,11 @@ import {
 } from "../../viralPosts/browseService";
 import {
   contentInventoryPlan,
+  dailyFeedCacheMatches,
   dailyFeedInventoryDecision,
+  dailyFeedStrategyKey,
   preservesEmptyTaxonomyFeed,
+  stampFeedStrategy,
 } from "./inventoryMatch";
 
 const strategy = {
@@ -122,7 +125,58 @@ describe("stored category inventory", () => {
   it("keeps a taxonomy empty feed from being replaced", () => {
     expect(preservesEmptyTaxonomyFeed("taxonomy_empty")).toBe(true);
     expect(preservesEmptyTaxonomyFeed("taxonomy_indexed")).toBe(true);
+    expect(preservesEmptyTaxonomyFeed(stampFeedStrategy("taxonomy_empty", "a".repeat(16)))).toBe(
+      true
+    );
     expect(preservesEmptyTaxonomyFeed("pool_assembly")).toBe(false);
     expect(preservesEmptyTaxonomyFeed(null)).toBe(false);
+  });
+
+  it("rebuilds today's feed when the workspace strategy changes and keeps an unchanged one", () => {
+    const cooking = dailyFeedStrategyKey({
+      workspaceId: "workspace-a",
+      categoryLabel: "Food",
+      nicheLabel: "weeknight dinners",
+      goalText: "Teach dinners",
+      audienceText: "Busy parents",
+      pillarTitles: ["Weeknight dinners"],
+    });
+    const fitness = dailyFeedStrategyKey({
+      workspaceId: "workspace-a",
+      categoryLabel: "Fitness",
+      nicheLabel: "fitness coaching",
+      goalText: "Book clients",
+      audienceText: "Busy adults",
+      pillarTitles: ["strength"],
+    });
+    const otherWorkspace = dailyFeedStrategyKey({
+      workspaceId: "workspace-b",
+      categoryLabel: "Food",
+      nicheLabel: "weeknight dinners",
+      goalText: "Teach dinners",
+      audienceText: "Busy parents",
+      pillarTitles: ["Weeknight dinners"],
+    });
+    const legacy = dailyFeedStrategyKey({ workspaceId: "workspace-a" });
+    expect(cooking).not.toBe(fitness);
+    expect(cooking).not.toBe(otherWorkspace);
+    expect(dailyFeedStrategyKey({
+      workspaceId: "workspace-a",
+      categoryLabel: "Food",
+      nicheLabel: "weeknight dinners",
+      goalText: "Teach dinners",
+      audienceText: "Busy parents",
+      pillarTitles: ["Weeknight dinners"],
+    })).toBe(cooking);
+
+    const stamped = stampFeedStrategy("taxonomy_empty", cooking);
+    expect(stamped.startsWith("taxonomy_empty:s")).toBe(true);
+    expect(dailyFeedCacheMatches(stamped, cooking, true)).toBe(true);
+    expect(dailyFeedCacheMatches(stamped, fitness, true)).toBe(false);
+    expect(dailyFeedCacheMatches("pool_assembly", cooking, true)).toBe(false);
+    expect(dailyFeedCacheMatches("pool_assembly", legacy, false)).toBe(true);
+    expect(dailyFeedCacheMatches(stampFeedStrategy("pool_assembly", cooking), legacy, false)).toBe(
+      false
+    );
   });
 });
