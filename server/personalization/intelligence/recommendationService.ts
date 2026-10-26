@@ -311,10 +311,26 @@ export function safeValidationReason(message: string): string {
 }
 
 /**
- * None, and a weak profile with almost no bio and almost no posts, is not
- * enough to name a niche. The goal step asks instead.
+ * Whether niche-v4 should read this profile. Any bio, caption, or later user
+ * answer is enough to ask. The model decides if a subject is there. An empty
+ * profile is not sent. Word count is not a subject test.
  */
-export function evidenceSupportsNiche(evidence: CreatorEvidence): boolean {
+export function evidenceSupportsNiche(
+  evidence: CreatorEvidence,
+  userAnswer = ""
+): boolean {
+  if (userAnswer.trim()) return true;
+  return evidence.snippets.some(
+    item =>
+      (item.source === "bio" ||
+        item.source === "brand_description" ||
+        item.source === "captions") &&
+      item.text.trim().length > 0
+  );
+}
+
+/** Quantity only. Stops audience and pillar drafts before a goal exists. */
+function canDraftAudienceWithoutGoal(evidence: CreatorEvidence): boolean {
   if (evidence.strength === "none") return false;
   const bioWords = evidence.snippets
     .filter(item => item.source === "bio" || item.source === "brand_description")
@@ -322,6 +338,14 @@ export function evidenceSupportsNiche(evidence: CreatorEvidence): boolean {
   const captions = evidence.snippets.filter(item => item.source === "captions").length;
   if (evidence.strength === "weak" && bioWords < 5 && captions < 3) return false;
   return true;
+}
+
+function confirmedGoalText(items: ItemRecord[]): string {
+  return items
+    .filter(item => item.kind === "goal" && item.status === "confirmed")
+    .map(item => (item.payload as ItemPayloadByKind["goal"]).text.trim())
+    .filter(Boolean)
+    .join("\n");
 }
 
 /** An unconfirmed catalog bucket is not a finished specific niche. */
@@ -427,7 +451,7 @@ export async function generateRecommendations(
   if (
     input.step !== "goal" &&
     goals.length === 0 &&
-    !evidenceSupportsNiche(evidence)
+    !canDraftAudienceWithoutGoal(evidence)
   ) {
     return {
       status: "needs_clarification",
@@ -726,9 +750,11 @@ async function runGoalStep(input: {
       : null;
     let niche: NichePayload | null = null;
     let usage: LlmUsage | null = null;
-    if (input.needNiche && evidenceSupportsNiche(evidence)) {
+    const userAnswer = confirmedGoalText(input.items);
+    if (input.needNiche && evidenceSupportsNiche(evidence, userAnswer)) {
       const inferred = await inferNicheLabel({
         evidence,
+        userAnswer,
         invoker: deps.invoker,
         timeoutMs: Math.min(input.timeoutMs ?? 12_000, 12_000),
       });

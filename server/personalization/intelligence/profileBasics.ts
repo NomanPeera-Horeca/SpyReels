@@ -134,10 +134,14 @@ export type InferredNiche = NicheSuggestion & {
  */
 export async function inferNicheLabel(input: {
   evidence: CreatorEvidence;
+  /** Confirmed answer supplied after an unclear profile. Not a second model call. */
+  userAnswer?: string | null;
   invoker?: LlmInvoker;
   timeoutMs?: number;
 }): Promise<{ niche: InferredNiche | null; usage: LlmUsage | null }> {
   try {
+    const profileText = input.evidence.snippets.map(s => s.text).join("\n");
+    const answer = input.userAnswer?.trim() ?? "";
     const { value, usage } = await callStructured({
       operation: "personalization_niche",
       system: [
@@ -161,15 +165,21 @@ export async function inferNicheLabel(input: {
         "No numbers and no performance claims.",
         UNTRUSTED_DATA_RULE,
       ].join("\n"),
-      user: input.evidence.snippets.map(s => s.text).join("\n").slice(0, 1200),
+      user: [profileText, answer ? `Creator answer: ${answer}` : ""]
+        .filter(Boolean)
+        .join("\n")
+        .slice(0, 1200),
       schemaName: "content_niche",
       schema: NICHE_SCHEMA,
       parse: raw => {
         const shape = z.object({ label: z.string(), category: z.string() }).safeParse(raw);
         if (!shape.success)
           return { ok: false as const, reason: "output did not match the schema" };
-        const label = sanitizeCopy(shape.data.label).replace(/\.$/, "");
-        if (!label || wordCount(label) < 1 || wordCount(label) > 6 || label.length > 60)
+        const label = sanitizeCopy(shape.data.label).replace(/\.$/, "").trim();
+        const category = resolveContentCategory(shape.data.category);
+        // Empty label plus unknown is a real abstention, not a broken answer.
+        if (!label && !category) return { ok: true as const, value: null };
+        if (!label || wordCount(label) > 6 || label.length > 60)
           return { ok: false as const, reason: "niche label is empty or too long" };
         if (isPlaceholderNiche(label))
           return { ok: false as const, reason: "niche label is a placeholder" };
@@ -182,7 +192,6 @@ export async function inferNicheLabel(input: {
           return { ok: false as const, reason: "niche must not claim performance" };
         if (copiesSourceText(label, input.evidence.declaredText))
           return { ok: false as const, reason: "niche copies the biography" };
-        const category = resolveContentCategory(shape.data.category);
         return {
           ok: true as const,
           value: {
