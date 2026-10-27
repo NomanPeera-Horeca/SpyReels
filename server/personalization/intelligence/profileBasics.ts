@@ -152,7 +152,7 @@ export async function inferNicheLabel(input: {
         "Match the precision of the actual evidence; do not invent a specialty, location, audience, or expertise.",
         "The label is not a biography, a goal, or a call to action.",
         "Do not use a category name as the label.",
-        "Return an empty label and category unknown only when no recognizable content subject or creator perspective is evident. Generic vibes, links, or an empty profile alone are not enough.";
+        "Return an empty label and category unknown only when no recognizable content subject or creator perspective is evident. Generic vibes, links, or an empty profile alone are not enough.",
         "Business: sells their own product or service, including equipment or services sold to other businesses. A bookkeeping, tax, or accounting firm is Business.",
         "Do not choose Business for a beauty brand, a comedy or fiction account, or a hiking account.",
         "Hospitality: operates a restaurant, cafe, bar, food truck, bakery, or place to stay.",
