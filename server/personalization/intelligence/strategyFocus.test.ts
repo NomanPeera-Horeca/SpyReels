@@ -82,7 +82,7 @@ describe("targeted personalization quality contracts (no model calls)", () => {
     expect(prompt.system).toContain("connection, enjoyment, empathy, or inspiration");
     const llm = scripted({
       audiences: [
-        { who: "Parents raising young children", outcome: "Feel understood in everyday family life", why: "They relate to messy routines and small wins." },
+        { who: "Parents navigating family routines", outcome: "Feel understood in everyday family life", why: "They relate to messy routines and small wins." },
         { who: "Busy families", outcome: "Find practical family routines", why: "Family-life experiences can offer useful ideas." },
       ],
       confidence: "medium",
@@ -94,7 +94,7 @@ describe("targeted personalization quality contracts (no model calls)", () => {
       invoker: llm.invoker,
     });
     expect(output.audiences.map(a => a.who)).toEqual([
-      "Parents raising young children", "Busy families",
+      "Parents navigating family routines", "Busy families",
     ]);
     expect(output.observedAudience).toBeNull();
   });

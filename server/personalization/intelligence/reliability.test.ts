@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CreatorEvidence } from "./evidence";
-import { copiesSourceText } from "./guards";
+import { copiesSourceText, unsupportedDemographics } from "./guards";
 import { parsePillarOutput } from "./pillarRecommendations";
 import { firstVisibleDelayMs, safeValidationReason, stepHasLiveSuggestions } from "./recommendationService";
 import { detectContentLanguage } from "./profileBasics";
@@ -22,6 +22,30 @@ const evidence: CreatorEvidence = {
   declaredText: "commercial kitchen equipment for restaurants. free kitchen design.",
   postsWithViews: 0,
 };
+
+describe("family audience evidence semantics", () => {
+  it("treats kids and children as equivalent when the captions mention either", () => {
+    expect(unsupportedDemographics(
+      "Parents helping children with morning routines",
+      "family of five, morning routine with three kids under eight"
+    )).toEqual([]);
+    expect(unsupportedDemographics(
+      "Parents helping kids with school",
+      "parenting two children while working"
+    )).toEqual([]);
+  });
+
+  it("still rejects unsupported demographic claims", () => {
+    expect(unsupportedDemographics(
+      "Advice for children, women, and teenagers",
+      "adult hiking tips"
+    )).toEqual(["children", "women", "teenagers"]);
+    expect(unsupportedDemographics(
+      "For mothers and girls who hike",
+      "weekend hikes and trail tips"
+    )).toEqual(["mothers", "girls"]);
+  });
+});
 
 describe("suggestion guards", () => {
   it("rejects a goal that copies a stretch of the biography", () => {

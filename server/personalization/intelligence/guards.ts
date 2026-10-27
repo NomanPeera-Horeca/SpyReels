@@ -148,9 +148,13 @@ export function unsupportedDemographics(
   text: string,
   corpus: string
 ): string[] {
-  return (text.match(DEMOGRAPHIC) ?? []).filter(
-    t => !corpus.includes(t.toLowerCase())
-  );
+  // "kids" and "children" name the same family role. Explicit mention of one
+  // supports the other, but never licenses invented ages or demographics.
+  const childrenInEvidence = /\b(?:kids|children|child)\b/i.test(corpus);
+  return (text.match(DEMOGRAPHIC) ?? []).filter(t => {
+    if (/^(?:kids|children)$/i.test(t) && childrenInEvidence) return false;
+    return !corpus.includes(t.toLowerCase());
+  });
 }
 
 /** Recommended pillars must not claim past performance. */
