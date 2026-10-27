@@ -120,7 +120,7 @@ const NICHE_SCHEMA = {
   additionalProperties: false,
 };
 
-export const NICHE_PROMPT_VERSION = "niche-v4";
+export const NICHE_PROMPT_VERSION = "niche-v5";
 
 export type InferredNiche = NicheSuggestion & {
   categoryLabel: string | null;
@@ -146,10 +146,13 @@ export async function inferNicheLabel(input: {
       operation: "personalization_niche",
       system: [
         "Name the specific subject this creator makes content about, and choose one broad category.",
-        "The label uses 2 to 6 words and names what they actually do, teach, or sell.",
+        "The label uses 2 to 6 words and names the specific content subject, creative practice, lived experience, skill, or offer evidenced by the profile.",
+        "Personal reflections, observations, storytelling, and everyday experiences are valid content subjects. Do not require a profession, teaching credential, or commercial offer.",
+        "If several related subjects are connected by the creator\'s own perspective, use one honest concise combined niche rather than picking an unrelated single subtopic or abstaining.",
+        "Match the precision of the actual evidence; do not invent a specialty, location, audience, or expertise.",
         "The label is not a biography, a goal, or a call to action.",
         "Do not use a category name as the label.",
-        "If the evidence does not name a specific subject, return an empty label and category unknown.",
+        "Return an empty label and category unknown only when no recognizable content subject or creator perspective is evident. Generic vibes, links, or an empty profile alone are not enough.";
         "Business: sells their own product or service, including equipment or services sold to other businesses. A bookkeeping, tax, or accounting firm is Business.",
         "Do not choose Business for a beauty brand, a comedy or fiction account, or a hiking account.",
         "Hospitality: operates a restaurant, cafe, bar, food truck, bakery, or place to stay.",

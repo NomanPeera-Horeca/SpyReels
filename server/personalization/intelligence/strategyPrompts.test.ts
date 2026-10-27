@@ -15,10 +15,10 @@ const evidence = buildCreatorEvidence({
   items: [],
 });
 
-describe("frozen strategy prompts", () => {
-  it("keeps the approved prompt versions", () => {
+describe("approved strategy prompt contracts", () => {
+  it("keeps Goals and Pillars frozen while versioning the scoped Audience update", () => {
     expect(GOAL_PROMPT_VERSION).toBe("goal-v2");
-    expect(AUDIENCE_PROMPT_VERSION).toBe("audience-v3");
+    expect(AUDIENCE_PROMPT_VERSION).toBe("audience-v4");
     expect(PILLAR_PROMPT_VERSION).toBe("pillars-v2");
   });
 

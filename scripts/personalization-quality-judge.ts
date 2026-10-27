@@ -225,6 +225,9 @@ async function main() {
           content: [
             "You score a content-strategy draft against a synthetic creator profile.",
             "You are not writing the strategy. Score only what is shown.",
+            "Judge the creator\'s actual content purpose: entertainment, sharing personal experiences, teaching, or building a community are valid goals. Do not require sales, growth metrics, or retention unless the evidence supports that aim.",
+            "Do not penalize a proposal for refusing to invent locations, specialties, achievements, or demographic facts missing from a thin profile. Reward useful specificity supported by available evidence.",
+            "Judge multilingual output in the creator\'s detected or explicitly selected content language. Do not assume English is required when the evidence is in another language.",
             "Niche is out of 30. A label that only names a broad catalog bucket, such as Business & Entrepreneurship or Health & Fitness, scores 12 or lower when the profile is more specific. A missing niche scores 0. A specific accurate label scores 24 to 30.",
             "Goal is out of 25. Audience is out of 20. Pillars are out of 25. Specificity is out of 15. Clarity is out of 10. Evidence discipline is out of 5.",
             "Penalize invented products, audiences, and statistics.",

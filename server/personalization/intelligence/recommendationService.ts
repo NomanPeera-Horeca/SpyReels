@@ -315,7 +315,7 @@ export function safeValidationReason(message: string): string {
 }
 
 /**
- * Whether niche-v4 should read this profile. Any bio, caption, or later user
+ * Whether the current niche inference should read this profile. Any bio, caption, or later user
  * answer is enough to ask. The model decides if a subject is there. An empty
  * profile is not sent. Word count is not a subject test.
  */

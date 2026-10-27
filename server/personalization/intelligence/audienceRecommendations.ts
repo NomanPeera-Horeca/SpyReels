@@ -32,7 +32,7 @@ import {
   type ParseResult,
 } from "./structuredLlm";
 
-export const AUDIENCE_PROMPT_VERSION = "audience-v3";
+export const AUDIENCE_PROMPT_VERSION = "audience-v4";
 export const MAX_AUDIENCES = 3;
 
 export type AudienceRecommendation = AudiencePayload & { why: string };
@@ -90,6 +90,10 @@ export function buildAudiencePrompt(
     "- who: a short noun phrase (max 8 words). outcome: what this audience wants to achieve (max 10 words). why: one short sentence on how this audience serves the goal.",
     "- Do not add age, gender, ethnicity, religion, family role or orientation unless the evidence or goal mentions it.",
     "- Do not invent names, numbers or facts about the creator.",
+    "- First identify the overall content subject and primary purpose from the bio, name, and confirmed goal. Use recurring caption themes to refine that audience, not to replace it.",
+    "- A single post about a secondary subject must not narrow the entire audience or turn the creator into a different type of account.",
+    "- Your first segment must represent the primary intended audience for the creator\'s overall subject and goal. Additional segments may represent distinct recurring interests, not variations of one incidental topic.",
+    "- For creators who share personal life, entertainment, or experiences, audience outcomes may be connection, enjoyment, empathy, or inspiration; do not automatically recast them as shopping, budgeting, or business problems.",
     "- A sensible audience names the role or situation implied by the subject, such as pet owners for pet videos or founders for someone building an app.",
     "- A link in bio, a favorite product, or an affiliate mention is not a business. Do not recommend shoppers or affiliate audiences unless the evidence or the confirmed goal shows the creator sells their own offer.",
     "- Do not use a generic viewer group such as people, viewers, fans, followers, or social-media browsers as the whole audience.",
