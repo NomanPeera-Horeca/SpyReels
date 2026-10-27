@@ -793,7 +793,7 @@ export const EVAL_CASES: EvalCase[] = [
       commercial: false,
       clarification: "allowed",
       goalThemes: ["share daily student life"],
-      notes: "Arabic bio, English output. Lifestyle and study. No business.",
+      notes: "Arabic bio and captions. Use the creator\'s detected or confirmed language for generated output unless explicitly changed. Lifestyle and study; no business.",
     },
     fallbackGoal: "Share my daily study life to motivate other students.",
     fallbackAudiences: [

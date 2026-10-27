@@ -15,10 +15,16 @@ import {
 } from "@shared/personalization/state";
 import type { PersonalizationCtx } from "../authorization";
 import { buildCreatorEvidence } from "./evidence";
-import { DEFAULT_CLARIFYING_QUESTION, inferGoal } from "./goalInference";
+import {
+  buildGoalPrompt,
+  DEFAULT_CLARIFYING_QUESTION,
+  inferGoal,
+} from "./goalInference";
 import { recommendAudiences } from "./audienceRecommendations";
 import { recommendPillars } from "./pillarRecommendations";
+import { inferNicheLabel } from "./profileBasics";
 import {
+  evidenceSupportsNiche,
   generateRecommendations,
   stepInputsHash,
   type GeneratedInsert,
@@ -46,6 +52,27 @@ function fakeLlm(...responses: Scripted[]) {
   const calls: InvokeParams[] = [];
   const invoker = async (params: InvokeParams): Promise<InvokeResult> => {
     calls.push(params);
+    if (params.operation === "personalization_niche") {
+      return {
+        id: "x",
+        created: 0,
+        model: "claude-sonnet-4-6",
+        choices: [
+          {
+            index: 0,
+            message: {
+              role: "assistant",
+              content: JSON.stringify({
+                label: "Commercial kitchen equipment",
+                category: "Business",
+              }),
+            },
+            finish_reason: "tool_use",
+          },
+        ],
+        usage: { prompt_tokens: 200, completion_tokens: 20, total_tokens: 220 },
+      };
+    }
     const next = responses.shift();
     if (next === undefined) throw new Error("unexpected extra LLM call");
     if (next instanceof Error) throw next;
@@ -64,6 +91,32 @@ function fakeLlm(...responses: Scripted[]) {
         },
       ],
       usage: { prompt_tokens: 900, completion_tokens: 120, total_tokens: 1020 },
+    };
+  };
+  return { invoker, calls };
+}
+
+function scriptedInvoker(byOperation: Record<string, unknown>) {
+  const calls: InvokeParams[] = [];
+  const invoker = async (params: InvokeParams): Promise<InvokeResult> => {
+    calls.push(params);
+    const body = byOperation[params.operation ?? ""];
+    if (body === undefined) throw new Error(`unexpected ${params.operation}`);
+    return {
+      id: "x",
+      created: 0,
+      model: "claude-sonnet-4-6",
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: "assistant",
+            content: JSON.stringify(body),
+          },
+          finish_reason: "tool_use",
+        },
+      ],
+      usage: { prompt_tokens: 100, completion_tokens: 20, total_tokens: 120 },
     };
   };
   return { invoker, calls };
@@ -173,6 +226,34 @@ const privateAccount = buildCreatorEvidence({
   snapshot: null,
   items: [],
 });
+const weddingPhotographer = buildCreatorEvidence({
+  platform: "instagram",
+  displayName: "Ava Cole",
+  bio: "Wedding photographer",
+  snapshot: null,
+  items: [],
+});
+const mathTutor = buildCreatorEvidence({
+  platform: "instagram",
+  displayName: "Ms. Patel",
+  bio: "Math tutor",
+  snapshot: null,
+  items: [],
+});
+const vagueBio = buildCreatorEvidence({
+  platform: "instagram",
+  displayName: "Sam Rivera",
+  bio: "Just figuring things out and enjoying life",
+  snapshot: null,
+  items: [],
+});
+const thinAccount = buildCreatorEvidence({
+  platform: "tiktok",
+  displayName: "kai.makes",
+  bio: "just starting out",
+  snapshot: snap(["first video lol", "trying a new camera"]),
+  items: [],
+});
 
 const goalOut = (goal: string, over: Record<string, unknown> = {}) => ({
   decision: "suggest",
@@ -192,7 +273,16 @@ describe("evidence", () => {
     expect(storyteller.strength).toBe("strong");
     expect(travel.strength).toBe("moderate");
     expect(privateAccount.strength).toBe("weak");
+    expect(weddingPhotographer.strength).toBe("weak");
+    expect(mathTutor.strength).toBe("weak");
+    expect(vagueBio.strength).toBe("weak");
+    expect(thinAccount.strength).toBe("weak");
     expect(beginner.strength).toBe("none");
+    expect(evidenceSupportsNiche(weddingPhotographer)).toBe(true);
+    expect(evidenceSupportsNiche(mathTutor)).toBe(true);
+    expect(evidenceSupportsNiche(vagueBio)).toBe(true);
+    expect(evidenceSupportsNiche(beginner)).toBe(false);
+    expect(evidenceSupportsNiche(beginner, "I tutor high school math.")).toBe(true);
   });
 
   it("detects commercial intent only when the creator shows they sell something", () => {
@@ -271,18 +361,42 @@ describe("Goal inference", () => {
     expect(r).toMatchObject({ status: "suggested", confidence: "low" });
   });
 
-  it("weak evidence + low model confidence asks the user instead of guessing", async () => {
-    const llm = fakeLlm(
-      goalOut("Share dental tips.", {
-        confidence: "low",
-        evidence_basis: ["bio"],
-      })
-    );
-    const r = await inferGoal({
-      evidence: privateAccount,
-      invoker: llm.invoker,
+  it("keeps a useful suggestion for a short clear bio", async () => {
+    for (const [evidence, goal] of [
+      [weddingPhotographer, "Help couples remember their wedding day."],
+      [mathTutor, "Help students practice math."],
+    ] as const) {
+      const prompt = buildGoalPrompt(evidence);
+      expect(prompt.user).toContain("Evidence strength: weak.");
+      expect(prompt.system).toContain("even when there are no posts");
+      const llm = fakeLlm(
+        goalOut(goal, { confidence: "low", evidence_basis: ["bio"] })
+      );
+      const r = await inferGoal({ evidence, invoker: llm.invoker });
+      expect(r).toMatchObject({ status: "suggested", confidence: "low", goal });
+      expect(llm.calls).toHaveLength(1);
+    }
+  });
+
+  it("does not treat a longer vague bio as clear when the model asks", async () => {
+    const prompt = buildGoalPrompt(vagueBio);
+    expect(prompt.user).toContain("Evidence strength: weak.");
+    expect(vagueBio.strength).toBe(weddingPhotographer.strength);
+    const llm = fakeLlm({
+      decision: "clarify",
+      goal: "",
+      confidence: "low",
+      evidence_basis: ["bio"],
+      clarifying_question: "What do you most want these videos to do for people?",
+      offer_quote: "",
     });
-    expect(r.status).toBe("needs_clarification");
+    const r = await inferGoal({ evidence: vagueBio, invoker: llm.invoker });
+    expect(r).toMatchObject({
+      status: "needs_clarification",
+      reason: "ambiguous",
+      question: "What do you most want these videos to do for people?",
+    });
+    expect(llm.calls).toHaveLength(1);
   });
 
   it("ambiguous evidence: the model's clarifying question is passed through", async () => {
@@ -626,6 +740,123 @@ describe("Pillar recommendations", () => {
   });
 });
 
+describe("specific niche", () => {
+  it("does not keep a catalog bucket when that is all the model returns", async () => {
+    const bucket = {
+      id: "x",
+      created: 0,
+      model: "claude-sonnet-4-6",
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: "assistant" as const,
+            content: JSON.stringify({
+              label: "Business & Entrepreneurship",
+              category: "Business",
+            }),
+          },
+          finish_reason: "tool_use" as const,
+        },
+      ],
+      usage: { prompt_tokens: 100, completion_tokens: 20, total_tokens: 120 },
+    };
+    const result = await inferNicheLabel({
+      evidence: restaurant,
+      invoker: async () => bucket,
+    });
+    expect(result.niche).toBeNull();
+  });
+
+  it("rejects a placeholder niche instead of saving it", async () => {
+    let calls = 0;
+    const placeholder = {
+      id: "x",
+      created: 0,
+      model: "claude-sonnet-4-6",
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: "assistant" as const,
+            content: JSON.stringify({ label: "<UNKNOWN>", category: "unknown" }),
+          },
+          finish_reason: "tool_use" as const,
+        },
+      ],
+      usage: { prompt_tokens: 100, completion_tokens: 20, total_tokens: 120 },
+    };
+    const result = await inferNicheLabel({
+      evidence: restaurant,
+      invoker: async () => {
+        calls += 1;
+        return placeholder;
+      },
+    });
+    expect(result.niche).toBeNull();
+    expect(calls).toBe(2);
+  });
+
+  it("accepts an empty label with unknown category as abstention, once", async () => {
+    let calls = 0;
+    const result = await inferNicheLabel({
+      evidence: vagueBio,
+      invoker: async () => {
+        calls += 1;
+        return {
+          id: "x",
+          created: 0,
+          model: "claude-sonnet-4-6",
+          choices: [
+            {
+              index: 0,
+              message: {
+                role: "assistant" as const,
+                content: JSON.stringify({ label: "", category: "unknown" }),
+              },
+              finish_reason: "tool_use" as const,
+            },
+          ],
+          usage: { prompt_tokens: 80, completion_tokens: 8, total_tokens: 88 },
+        };
+      },
+    });
+    expect(result.niche).toBeNull();
+    expect(result.usage?.inputTokens).toBe(80);
+    expect(calls).toBe(1);
+  });
+
+  it("keeps a specific label when the category is not in the taxonomy", async () => {
+    const unmatched = {
+      id: "x",
+      created: 0,
+      model: "claude-sonnet-4-6",
+      choices: [
+        {
+          index: 0,
+          message: {
+            role: "assistant" as const,
+            content: JSON.stringify({
+              label: "Corporate office life comedy sketches",
+              category: "unknown",
+            }),
+          },
+          finish_reason: "tool_use" as const,
+        },
+      ],
+      usage: { prompt_tokens: 100, completion_tokens: 20, total_tokens: 120 },
+    };
+    const result = await inferNicheLabel({
+      evidence: restaurant,
+      invoker: async () => unmatched,
+    });
+    expect(result.niche).toMatchObject({
+      label: "Corporate office life comedy sketches",
+      categoryLabel: null,
+    });
+  });
+});
+
 describe("guards", () => {
   it("flags invented proper nouns but not sentence starts, platform names or evidence names", () => {
     expect(
@@ -863,7 +1094,7 @@ describe("generateRecommendations: Goal -> Audience -> Pillars", () => {
     expect(
       suggested.every(row => row.generationMeta?.evidenceBasis.includes("niche_examples"))
     ).toBe(true);
-    expect(saved).toContain("Ask for the install quote first");
+    expect(saved).not.toContain("Ask for the install quote first");
     const again = await generateRecommendations(
       {
         store,
@@ -1077,7 +1308,11 @@ describe("generateRecommendations: Goal -> Audience -> Pillars", () => {
       { ctx, socialProfileId: "prof-1", step: "goal" }
     );
     expect(r).toMatchObject({ status: "generated" });
-    expect(store.items.some(i => i.kind === "niche")).toBe(true);
+    expect(store.items.find(i => i.kind === "niche")?.payload).toMatchObject({
+      label: "Commercial kitchen equipment",
+      slug: "business",
+      categoryLabel: "Business",
+    });
     expect(store.items.some(i => i.kind === "language")).toBe(true);
     const g = store.items.find(i => i.kind === "goal") as ItemRecord & {
       generationMeta: GeneratedInsert["generationMeta"];
@@ -1118,7 +1353,7 @@ describe("generateRecommendations: Goal -> Audience -> Pillars", () => {
       status: "reused",
       dismissedForTheseInputs: false,
     });
-    expect(llm.calls).toHaveLength(1);
+    expect(llm.calls.filter(call => call.operation !== "personalization_niche")).toHaveLength(1);
   });
 
   it("dismissed for the same inputs: not regenerated (no surprise reappearance, no cost)", async () => {
@@ -1370,7 +1605,9 @@ describe("generateRecommendations: Goal -> Audience -> Pillars", () => {
     expect(first).toMatchObject({ status: "failed", kind: "llm_unavailable" });
     expect(store.items.filter(i => i.kind === "goal")).toEqual([]);
     expect(store.items.find(i => i.kind === "niche")?.payload).toMatchObject({
-      slug: "business-entrepreneurship",
+      slug: "business",
+      label: "Commercial kitchen equipment",
+      categoryLabel: "Business",
     });
     expect(store.items.find(i => i.kind === "language")?.payload).toMatchObject({
       code: "en",
@@ -1382,7 +1619,7 @@ describe("generateRecommendations: Goal -> Audience -> Pillars", () => {
     );
     expect(again).toMatchObject({ status: "failed", kind: "llm_unavailable" });
     expect(store.items.filter(i => i.kind === "niche")).toHaveLength(1);
-    expect(llm.calls).toHaveLength(2);
+    expect(llm.calls.filter(call => call.operation !== "personalization_niche")).toHaveLength(2);
   });
 
   it("asks the goal question even after a profile niche was saved", async () => {
@@ -1403,6 +1640,321 @@ describe("generateRecommendations: Goal -> Audience -> Pillars", () => {
     expect(result.status).toBe("needs_clarification");
     expect(store.items.some(i => i.kind === "niche")).toBe(true);
     expect(store.items.some(i => i.kind === "goal")).toBe(false);
+  });
+
+  it("a user answer after clarification produces audience and pillar suggestions", async () => {
+    const store = new MemoryRecoStore();
+    store.profile = { ...store.profile, bio: null, displayName: null };
+    store.snapshot = null;
+    const asked = await generateRecommendations(
+      { store, invoker: fakeLlm().invoker },
+      { ctx, socialProfileId: "prof-1", step: "goal" }
+    );
+    expect(asked).toMatchObject({
+      status: "needs_clarification",
+      reason: "insufficient_evidence",
+    });
+    expect(store.items.filter(i => i.kind === "audience")).toEqual([]);
+    expect(store.items.filter(i => i.kind === "pillar")).toEqual([]);
+    store.items.push(
+      item("goal", { text: "Share neighborhood bird walks with beginners." })
+    );
+    const llm = fakeLlm(audienceOut, pillarOut);
+    const audience = await generateRecommendations(
+      { store, invoker: llm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "audience" }
+    );
+    expect(audience.status).toBe("generated");
+    expect(store.items.some(i => i.kind === "audience" && i.status === "suggested")).toBe(true);
+    for (const row of store.items) {
+      if (row.kind === "audience") row.status = "confirmed";
+    }
+    const pillars = await generateRecommendations(
+      { store, invoker: llm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "pillars" }
+    );
+    expect(pillars.status).toBe("generated");
+    expect(store.items.some(i => i.kind === "pillar" && i.status === "suggested")).toBe(true);
+    expect(
+      store.items.find(i => i.kind === "goal" && i.status === "confirmed")?.payload
+    ).toMatchObject({ text: "Share neighborhood bird walks with beginners." });
+  });
+
+  it("a short clear bio with zero posts gets a goal, then audience and pillars", async () => {
+    const store = new MemoryRecoStore();
+    store.profile = {
+      ...store.profile,
+      displayName: "Ava Cole",
+      bio: "Wedding photographer",
+    };
+    store.snapshot = null;
+    const goalLlm = scriptedInvoker({
+      personalization_goal_inference: goalOut("Help couples remember their wedding day.", {
+        confidence: "low",
+        evidence_basis: ["bio"],
+      }),
+      personalization_niche: { label: "wedding photography", category: "Lifestyle" },
+    });
+    const goal = await generateRecommendations(
+      { store, invoker: goalLlm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "goal" }
+    );
+    expect(goal.status).toBe("generated");
+    expect(goalLlm.calls.map(call => call.operation).sort()).toEqual([
+      "personalization_goal_inference",
+      "personalization_niche",
+    ]);
+    expect(store.items.find(i => i.kind === "niche")?.payload).toMatchObject({
+      label: "wedding photography",
+      categoryLabel: "Lifestyle",
+    });
+    const blocked = await generateRecommendations(
+      { store, invoker: scriptedInvoker({}).invoker },
+      { ctx, socialProfileId: "prof-1", step: "audience" }
+    );
+    expect(blocked.status).toBe("needs_clarification");
+    const goalRow = store.items.find(i => i.kind === "goal");
+    expect(goalRow).toMatchObject({
+      status: "suggested",
+      payload: { text: "Help couples remember their wedding day." },
+    });
+    goalRow!.status = "confirmed";
+    const llm = fakeLlm(
+      {
+        audiences: [
+          {
+            who: "Couples planning a wedding",
+            outcome: "remember the wedding day",
+            why: "The bio says wedding photographer.",
+          },
+        ],
+        confidence: "low",
+      },
+      {
+        pillars: [
+          { title: "Wedding day timeline", serves: "Shows couples how the day unfolds." },
+          { title: "Getting ready photos", serves: "Gives couples ideas for the morning." },
+          { title: "Family portraits", serves: "Helps couples plan the people pictures." },
+        ],
+        confidence: "low",
+      }
+    );
+    const audience = await generateRecommendations(
+      { store, invoker: llm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "audience" }
+    );
+    expect(audience.status).toBe("generated");
+    for (const row of store.items) {
+      if (row.kind === "audience") row.status = "confirmed";
+    }
+    const pillars = await generateRecommendations(
+      { store, invoker: llm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "pillars" }
+    );
+    expect(pillars.status).toBe("generated");
+    expect(store.items.filter(i => i.kind === "pillar" && i.status === "suggested")).toHaveLength(3);
+  });
+
+  it("a longer vague bio asks, then a user answer continues the strategy", async () => {
+    const store = new MemoryRecoStore();
+    store.profile = {
+      ...store.profile,
+      displayName: "Sam Rivera",
+      bio: "Just figuring things out and enjoying life",
+    };
+    store.snapshot = null;
+    const first = scriptedInvoker({
+      personalization_goal_inference: {
+        decision: "clarify",
+        goal: "",
+        confidence: "low",
+        evidence_basis: ["bio"],
+        clarifying_question: "What do you most want these videos to do for people?",
+        offer_quote: "",
+      },
+      personalization_niche: { label: "", category: "unknown" },
+    });
+    const asked = await generateRecommendations(
+      { store, invoker: first.invoker },
+      { ctx, socialProfileId: "prof-1", step: "goal" }
+    );
+    expect(asked).toMatchObject({
+      status: "needs_clarification",
+      question: "What do you most want these videos to do for people?",
+    });
+    expect(first.calls.filter(call => call.operation === "personalization_niche")).toHaveLength(1);
+    expect(store.items.filter(i => i.kind === "goal")).toEqual([]);
+    expect(store.items.filter(i => i.kind === "niche")).toEqual([]);
+    expect(store.items.filter(i => i.kind === "audience")).toEqual([]);
+    store.items.push(
+      item("goal", { text: "I photograph weddings for couples." })
+    );
+    const nichePass = scriptedInvoker({
+      personalization_niche: { label: "wedding photography", category: "Lifestyle" },
+    });
+    const filled = await generateRecommendations(
+      { store, invoker: nichePass.invoker },
+      { ctx, socialProfileId: "prof-1", step: "goal" }
+    );
+    expect(filled.status).not.toBe("needs_clarification");
+    expect(String(nichePass.calls[0]?.messages[1]?.content)).toContain(
+      "I photograph weddings for couples."
+    );
+    expect(store.items.find(i => i.kind === "niche")?.payload).toMatchObject({
+      label: "wedding photography",
+      categoryLabel: "Lifestyle",
+    });
+    const llm = fakeLlm(audienceOut, pillarOut);
+    const audience = await generateRecommendations(
+      { store, invoker: llm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "audience" }
+    );
+    expect(audience.status).toBe("generated");
+    for (const row of store.items) {
+      if (row.kind === "audience") row.status = "confirmed";
+    }
+    const pillars = await generateRecommendations(
+      { store, invoker: llm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "pillars" }
+    );
+    expect(pillars.status).toBe("generated");
+    expect(
+      store.items.find(i => i.kind === "goal" && i.status === "confirmed")?.payload
+    ).toMatchObject({ text: "I photograph weddings for couples." });
+  });
+
+  it("a short math tutor bio gets a niche, goal, audience, and pillars", async () => {
+    const store = new MemoryRecoStore();
+    store.profile = { ...store.profile, displayName: "Ms. Patel", bio: "Math tutor" };
+    store.snapshot = null;
+    const goalLlm = scriptedInvoker({
+      personalization_goal_inference: goalOut("Help students practice math.", {
+        confidence: "low",
+        evidence_basis: ["bio"],
+      }),
+      personalization_niche: { label: "high school math tutoring", category: "Education" },
+    });
+    const goal = await generateRecommendations(
+      { store, invoker: goalLlm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "goal" }
+    );
+    expect(goal.status).toBe("generated");
+    expect(store.items.find(i => i.kind === "niche")?.payload).toMatchObject({
+      label: "high school math tutoring",
+      categoryLabel: "Education",
+    });
+    store.items.find(i => i.kind === "goal")!.status = "confirmed";
+    const llm = fakeLlm(
+      {
+        audiences: [
+          {
+            who: "High school math students",
+            outcome: "practice the next lesson",
+            why: "The bio says math tutor.",
+          },
+        ],
+        confidence: "low",
+      },
+      {
+        pillars: [
+          { title: "Algebra walkthroughs", serves: "Shows students how to solve the next problem." },
+          { title: "Exam practice", serves: "Helps students prepare for a test." },
+          { title: "Homework patterns", serves: "Points out mistakes students repeat." },
+        ],
+        confidence: "low",
+      }
+    );
+    expect(
+      (await generateRecommendations(
+        { store, invoker: llm.invoker },
+        { ctx, socialProfileId: "prof-1", step: "audience" }
+      )).status
+    ).toBe("generated");
+    for (const row of store.items) if (row.kind === "audience") row.status = "confirmed";
+    expect(
+      (await generateRecommendations(
+        { store, invoker: llm.invoker },
+        { ctx, socialProfileId: "prof-1", step: "pillars" }
+      )).status
+    ).toBe("generated");
+  });
+
+  it("an empty profile asks, then a clear answer completes niche and strategy", async () => {
+    const store = new MemoryRecoStore();
+    store.profile = { ...store.profile, bio: null, displayName: null };
+    store.snapshot = null;
+    const asked = await generateRecommendations(
+      { store, invoker: scriptedInvoker({}).invoker },
+      { ctx, socialProfileId: "prof-1", step: "goal" }
+    );
+    expect(asked).toMatchObject({ status: "needs_clarification", reason: "insufficient_evidence" });
+    expect(store.items.filter(i => i.kind === "niche")).toEqual([]);
+    store.items.push(item("goal", { text: "I tutor high school math." }));
+    const nichePass = scriptedInvoker({
+      personalization_niche: { label: "high school math tutoring", category: "Education" },
+    });
+    await generateRecommendations(
+      { store, invoker: nichePass.invoker },
+      { ctx, socialProfileId: "prof-1", step: "goal" }
+    );
+    expect(String(nichePass.calls.find(call => call.operation === "personalization_niche")?.messages[1]?.content)).toContain(
+      "I tutor high school math."
+    );
+    expect(store.items.find(i => i.kind === "niche")?.payload).toMatchObject({
+      label: "high school math tutoring",
+      categoryLabel: "Education",
+    });
+    const llm = fakeLlm(audienceOut, pillarOut);
+    expect(
+      (await generateRecommendations(
+        { store, invoker: llm.invoker },
+        { ctx, socialProfileId: "prof-1", step: "audience" }
+      )).status
+    ).toBe("generated");
+    for (const row of store.items) if (row.kind === "audience") row.status = "confirmed";
+    expect(
+      (await generateRecommendations(
+        { store, invoker: llm.invoker },
+        { ctx, socialProfileId: "prof-1", step: "pillars" }
+      )).status
+    ).toBe("generated");
+  });
+
+  it("does not replace a confirmed niche or goal", async () => {
+    const store = new MemoryRecoStore();
+    store.profile = {
+      ...store.profile,
+      displayName: "Ava Cole",
+      bio: "Wedding photographer",
+    };
+    store.snapshot = null;
+    store.items.push(
+      item("goal", { text: "Help couples remember their wedding day." }),
+      item("niche", {
+        label: "wedding photography",
+        slug: "lifestyle",
+        categoryLabel: "Lifestyle",
+      })
+    );
+    const llm = scriptedInvoker({
+      personalization_goal_inference: goalOut("Sell photo presets.", {
+        evidence_basis: ["bio"],
+      }),
+      personalization_niche: { label: "preset shop", category: "Business" },
+    });
+    await generateRecommendations(
+      { store, invoker: llm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "goal" }
+    );
+    expect(llm.calls.map(call => call.operation)).not.toContain("personalization_niche");
+    expect(llm.calls.map(call => call.operation)).not.toContain("personalization_goal_inference");
+    expect(store.items.find(i => i.kind === "niche" && i.status === "confirmed")?.payload).toMatchObject({
+      label: "wedding photography",
+      categoryLabel: "Lifestyle",
+    });
+    expect(store.items.find(i => i.kind === "goal" && i.status === "confirmed")?.payload).toMatchObject({
+      text: "Help couples remember their wedding day.",
+    });
   });
 
   it("keeps confirmed niche and language when a later post analysis retries the goal", async () => {
@@ -1432,7 +1984,7 @@ describe("generateRecommendations: Goal -> Audience -> Pillars", () => {
       store.items.filter(i => i.kind === "language" && i.status === "confirmed")
     ).toHaveLength(1);
     expect(store.items.filter(i => i.kind === "goal")).toEqual([]);
-    expect(llm.calls).toHaveLength(2);
+    expect(llm.calls.filter(call => call.operation !== "personalization_niche")).toHaveLength(2);
   });
 
   it("insufficient evidence: asks to clarify, no model call, nothing stored", async () => {

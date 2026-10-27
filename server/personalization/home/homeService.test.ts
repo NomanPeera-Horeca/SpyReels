@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { OnboardingStateView } from "../onboarding/onboardingService";
+import {
+  categorySelectsRestaurantPillars,
+  poolNicheForCategory,
+} from "@shared/personalization/contentTaxonomy";
+import { indexedHomePoolSpecChoices } from "../../viralPosts/browseService";
 import { CREATOR_SIGNAL_RECENT_DAYS, homeContextFromState, pickViralCreators, videoMatchText } from "./homeService";
 
 const now = new Date("2026-10-16T12:00:00Z");
@@ -103,6 +108,77 @@ describe("homeContextFromState", () => {
     expect(ctx.audienceText).toBe("Restaurant owners. Lower food cost");
     expect(ctx.pillarTitles).toEqual(["Menu engineering"]);
     expect(videoMatchText(ctx)).toBe("Pottery studio");
-    expect(videoMatchText(ctx)).not.toContain("fitness");
+    expect(ctx.nicheLabel).not.toContain("fitness");
+  });
+
+  it("keeps the live Home label and only reads a pool whose supply matches", () => {
+    const state = {
+      profile: { id: "p" },
+      steps: { goal: "confirmed", audience: "pending", pillars: "pending" },
+      items: [
+        {
+          kind: "niche",
+          status: "confirmed",
+          payload: {
+            slug: "business-entrepreneurship",
+            label: "Commercial kitchen equipment",
+            categoryLabel: "Business & Entrepreneurship",
+          },
+        },
+      ],
+    } as OnboardingStateView;
+    const ctx = homeContextFromState(state);
+    expect(ctx.nicheLabel).toBe("Commercial kitchen equipment");
+    expect(ctx.featuredNicheSlug).toBe("business-entrepreneurship");
+    expect(videoMatchText(ctx)).toBe("Commercial kitchen equipment");
+    expect(poolNicheForCategory("Business")).toBeNull();
+    expect(poolNicheForCategory("Business & Entrepreneurship")).toBeNull();
+    expect(categorySelectsRestaurantPillars("Business")).toBe(false);
+    const routed = indexedHomePoolSpecChoices({
+      nicheText: "",
+      confirmedPillars: [],
+      useStoredCategory: true,
+      categoryLabel: "Business",
+      goalText: "Help restaurant owners choose kitchen equipment",
+      audienceText: "Restaurant owners",
+    });
+    expect(routed.niche).toBe("");
+    expect(routed.fallbackSpecs).toEqual([]);
+    const hospitality = indexedHomePoolSpecChoices({
+      nicheText: "",
+      confirmedPillars: [],
+      useStoredCategory: true,
+      categoryLabel: "Hospitality",
+    });
+    expect(poolNicheForCategory("Beauty")).toBe("Beauty");
+    expect(poolNicheForCategory("Finance")).toBe("Personal Finance");
+    expect(poolNicheForCategory("Outdoors")).toBeNull();
+    expect(poolNicheForCategory("Entertainment")).toBeNull();
+    expect(hospitality.niche).toBe("Business & Entrepreneurship");
+    expect(hospitality.fallbackSpecs.some(spec => spec.pillar === "menu engineering")).toBe(true);
+    const savedVenue = indexedHomePoolSpecChoices({
+      nicheText: "",
+      confirmedPillars: [],
+      useStoredCategory: true,
+      categoryLabel: "Restaurants & Cafes",
+    });
+    expect(savedVenue.niche).toBe("Business & Entrepreneurship");
+    expect(savedVenue.fallbackSpecs.some(spec => spec.pillar === "menu engineering")).toBe(true);
+    const recipes = indexedHomePoolSpecChoices({
+      nicheText: "",
+      confirmedPillars: [],
+      useStoredCategory: true,
+      categoryLabel: "Food",
+    });
+    expect(recipes.niche).toBe("");
+    expect(recipes.fallbackSpecs).toEqual([]);
+    const unmatched = indexedHomePoolSpecChoices({
+      nicheText: "Slow travel vlogs",
+      confirmedPillars: [],
+      useStoredCategory: true,
+      categoryLabel: null,
+    });
+    expect(unmatched.niche).toBe("");
+    expect(unmatched.fallbackSpecs).toEqual([]);
   });
 });

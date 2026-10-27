@@ -4,7 +4,8 @@
  *
  * Never invents a business objective: a commercial goal needs commercial
  * evidence. With no evidence it does not call the model and asks the user.
- * With weak evidence and low model confidence it also asks the user.
+ * When the model is called, its suggest or clarify decision stands. Evidence
+ * strength only caps confidence. It does not override that decision.
  */
 import { z } from "zod";
 import type { SuggestionConfidence } from "@shared/personalization/model";
@@ -65,9 +66,6 @@ const SCHEMA = {
         enum: [
           "display_name",
           "bio",
-          "category",
-          "cta",
-          "website",
           "captions",
           "brand_description",
           "niche",
@@ -97,9 +95,6 @@ const Shape = z.object({
     z.enum([
       "display_name",
       "bio",
-      "category",
-      "cta",
-      "website",
       "captions",
       "brand_description",
       "niche",
@@ -127,13 +122,13 @@ export function buildGoalPrompt(e: CreatorEvidence): {
     "You help short-form video creators state why they create content.",
     UNTRUSTED_DATA_RULE,
     "Write the creator's PURPOSE (why they create), not a description of what they posted.",
-    "Use the biography, a stated call to action, retrieved website facts (offers, customers, and calls to action), and confirmed answers. Do not invent an outcome those sources do not support.",
-    "Cite website only when those retrieved facts are present. A website address alone is not page content.",
     "Rules:",
     "- One sentence, at most 18 words, starting with a verb such as Help, Teach, Share, Entertain, Inspire, Show.",
-    "- Only use facts present in the evidence. Do not invent products, places, names, numbers or audiences.",
+    "- Only use facts present in the evidence. Do not invent products, places, names, numbers, or a business. A purpose that follows from the stated subject is a recommendation, not an invented fact.",
     '- Mention a business outcome (clients, sales, customers, bookings, growing a business) ONLY if the bio, brand description or name shows the creator sells something. Then copy the exact words that show it into offer_quote (for example "Now taking new clients"). Otherwise leave offer_quote empty. Affiliate links ("link in bio", "shop my picks") are not a business.',
-    '- If the evidence is too thin or contradictory to know their purpose, choose decision "clarify" and write one short question in the output language. Otherwise leave clarifying_question empty.',
+    "- A bio that names the subject is enough for one initial purpose, even when there are no posts.",
+    "- If several purposes fit that same subject, choose the most direct one. Do not ask the user to pick among purposes that all fit the evidence.",
+    '- Choose decision "clarify" only when the bio does not say what the content is about, or the evidence contradicts itself. Write one short question in the output language. Otherwise leave clarifying_question empty.',
     "- evidence_basis lists only the evidence sources you actually relied on.",
     `- Write in ${e.outputLanguage.label}. The evidence may be in any language.`,
   ].join("\n");
@@ -246,17 +241,9 @@ export async function inferGoal(input: {
       attempts,
     };
   }
-  // Weak evidence + low confidence: ask instead of guessing.
-  if (e.strength === "weak" && value.confidence === "low") {
-    return {
-      status: "needs_clarification",
-      reason: "insufficient_evidence",
-      question: DEFAULT_CLARIFYING_QUESTION,
-      usage,
-      attempts,
-    };
-  }
-  // Confidence can never exceed what the evidence supports.
+  // Confidence can never exceed what the evidence quantity supports.
+  // A low-confidence suggestion is still a suggestion. The model already
+  // chose suggest rather than clarify.
   const cap: Record<CreatorEvidence["strength"], SuggestionConfidence> = {
     none: "low",
     weak: "low",

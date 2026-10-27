@@ -217,7 +217,7 @@ describe("migration gate: drafts cannot reach a database by accident", () => {
     expect(hits).toEqual([]);
   });
 
-  it("the live server reaches personalization code only through the gated entry points", () => {
+  it("only audited server entry points and read-only bridges reach personalization code", () => {
     const hits = execSync(
       'git grep --untracked -l -E "(from|import\\()[[:space:]]*[\'\\"][^\'\\"]*personalization/" -- server || true',
       { cwd: root }
@@ -227,14 +227,63 @@ describe("migration gate: drafts cannot reach a database by accident", () => {
       .filter(Boolean)
       .filter(f => !f.endsWith(".test.ts"))
       .filter(f => !f.startsWith("server/personalization/"));
-    // onboardingV2Router: every procedure but `experience` checks the rollout switch.
-    // pilotHandlers: registers the two job types; jobs are only enqueued by that router.
-    // homeV2Router: every procedure checks the Home switch (assertHomeV2Access).
+
+    // Onboarding and Home routers are rollout gated. Durable handlers run
+    // previously authorized jobs. Viral Posts has an independently authenticated,
+    // feature-gated router and reads confirmed workspace-scoped strategy data.
+    // Coach reads only the signed-in user's stored niche for display.
+    // Adding any other server consumer requires a deliberate security review.
     expect(hits.sort()).toEqual([
       "server/durableJobs/pilotHandlers.ts",
+      "server/planCoachProfile.ts",
       "server/routers/homeV2Router.ts",
       "server/routers/onboardingV2Router.ts",
+      "server/viralPosts/browseService.ts",
+      "server/viralPosts/router.ts",
+      "server/viralPosts/service.ts",
     ]);
+
+    // These cross-feature paths may import ONLY the explicitly reviewed APIs.
+    // This is intentionally narrower than adding whole folders to an allowlist.
+    const auditedImports: Record<string, string[]> = {
+      "server/planCoachProfile.ts": [
+        "@shared/personalization/contentTaxonomy",
+        "./personalization/activeNiche",
+      ],
+      "server/viralPosts/browseService.ts": [
+        "@shared/personalization/contentTaxonomy",
+      ],
+      "server/viralPosts/router.ts": [
+        "../personalization/home/inventoryMatch",
+      ],
+      "server/viralPosts/service.ts": [
+        "../personalization/home/inventoryMatch",
+        "../personalization/home/storedInventory",
+      ],
+    };
+    for (const [file, allowed] of Object.entries(auditedImports)) {
+      const source = readFileSync(path.join(root, file), "utf8");
+      const imported = [...source.matchAll(/["']([^"']*personalization\/[^"']+)["']/g)]
+        .map(match => match[1])
+        .sort();
+      expect(imported, file + ": only audited personalization imports are allowed")
+        .toEqual([...allowed].sort());
+    }
+
+    // The bridge never writes personalization, never reads unconfirmed rows,
+    // and resolves both member and active profile within the selected workspace.
+    const stored = readFileSync(
+      path.join(root, "server/personalization/home/storedInventory.ts"),
+      "utf8"
+    );
+    expect(stored).toContain("eq(workspaceMemberActiveProfiles.userId, userId)");
+    expect(stored).toContain("eq(workspaceMemberActiveProfiles.workspaceId, scopedWorkspaceId)");
+    expect(stored).toContain('eq(personalizationItems.status, "confirmed")');
+
+    const viralRouter = readFileSync(path.join(root, "server/viralPosts/router.ts"), "utf8");
+    expect(viralRouter).toContain("const viralPostsProcedure = protectedProcedure.use(");
+    const coach = readFileSync(path.join(root, "server/planCoachProfile.ts"), "utf8");
+    expect(coach).toContain("loadActiveNichePayload(userId)");
   });
 
   it("every onboarding v2 procedure except `experience` is behind the rollout switch", () => {

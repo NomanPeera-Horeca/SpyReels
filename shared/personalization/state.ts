@@ -315,8 +315,10 @@ export function itemIdentity(
     }
     case "pillar":
       return `pillar:${norm((payload as ItemPayloadByKind["pillar"]).title)}`;
-    case "niche":
-      return `niche:${norm((payload as ItemPayloadByKind["niche"]).slug)}`;
+    case "niche": {
+      const niche = payload as ItemPayloadByKind["niche"];
+      return `niche:${norm(niche.slug)}|${norm(niche.label)}`;
+    }
     case "language":
       return `language:${norm((payload as ItemPayloadByKind["language"]).code)}`;
     case "brand_description":

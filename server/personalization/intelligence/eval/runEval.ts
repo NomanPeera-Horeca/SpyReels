@@ -2,9 +2,11 @@
  * Real-model evaluation runner for the personalization engine (Phase 4B).
  *
  * Runs the PRODUCTION path for each synthetic case:
- *   evidence -> generateRecommendations(goal) -> confirm (or user's typed goal
- *   when the engine asks) -> generateRecommendations(audience) -> confirm ->
+ *   evidence -> generateRecommendations(goal) -> confirm the AI goal ->
+ *   generateRecommendations(audience) -> confirm the AI audiences ->
  *   generateRecommendations(pillars)
+ *   A clarification or a failed step stops that case. Fixture fallback answers
+ *   are not substituted, so they cannot hide an AI failure.
  * through the existing invokeLLM (default model routing, prompts, guards).
  *
  * It never substitutes scripted answers for a real run: realRun() refuses
@@ -18,6 +20,10 @@
  * Human rubric scores (100 points) are NOT computed here: the artifact
  * leaves them empty for reviewers. Only objective gates are automated.
  */
+import {
+  categorySelectsRestaurantPillars,
+  poolNicheForCategory,
+} from "@shared/personalization/contentTaxonomy";
 import { estimateLlmCost } from "../../../analytics/aiCostModel";
 import type {
   AnalysisSourceSnapshot,
@@ -30,7 +36,8 @@ import {
 } from "@shared/personalization/state";
 import type { InvokeParams, InvokeResult } from "../../../_core/llm";
 import type { PersonalizationCtx } from "../../authorization";
-import { buildCreatorEvidence } from "../evidence";
+import { EVAL_CASES } from "./fixtures";
+import { buildCreatorEvidence, verbatimCta } from "../evidence";
 import {
   inventsCommercialObjective,
   unsupportedNumbers,
@@ -52,7 +59,7 @@ export const EVAL_SPEND_CAP_USD = 5;
  * step's max output tokens, priced on the default model.
  */
 export function worstCaseCaseUsd(model = "claude-sonnet-4-6"): number {
-  const steps = [400, 600, 700];
+  const steps = [160, 400, 600, 700];
   return steps.reduce(
     (sum, maxOut) =>
       sum +
@@ -95,10 +102,25 @@ export type CaseRecord = {
     status: string;
     items: Array<{ title: string; description: string }>;
   };
+  niche: {
+    status: string;
+    label: string | null;
+    slug: string | null;
+    categoryLabel: string | null;
+  };
+  routing: {
+    pool: string | null;
+    restaurantPillars: boolean;
+  };
+  /** Verbatim call to action taken from the bio. Null when none is present. */
+  cta: string | null;
   rejections: Array<{ step: string; reason: string }>;
   calls: number;
   retries: number;
+  /** Sum of model-call latencies. Parallel calls are counted separately. */
   latencyMs: number;
+  /** Clock time for the case, including parallel niche and goal work. */
+  wallClockMs: number;
   estimatedUsd: number;
   gates: {
     unsupportedCommercialGoal: boolean;
@@ -110,6 +132,19 @@ export type CaseRecord = {
   };
   /** Filled by human reviewers (rubric out of 100). */
   humanScores: null;
+};
+
+export type BenchmarkDecision = {
+  /** First-pass model suggestions. Fixture answers are not included. */
+  suggested: string[];
+  /** The model or the evidence gate asked a question. */
+  clarification: string[];
+  /** Failed or unfinished for another reason. */
+  other: string[];
+  requiredClarificationCorrect: number;
+  requiredClarification: number;
+  answerableSuggested: number;
+  answerable: number;
 };
 
 export type EvalReport = {
@@ -130,9 +165,44 @@ export type EvalReport = {
     maxUsdPerCase: number;
     meanLatencyMs: number;
     p95LatencyMs: number;
+    meanWallClockMs: number;
+    p95WallClockMs: number;
     failedCallUsd: number;
   };
+  decision: BenchmarkDecision;
 };
+
+/**
+ * Separates first-pass suggestion, clarification, and answerable profiles.
+ * A stored fallback goal does not count as a suggestion.
+ */
+export function benchmarkDecision(
+  cases: Array<{ caseId: string; goal: { status: string; source: string } }>,
+  fixtures: Array<{ id: string; expect: { clarification: "required" | "allowed" | "no" } }> = EVAL_CASES
+): BenchmarkDecision {
+  const expectById = new Map(fixtures.map(item => [item.id, item.expect.clarification]));
+  const suggested = cases
+    .filter(item => item.goal.status === "generated" && item.goal.source === "ai")
+    .map(item => item.caseId);
+  const clarification = cases
+    .filter(item => item.goal.status === "needs_clarification")
+    .map(item => item.caseId);
+  const known = new Set([...suggested, ...clarification]);
+  const other = cases.filter(item => !known.has(item.caseId)).map(item => item.caseId);
+  const required = cases.filter(item => expectById.get(item.caseId) === "required");
+  const answerable = cases.filter(item => expectById.get(item.caseId) !== "required");
+  return {
+    suggested,
+    clarification,
+    other,
+    requiredClarificationCorrect: required.filter(item =>
+      clarification.includes(item.caseId)
+    ).length,
+    requiredClarification: required.length,
+    answerableSuggested: answerable.filter(item => suggested.includes(item.caseId)).length,
+    answerable: answerable.length,
+  };
+}
 
 const WS = "eval-workspace";
 const ctx: PersonalizationCtx = {
@@ -229,6 +299,15 @@ function snapshotFor(c: EvalCase): AnalysisSourceSnapshot | null {
       durationSec: null,
       caption,
     })),
+    profileEvidence: {
+      username: "synthetic",
+      displayName: c.displayName,
+      bio: c.bio,
+      category: null,
+      cta: verbatimCta(c.bio),
+      websiteUrl: null,
+      captions: c.captions.slice(0, 6),
+    },
   };
 }
 
@@ -264,6 +343,7 @@ export async function runEvaluation(input: {
     const caseCalls: CallRecord[] = [];
     const rejections: CaseRecord["rejections"] = [];
     let step = "goal";
+    const caseStarted = now();
     const invoker: LlmInvoker = async (
       params: InvokeParams
     ): Promise<InvokeResult> => {
@@ -348,42 +428,48 @@ export async function runEvaluation(input: {
       goal.source = "ai";
       goal.confidence = row.confidence ?? null;
       store.confirmSuggested("goal", 1);
-    } else {
-      if (g.status === "needs_clarification") goal.question = g.question;
-      store.typed("goal", { text: c.fallbackGoal });
-      goal.text = c.fallbackGoal;
-      goal.source = "user_typed";
+    } else if (g.status === "needs_clarification") {
+      goal.question = g.question;
+      goal.source = "none";
     }
     const userValuesBefore = JSON.stringify(
       store.items.filter(i => i.source === "user_entered")
     );
 
-    // Audience
-    step = "audience";
-    const a = await generateRecommendations(deps(store), {
-      ctx,
-      socialProfileId: "p",
-      step: "audience",
-    });
+    // Audience and pillars run only from an AI goal. A fixture fallback is not inserted.
+    let a: RecommendationResult = {
+      status: "needs_clarification",
+      question: goal.question ?? "",
+      reason: "insufficient_evidence",
+      usage: null,
+    };
     let usedFallback = false;
-    const suggestedAudiences = store.items
-      .filter(i => i.kind === "audience" && i.status === "suggested")
-      .map(i => i.payload as ItemPayloadByKind["audience"]);
-    if (store.confirmSuggested("audience", 2) === 0) {
-      usedFallback = true;
-      for (const fa of c.fallbackAudiences) store.typed("audience", fa);
+    let suggestedAudiences: ItemPayloadByKind["audience"][] = [];
+    let p: RecommendationResult = a;
+    let pillars: ItemPayloadByKind["pillar"][] = [];
+    if (g.status === "generated") {
+      step = "audience";
+      a = await generateRecommendations(deps(store), {
+        ctx,
+        socialProfileId: "p",
+        step: "audience",
+      });
+      suggestedAudiences = store.items
+        .filter(i => i.kind === "audience" && i.status === "suggested")
+        .map(i => i.payload as ItemPayloadByKind["audience"]);
+      if (a.status === "generated") {
+        store.confirmSuggested("audience", 2);
+        step = "pillars";
+        p = await generateRecommendations(deps(store), {
+          ctx,
+          socialProfileId: "p",
+          step: "pillars",
+        });
+        pillars = store.items
+          .filter(i => i.kind === "pillar" && i.status === "suggested")
+          .map(i => i.payload as ItemPayloadByKind["pillar"]);
+      }
     }
-
-    // Pillars
-    step = "pillars";
-    const p = await generateRecommendations(deps(store), {
-      ctx,
-      socialProfileId: "p",
-      step: "pillars",
-    });
-    const pillars = store.items
-      .filter(i => i.kind === "pillar" && i.status === "suggested")
-      .map(i => i.payload as ItemPayloadByKind["pillar"]);
 
     // Objective gates
     const evidence = buildCreatorEvidence({
@@ -420,6 +506,12 @@ export async function runEvaluation(input: {
     const caseUsd = caseCalls.reduce((s, x) => s + x.estimatedUsd, 0);
     spent += caseUsd;
     calls.push(...caseCalls);
+    const nicheRow = store.items.find(
+      i => i.kind === "niche" && i.status !== "superseded" && i.status !== "dismissed"
+    );
+    const nichePayload = nicheRow
+      ? (nicheRow.payload as ItemPayloadByKind["niche"])
+      : null;
     cases.push({
       caseId: c.id,
       category: c.category,
@@ -439,10 +531,24 @@ export async function runEvaluation(input: {
           description: x.description,
         })),
       },
+      niche: {
+        status: nicheRow?.status ?? "missing",
+        label: nichePayload?.label ?? null,
+        slug: nichePayload?.slug ?? null,
+        categoryLabel: nichePayload?.categoryLabel ?? null,
+      },
+      routing: {
+        pool: poolNicheForCategory(nichePayload?.categoryLabel),
+        restaurantPillars: categorySelectsRestaurantPillars(nichePayload?.categoryLabel),
+      },
+      cta: verbatimCta(c.bio),
       rejections,
       calls: caseCalls.length,
-      retries: Math.max(0, caseCalls.length - 3),
+      retries: caseCalls.filter((call, index) =>
+        caseCalls.findIndex(earlier => earlier.operation === call.operation) !== index
+      ).length,
       latencyMs: caseCalls.reduce((s, x) => s + x.latencyMs, 0),
+      wallClockMs: now() - caseStarted,
       estimatedUsd: Math.round(caseUsd * 1_000_000) / 1_000_000,
       gates: {
         unsupportedCommercialGoal:
@@ -469,6 +575,7 @@ export async function runEvaluation(input: {
 
   const caseCosts = cases.map(c => c.estimatedUsd);
   const latencies = calls.map(c => c.latencyMs);
+  const walls = cases.map(c => c.wallClockMs);
   const total = caseCosts.reduce((s, x) => s + x, 0);
   return {
     realModel: input.realModel,
@@ -492,6 +599,10 @@ export async function runEvaluation(input: {
         ? Math.round(latencies.reduce((s, x) => s + x, 0) / latencies.length)
         : 0,
       p95LatencyMs: percentile(latencies, 95),
+      meanWallClockMs: walls.length
+        ? Math.round(walls.reduce((s, x) => s + x, 0) / walls.length)
+        : 0,
+      p95WallClockMs: percentile(walls, 95),
       failedCallUsd:
         Math.round(
           calls
@@ -499,6 +610,7 @@ export async function runEvaluation(input: {
             .reduce((sum, x) => sum + x.estimatedUsd, 0) * 1_000_000
         ) / 1_000_000,
     },
+    decision: benchmarkDecision(cases),
   };
 }
 

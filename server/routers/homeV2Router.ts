@@ -20,10 +20,36 @@ import {
   HOME_CREATOR_LIMIT,
   homeContextFromState,
   videoMatchText,
+  type HomeContext,
 } from "../personalization/home/homeService";
+import { contentInventoryPlan } from "../personalization/home/inventoryMatch";
 import { browseIndexedViralPosts } from "../viralPosts/browseService";
 
 export const HOME_VIDEO_LIMIT = 4;
+
+function indexedBrowseInput(userId: number, c: HomeContext) {
+  const plan = contentInventoryPlan({
+    categoryLabel: c.categoryLabel,
+    nicheLabel: c.nicheLabel,
+    pillarTitles: c.pillarTitles,
+    goalText: c.goalText,
+    audienceText: c.audienceText,
+  });
+  const taxonomy = plan.mode === "taxonomy";
+  return {
+    userId,
+    description: taxonomy ? c.nicheLabel : videoMatchText(c),
+    pillars: c.pillarTitles,
+    goalText: c.goalText,
+    audienceText: c.audienceText,
+    matchMode: taxonomy ? ("taxonomy" as const) : ("legacy" as const),
+    categoryLabel: taxonomy ? c.categoryLabel : null,
+    specificNiche: taxonomy ? c.nicheLabel : null,
+    limit: HOME_VIDEO_LIMIT,
+    creatorLimit: HOME_CREATOR_LIMIT,
+    recentDays: CREATOR_SIGNAL_RECENT_DAYS,
+  };
+}
 
 const homeProcedure = protectedProcedure.use(async ({ ctx, next }) => {
   await assertHomeV2Access(ctx.user);
@@ -51,31 +77,13 @@ export const homeV2Router = router({
 
   creators: homeProcedure.query(async ({ ctx }) => {
     const c = await context(ctx);
-    const res = await browseIndexedViralPosts({
-      userId: ctx.user.id,
-      description: videoMatchText(c),
-      pillars: c.pillarTitles,
-      goalText: c.goalText,
-      audienceText: c.audienceText,
-      limit: HOME_VIDEO_LIMIT,
-      creatorLimit: HOME_CREATOR_LIMIT,
-      recentDays: CREATOR_SIGNAL_RECENT_DAYS,
-    });
+    const res = await browseIndexedViralPosts(indexedBrowseInput(ctx.user.id, c));
     return { personalized: c.nicheLabel !== null, nicheLabel: c.nicheLabel, creators: res.creators };
   }),
 
   videos: homeProcedure.query(async ({ ctx }) => {
     const c = await context(ctx);
-    const res = await browseIndexedViralPosts({
-      userId: ctx.user.id,
-      description: videoMatchText(c),
-      pillars: c.pillarTitles,
-      goalText: c.goalText,
-      audienceText: c.audienceText,
-      limit: HOME_VIDEO_LIMIT,
-      creatorLimit: HOME_CREATOR_LIMIT,
-      recentDays: CREATOR_SIGNAL_RECENT_DAYS,
-    });
+    const res = await browseIndexedViralPosts(indexedBrowseInput(ctx.user.id, c));
     return { personalized: c.nicheLabel !== null, nicheLabel: c.nicheLabel, items: res.items };
   }),
 

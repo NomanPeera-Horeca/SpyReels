@@ -5,6 +5,7 @@ import {
   completeDurableJob,
   failDurableJob,
   heartbeatDurableJob,
+  isTransientLockConflict,
   requeueDeadDurableJobByKey,
 } from "./queue";
 import { getDurableJobHandler } from "./handlers";
@@ -64,8 +65,14 @@ async function run(): Promise<void> {
     );
   }
   while (!draining) {
-    const worked = await processNext();
-    if (!worked) await delay(pollMs);
+    try {
+      const worked = await processNext();
+      if (!worked) await delay(pollMs);
+    } catch (error) {
+      if (!isTransientLockConflict(error)) throw error;
+      console.warn("[durableJobs] transient claim conflict");
+      await delay(pollMs);
+    }
   }
   console.info("[durableJobs] worker drained");
 }

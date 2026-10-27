@@ -1,3 +1,7 @@
+import {
+  categorySelectsRestaurantPillars,
+  poolNicheForCategory,
+} from "@shared/personalization/contentTaxonomy";
 import type { FollowerViralBadge } from "@shared/viralTier";
 import type {
   ViralMediaStatus,
@@ -156,10 +160,14 @@ export function strategyUsesIndexedContentPillars(args: {
   confirmedPillars: string[];
   goalText?: string | null;
   audienceText?: string | null;
+  /** Taxonomy mode. True only for a food or hospitality category. False never uses goal keywords. */
+  allowIndexedContent?: boolean;
 }): boolean {
   const indexed = new Set(DEFAULT_CONTENT_PILLARS.map(pillar => pillar.toLowerCase()));
   const pillars = args.confirmedPillars.map(pillar => pillar.trim()).filter(Boolean);
   if (pillars.some(pillar => indexed.has(pillar.toLowerCase()))) return true;
+  if (args.allowIndexedContent === true) return true;
+  if (args.allowIndexedContent === false) return false;
   const strategy = [args.goalText ?? "", args.audienceText ?? "", ...pillars]
     .join("\n")
     .toLowerCase();
@@ -219,18 +227,31 @@ export function indexedHomePoolSpecChoices(args: {
   goalText?: string | null;
   audienceText?: string | null;
   platforms?: BrowsePlatforms;
+  /** Use the stored taxonomy category instead of keyword classification. */
+  useStoredCategory?: boolean;
+  categoryLabel?: string | null;
 }): {
   niche: string;
   confirmedSpecs: Array<{ niche: string; pillar: string; platform?: string }>;
   fallbackSpecs: Array<{ niche: string; pillar: string; platform?: string }>;
 } {
-  const niche = inferNiche(args.nicheText);
+  const storedPool = args.useStoredCategory ? poolNicheForCategory(args.categoryLabel) : null;
+  if (args.useStoredCategory && !storedPool) {
+    return { niche: "", confirmedSpecs: [], fallbackSpecs: [] };
+  }
+  const niche = storedPool ?? inferNiche(args.nicheText);
   const confirmed = [
     ...new Set(args.confirmedPillars.map(pillar => pillar.trim()).filter(Boolean)),
   ].slice(0, 6);
-  const fallbackPillars = strategyUsesIndexedContentPillars(args)
+  const fallbackPillars = strategyUsesIndexedContentPillars({
+    ...args,
+    nicheText: storedPool ?? args.nicheText,
+    allowIndexedContent: args.useStoredCategory
+      ? categorySelectsRestaurantPillars(args.categoryLabel)
+      : undefined,
+  })
     ? [...DEFAULT_CONTENT_PILLARS]
-    : inferActivePillars(args.nicheText, niche);
+    : inferActivePillars(storedPool ?? args.nicheText, niche);
   return {
     niche,
     confirmedSpecs:
@@ -460,6 +481,11 @@ export async function browseIndexedViralPosts(args: {
   /** Ranking boost only. Must not be concatenated into the niche text. */
   goalText?: string | null;
   audienceText?: string | null;
+  /** Stored taxonomy category. With matchMode taxonomy, a missing category selects no pool. */
+  matchMode?: "legacy" | "taxonomy";
+  categoryLabel?: string | null;
+  /** Specific niche. Ranking context only. */
+  specificNiche?: string | null;
   limit: number;
   /** Home row size. Supplied by the gated Home router. */
   creatorLimit: number;
@@ -472,14 +498,24 @@ export async function browseIndexedViralPosts(args: {
   poolRefreshStarted: false;
 }> {
   if (!isViralPostsLive) return { items: [], creators: [], niche: "", poolRefreshStarted: false };
+  const taxonomy = args.matchMode === "taxonomy";
   const explicit = args.description?.trim() ?? "";
-  const text = explicit.length > 0 ? explicit : await loadUserBusinessDescription(args.userId);
+  const text = taxonomy
+    ? ""
+    : explicit.length > 0
+      ? explicit
+      : await loadUserBusinessDescription(args.userId);
   const plan = indexedHomePoolSpecChoices({
     nicheText: text,
     confirmedPillars: args.pillars ?? [],
     goalText: args.goalText,
     audienceText: args.audienceText,
+    useStoredCategory: taxonomy,
+    categoryLabel: args.categoryLabel ?? null,
   });
+  if (taxonomy && !plan.niche) {
+    return { items: [], creators: [], niche: "", poolRefreshStarted: false };
+  }
   const existing = await poolRepo.findExistingPools([
     ...plan.confirmedSpecs,
     ...plan.fallbackSpecs,
@@ -507,6 +543,7 @@ export async function browseIndexedViralPosts(args: {
           niche: plan.niche,
           goalText: args.goalText ?? null,
           audienceText: args.audienceText ?? null,
+          specificNiche: args.specificNiche ?? null,
           limit: args.limit,
           creatorLimit: args.creatorLimit,
           recentDays: args.recentDays,
@@ -515,10 +552,13 @@ export async function browseIndexedViralPosts(args: {
     return { ...assembled, niche: plan.niche, poolRefreshStarted: false };
   }
   const relevantPillars = strategyUsesIndexedContentPillars({
-    nicheText: text,
+    nicheText: taxonomy ? plan.niche : text,
     confirmedPillars: args.pillars ?? [],
     goalText: args.goalText,
     audienceText: args.audienceText,
+    allowIndexedContent: taxonomy
+      ? categorySelectsRestaurantPillars(args.categoryLabel)
+      : undefined,
   })
     ? [...DEFAULT_CONTENT_PILLARS]
     : [];
@@ -550,6 +590,7 @@ export async function browseIndexedViralPosts(args: {
     niche: plan.niche,
     goalText: args.goalText ?? null,
     audienceText: args.audienceText ?? null,
+    specificNiche: args.specificNiche ?? null,
     limit: args.limit,
     creatorLimit: args.creatorLimit,
     recentDays: args.recentDays,
@@ -570,6 +611,7 @@ async function assembleIndexedHome(args: {
   niche: string;
   goalText: string | null;
   audienceText: string | null;
+  specificNiche: string | null;
   limit: number;
   creatorLimit: number;
   recentDays: number;
@@ -618,6 +660,7 @@ async function assembleIndexedHome(args: {
     })),
     goalText: args.goalText,
     audienceText: args.audienceText,
+    nicheText: args.specificNiche,
     limit: args.limit,
     creatorLimit: args.creatorLimit,
     recentDays: args.recentDays,

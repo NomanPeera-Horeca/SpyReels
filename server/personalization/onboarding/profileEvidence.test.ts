@@ -111,6 +111,14 @@ describe("profile evidence from lookup", () => {
       })
     ).toEqual([{ id: "a", thumbnailUrl: "https://cdn.example/a.jpg", viewCount: 5, isPinned: true }]);
     expect(verbatimCta("I photograph wild animals.")).toBeNull();
+    expect(
+      verbatimCta(
+        "Commercial kitchen equipment for restaurants, cafes and food trucks. Free kitchen layout design. Financing available. DM for a quote."
+      )
+    ).toBe("DM for a quote.");
+    expect(verbatimCta("Family-run Italian restaurant since 1998. Handmade pasta daily. Reservations at the link.")).toBe(
+      "Reservations at the link."
+    );
     expect(publicWebsiteUrl("javascript:alert(1)")).toBeNull();
   });
 

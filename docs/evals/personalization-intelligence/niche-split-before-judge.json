@@ -1,0 +1,116 @@
+{
+  "stem": "niche-split-before",
+  "cases": 7,
+  "scored": 7,
+  "estimatedUsd": 0.047292,
+  "mean": {
+    "niche": 16,
+    "goal": 20.9,
+    "audience": 16.3,
+    "pillars": 20,
+    "specificity": 10,
+    "clarity": 7.9,
+    "evidence": 3.4,
+    "total": 94.5
+  },
+  "rows": [
+    {
+      "caseId": "RL-01",
+      "scores": {
+        "niche": 12,
+        "goal": 22,
+        "audience": 17,
+        "pillars": 16,
+        "specificity": 10,
+        "clarity": 8,
+        "evidence": 4,
+        "reason": "Niche label is a broad bucket; profile is clearly \"Commercial Kitchen Equipment for Foodservice Operators,\" costing significant niche points; pillars overlap and lack differentiation."
+      },
+      "costUsd": 0.006837
+    },
+    {
+      "caseId": "RL-02",
+      "scores": {
+        "niche": 14,
+        "goal": 22,
+        "audience": 16,
+        "pillars": 22,
+        "specificity": 11,
+        "clarity": 8,
+        "evidence": 3,
+        "reason": "Niche is a broad catalog bucket missing the local/family-Italian specificity; pillars are strong and reservation-focused but the traveler audience is speculative given no travel-signal evidence."
+      },
+      "costUsd": 0.006906
+    },
+    {
+      "caseId": "FH-01",
+      "scores": {
+        "niche": 14,
+        "goal": 21,
+        "audience": 17,
+        "pillars": 22,
+        "specificity": 11,
+        "clarity": 8,
+        "evidence": 4,
+        "reason": "Niche label \"Health & Fitness\" is a broad catalog bucket; profile clearly warrants \"Online Strength Coaching for Busy Professionals,\" costing significant niche points."
+      },
+      "costUsd": 0.006723
+    },
+    {
+      "caseId": "PB-01",
+      "scores": {
+        "niche": 18,
+        "goal": 20,
+        "audience": 16,
+        "pillars": 21,
+        "specificity": 10,
+        "clarity": 7,
+        "evidence": 3,
+        "reason": "Niche label is too broad; \"Indie Skincare Brand Building\" fits better. CTA misused as extracted CTA; no discovery category weakens structure."
+      },
+      "costUsd": 0.006684
+    },
+    {
+      "caseId": "PB-03",
+      "scores": {
+        "niche": 14,
+        "goal": 21,
+        "audience": 16,
+        "pillars": 20,
+        "specificity": 9,
+        "clarity": 7,
+        "evidence": 3,
+        "reason": "Niche label \"Real Estate\" is a broad bucket; profile is clearly first-time buyer agent, and CTA was misread from bio rather than extracted from captions."
+      },
+      "costUsd": 0.00672
+    },
+    {
+      "caseId": "EN-02",
+      "scores": {
+        "niche": 27,
+        "goal": 20,
+        "audience": 16,
+        "pillars": 20,
+        "specificity": 10,
+        "clarity": 9,
+        "evidence": 3,
+        "reason": "Niche and goal are accurate and well-matched; pillars align with captions but Remote Work Struggles is weakly evidenced and no CTA or discovery category was extracted."
+      },
+      "costUsd": 0.006666
+    },
+    {
+      "caseId": "ES-02",
+      "scores": {
+        "niche": 13,
+        "goal": 20,
+        "audience": 16,
+        "pillars": 19,
+        "specificity": 9,
+        "clarity": 8,
+        "evidence": 4,
+        "reason": "Niche label is a broad catalog bucket despite a clearly specific bookkeeping/tax-prep practice; no discovery category filed; pillars are solid but Cash Flow Clarity lacks caption support."
+      },
+      "costUsd": 0.006756
+    }
+  ]
+}

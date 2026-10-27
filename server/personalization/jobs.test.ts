@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  confirmedAnswerKey,
   recommendationEvidenceToken,
+  recommendationJobKey,
   recommendationStateFromSources,
   shouldStartRecommendationJob,
 } from "./jobs";
@@ -107,6 +109,84 @@ describe("recommendationStateFromSources", () => {
     expect(shouldStartRecommendationJob("succeeded")).toBe(false);
     expect(shouldStartRecommendationJob("failed")).toBe(false);
     expect(shouldStartRecommendationJob("dead")).toBe(false);
+  });
+
+  it("starts exactly one new job for a confirmed answer and reuses it", () => {
+    const profile = {
+      profileId: "profile-1",
+      version: 1,
+      evidence: "profile",
+    };
+    const answer = "I photograph weddings for couples.";
+    const confirmedGoal = {
+      kind: "goal",
+      status: "confirmed",
+      payload: { text: answer },
+    };
+    const open = recommendationJobKey({
+      ...profile,
+      step: "goal",
+      answerKey: confirmedAnswerKey("goal", []),
+    });
+    const answered = recommendationJobKey({
+      ...profile,
+      step: "goal",
+      answerKey: confirmedAnswerKey("goal", [confirmedGoal]),
+    });
+    expect(answered).not.toBe(open);
+    const started = new Map<string, "succeeded">();
+    const request = (key: string) => {
+      if (shouldStartRecommendationJob(started.get(key) ?? null)) {
+        started.set(key, "succeeded");
+        return "start";
+      }
+      return "reuse";
+    };
+    expect(request(open)).toBe("start");
+    expect(request(open)).toBe("reuse");
+    expect(request(answered)).toBe("start");
+    expect(request(answered)).toBe("reuse");
+    expect([...started.keys()]).toEqual([open, answered]);
+    const audienceAnswered = recommendationJobKey({
+      ...profile,
+      step: "audience",
+      answerKey: confirmedAnswerKey("audience", [confirmedGoal]),
+    });
+    expect(request(audienceAnswered)).toBe("start");
+    expect(request(audienceAnswered)).toBe("reuse");
+    const goalAfterAudience = recommendationJobKey({
+      ...profile,
+      step: "goal",
+      answerKey: confirmedAnswerKey("goal", [
+        confirmedGoal,
+        { kind: "audience", status: "confirmed", payload: { who: "Couples", outcome: "remember the day" } },
+      ]),
+    });
+    expect(goalAfterAudience).toBe(answered);
+    expect(request(goalAfterAudience)).toBe("reuse");
+  });
+
+  it("keeps an abstention on one key and changes the key after a confirmed answer", () => {
+    const base = {
+      profileId: "profile-1",
+      step: "goal" as const,
+      version: 1,
+      evidence: "profile",
+    };
+    const open = confirmedAnswerKey("goal", []);
+    expect(open).toBe("open");
+    const abstained = recommendationJobKey({ ...base, answerKey: open });
+    expect(recommendationJobKey({ ...base, answerKey: open })).toBe(abstained);
+    const answered = confirmedAnswerKey("goal", [
+      { kind: "goal", status: "confirmed", payload: { text: "I photograph weddings for couples." } },
+    ]);
+    expect(answered).not.toBe(open);
+    expect(recommendationJobKey({ ...base, answerKey: answered })).not.toBe(abstained);
+    expect(
+      confirmedAnswerKey("goal", [
+        { kind: "goal", status: "suggested", payload: { text: "Help couples remember their wedding day." } },
+      ])
+    ).toBe("open");
   });
 
   it("keeps a queued durable job visible as running", () => {

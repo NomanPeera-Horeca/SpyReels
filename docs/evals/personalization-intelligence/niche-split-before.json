@@ -1,0 +1,835 @@
+{
+  "realModel": true,
+  "startedAt": "2026-10-25T15:05:02.316Z",
+  "promptVersions": {
+    "goal": "goal-v1",
+    "audience": "audience-v1",
+    "pillars": "pillars-v1"
+  },
+  "capUsd": 5,
+  "stoppedByCap": false,
+  "cases": [
+    {
+      "caseId": "RL-01",
+      "category": "restaurant_local",
+      "goal": {
+        "status": "generated",
+        "text": "Help restaurant, cafe, and food truck owners choose the right commercial kitchen equipment and design their kitchen layout.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "First-time restaurant or cafe owners",
+            "outcome": "Avoid costly equipment mistakes when opening"
+          },
+          {
+            "who": "Food truck operators planning a build-out",
+            "outcome": "Fit the right equipment into a tight space"
+          },
+          {
+            "who": "Established owners upgrading their kitchen",
+            "outcome": "Improve kitchen efficiency with better equipment"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Equipment Buying Decisions",
+            "description": "Helps first-time owners choose the right equipment confidently and avoid costly purchasing mistakes."
+          },
+          {
+            "title": "Kitchen Layout Strategy",
+            "description": "Guides owners in designing efficient, code-compliant layouts that match their concept and volume."
+          },
+          {
+            "title": "Food Truck Builds",
+            "description": "Supports food truck operators in fitting essential equipment into a compact, functional build-out."
+          },
+          {
+            "title": "Avoiding Costly Mistakes",
+            "description": "Protects first-time owners from common, expensive errors that derail openings and blow budgets."
+          },
+          {
+            "title": "Opening Day Readiness",
+            "description": "Prepares new restaurant and cafe owners to open with the right equipment in place and working."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Business & Entrepreneurship",
+        "slug": "business-entrepreneurship",
+        "categoryLabel": null
+      },
+      "cta": "Free kitchen layout design.",
+      "rejections": [],
+      "calls": 3,
+      "retries": 0,
+      "latencyMs": 16951,
+      "wallClockMs": 16963,
+      "estimatedUsd": 0.023916,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "RL-02",
+      "category": "restaurant_local",
+      "goal": {
+        "status": "generated",
+        "text": "Share the daily craft and family traditions behind a handmade Italian restaurant to attract reservations.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Local diners seeking authentic Italian experiences",
+            "outcome": "Book a memorable, tradition-rooted Italian meal"
+          },
+          {
+            "who": "Food-curious travelers planning local dining",
+            "outcome": "Find a standout, story-driven restaurant to visit"
+          },
+          {
+            "who": "Homemade pasta and Italian cooking enthusiasts",
+            "outcome": "Experience authentic handmade pasta beyond home cooking"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Family Recipe Heritage",
+            "description": "Draws diners and travelers in by revealing the generational traditions that make every dish meaningful and irreplaceable."
+          },
+          {
+            "title": "Handmade From Scratch",
+            "description": "Builds trust with authenticity-seeking locals and travelers by showing the daily craft and labor behind every plate."
+          },
+          {
+            "title": "Behind the Kitchen Door",
+            "description": "Creates an emotional connection with both audiences by giving an honest, unscripted look at restaurant life."
+          },
+          {
+            "title": "Seasonal Table Stories",
+            "description": "Gives food-curious travelers and locals a timely reason to book by spotlighting ingredients and menus tied to the season."
+          },
+          {
+            "title": "The Dining Experience",
+            "description": "Converts viewers into reservation holders by showing what guests actually feel, see, and taste when they visit."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Restaurants & Cafes",
+        "slug": "restaurants-cafes",
+        "categoryLabel": null
+      },
+      "cta": "Reservations at the link.",
+      "rejections": [],
+      "calls": 3,
+      "retries": 0,
+      "latencyMs": 16958,
+      "wallClockMs": 16961,
+      "estimatedUsd": 0.023955,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "FH-01",
+      "category": "fitness_health",
+      "goal": {
+        "status": "generated",
+        "text": "Help busy professionals build strength through coaching, practical workouts, and expert programming guidance.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Busy professionals seeking structured strength training",
+            "outcome": "Build strength without sacrificing limited time"
+          },
+          {
+            "who": "Professionals frustrated with poor lifting form",
+            "outcome": "Fix technique to train safely and progress faster"
+          },
+          {
+            "who": "Career-focused people wanting accountability and results",
+            "outcome": "See measurable strength progress with expert guidance"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Smart Program Design",
+            "description": "Shows busy professionals how structured, efficient programming drives consistent strength gains over time."
+          },
+          {
+            "title": "Technique Deep Dives",
+            "description": "Helps frustrated lifters fix movement patterns so they train safely and progress without setbacks."
+          },
+          {
+            "title": "Time-Efficient Training",
+            "description": "Gives time-strapped professionals frameworks to get strong within the hours they actually have."
+          },
+          {
+            "title": "Coaching Mindset",
+            "description": "Builds trust with professionals by showing the thinking and decision-making behind expert strength coaching."
+          },
+          {
+            "title": "Client Transformation Stories",
+            "description": "Motivates the target audience by making long-term strength progress feel achievable and relatable."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Health & Fitness",
+        "slug": "health-fitness",
+        "categoryLabel": null
+      },
+      "cta": "1:1 coaching spots open.",
+      "rejections": [],
+      "calls": 3,
+      "retries": 0,
+      "latencyMs": 16343,
+      "wallClockMs": 16344,
+      "estimatedUsd": 0.023289,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "PB-01",
+      "category": "personal_brand",
+      "goal": {
+        "status": "generated",
+        "text": "Share every lesson from building a skincare brand, from kitchen to retail stores.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Aspiring skincare brand founders",
+            "outcome": "Launch and grow their own skincare brand"
+          },
+          {
+            "who": "Early-stage product brand builders",
+            "outcome": "Scale a physical product from idea to retail"
+          },
+          {
+            "who": "Independent makers entering retail",
+            "outcome": "Land their first retail store partnership"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Product Development",
+            "description": "Helps aspiring founders turn formulation ideas into a sellable, shelf-ready skincare product."
+          },
+          {
+            "title": "Brand Building",
+            "description": "Guides early-stage founders in shaping a brand identity that resonates with buyers and retailers."
+          },
+          {
+            "title": "Retail Strategy",
+            "description": "Teaches aspiring founders how to pitch, enter, and grow relationships with retail partners."
+          },
+          {
+            "title": "Founder Operations",
+            "description": "Prepares brand builders for the behind-the-scenes decisions that keep a growing business running."
+          },
+          {
+            "title": "Sales and Pricing",
+            "description": "Equips founders to price confidently and build revenue strategies that support sustainable growth."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Beauty & Skincare",
+        "slug": "beauty-skincare",
+        "categoryLabel": null
+      },
+      "cta": "Building a skincare brand from my kitchen to 40 stores.",
+      "rejections": [
+        {
+          "step": "audience",
+          "reason": "audience names things not in the evidence (CPG)"
+        }
+      ],
+      "calls": 4,
+      "retries": 1,
+      "latencyMs": 20561,
+      "wallClockMs": 20565,
+      "estimatedUsd": 0.030339,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "PB-03",
+      "category": "personal_brand",
+      "goal": {
+        "status": "generated",
+        "text": "Educate first-time buyers on the home buying process to earn new clients.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Renters ready to buy their first home",
+            "outcome": "Understand the home buying process with confidence"
+          },
+          {
+            "who": "Buyers unsure about affordability and costs",
+            "outcome": "Clarify budget, closing costs, and offer steps"
+          },
+          {
+            "who": "Local residents exploring homeownership options",
+            "outcome": "Find a trustworthy agent to guide their first purchase"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Affordability Decoded",
+            "description": "Helps cost-anxious renters understand what they can realistically afford before starting their search."
+          },
+          {
+            "title": "Offer Process Clarity",
+            "description": "Guides first-time buyers through each step of making a competitive, confident offer."
+          },
+          {
+            "title": "Hidden Costs Exposed",
+            "description": "Prepares buyers for expenses beyond the listing price so there are no financial surprises."
+          },
+          {
+            "title": "Buyer Mindset Shifts",
+            "description": "Builds trust with renters who feel overwhelmed by reframing the process as learnable and achievable."
+          },
+          {
+            "title": "Agent Relationship Guide",
+            "description": "Shows first-time buyers how working with an agent protects their interests and simplifies the process."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Real Estate",
+        "slug": "real-estate",
+        "categoryLabel": null
+      },
+      "cta": "Real estate agent.",
+      "rejections": [
+        {
+          "step": "goal",
+          "reason": "goal copies the profile bio instead of stating a purpose"
+        }
+      ],
+      "calls": 4,
+      "retries": 1,
+      "latencyMs": 18116,
+      "wallClockMs": 18118,
+      "estimatedUsd": 0.030174,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "EN-02",
+      "category": "entertainment",
+      "goal": {
+        "status": "generated",
+        "text": "Entertain office workers with comedy sketches about relatable corporate workplace situations.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Corporate office workers",
+            "outcome": "Laugh at painfully familiar workplace moments"
+          },
+          {
+            "who": "Remote and hybrid desk workers",
+            "outcome": "Find humor in shared corporate culture frustrations"
+          },
+          {
+            "who": "Early-career professionals and new hires",
+            "outcome": "Feel seen and validated in a confusing workplace"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Meeting Culture Madness",
+            "description": "Entertains office workers by lampooning the absurd rituals and politics of corporate meetings."
+          },
+          {
+            "title": "Corporate Email Comedy",
+            "description": "Gives desk workers a laugh by exaggerating the chaos and passive aggression of workplace email."
+          },
+          {
+            "title": "Office Hierarchy Sketches",
+            "description": "Entertains by playing up the comedic gap between corporate roles and unwritten workplace rules."
+          },
+          {
+            "title": "Remote Work Struggles",
+            "description": "Connects with hybrid and remote workers through humor about the quirks of working from home."
+          },
+          {
+            "title": "Corporate Jargon Roasts",
+            "description": "Delights office workers by mocking the buzzwords and corporate speak they endure every day."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Office comedy sketches",
+        "slug": "office-comedy-sketches",
+        "categoryLabel": null
+      },
+      "cta": null,
+      "rejections": [],
+      "calls": 4,
+      "retries": 1,
+      "latencyMs": 20036,
+      "wallClockMs": 17797,
+      "estimatedUsd": 0.026517,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    },
+    {
+      "caseId": "ES-02",
+      "category": "education_services",
+      "goal": {
+        "status": "generated",
+        "text": "Teach small businesses bookkeeping and tax essentials to attract new clients.",
+        "source": "ai",
+        "question": null,
+        "confidence": "high"
+      },
+      "audiences": {
+        "status": "generated",
+        "items": [
+          {
+            "who": "Early-stage small business owners",
+            "outcome": "Avoid costly tax mistakes and stay compliant"
+          },
+          {
+            "who": "Self-employed freelancers and solopreneurs",
+            "outcome": "Understand quarterly taxes and track deductions"
+          },
+          {
+            "who": "Small business owners switching from DIY finances",
+            "outcome": "Hand off bookkeeping to a trusted professional"
+          }
+        ],
+        "usedFallback": false
+      },
+      "pillars": {
+        "status": "generated",
+        "items": [
+          {
+            "title": "Tax Mistake Prevention",
+            "description": "Helps early-stage owners avoid costly errors and stay compliant before tax season hits."
+          },
+          {
+            "title": "Freelancer Finance Basics",
+            "description": "Equips solopreneurs with foundational money skills to manage income and obligations confidently."
+          },
+          {
+            "title": "Deduction Deep Dives",
+            "description": "Uncovers overlooked write-offs so small business owners legally reduce what they owe."
+          },
+          {
+            "title": "Cash Flow Clarity",
+            "description": "Teaches owners to read and manage their money flow so the business stays financially healthy."
+          },
+          {
+            "title": "When to Hire Help",
+            "description": "Guides owners toward knowing when professional bookkeeping or tax help is worth the investment."
+          }
+        ]
+      },
+      "niche": {
+        "status": "suggested",
+        "label": "Business & Entrepreneurship",
+        "slug": "business-entrepreneurship",
+        "categoryLabel": null
+      },
+      "cta": "Free 15-minute consult.",
+      "rejections": [],
+      "calls": 3,
+      "retries": 0,
+      "latencyMs": 17066,
+      "wallClockMs": 17067,
+      "estimatedUsd": 0.023538,
+      "gates": {
+        "unsupportedCommercialGoal": false,
+        "inventedStatistics": [],
+        "clarificationExpectationMet": true,
+        "audienceCountOk": true,
+        "pillarCountOk": true,
+        "confirmedPreserved": true
+      },
+      "humanScores": null
+    }
+  ],
+  "calls": [
+    {
+      "caseId": "RL-01",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1518,
+      "outputTokens": 157,
+      "latencyMs": 4538,
+      "estimatedUsd": 0.006909,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-01",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1433,
+      "outputTokens": 204,
+      "latencyMs": 5231,
+      "estimatedUsd": 0.007359,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-01",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1621,
+      "outputTokens": 319,
+      "latencyMs": 7182,
+      "estimatedUsd": 0.009648,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-02",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1469,
+      "outputTokens": 156,
+      "latencyMs": 3001,
+      "estimatedUsd": 0.006747,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-02",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1382,
+      "outputTokens": 230,
+      "latencyMs": 5830,
+      "estimatedUsd": 0.007596,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "RL-02",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1554,
+      "outputTokens": 330,
+      "latencyMs": 8127,
+      "estimatedUsd": 0.009612,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "FH-01",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1470,
+      "outputTokens": 159,
+      "latencyMs": 2812,
+      "estimatedUsd": 0.006795,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "FH-01",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1381,
+      "outputTokens": 208,
+      "latencyMs": 5764,
+      "estimatedUsd": 0.007263,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "FH-01",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1547,
+      "outputTokens": 306,
+      "latencyMs": 7767,
+      "estimatedUsd": 0.009231,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-01",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1468,
+      "outputTokens": 146,
+      "latencyMs": 3179,
+      "estimatedUsd": 0.006594,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-01",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1378,
+      "outputTokens": 220,
+      "latencyMs": 5790,
+      "estimatedUsd": 0.007434,
+      "error": null,
+      "rejected": true
+    },
+    {
+      "caseId": "PB-01",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1403,
+      "outputTokens": 197,
+      "latencyMs": 4718,
+      "estimatedUsd": 0.007164,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-01",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1544,
+      "outputTokens": 301,
+      "latencyMs": 6874,
+      "estimatedUsd": 0.009147,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-03",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1449,
+      "outputTokens": 152,
+      "latencyMs": 2671,
+      "estimatedUsd": 0.006627,
+      "error": null,
+      "rejected": true
+    },
+    {
+      "caseId": "PB-03",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1474,
+      "outputTokens": 154,
+      "latencyMs": 2887,
+      "estimatedUsd": 0.006732,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-03",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1360,
+      "outputTokens": 225,
+      "latencyMs": 5452,
+      "estimatedUsd": 0.007455,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "PB-03",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1525,
+      "outputTokens": 319,
+      "latencyMs": 7106,
+      "estimatedUsd": 0.00936,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "EN-02",
+      "operation": "personalization_niche",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 937,
+      "outputTokens": 36,
+      "latencyMs": 2243,
+      "estimatedUsd": 0.003351,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "EN-02",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1425,
+      "outputTokens": 146,
+      "latencyMs": 2629,
+      "estimatedUsd": 0.006465,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "EN-02",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1335,
+      "outputTokens": 215,
+      "latencyMs": 6113,
+      "estimatedUsd": 0.00723,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "EN-02",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1492,
+      "outputTokens": 333,
+      "latencyMs": 9051,
+      "estimatedUsd": 0.009471,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "ES-02",
+      "operation": "personalization_goal_inference",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1455,
+      "outputTokens": 165,
+      "latencyMs": 4746,
+      "estimatedUsd": 0.00684,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "ES-02",
+      "operation": "personalization_audience_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1365,
+      "outputTokens": 216,
+      "latencyMs": 5181,
+      "estimatedUsd": 0.007335,
+      "error": null,
+      "rejected": false
+    },
+    {
+      "caseId": "ES-02",
+      "operation": "personalization_pillar_recommendations",
+      "model": "claude-sonnet-4-6",
+      "inputTokens": 1531,
+      "outputTokens": 318,
+      "latencyMs": 7139,
+      "estimatedUsd": 0.009363,
+      "error": null,
+      "rejected": false
+    }
+  ],
+  "totals": {
+    "cases": 7,
+    "calls": 24,
+    "retries": 3,
+    "rejections": 2,
+    "estimatedUsd": 0.181728,
+    "meanUsdPerCase": 0.025961,
+    "maxUsdPerCase": 0.030339,
+    "meanLatencyMs": 5251,
+    "p95LatencyMs": 8127,
+    "meanWallClockMs": 17688,
+    "p95WallClockMs": 20565,
+    "failedCallUsd": 0.014061
+  }
+}

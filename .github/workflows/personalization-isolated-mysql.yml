@@ -1,0 +1,46 @@
+name: SpyReels Personalization Isolated MySQL
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  isolated-mysql:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: testonly
+          MYSQL_DATABASE: spyreels_isolated
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ptestonly"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    env:
+      PERSONALIZATION_SCHEMA_TEST_DB: mysql://root:testonly@127.0.0.1:3307/spyreels_isolated
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Queue claims and expired leases
+        run: pnpm exec vitest run server/durableJobs/queue.mysql.test.ts
+      - name: Authenticated Instagram onboarding and persisted Home
+        run: pnpm exec vitest run server/personalization/onboarding/onboardingService.mysql.test.ts
+      - name: Subtopic and confirmed-choice protection
+        run: pnpm exec vitest run server/personalization/subtopicJobs.mysql.test.ts
+      - name: MySQL schema isolation
+        run: pnpm exec vitest run shared/personalization/schema.mysql.test.ts

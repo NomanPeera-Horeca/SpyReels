@@ -23,6 +23,7 @@ import {
   type AnalysisStageStatus,
   type AttributionSource,
   type ItemPayloadByKind,
+  type NichePayload,
   type PersonalizationItemKind,
   type PillarPayload,
   type PersonalizationStep,
@@ -59,6 +60,8 @@ import {
 } from "@shared/personalization/performanceInsights";
 import { readOptional } from "./optionalRead";
 import { previewPostsFromEvidence } from "./profileEvidence";
+import { resolveContentCategory } from "@shared/personalization/contentTaxonomy";
+import { nichePayloadForSave } from "../intelligence/profileBasics";
 import { firstVisibleDelayMs } from "../intelligence/recommendationService";
 import { toItemRecord } from "../db/rows";
 import {
@@ -205,7 +208,8 @@ async function loadItems(db: Db, profileId: string): Promise<ItemRecord[]> {
     .select()
     .from(personalizationItems)
     .where(eq(personalizationItems.socialProfileId, profileId))
-    .orderBy(personalizationItems.sortOrder, personalizationItems.createdAt);
+    // Stable ordering even when multiple items share the same timestamp/position.
+    .orderBy(personalizationItems.sortOrder, personalizationItems.createdAt, personalizationItems.id);
   return rows.map(toItemRecord);
 }
 
@@ -547,12 +551,17 @@ export async function startNotPostingYet(
   await setActive(db, ctx, profileId);
   const items = liveItems(await loadItems(db, profileId));
   const currentNiche = items.find(i => i.kind === "niche");
+  const pickedCategory = resolveContentCategory(niche.label) ?? resolveContentCategory(niche.slug);
+  const savedNiche = nichePayloadForSave({
+    ...niche,
+    categoryLabel: pickedCategory?.label,
+  });
   if (!currentNiche) {
     await insertItems(db, ctx, profileId, [
-      userItem("niche", niche, progress.personalizationVersion),
+      userItem("niche", savedNiche, progress.personalizationVersion),
     ]);
-  } else if ((currentNiche.payload as { slug: string }).slug !== niche.slug) {
-    await editItem(db, ctx, currentNiche.id, niche);
+  } else if ((currentNiche.payload as { slug: string }).slug !== savedNiche.slug) {
+    await editItem(db, ctx, currentNiche.id, savedNiche);
   }
   return { profileId };
 }
@@ -655,7 +664,17 @@ export async function editItem(
 ): Promise<{ itemId: string }> {
   const { profile, item } = await itemOfActiveProfile(db, ctx, itemId);
   const progress = await ensureProgress(db, profile.id, ctx.workspaceId);
-  const plan = planItemEdit(item, payload, progress.personalizationVersion);
+  const nextPayload =
+    item.kind === "niche"
+      ? nichePayloadForSave({
+          slug: (payload as NichePayload).slug,
+          label: (payload as NichePayload).label,
+          categoryLabel:
+            (payload as NichePayload).categoryLabel ??
+            (item.payload as NichePayload).categoryLabel,
+        })
+      : payload;
+  const plan = planItemEdit(item, nextPayload, progress.personalizationVersion);
   const newId = randomUUID();
   // Topics move only when the normalized title is unchanged. A changed title keeps
   // its old topics on the superseded pillar as history; the new pillar starts empty.

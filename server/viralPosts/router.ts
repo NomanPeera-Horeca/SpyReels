@@ -24,6 +24,7 @@ import {
   saveViralCandidateCanonical,
   unsaveViralCandidateCanonical,
 } from "./canonicalSaved";
+import { preservesEmptyTaxonomyFeed } from "../personalization/home/inventoryMatch";
 import { browseViralPosts } from "./browseService";
 import * as repo from "./repository";
 import {
@@ -129,6 +130,9 @@ async function withNonEmptyFeedFallback(args: {
   feed: ViralDailyFeedResponse;
 }): Promise<ViralDailyFeedResponse> {
   if (args.feed.items.length > 0) return args.feed;
+  // A stored category with no relevant inventory stays on the empty state.
+  // History and the legacy browse fallback would show another niche.
+  if (preservesEmptyTaxonomyFeed(args.feed.generationReason)) return args.feed;
 
   try {
     const history = await getFeedHistory({
@@ -247,6 +251,7 @@ export const viralPostsRouter = router({
 
       const request = {
         userId: ctx.user.id,
+        workspaceId: ctx.workspaceId,
         localDate: input.localDate,
         timezone: input.timezone,
       };

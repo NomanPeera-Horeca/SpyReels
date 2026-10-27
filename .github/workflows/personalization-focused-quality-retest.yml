@@ -1,0 +1,111 @@
+# Authorized, synthetic-only real-model focused retest. PR branch only.
+# Additional spend reservation: generation <=$0.35 and judging <=$0.15;
+# combined with prior $0.980370 estimated spend, <= the $1.50 authorization.
+# Does not change production config, run scrapers, or deploy.
+name: SpyReels Focused Real AI Quality Retest
+
+on:
+  push:
+    branches:
+      - fix/precise-niche-split
+
+permissions:
+  contents: read
+
+jobs:
+  focused-retest:
+    if: ${{ contains(github.event.head_commit.message, '[authorized-focused-quality-retest]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - name: Checkout isolated draft branch
+        uses: actions/checkout@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Verify credential and frozen Goal and Pillar versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "Missing private Anthropic test credential" >&2
+            exit 1
+          fi
+          grep -q 'GOAL_PROMPT_VERSION = "goal-v2"' server/personalization/intelligence/goalInference.ts
+          grep -q 'PILLAR_PROMPT_VERSION = "pillars-v2"' server/personalization/intelligence/pillarRecommendations.ts
+          grep -q 'NICHE_PROMPT_VERSION = "niche-v5"' server/personalization/intelligence/profileBasics.ts
+          grep -q 'AUDIENCE_PROMPT_VERSION = "audience-v4"' server/personalization/intelligence/audienceRecommendations.ts
+      - name: Real Sonnet strategy generation for 10 selected synthetic profiles
+        run: |
+          pnpm exec tsx scripts/personalization-intelligence-eval.ts \
+            --confirm-spend \
+            --cases=PB-04,TL-02,EN-01,TL-04,AM-02,RL-01,FH-01,ES-01,SN-01,AM-03 \
+            --cap=0.35 \
+            --out=focused-retest-10
+      - name: Check complete first pass before incurring judge costs
+        shell: bash
+        run: |
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const r=JSON.parse(fs.readFileSync("docs/evals/personalization-intelligence/focused-retest-10.json","utf8"));
+            const expected=new Set("PB-04,TL-02,EN-01,TL-04,AM-02,RL-01,FH-01,ES-01,SN-01,AM-03".split(","));
+            const actual=r.cases.map(x=>x.caseId);
+            if (!r.realModel || r.stoppedByCap || r.totals.cases !== 10 ||
+                r.totals.estimatedUsd > 0.35 ||
+                actual.some(id=>!expected.has(id)) || actual.length!==expected.size) {
+              console.error("STOP: Generation incomplete, mismatched or over budget",r.totals);
+              process.exit(1);
+            }
+            console.log("Generation passed",JSON.stringify({actual,totals:r.totals,decisions:r.decision}));
+          '
+      - name: Independent judge capped at 15 cents
+        run: |
+          pnpm exec tsx scripts/personalization-quality-judge.ts \
+            --confirm-spend \
+            --in=focused-retest-10 \
+            --cap=0.15
+      - name: Verify all scores and produce separated metrics
+        shell: bash
+        run: |
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const dir="docs/evals/personalization-intelligence/";
+            const r=JSON.parse(fs.readFileSync(dir+"focused-retest-10.json","utf8"));
+            const j=JSON.parse(fs.readFileSync(dir+"focused-retest-10-judge.json","utf8"));
+            const total=r.totals.estimatedUsd+j.estimatedUsd;
+            if (j.stoppedByCap || j.scored!==10 || j.cases!==10 ||
+                j.estimatedUsd>0.15 || total>0.50) {
+              console.error("STOP: Judging incomplete, over budget, or missing cases",j);
+              process.exit(1);
+            }
+            console.log("Estimated cost USD",JSON.stringify({
+              generation:r.totals.estimatedUsd,
+              judge:j.estimatedUsd,
+              total,
+              note:"Token-estimated, not provider invoice"
+            }));
+          '
+          pnpm exec tsx scripts/personalization-quality-judge.ts \
+            --in=focused-retest-10 --report-only \
+            > docs/evals/personalization-intelligence/focused-retest-10-summary.json
+          cat docs/evals/personalization-intelligence/focused-retest-10-summary.json
+      - name: Upload complete synthetic-only reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spyreels-focused-retest-10
+          path: |
+            docs/evals/personalization-intelligence/focused-retest-10.json
+            docs/evals/personalization-intelligence/focused-retest-10.md
+            docs/evals/personalization-intelligence/focused-retest-10-judge.json
+            docs/evals/personalization-intelligence/focused-retest-10-summary.json
+          if-no-files-found: warn
+          retention-days: 30

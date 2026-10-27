@@ -8,7 +8,9 @@
  * - creators: the same indexed Viral Posts inventory as videos. Home groups
  *   qualified posts by creator. The featured catalog is not that source.
  * - videos: indexed Viral Posts pools that already exist (no new pools, no
- *   refresh), see browseIndexedViralPosts.
+ *   refresh), see browseIndexedViralPosts. A stored category selects those
+ *   pools in the Home router. A profile with no category stays on the legacy
+ *   label match.
  */
 import { inferNicheFromText } from "@shared/creatorContextInference";
 import type {
@@ -28,9 +30,11 @@ export const HOME_CREATOR_LIMIT = 3;
 
 export type HomeContext = {
   hasProfile: boolean;
-  /** Confirmed niche label, or null (sidebar and subtitles say "not personalized yet"). */
+  /** Confirmed specific niche label, or null (sidebar and subtitles say "not personalized yet"). */
   nicheLabel: string | null;
-  /** Slug inferred from the confirmed niche label. Not the Home creator source. */
+  /** Broad discovery category when the niche row has one. Pool matching uses this. */
+  categoryLabel: string | null;
+  /** Slug inferred from the discovery category, or from the label when no category is stored. */
   featuredNicheSlug: string | null;
   /** Confirmed niche, goal, and pillar text joined for display context. Not a pool key. */
   description: string | null;
@@ -49,12 +53,12 @@ export type HomeContext = {
 const ORDER: PersonalizationStep[] = ["goal", "audience", "pillars"];
 
 /**
- * Pool niche text is the confirmed niche label only.
- * Goal, audience, and pillar text must not retarget that niche.
- * When the label is missing, browse falls back to the legacy profile text.
+ * Live Home matching stays on the confirmed niche label.
+ * The stored category is not a pool key until its indexed supply is verified.
  */
 export function videoMatchText(context: HomeContext): string | null {
-  return context.nicheLabel;
+  const label = context.nicheLabel?.trim() ?? "";
+  return label || null;
 }
 
 /** Pure: personalization state -> Home context. Uses confirmed items only. */
@@ -63,6 +67,7 @@ export function homeContextFromState(state: OnboardingStateView | null): HomeCon
     return {
       hasProfile: false,
       nicheLabel: null,
+      categoryLabel: null,
       featuredNicheSlug: null,
       description: null,
       pillarTitles: [],
@@ -74,6 +79,7 @@ export function homeContextFromState(state: OnboardingStateView | null): HomeCon
   }
   const confirmed = state.items.filter(i => i.status === "confirmed");
   const niche = confirmed.find(i => i.kind === "niche")?.payload as NichePayload | undefined;
+  const categoryLabel = niche?.categoryLabel?.trim() || null;
   const goal = confirmed.find(i => i.kind === "goal")?.payload as GoalPayload | undefined;
   const pillarTitles = confirmed
     .filter(i => i.kind === "pillar")
@@ -87,13 +93,13 @@ export function homeContextFromState(state: OnboardingStateView | null): HomeCon
     (s): s is string => typeof s === "string" && s.trim().length > 0
   );
   const description = parts.length ? parts.join(". ") : null;
-  // Goal and audience never choose the featured niche. An unmatched label stays general.
-  const inferred = niche?.label ? inferNicheFromText(niche.label) : null;
   const statusOf = (s: PersonalizationStep): StepStatus => state.steps[s];
   const nextStep = ORDER.find(s => statusOf(s) !== "confirmed") ?? null;
+  const inferred = niche?.label ? inferNicheFromText(niche.label) : null;
   return {
     hasProfile: Boolean(state.profile),
     nicheLabel: niche?.label ?? null,
+    categoryLabel,
     featuredNicheSlug: inferred?.slug ?? null,
     description,
     pillarTitles,

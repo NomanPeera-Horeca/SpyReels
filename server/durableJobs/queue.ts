@@ -30,6 +30,43 @@ function jobTypeListSql(types: PilotJobType[]): SQL {
   );
 }
 
+const CLAIM_BACKOFF_MS = [0, 40, 120, 280];
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function selectedRows(result: unknown): Array<Record<string, unknown>> {
+  if (!Array.isArray(result)) return [];
+  const packet = result[0];
+  return Array.isArray(packet) ? (packet as Array<Record<string, unknown>>) : [];
+}
+
+/** Deadlock and lock-wait are transient. The claim rolls back and can be retried. */
+export function isTransientLockConflict(error: unknown): boolean {
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+  while (current && typeof current === "object" && !seen.has(current)) {
+    seen.add(current);
+    const record = current as { code?: unknown; errno?: unknown; message?: unknown; cause?: unknown };
+    const code = typeof record.code === "string" ? record.code : "";
+    const errno = typeof record.errno === "number" ? record.errno : NaN;
+    const message = typeof record.message === "string" ? record.message : "";
+    if (
+      code === "ER_LOCK_DEADLOCK" ||
+      code === "ER_LOCK_WAIT_TIMEOUT" ||
+      errno === 1213 ||
+      errno === 1205 ||
+      message.includes("Deadlock found") ||
+      message.includes("Lock wait timeout")
+    ) {
+      return true;
+    }
+    current = record.cause;
+  }
+  return false;
+}
+
 function claimTypeFilterSql(input: {
   includeJobTypes?: PilotJobType[];
   excludeJobTypes?: PilotJobType[];
@@ -172,16 +209,16 @@ export async function claimNextDurableJob(input: {
   const claimToken = `${input.workerId}:${randomUUID()}`;
   const typeFilter = claimTypeFilterSql(input);
 
-  const result = await db.execute(sql`
-    UPDATE durable_jobs
-    SET
-      status = 'running',
-      attempt = attempt + 1,
-      lockedBy = ${claimToken},
-      leaseExpiresAt = DATE_ADD(NOW(3), INTERVAL ${leaseSeconds} SECOND),
-      updatedAt = NOW(3)
-    WHERE id = (
-      SELECT id FROM (
+  // The previous single-statement UPDATE ... WHERE id = (SELECT ... LIMIT 1)
+  // deadlocked two workers (ER_LOCK_DEADLOCK, errno 1213). One worker won the
+  // row and the other threw, which exited the process. A range
+  // SELECT ... ORDER BY ... LIMIT 1 FOR UPDATE also hides the next queued row
+  // from the second worker. Read the candidate ids, then lock one primary key.
+  // SKIP LOCKED on that key returns nothing when another worker already owns
+  // it, so the second worker takes the next id.
+  const claimOnce = async (): Promise<ClaimedJob | null> =>
+    db.transaction(async (tx) => {
+      const candidates = await tx.execute(sql`
         SELECT id
         FROM durable_jobs
         WHERE
@@ -193,22 +230,68 @@ export async function claimNextDurableJob(input: {
           AND attempt < maxAttempts
           ${typeFilter}
         ORDER BY availableAt ASC, id ASC
-        LIMIT 1
-      ) AS claimable
-    )
-  `);
-  if (Number((result[0] as { affectedRows?: number }).affectedRows ?? 0) === 0) {
-    return null;
-  }
+        LIMIT 16
+      `);
+      for (const candidate of selectedRows(candidates)) {
+        const id = Number(candidate.id ?? 0);
+        if (!id) continue;
+        const locked = await tx.execute(sql`
+          SELECT id
+          FROM durable_jobs
+          WHERE
+            id = ${id}
+            AND (
+              status = 'queued'
+              OR (status = 'running' AND leaseExpiresAt < NOW(3))
+            )
+            AND availableAt <= NOW(3)
+            AND attempt < maxAttempts
+          FOR UPDATE SKIP LOCKED
+        `);
+        if (!selectedRows(locked)[0]) continue;
+        await tx.execute(sql`
+          UPDATE durable_jobs
+          SET
+            status = 'running',
+            attempt = attempt + 1,
+            lockedBy = ${claimToken},
+            leaseExpiresAt = DATE_ADD(NOW(3), INTERVAL ${leaseSeconds} SECOND),
+            updatedAt = NOW(3)
+          WHERE
+            id = ${id}
+            AND (
+              status = 'queued'
+              OR (status = 'running' AND leaseExpiresAt < NOW(3))
+            )
+            AND availableAt <= NOW(3)
+            AND attempt < maxAttempts
+        `);
+        const rows = await tx.execute(sql`
+          SELECT *
+          FROM durable_jobs
+          WHERE id = ${id} AND lockedBy = ${claimToken} AND status = 'running'
+          LIMIT 1
+        `);
+        const row = selectedRows(rows)[0];
+        if (row) return coerceJob(row, claimToken);
+      }
+      return null;
+    }, { isolationLevel: "read committed" });
 
-  const rows = await db.execute(sql`
-    SELECT *
-    FROM durable_jobs
-    WHERE lockedBy = ${claimToken} AND status = 'running'
-    LIMIT 1
-  `);
-  const row = (rows[0] as unknown as Record<string, unknown>[])[0];
-  return row ? coerceJob(row, claimToken) : null;
+  for (let attempt = 0; attempt < CLAIM_BACKOFF_MS.length; attempt += 1) {
+    if (CLAIM_BACKOFF_MS[attempt] > 0) await delay(CLAIM_BACKOFF_MS[attempt]);
+    try {
+      return await claimOnce();
+    } catch (error) {
+      const last = attempt === CLAIM_BACKOFF_MS.length - 1;
+      if (!isTransientLockConflict(error)) throw error;
+      if (last) {
+        console.warn("[durableJobs] claim lock conflict, skipping this poll");
+        return null;
+      }
+    }
+  }
+  return null;
 }
 
 export async function heartbeatDurableJob(

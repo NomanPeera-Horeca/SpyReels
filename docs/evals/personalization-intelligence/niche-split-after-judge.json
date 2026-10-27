@@ -1,0 +1,116 @@
+{
+  "stem": "niche-split-after",
+  "cases": 7,
+  "scored": 7,
+  "estimatedUsd": 0.047421,
+  "mean": {
+    "niche": 26.9,
+    "goal": 22.1,
+    "audience": 17.4,
+    "pillars": 21.9,
+    "specificity": 12.1,
+    "clarity": 9,
+    "evidence": 4.1,
+    "total": 113.5
+  },
+  "rows": [
+    {
+      "caseId": "RL-01",
+      "scores": {
+        "niche": 26,
+        "goal": 22,
+        "audience": 18,
+        "pillars": 22,
+        "specificity": 12,
+        "clarity": 9,
+        "evidence": 4,
+        "reason": "Niche label is accurate and specific; goal, audiences, and pillars align tightly with bio and captions; no invented stats or audiences; minor specificity gains possible in pillar tactics."
+      },
+      "costUsd": 0.006867
+    },
+    {
+      "caseId": "RL-02",
+      "scores": {
+        "niche": 27,
+        "goal": 22,
+        "audience": 17,
+        "pillars": 22,
+        "specificity": 12,
+        "clarity": 9,
+        "evidence": 4,
+        "reason": "Niche and pillars are well-tailored; goal correctly targets diners not owners; \"special occasion planners\" is lightly inferred but plausible; no invented stats penalized."
+      },
+      "costUsd": 0.006918
+    },
+    {
+      "caseId": "FH-01",
+      "scores": {
+        "niche": 27,
+        "goal": 22,
+        "audience": 16,
+        "pillars": 22,
+        "specificity": 12,
+        "clarity": 9,
+        "evidence": 4,
+        "reason": "Niche and pillars are well-matched to the profile; Mindset pillar is weakly evidenced, and the beginner audience segment is inferred rather than clearly grounded in the captions."
+      },
+      "costUsd": 0.006816
+    },
+    {
+      "caseId": "PB-01",
+      "scores": {
+        "niche": 27,
+        "goal": 22,
+        "audience": 18,
+        "pillars": 23,
+        "specificity": 13,
+        "clarity": 9,
+        "evidence": 5,
+        "reason": "Niche label is specific and accurate; goal, pillars, and audiences map tightly to captions with no invented data; missing CTA is the only notable gap."
+      },
+      "costUsd": 0.006729
+    },
+    {
+      "caseId": "PB-03",
+      "scores": {
+        "niche": 27,
+        "goal": 22,
+        "audience": 18,
+        "pillars": 21,
+        "specificity": 12,
+        "clarity": 9,
+        "evidence": 4,
+        "reason": "Niche and goal are accurate and well-scoped; pillars align with captions but \"Mortgage Made Simple\" has no caption evidence and slightly overreaches Lena's demonstrated content."
+      },
+      "costUsd": 0.006816
+    },
+    {
+      "caseId": "EN-02",
+      "scores": {
+        "niche": 27,
+        "goal": 22,
+        "audience": 17,
+        "pillars": 21,
+        "specificity": 11,
+        "clarity": 9,
+        "evidence": 4,
+        "reason": "Niche label is precise and accurate; pillars align well with observed content but lack CTAs and discovery category weakens discoverability signals."
+      },
+      "costUsd": 0.006555
+    },
+    {
+      "caseId": "ES-02",
+      "scores": {
+        "niche": 27,
+        "goal": 23,
+        "audience": 18,
+        "pillars": 22,
+        "specificity": 13,
+        "clarity": 9,
+        "evidence": 4,
+        "reason": "Niche is precise and accurate; goal, audiences, and pillars align tightly with bio and captions; minor penalty for two duplicate captions reducing evidence discipline."
+      },
+      "costUsd": 0.00672
+    }
+  ]
+}

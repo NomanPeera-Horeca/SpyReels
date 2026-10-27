@@ -36,6 +36,15 @@ import {
   switchActiveProfile,
 } from "./onboardingService";
 import { homeContextFromState, videoMatchText } from "../home/homeService";
+import { contentInventoryPlan } from "../home/inventoryMatch";
+import { loadStoredContentInventory } from "../home/storedInventory";
+import { browseIndexedViralPosts } from "../../viralPosts/browseService";
+import {
+  lookupPublicProfile,
+  resetLookupLimiterForTests,
+  resetProfileLookupCacheForTests,
+  type ProfileLookupDeps,
+} from "./profileLookup";
 import {
   addPillarSubtopic,
   dismissPillarSubtopic,
@@ -105,6 +114,15 @@ const AUDIENCE_OUT = {
   ],
   confidence: "medium",
 };
+const PILLAR_OUT = {
+  pillars: [
+    { title: "Weeknight dinners", serves: "Show meals busy parents can cook after work.", subtopics: ["One pan pasta", "Sheet pan chicken", "Rice bowls"] },
+    { title: "Grocery shortcuts", serves: "Help parents shop once and cook all week.", subtopics: ["Sunday prep", "Freezer meals", "Pantry staples"] },
+    { title: "Kid friendly plates", serves: "Give parents dinners children will actually eat.", subtopics: ["Hidden vegetables", "Build your own", "Ten minute sides"] },
+  ],
+  confidence: "medium",
+};
+const NICHE_OUT = { label: "weeknight dinners", category: "Food" };
 
 describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
   let conn: mysql.Connection;
@@ -418,8 +436,8 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
     expect(ctx.description).toContain("fitness");
     expect(ctx.goalText).toContain("fitness");
     expect(ctx.pillarTitles).toEqual([]);
-    expect(videoMatchText(ctx)).toBe(ctx.nicheLabel);
-    expect(videoMatchText(ctx)).not.toContain("fitness");
+    expect(videoMatchText(ctx)).toBe("Restaurant business");
+    expect(ctx.nicheLabel).not.toContain("fitness");
   });
 
   it("pillar edits keep subtopic ids and dismissal, and Undo does not resurrect them", async () => {
@@ -652,6 +670,215 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
     }
   });
 
+  it("walks a mocked Instagram profile from That's me through Home", async () => {
+    resetLookupLimiterForTests();
+    resetProfileLookupCacheForTests();
+    const lookupDeps: ProfileLookupDeps = {
+      instagram: async () => ({
+        username: "Test.Kitchen",
+        fullName: "Test Kitchen",
+        biography: "Easy weeknight dinners for busy parents",
+        profilePicUrl: "https://cdn.example/pic.jpg",
+        followerCount: 1200,
+        followingCount: 10,
+        postCount: 40,
+        isVerified: false,
+        isPrivate: false,
+        category: "",
+        externalUrl: "",
+        userId: "ig-1",
+        recentMedia: [
+          { shortcode: "pasta1", thumbnailUrl: "https://cdn.example/pasta.jpg", viewCount: 900, isPinned: false },
+        ],
+      }),
+      tiktok: async () => {
+        throw new Error("not used");
+      },
+      youtube: async () => {
+        throw new Error("not used");
+      },
+      mirrorAvatar: async (_handle, avatarUrl) => avatarUrl,
+      mirrorThumbnails: async items => new Map(items.map(item => [item.shortcode, item.thumbnailUrl])),
+      classify: () => "error",
+    };
+    const looked = await lookupPublicProfile({
+      userId: A.userId,
+      platform: "instagram",
+      handle: "test.kitchen",
+      deps: lookupDeps,
+    });
+    expect(looked.ok).toBe(true);
+    if (!looked.ok) return;
+    expect(looked.profile).toMatchObject({
+      platform: "instagram",
+      handle: "test.kitchen",
+      bio: "Easy weeknight dinners for busy parents",
+    });
+
+    const { profileId } = await confirmProfile(db, A, looked.profile);
+    const analysisDeps = {
+      store: createAnalysisStore(db),
+      enqueue: async () => 1,
+      newId: randomUUID,
+      now: () => new Date(),
+    };
+    const started = await requestProfileAnalysis(analysisDeps, {
+      ctx: authCtx(A),
+      socialProfileId: profileId,
+      requestKind: "initial",
+    });
+    const repeated = await requestProfileAnalysis(analysisDeps, {
+      ctx: authCtx(A),
+      socialProfileId: profileId,
+      requestKind: "initial",
+    });
+    expect(started.status).toBe("started");
+    expect(repeated).toMatchObject({ status: "reused" });
+    await runProfileAnalysis(
+      {
+        payload: {
+          runId: (started as { runId: string }).runId,
+          workspaceId: WS_A,
+          socialProfileId: profileId,
+          requestKind: "initial",
+        },
+        attempt: 1,
+        maxAttempts: 1,
+      },
+      {
+        store: createAnalysisStore(db),
+        source: {
+          fetchPosts: async ({ platform, handle, windowStart, windowEnd }) => ({
+            snapshot: {
+              version: 1,
+              platform,
+              handle,
+              followerCount: 1200,
+              windowStart: windowStart.toISOString(),
+              windowEnd: windowEnd.toISOString(),
+              posts: [
+                {
+                  postId: "pasta1",
+                  url: null,
+                  publishedAt: windowEnd.toISOString(),
+                  views: 900,
+                  likes: 20,
+                  comments: 2,
+                  durationSec: 20,
+                  caption: "15 minute pasta for busy parents",
+                },
+              ],
+            },
+            meter: { requests: 1, blockedByBudget: 0, byStatus: { "200": 1 }, budget: 25, estimatedUsd: 0 },
+          }),
+        },
+        suggestions: null,
+        now: () => new Date(),
+      }
+    );
+
+    await saveUseCase(db, A, "find_viral_videos");
+    await saveAttribution(db, A, null);
+    const calls: string[] = [];
+    const invoker = async (p: InvokeParams): Promise<InvokeResult> => {
+      calls.push(p.operation ?? "");
+      return fakeInvoker({
+        personalization_niche: NICHE_OUT,
+        personalization_goal_inference: GOAL_OUT,
+        personalization_audience_recommendations: AUDIENCE_OUT,
+        personalization_pillar_recommendations: PILLAR_OUT,
+      })(p);
+    };
+    const store = createRecommendationStore(db);
+    const goal = await generateRecommendations(
+      { store, invoker },
+      { ctx: authCtx(A), socialProfileId: profileId, step: "goal" }
+    );
+    expect(goal.status).toBe("generated");
+    expect(calls.slice().sort()).toEqual(["personalization_goal_inference", "personalization_niche"]);
+    await resolveStep(db, A, "goal", "confirm");
+    let state = await loadOnboardingState(db, A);
+    const confirmedGoal = state.items.find(i => i.kind === "goal" && i.status === "confirmed");
+    const confirmedNiche = state.items.find(i => i.kind === "niche" && i.status === "confirmed");
+    expect(confirmedGoal?.payload).toMatchObject({ text: GOAL_OUT.goal });
+    expect(confirmedNiche?.payload).toMatchObject({ label: "weeknight dinners", categoryLabel: "Food" });
+
+    const protectedGoal = await generateRecommendations(
+      { store, invoker },
+      { ctx: authCtx(A), socialProfileId: profileId, step: "goal" }
+    );
+    expect(protectedGoal).toMatchObject({ status: "already_confirmed" });
+    expect(calls.slice().sort()).toEqual(["personalization_goal_inference", "personalization_niche"]);
+
+    const audience = await generateRecommendations(
+      { store, invoker },
+      { ctx: authCtx(A), socialProfileId: profileId, step: "audience" }
+    );
+    expect(audience.status).toBe("generated");
+    await resolveStep(db, A, "audience", "confirm");
+    const pillars = await generateRecommendations(
+      { store, invoker },
+      { ctx: authCtx(A), socialProfileId: profileId, step: "pillars" }
+    );
+    expect(pillars.status).toBe("generated");
+    await resolveStep(db, A, "pillars", "confirm");
+
+    const reloaded = await loadOnboardingState(db, A);
+    expect(reloaded.profile).toMatchObject({ id: profileId, handle: "test.kitchen", platform: "instagram" });
+    expect(reloaded.items.filter(i => i.status === "confirmed").map(i => i.kind).sort()).toEqual([
+      "audience",
+      "audience",
+      "goal",
+      "language",
+      "niche",
+      "pillar",
+      "pillar",
+      "pillar",
+    ]);
+    const home = homeContextFromState(reloaded);
+    expect(home).toMatchObject({
+      hasProfile: true,
+      nicheLabel: "weeknight dinners",
+      categoryLabel: "Food",
+      goalText: GOAL_OUT.goal,
+      personalizationComplete: true,
+      nextStep: null,
+    });
+    expect(home.pillarTitles).toEqual(["Weeknight dinners", "Grocery shortcuts", "Kid friendly plates"]);
+    expect(videoMatchText(home)).toBe("weeknight dinners");
+    expect(videoMatchText(home)).not.toBe("Food");
+    const unmatched = contentInventoryPlan({
+      categoryLabel: home.categoryLabel,
+      nicheLabel: home.nicheLabel,
+      pillarTitles: home.pillarTitles,
+      goalText: home.goalText,
+      audienceText: home.audienceText,
+    });
+    expect(unmatched.mode).toBe("taxonomy");
+    if (unmatched.mode === "taxonomy") expect(unmatched.plan.niche).toBe("");
+    const browse = await browseIndexedViralPosts({
+      userId: A.userId,
+      description: home.nicheLabel,
+      pillars: home.pillarTitles,
+      goalText: home.goalText,
+      audienceText: home.audienceText,
+      matchMode: "taxonomy",
+      categoryLabel: home.categoryLabel,
+      specificNiche: home.nicheLabel,
+      limit: 4,
+      creatorLimit: 3,
+      recentDays: 90,
+    });
+    expect(browse).toMatchObject({
+      items: [],
+      creators: [],
+      niche: "",
+      poolRefreshStarted: false,
+    });
+    const secondLoad = await loadOnboardingState(db, A);
+    expect(secondLoad.items.map(i => i.id)).toEqual(reloaded.items.map(i => i.id));
+  });
+
   it("does not restore a superseded row that the user did not delete", async () => {
     await confirmProfile(db, A, preview("test.kitchen"));
     const { itemId } = await addItem(db, A, "audience", { who: "Owners", outcome: "save time" });
@@ -680,5 +907,35 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
       who: "Restaurant owners in Texas",
       outcome: "cut food cost",
     });
+  });
+
+  it("loads the active profile for the requested workspace only", async () => {
+    await q(
+      "INSERT INTO workspace_members (id, workspaceId, userId, role) VALUES (UUID(), ?, 1, 'member')",
+      [WS_B]
+    );
+    const cook = await confirmProfile(db, A, preview("weeknight.cook"));
+    const coach = await confirmProfile(db, { userId: 1, workspaceId: WS_B }, preview("fitness.coach"));
+    const niche = async (workspaceId: string, profileId: string, label: string, category: string) => {
+      await q(
+        `INSERT INTO personalization_items
+          (id, workspaceId, socialProfileId, kind, payload, source, status, evidence, basedOnVersion)
+         VALUES (?, ?, ?, 'niche', ?, 'user_entered', 'confirmed', 'user_provided', 1)`,
+        [randomUUID(), workspaceId, profileId, JSON.stringify({ label, categoryLabel: category })]
+      );
+    };
+    await niche(WS_A, cook.profileId, "weeknight dinners", "Food");
+    await niche(WS_B, coach.profileId, "fitness coaching", "Fitness");
+    await q(
+      "UPDATE workspace_member_active_profiles SET updatedAt = '2020-01-01 00:00:00' WHERE workspaceId = ? AND userId = 1",
+      [WS_A]
+    );
+
+    const inA = await loadStoredContentInventory(1, WS_A, db);
+    const inB = await loadStoredContentInventory(1, WS_B, db);
+    expect(inA).toMatchObject({ categoryLabel: "Food", nicheLabel: "weeknight dinners" });
+    expect(inB).toMatchObject({ categoryLabel: "Fitness", nicheLabel: "fitness coaching" });
+    expect(await loadStoredContentInventory(2, WS_A, db)).toBeNull();
+    expect(await loadStoredContentInventory(1, "", db)).toBeNull();
   });
 });
