@@ -91,7 +91,8 @@ export async function loadStoredContentInventory(
           inArray(personalizationItems.kind, ["niche", "goal", "audience", "pillar"])
         )
       )
-      .orderBy(personalizationItems.sortOrder, personalizationItems.createdAt);
+      // Stable ordering even when multiple items share the same timestamp/position.
+    .orderBy(personalizationItems.sortOrder, personalizationItems.createdAt, personalizationItems.id);
     const niche = items.find((item) => item.kind === "niche");
     const categoryLabel = field(niche?.payload, "categoryLabel");
     if (!categoryLabel) return null;

@@ -208,7 +208,8 @@ async function loadItems(db: Db, profileId: string): Promise<ItemRecord[]> {
     .select()
     .from(personalizationItems)
     .where(eq(personalizationItems.socialProfileId, profileId))
-    .orderBy(personalizationItems.sortOrder, personalizationItems.createdAt);
+    // Stable ordering even when multiple items share the same timestamp/position.
+    .orderBy(personalizationItems.sortOrder, personalizationItems.createdAt, personalizationItems.id);
   return rows.map(toItemRecord);
 }
 
