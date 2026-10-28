@@ -24,7 +24,11 @@ import {
 import { ResultCard } from "@/design-system/ResultCard";
 import { PlatformFullColorMark } from "@/design-system/platformMarks";
 import { InstagramMark } from "@shared/ui/PlatformMarks";
-import { formatCompactCount } from "@/lib/viralPosts/format";
+import {
+  formatCompactCount,
+  formatEngagementPct,
+  formatShortPostDate,
+} from "@/lib/viralPosts/format";
 import { safeHttpUrl } from "@/lib/viralPostPlayback";
 import { HOME_COPY as C } from "./copy";
 import styles from "./home.module.css";
@@ -361,14 +365,13 @@ export function IdeasSkeleton() {
   );
 }
 
-/* ---------- Videos for you: shared Result Card (288:666) ---------- */
+/* ---------- Viral Videos for you: canonical Result Card (Figma 288:666) ---------- */
 
 /**
- * Maps a Home video to the shared Result Card (Home media extension,
- * 1603:3680 / 1605:4184). Not a separate card: layout and styles live in
- * the design-system ResultCard. Viral score is off on Home (Figma instance
- * setting) and the "↗ N×" pill stays hidden: Home has no validated
- * creator-usual-views baseline yet, so no multiplier is computed or shown.
+ * Maps Home videos to the canonical shared Result Card (Figma 288:666,
+ * Context=Product, State=Default, portrait media). No separate card markup.
+ * Viral score and performance multiplier stay hidden: Home cannot prove the
+ * creator-usual-views baseline required by the approved Figma signal policy.
  */
 export function HomeVideoCard({
   post,
@@ -389,17 +392,25 @@ export function HomeVideoCard({
 }) {
   const title = post.hook?.trim() || post.caption?.trim() || C.videos.untitled;
   const views = formatCompactCount(post.views);
+  const engagement = formatEngagementPct(post.engagementRate);
+  const published = formatShortPostDate(post.publishedAt);
+  const metrics = [
+    ...(views ? [`${views} views`] : []),
+    ...(engagement ? [engagement] : []),
+    ...(published ? [published] : []),
+  ];
   const handle = (post.creatorHandle || "").replace(/^@/, "");
   const originalUrl = safeHttpUrl(post.sourceUrl);
   return (
     <ResultCard
       testId="home-result-card"
+      mediaFormat="portrait"
       platform={post.platform as SocialPlatform}
       platformLabel={PLATFORM_BADGE[post.platform] ?? post.platform}
       thumbnailUrl={post.thumbnailUrl ?? null}
       title={title}
       creator={handle ? `@${handle}` : null}
-      metrics={views ? [`${views} views`] : []}
+      metrics={metrics}
       signal={null}
       labels={{
         play: C.videos.play,

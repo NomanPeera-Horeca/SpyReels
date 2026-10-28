@@ -480,9 +480,10 @@ export default function HomeV2Page() {
               </button>
             </div>
             {videosQ.isLoading ? (
-              <div className={styles.twoUp}>
-                <ResultSkeleton />
-                <ResultSkeleton />
+              <div className={styles.videoGrid}>
+                {Array.from({ length: 4 }, (_, i) => (
+                  <ResultSkeleton key={i} mediaFormat="portrait" />
+                ))}
               </div>
             ) : videosQ.isError ? (
               <StateCard
@@ -500,7 +501,7 @@ export default function HomeV2Page() {
                 }
               />
             ) : videos && videos.items.length > 0 ? (
-              <div className={styles.twoUp}>
+              <div className={styles.videoGrid}>
                 {videos.items.map(post => {
                   const p = {
                     ...post,

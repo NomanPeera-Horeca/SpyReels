@@ -1,4 +1,4 @@
-/* Result Card (Figma 288:666), Home media 180 (1603:3680, 1605:4184). Locked tokens only. */
+/* Shared Figma Result Card 288:666: standard portrait and existing wide extension. Locked tokens only. */
 .card {
   display: flex;
   flex-direction: column;
@@ -11,13 +11,20 @@
   color: var(--sr-color-text-primary);
 }
 
-/* Home media: fixed 180 tall, image cropped (cover), never stretched. */
+/* Existing wide Home media extension: unchanged for older consumers. */
 .media {
   position: relative;
   flex: 0 0 180px;
   height: 180px;
   overflow: hidden;
   background: var(--sr-color-surface-subtle);
+}
+
+/* Figma 288:260 and 1545:514: tall media with the original portrait crop. */
+.portrait .media {
+  flex: 0 0 auto;
+  height: auto;
+  aspect-ratio: 3 / 4;
 }
 
 .thumb {
