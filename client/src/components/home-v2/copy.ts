@@ -32,7 +32,7 @@ export const HOME_COPY = {
     errorBody: "Nothing was lost. Try again in a moment.",
   },
   videos: {
-    title: "Videos for you",
+    title: "Viral Videos for you",
     general: "General picks, not personalized yet",
     allPlatforms: "All platforms",
     seeMore: "See more in Discover",

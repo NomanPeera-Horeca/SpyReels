@@ -414,7 +414,16 @@
   margin-top: var(--sr-space-2);
 }
 
-/* Videos for you uses the shared design-system Result Card (288:666). */
+/* Viral Videos for you: same portrait Result Card as Figma 288:666.
+   Auto-fill reserves compact card slots even when the pool supplies fewer
+   than four relevant videos. Never stretch one video into a wide card. */
+.videoGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+  gap: var(--sr-space-4);
+}
+
+/* This section alone uses the portrait grid; ideas keep their approved two-up layout. */
 
 /* Badge (Figma Badge: neutral, success, brand, info, warning). */
 .badge {

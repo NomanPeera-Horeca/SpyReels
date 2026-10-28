@@ -1,7 +1,8 @@
 /**
  * Result Card (Figma 288:666, canonical shared Result/Remake card), app
- * version. Home uses the approved "Home media" extension (180px crop,
- * instances 1603:3680 desktop and 1605:4184 mobile).
+ * version. The portrait media format is the original Figma Result Card
+ * (280x599, media 280x373). The existing 180px-wide Home media extension
+ * remains available to avoid silently changing older approved consumers.
  *
  * Rules from the Figma component notes:
  * - Show Home media XOR standard media (only Home media is built here).
@@ -34,6 +35,8 @@ export type ResultCardProps = {
   platform: SocialPlatform;
   platformLabel: string;
   thumbnailUrl: string | null;
+  /** Portrait is the canonical Result Card; wide preserves the former Home extension. */
+  mediaFormat?: "portrait" | "wide";
   title: string;
   creator: string | null;
   metrics: string[];
@@ -61,6 +64,7 @@ export function ResultCard({
   platform,
   platformLabel,
   thumbnailUrl,
+  mediaFormat = "wide",
   title,
   creator,
   metrics,
@@ -94,7 +98,7 @@ export function ResultCard({
   }, [menuOpen]);
 
   return (
-    <article className={["sr-mode-product", styles.card].join(" ")} data-testid={testId}>
+    <article className={["sr-mode-product", styles.card, mediaFormat === "portrait" && styles.portrait].filter(Boolean).join(" ")} data-testid={testId}>
       <div className={styles.media}>
         {thumbnailUrl && !thumbFailed ? (
           <img
@@ -210,9 +214,13 @@ export function ResultCard({
 }
 
 /** Loading state for the same card (keeps score, Expand and signal hidden). */
-export function ResultCardSkeleton() {
+export function ResultCardSkeleton({
+  mediaFormat = "wide",
+}: {
+  mediaFormat?: "portrait" | "wide";
+} = {}) {
   return (
-    <div className={["sr-mode-product", styles.card].join(" ")} aria-busy>
+    <div className={["sr-mode-product", styles.card, mediaFormat === "portrait" && styles.portrait].filter(Boolean).join(" ")} aria-busy>
       <div className={styles.media} />
       <div className={styles.content}>
         <span className={styles.skeleton} style={{ width: "80%", height: 16 }} />
