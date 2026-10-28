@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { isRestaurantBusinessInventoryNiche } from "@shared/personalization/contentTaxonomy";
 import { buildPoolKey, DEFAULT_CONTENT_PILLARS } from "../../viralPosts/constants";
 import {
   chooseIndexedHomeSpecs,
@@ -57,6 +58,82 @@ describe("stored category inventory", () => {
         confirmedSpecs: [],
         fallbackSpecs: [],
       });
+    }
+  });
+
+  it("restores the existing restaurant-business supply for an evidence-specific Business profile", () => {
+    const niche = "Restaurant business growth strategies";
+    expect(isRestaurantBusinessInventoryNiche("Business", niche)).toBe(true);
+    expect(isRestaurantBusinessInventoryNiche("Marketing", "Restaurant marketing strategies")).toBe(true);
+    expect(isRestaurantBusinessInventoryNiche("Business & Entrepreneurship", niche)).toBe(true);
+
+    const plan = planFor("Business", niche, [
+      "Restaurant Profit Mechanics",
+      "Menu Strategy",
+      "Restaurant Systems",
+      "Restaurant Owner Mindset",
+    ]);
+    expect(plan.mode).toBe("taxonomy");
+    if (plan.mode !== "taxonomy") return;
+    expect(plan.plan.niche).toBe("Business & Entrepreneurship");
+    expect(plan.plan.fallbackSpecs.some(
+      spec => spec.pillar === DEFAULT_CONTENT_PILLARS[0]
+    )).toBe(true);
+    expect(plan.plan.fallbackSpecs.every(
+      spec => spec.niche === "Business & Entrepreneurship"
+    )).toBe(true);
+
+    // The existing index is all that can be read. No new pools or new API calls.
+    const key = buildPoolKey({
+      platform: "instagram",
+      niche: "Business & Entrepreneurship",
+      pillar: "restaurant profitability",
+    });
+    const chosen = chooseIndexedHomeSpecs({
+      confirmedSpecs: plan.plan.confirmedSpecs,
+      fallbackSpecs: plan.plan.fallbackSpecs,
+      existingKeys: new Set([key]),
+    });
+    expect(chosen.source).toBe("inferred");
+    expect(chosen.specs).toHaveLength(1);
+    expect(buildPoolKey(chosen.specs[0]!)).toBe(key);
+
+    const feed = dailyFeedInventoryDecision({
+      categoryLabel: "Business",
+      nicheLabel: niche,
+      pillarTitles: [],
+      goalText: "Teach restaurant owners profitable operations",
+      audienceText: "Independent restaurant owners",
+      platforms: strategy.platforms,
+    });
+    expect(feed.mode).toBe("taxonomy");
+    if (feed.mode !== "taxonomy") return;
+    expect(feed.niche).toBe("Business & Entrepreneurship");
+    expect(feed.fallbackSpecs.some(
+      spec => spec.pillar === "restaurant profitability"
+    )).toBe(true);
+  });
+
+  it("does not route restaurant content creators into restaurant-business operations pools", () => {
+    for (const [category, niche] of [
+      ["Business", "restaurant photography business"],
+      ["Business", "restaurant reviews"],
+      ["Business", "restaurant recipes"],
+      ["Business", "restaurant equipment"],
+      ["Business", "wedding photography"],
+      ["Business", "business growth strategies"],
+      ["Marketing", "social media growth strategies"],
+      ["Food", "restaurant business growth strategies"],
+      ["Education", "restaurant business growth strategies"],
+    ] as const) {
+      expect(isRestaurantBusinessInventoryNiche(category, niche)).toBe(false);
+      const plan = planFor(category, niche);
+      expect(plan.mode).toBe("taxonomy");
+      if (plan.mode === "taxonomy" && category !== "Food" && category !== "Education") {
+        expect(plan.plan.niche).toBe("");
+        expect(plan.plan.confirmedSpecs).toEqual([]);
+        expect(plan.plan.fallbackSpecs).toEqual([]);
+      }
     }
   });
 

@@ -1,5 +1,6 @@
 import {
   categorySelectsRestaurantPillars,
+  isRestaurantBusinessInventoryNiche,
   poolNicheForCategory,
 } from "@shared/personalization/contentTaxonomy";
 import type { FollowerViralBadge } from "@shared/viralTier";
@@ -235,7 +236,17 @@ export function indexedHomePoolSpecChoices(args: {
   confirmedSpecs: Array<{ niche: string; pillar: string; platform?: string }>;
   fallbackSpecs: Array<{ niche: string; pillar: string; platform?: string }>;
 } {
-  const storedPool = args.useStoredCategory ? poolNicheForCategory(args.categoryLabel) : null;
+  const verifiedRestaurantBusiness =
+    args.useStoredCategory &&
+    isRestaurantBusinessInventoryNiche(args.categoryLabel, args.nicheText);
+  // Existing restaurant-operation inventory is indexed under Business &
+  // Entrepreneurship. This exception requires a specifically restaurant-
+  // business niche; unrelated Business creators still get an empty result.
+  const storedPool = args.useStoredCategory
+    ? poolNicheForCategory(
+        verifiedRestaurantBusiness ? "Hospitality" : args.categoryLabel
+      )
+    : null;
   if (args.useStoredCategory && !storedPool) {
     return { niche: "", confirmedSpecs: [], fallbackSpecs: [] };
   }
@@ -247,7 +258,8 @@ export function indexedHomePoolSpecChoices(args: {
     ...args,
     nicheText: storedPool ?? args.nicheText,
     allowIndexedContent: args.useStoredCategory
-      ? categorySelectsRestaurantPillars(args.categoryLabel)
+      ? categorySelectsRestaurantPillars(args.categoryLabel) ||
+        verifiedRestaurantBusiness
       : undefined,
   })
     ? [...DEFAULT_CONTENT_PILLARS]
@@ -557,7 +569,8 @@ export async function browseIndexedViralPosts(args: {
     goalText: args.goalText,
     audienceText: args.audienceText,
     allowIndexedContent: taxonomy
-      ? categorySelectsRestaurantPillars(args.categoryLabel)
+      ? categorySelectsRestaurantPillars(args.categoryLabel) ||
+        isRestaurantBusinessInventoryNiche(args.categoryLabel, args.specificNiche)
       : undefined,
   })
     ? [...DEFAULT_CONTENT_PILLARS]

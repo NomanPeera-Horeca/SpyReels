@@ -92,3 +92,29 @@ export function categorySelectsRestaurantPillars(value: string | null | undefine
   const category = resolveContentCategory(value);
   return Boolean(category?.supplyMatched && category.restaurantPillars);
 }
+
+/**
+ * Business and Marketing do not have a generally relevant indexed pool.
+ * A specific niche about running or growing restaurants is the narrow
+ * exception: those six *existing* restaurant-operation pillars already live
+ * inside the Business & Entrepreneurship pool.
+ *
+ * Never use a generic Business label, an incidental goal keyword, cooking,
+ * restaurant reviews, or photography as permission to show those videos.
+ * This predicate is shared by Home and the daily feed; it neither changes
+ * the creator's saved category nor provisions new inventory.
+ */
+export function isRestaurantBusinessInventoryNiche(
+  categoryLabel: string | null | undefined,
+  specificNiche: string | null | undefined
+): boolean {
+  const category = resolveContentCategory(categoryLabel);
+  if (category?.slug !== "business" && category?.slug !== "marketing") return false;
+  const subject = specificNiche?.trim() ?? "";
+  if (!subject) return false;
+  if (!/\b(?:restaurants?|restaurateurs?)\b/i.test(subject)) return false;
+  if (/\b(?:photograph(?:y|er|ers)?|reviews?|recipes?|food critics?)\b/i.test(subject)) {
+    return false;
+  }
+  return /\b(?:business|growth|strateg(?:y|ies)|profits?|profitability|operations?|management|marketing|owners?|entrepreneur(?:s|ship)?|revenue)\b/i.test(subject);
+}
