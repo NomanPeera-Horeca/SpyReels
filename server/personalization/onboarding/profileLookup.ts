@@ -11,6 +11,8 @@
 import type { SocialPlatform } from "@shared/personalization/model";
 import type { PublicProfilePreview } from "@shared/personalization/publicProfilePreview";
 import {
+  INSTAGRAM_PROFILE_LOOKUP_ATTEMPT_TIMEOUT_MS,
+  INSTAGRAM_PROFILE_LOOKUP_DEADLINE_MS,
   PROFILE_LOOKUP_ATTEMPT_TIMEOUT_MS,
   PROFILE_LOOKUP_CACHE_TTL_MS,
   PROFILE_LOOKUP_DEADLINE_MS,
@@ -22,20 +24,29 @@ import {
 } from "../../scrapeCreatorsMeter";
 import type { LookupBudgetOptions } from "../../providerLookupBudget";
 
+/** Whole-lookup deadline. Instagram gets the Creator Radar request timeout plus one retry. */
+export function profileLookupDeadlineMs(platform: SocialPlatform): number {
+  return platform === "instagram"
+    ? INSTAGRAM_PROFILE_LOOKUP_DEADLINE_MS
+    : PROFILE_LOOKUP_DEADLINE_MS;
+}
+
 /**
- * Direct Instagram identification stays on one profile request until the
- * lookup deadline. The 8 second mark is only the on-screen slow hint.
- * TikTok and YouTube keep the shorter per-attempt cap.
+ * Instagram waits up to 30s for one profile request, the same as Creator
+ * Radar, and can retry once inside the deadline. The 8 second mark is only
+ * the on-screen slow hint. TikTok and YouTube keep the shorter cap.
  */
 export function profileLookupProviderBudget(
   platform: SocialPlatform,
   deadlineMs: number
 ): Pick<LookupBudgetOptions, "timeoutMs" | "maxAttempts" | "deadlineMs"> {
   return {
-    timeoutMs:
+    timeoutMs: Math.min(
       platform === "instagram"
-        ? deadlineMs
-        : Math.min(PROFILE_LOOKUP_ATTEMPT_TIMEOUT_MS, deadlineMs),
+        ? INSTAGRAM_PROFILE_LOOKUP_ATTEMPT_TIMEOUT_MS
+        : PROFILE_LOOKUP_ATTEMPT_TIMEOUT_MS,
+      deadlineMs
+    ),
     maxAttempts: PROFILE_LOOKUP_MAX_ATTEMPTS,
     deadlineMs,
   };
@@ -389,7 +400,7 @@ export async function lookupPublicProfile(input: {
   handle: string;
   deps: ProfileLookupDeps;
   now?: number;
-  /** Test override. Production uses PROFILE_LOOKUP_DEADLINE_MS. */
+  /** Test override. Production uses profileLookupDeadlineMs(platform). */
   deadlineMs?: number;
   /** Copy provider media to stable storage and return those URLs. */
   warmMedia?: boolean;
@@ -408,7 +419,7 @@ export async function lookupPublicProfile(input: {
     return { ok: false, reason: "rate_limited", meter: null };
   }
 
-  const deadlineMs = input.deadlineMs ?? PROFILE_LOOKUP_DEADLINE_MS;
+  const deadlineMs = input.deadlineMs ?? profileLookupDeadlineMs(input.platform);
   const started = Date.now();
   const work = (async (): Promise<ProfileLookupResult> => {
     const metered = await withScrapeCreatorsMeter(PROFILE_LOOKUP_REQUEST_BUDGET, () =>
