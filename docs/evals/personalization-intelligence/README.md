@@ -96,8 +96,8 @@ The evaluation makes no provider (ScrapeCreators) calls, writes no database rows
 
 `.github/workflows/personalization-baseline-eval.yml` scores today's code on the 30 synthetic profiles and on real SpyReels customers replayed from their stored public profile data.
 
-- Runs only on `claude/personalization-baseline-eval`, only when the commit message contains `[authorized-baseline-eval]`.
+- Runs only on `claude/personalization-baseline-eval`, only when the commit message starts with `eval: [authorized-baseline-eval]`. Adding `[real-only]` skips the synthetic part.
 - Real customers are read with `EVAL_DB_READONLY_URL`, a SELECT-only login limited to `social_profiles`, `profile_analysis_runs`, `personalization_items` and `personalization_progress`. The export refuses a login with any write grant.
 - Customer cases exist only in a runner temp file that is deleted at the end of the job. Logs use anonymized ids (R001, N001).
-- Spend caps: synthetic $1.20 generation + $0.30 judging, real $3.80 generation + $0.70 judging.
+- Spend caps: synthetic $1.20 generation + $0.30 judging, real $3.60 generation + $0.60 judging.
 - Review: the "results" steps print one line per case and the totals (`scripts/personalization-eval-digest.ts`).
