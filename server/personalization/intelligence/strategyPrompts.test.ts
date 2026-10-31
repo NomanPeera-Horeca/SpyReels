@@ -16,8 +16,8 @@ const evidence = buildCreatorEvidence({
 });
 
 describe("approved strategy prompt contracts", () => {
-  it("keeps Goals and Pillars frozen while versioning the scoped Audience update", () => {
-    expect(GOAL_PROMPT_VERSION).toBe("goal-v2");
+  it("keeps Pillars frozen while versioning the scoped Audience and Goal updates", () => {
+    expect(GOAL_PROMPT_VERSION).toBe("goal-v3");
     expect(AUDIENCE_PROMPT_VERSION).toBe("audience-v4");
     expect(PILLAR_PROMPT_VERSION).toBe("pillars-v2");
   });

@@ -19,6 +19,7 @@ import {
   buildGoalPrompt,
   DEFAULT_CLARIFYING_QUESTION,
   inferGoal,
+  parseGoalOutput,
 } from "./goalInference";
 import { recommendAudiences } from "./audienceRecommendations";
 import { recommendPillars } from "./pillarRecommendations";
@@ -1325,7 +1326,7 @@ describe("generateRecommendations: Goal -> Audience -> Pillars", () => {
     });
     expect(g.basedOnInputsHash).toMatch(/^[a-f0-9]{16}$/);
     expect(g.generationMeta).toMatchObject({
-      promptVersion: "goal-v2",
+      promptVersion: "goal-v3",
       model: "claude-sonnet-4-6",
       inputTokens: 900,
       outputTokens: 120,
@@ -2077,5 +2078,131 @@ describe("generateRecommendations: Goal -> Audience -> Pillars", () => {
     expect(stepInputsHash("goal", [], a)).not.toBe(
       stepInputsHash("goal", [], b)
     );
+  });
+});
+
+/* ------------------------------------------------------------------ */
+/* Starter strategy for picked niches, and subject words in goals      */
+/* ------------------------------------------------------------------ */
+
+describe("goal rules: subject words, one sentence, language names", () => {
+  const salesTrainer = buildCreatorEvidence({
+    platform: "instagram",
+    displayName: "Daniel G",
+    bio: "Labeled world's #1 sales trainer 2026\nSpoke at 800+ events globally\nAuthor of The Sales Game\nNext virtual sales event",
+    snapshot: null,
+    items: [],
+  });
+  const hiker = buildCreatorEvidence({
+    platform: "instagram",
+    displayName: "Hike with June",
+    bio: "Weekend hikes and trail tips.",
+    snapshot: null,
+    items: [],
+  });
+  const parse = (goal: string, e = salesTrainer) =>
+    parseGoalOutput({ ...goalOut(goal), evidence_basis: ["bio"] }, e);
+
+  it("accepts sales words when sales is the creator's own subject", () => {
+    expect(salesTrainer.commercialSignals).toBe(false);
+    expect(parse("Teach salespeople proven techniques to close more deals and master the sales game.").ok).toBe(true);
+    expect(parse("Teach people how to sell with confidence.").ok).toBe(true);
+  });
+
+  it("still rejects a business objective the creator never mentions", () => {
+    expect(parse("Help hikers grow their business on the trail.", hiker)).toEqual({
+      ok: false,
+      reason: "goal claims a business objective the evidence does not show",
+    });
+    expect(parse("Help sales teams win more clients.")).toEqual({
+      ok: false,
+      reason: "goal claims a business objective the evidence does not show",
+    });
+  });
+
+  it("keeps the first sentence when the model adds a second one", () => {
+    const r = parse("Teach salespeople to close more deals. Share stories from live events.");
+    expect(r).toMatchObject({ ok: true, value: { goal: "Teach salespeople to close more deals." } });
+    expect(parse("Sales. Teach salespeople to close more deals.")).toEqual({
+      ok: false,
+      reason: "goal must be one sentence",
+    });
+  });
+
+  it("allows a slightly longer sentence but still stops rambling", () => {
+    expect(parse("Teach new and experienced salespeople practical ways to handle objections, follow up, and close deals with confidence.").ok).toBe(true);
+    expect(
+      parse(
+        "Teach new and experienced salespeople practical ways to handle objections, follow up, close deals, build pipelines, coach teams, run events, and grow careers in every single market."
+      )
+    ).toEqual({ ok: false, reason: "goal is longer than one short sentence" });
+  });
+
+  it("allows the content language's name but not invented places", () => {
+    const swedish = { ...hiker, outputLanguage: { code: "sv", label: "Swedish" } };
+    expect(parse("Share Swedish weekend hikes and trail tips with beginners.", swedish).ok).toBe(true);
+    expect(parse("Share Stockholm weekend hikes with beginners.", swedish)).toMatchObject({ ok: false });
+  });
+
+  it("tells the model a picked niche names the subject", () => {
+    const prompt = buildGoalPrompt(hiker);
+    expect(prompt.system).toContain('A niche the creator picked themselves (evidence source "niche") also names the subject');
+    expect(prompt.system).toContain("only when neither the bio nor a picked niche says what the content is about");
+  });
+});
+
+describe("I don't post yet: a picked niche starts the strategy", () => {
+  const notPosting = () => {
+    const store = new MemoryRecoStore();
+    store.profile = {
+      ...store.profile,
+      displayName: null,
+      bio: null,
+      status: "not_posting_yet",
+      platform: null,
+    };
+    store.snapshot = null;
+    store.items.push(item("niche", { slug: "home_baking", label: "Home baking" }));
+    return store;
+  };
+
+  it("asks the model for a starter goal instead of stopping with a question", async () => {
+    const store = notPosting();
+    const llm = fakeLlm({ ...goalOut("Teach beginners simple home baking recipes."), evidence_basis: ["niche"] });
+    const r = await generateRecommendations(
+      { store, invoker: llm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "goal" }
+    );
+    expect(r.status).toBe("generated");
+    expect(llm.calls.filter(call => call.operation === "personalization_goal_inference")).toHaveLength(1);
+    expect(String(llm.calls[0]?.messages.map(m => m.content).join("\n"))).toContain("Home baking");
+    const goal = store.items.find(i => i.kind === "goal");
+    expect(goal).toMatchObject({ status: "suggested", source: "ai_suggested", evidence: "profile_inferred" });
+  });
+
+  it("drafts audiences from the picked niche even when the goal was skipped", async () => {
+    const store = notPosting();
+    const llm = fakeLlm({
+      audiences: [{ who: "Beginner home bakers", outcome: "bake reliable bread at home", why: "They want simple recipes." }],
+      confidence: "low",
+    });
+    const r = await generateRecommendations(
+      { store, invoker: llm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "audience" }
+    );
+    expect(r.status).toBe("generated");
+    expect(store.items.some(i => i.kind === "audience" && i.status === "suggested")).toBe(true);
+  });
+
+  it("still asks when there is no bio, no posts and no picked niche", async () => {
+    const store = notPosting();
+    store.items = [];
+    const llm = fakeLlm();
+    const r = await generateRecommendations(
+      { store, invoker: llm.invoker },
+      { ctx, socialProfileId: "prof-1", step: "audience" }
+    );
+    expect(r).toMatchObject({ status: "needs_clarification", reason: "insufficient_evidence" });
+    expect(llm.calls).toHaveLength(0);
   });
 });
