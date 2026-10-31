@@ -62,6 +62,7 @@ jobs:
 
       - name: Real customers - export (read-only login)
         id: export
+        if: always()
         shell: bash
         run: |
           if [ -z "${EVAL_DB_READONLY_URL:-}" ]; then
@@ -73,11 +74,11 @@ jobs:
           echo "ready=true" >> "$GITHUB_OUTPUT"
 
       - name: Real customers - generate (cap $3.60)
-        if: steps.export.outputs.ready == 'true'
+        if: always() && steps.export.outputs.ready == 'true'
         run: pnpm exec tsx scripts/personalization-intelligence-eval.ts --confirm-spend --cap=3.60 --out=baseline-real --fixtures="$RUNNER_TEMP/real-cases.json"
 
       - name: Real customers - independent judge (cap $0.90)
-        if: steps.export.outputs.ready == 'true'
+        if: always() && steps.export.outputs.ready == 'true'
         run: pnpm exec tsx scripts/personalization-quality-judge.ts --confirm-spend --in=baseline-real --cap=0.90 --fixtures="$RUNNER_TEMP/real-cases.json"
 
       - name: Real customers - results
