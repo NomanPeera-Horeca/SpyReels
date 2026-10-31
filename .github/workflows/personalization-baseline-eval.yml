@@ -5,7 +5,7 @@
 # "eval: [authorized-baseline-eval]" (mentioning the marker elsewhere does not run it).
 # "[real-only]" in that message skips the synthetic part.
 # No deployment, no production writes. Hard spend caps:
-# synthetic generation $1.20 + judging $0.30, real generation $3.60 + judging $0.60.
+# synthetic generation $1.20 + judging $0.30, real generation $3.60 + judging $0.90.
 name: SpyReels Personalization Baseline Evaluation
 
 on:
@@ -76,9 +76,9 @@ jobs:
         if: steps.export.outputs.ready == 'true'
         run: pnpm exec tsx scripts/personalization-intelligence-eval.ts --confirm-spend --cap=3.60 --out=baseline-real --fixtures="$RUNNER_TEMP/real-cases.json"
 
-      - name: Real customers - independent judge (cap $0.60)
+      - name: Real customers - independent judge (cap $0.90)
         if: steps.export.outputs.ready == 'true'
-        run: pnpm exec tsx scripts/personalization-quality-judge.ts --confirm-spend --in=baseline-real --cap=0.60 --fixtures="$RUNNER_TEMP/real-cases.json"
+        run: pnpm exec tsx scripts/personalization-quality-judge.ts --confirm-spend --in=baseline-real --cap=0.90 --fixtures="$RUNNER_TEMP/real-cases.json"
 
       - name: Real customers - results
         if: always() && steps.export.outputs.ready == 'true'
