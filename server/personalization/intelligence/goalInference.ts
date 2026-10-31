@@ -17,6 +17,8 @@ import {
   type EvidenceSource,
 } from "./evidence";
 import {
+  capitalizationMarksNames,
+  commercialWordsAreTopic,
   copiesSourceText,
   inventsCommercialObjective,
   isSingleSentence,
@@ -32,7 +34,10 @@ import {
   type ParseResult,
 } from "./structuredLlm";
 
-export const GOAL_PROMPT_VERSION = "goal-v2";
+export const GOAL_PROMPT_VERSION = "goal-v3";
+/** Hard cap after parsing. The prompt still asks for 18 words; this only stops rambling. */
+const MAX_GOAL_WORDS = 24;
+const MAX_GOAL_CHARS = 170;
 export const DEFAULT_CLARIFYING_QUESTION =
   "In one sentence, why do you create content? For example: to grow your business, teach a skill, or entertain people.";
 
@@ -125,10 +130,11 @@ export function buildGoalPrompt(e: CreatorEvidence): {
     "Rules:",
     "- One sentence, at most 18 words, starting with a verb such as Help, Teach, Share, Entertain, Inspire, Show.",
     "- Only use facts present in the evidence. Do not invent products, places, names, numbers, or a business. A purpose that follows from the stated subject is a recommendation, not an invented fact.",
-    '- Mention a business outcome (clients, sales, customers, bookings, growing a business) ONLY if the bio, brand description or name shows the creator sells something. Then copy the exact words that show it into offer_quote (for example "Now taking new clients"). Otherwise leave offer_quote empty. Affiliate links ("link in bio", "shop my picks") are not a business.',
+    '- Mention a business outcome (clients, sales, customers, bookings, growing a business) ONLY if the bio, brand description or name shows the creator sells something. Then copy the exact words that show it into offer_quote (for example "Now taking new clients"). Otherwise leave offer_quote empty. Affiliate links ("link in bio", "shop my picks") are not a business. A word that names the subject itself, such as sales for a sales trainer, is not a business outcome.',
     "- A bio that names the subject is enough for one initial purpose, even when there are no posts.",
+    '- A niche the creator picked themselves (evidence source "niche") also names the subject, even with no bio and no posts. Then suggest one starter purpose for that niche instead of asking.',
     "- If several purposes fit that same subject, choose the most direct one. Do not ask the user to pick among purposes that all fit the evidence.",
-    '- Choose decision "clarify" only when the bio does not say what the content is about, or the evidence contradicts itself. Write one short question in the output language. Otherwise leave clarifying_question empty.',
+    '- Choose decision "clarify" only when neither the bio nor a picked niche says what the content is about, or the evidence contradicts itself. Write one short question in the output language. Otherwise leave clarifying_question empty.',
     "- evidence_basis lists only the evidence sources you actually relied on.",
     `- Write in ${e.outputLanguage.label}. The evidence may be in any language.`,
   ].join("\n");
@@ -138,6 +144,12 @@ export function buildGoalPrompt(e: CreatorEvidence): {
     "Return the JSON object.",
   ].join("\n");
   return { system, user };
+}
+
+/** The creator's own words about their subject: bio, brand, site facts and picked niche. */
+function creatorTopicText(e: CreatorEvidence): string {
+  const niches = e.snippets.filter(s => s.source === "niche").map(s => s.text.toLowerCase());
+  return [e.declaredText, ...niches].join("\n");
 }
 
 export function parseGoalOutput(
@@ -159,21 +171,27 @@ export function parseGoalOutput(
       },
     };
   }
-  const goal = sanitizeCopy(o.goal).replace(/^"|"$/g, "");
+  let goal = sanitizeCopy(o.goal).replace(/^"|"$/g, "");
   if (!goal) return { ok: false, reason: "goal was empty" };
-  if (wordCount(goal) > 18 || goal.length > 140)
+  // A second sentence is extra detail: keep the first one when it stands alone.
+  if (!isSingleSentence(goal)) {
+    const first = goal.split(/(?<=[.!?])\s+/)[0]?.trim() ?? "";
+    if (wordCount(first) < 4) return { ok: false, reason: "goal must be one sentence" };
+    goal = first;
+  }
+  if (wordCount(goal) > MAX_GOAL_WORDS || goal.length > MAX_GOAL_CHARS)
     return { ok: false, reason: "goal is longer than one short sentence" };
   if (copiesSourceText(goal, e.declaredText))
     return { ok: false, reason: "goal copies the profile bio instead of stating a purpose" };
-  if (!isSingleSentence(goal))
-    return { ok: false, reason: "goal must be one sentence" };
   const nums = unsupportedNumbers(goal, e.corpus);
   if (nums.length)
     return {
       ok: false,
       reason: `goal contains numbers not in the evidence (${nums.join(", ")})`,
     };
-  const names = unsupportedProperNouns(goal, e.corpus);
+  const names = capitalizationMarksNames(e.outputLanguage.code)
+    ? unsupportedProperNouns(goal, e.corpus, [e.outputLanguage.label])
+    : [];
   if (names.length)
     return {
       ok: false,
@@ -182,7 +200,9 @@ export function parseGoalOutput(
   // A business goal needs an offer the creator stated: either our fast-path
   // signal, or the model's quote of the creator's own words, checked verbatim.
   const offerProven =
-    e.commercialSignals || offerQuoteIsVerbatim(o.offer_quote, e);
+    e.commercialSignals ||
+    offerQuoteIsVerbatim(o.offer_quote, e) ||
+    commercialWordsAreTopic(goal, creatorTopicText(e));
   if (inventsCommercialObjective(goal, offerProven)) {
     return {
       ok: false,

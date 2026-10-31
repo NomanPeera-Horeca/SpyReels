@@ -333,9 +333,13 @@ export function evidenceSupportsNiche(
   );
 }
 
-/** Quantity only. Stops audience and pillar drafts before a goal exists. */
+/**
+ * Quantity only. Stops audience and pillar drafts before a goal exists.
+ * A niche the creator picked or confirmed names the subject, so it is enough.
+ */
 function canDraftAudienceWithoutGoal(evidence: CreatorEvidence): boolean {
   if (evidence.strength === "none") return false;
+  if (evidence.snippets.some(item => item.source === "niche")) return true;
   const bioWords = evidence.snippets
     .filter(item => item.source === "bio" || item.source === "brand_description")
     .reduce((sum, item) => sum + item.text.trim().split(/\s+/).filter(Boolean).length, 0);
