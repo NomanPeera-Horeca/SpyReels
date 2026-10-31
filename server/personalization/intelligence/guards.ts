@@ -65,7 +65,13 @@ const ALLOWED_CAPITALIZED = new Set([
  * Capitalized words that are not the first word of a sentence and do not
  * appear in the evidence: usually invented brand, place or person names.
  */
-export function unsupportedProperNouns(text: string, corpus: string): string[] {
+export function unsupportedProperNouns(
+  text: string,
+  corpus: string,
+  /** Extra words that are never invented here, such as the content language's name. */
+  extraAllowed: string[] = []
+): string[] {
+  const allowed = new Set(extraAllowed.map(word => word.toLowerCase()));
   const out: string[] = [];
   const sentences = text.split(/(?<=[.!?])\s+/);
   for (const sentence of sentences) {
@@ -74,7 +80,7 @@ export function unsupportedProperNouns(text: string, corpus: string): string[] {
       const w = raw.replace(/^[^\p{L}\p{N}&]+|[^\p{L}\p{N}&]+$/gu, "");
       if (idx === 0 || w.length < 2) return;
       if (!/^\p{Lu}/u.test(w)) return;
-      if (ALLOWED_CAPITALIZED.has(w.toLowerCase())) return;
+      if (ALLOWED_CAPITALIZED.has(w.toLowerCase()) || allowed.has(w.toLowerCase())) return;
       if (!corpus.includes(w.toLowerCase())) out.push(w);
     });
   }
@@ -89,6 +95,30 @@ export function inventsCommercialObjective(
   commercialSignals: boolean
 ): boolean {
   return COMMERCIAL_CLAIM.test(text) && !commercialSignals;
+}
+
+/** COMMERCIAL_CLAIM grouped by word family, so "sell" and "sales" count as the same subject. */
+const COMMERCIAL_FAMILIES: RegExp[] = [
+  /\b(sales?|sell|selling|sellers?)\b/i,
+  /\bclients?\b/i,
+  /\bcustomers?\b/i,
+  /\bleads?\b/i,
+  /\bbusiness(es)?\b/i,
+  /\brevenue\b/i,
+  /\bbookings?\b/i,
+  /\bbuyers?\b/i,
+  /\borders?\b/i,
+];
+
+/**
+ * True when every commercial word family in the text already appears in the
+ * creator's own words (bio, brand description, site facts, picked niche).
+ * Then "sales" is the subject, as for a sales trainer, not an invented
+ * business objective.
+ */
+export function commercialWordsAreTopic(text: string, topicText: string): boolean {
+  const used = COMMERCIAL_FAMILIES.filter(family => family.test(text));
+  return used.length > 0 && used.every(family => family.test(topicText));
 }
 
 /** A confirmed goal that already states an offer may justify a commercial audience. */

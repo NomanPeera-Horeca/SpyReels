@@ -26,8 +26,8 @@ function scripted(output: Record<string, unknown>) {
 }
 
 describe("targeted personalization quality contracts (no model calls)", () => {
-  it("preserves approved Goal and Pillar versions, versioning only Niche and Audience", () => {
-    expect(GOAL_PROMPT_VERSION).toBe("goal-v2");
+  it("preserves approved Pillar versions; Goal moved to v3 for picked niches and subject words", () => {
+    expect(GOAL_PROMPT_VERSION).toBe("goal-v3");
     expect(PILLAR_PROMPT_VERSION).toBe("pillars-v2");
     expect(NICHE_PROMPT_VERSION).toBe("niche-v5");
     expect(AUDIENCE_PROMPT_VERSION).toBe("audience-v4");
