@@ -124,16 +124,28 @@ async function main() {
     const ids = profiles.map(p => p.id);
     if (ids.length === 0) throw new Error("No confirmed or not-posting profiles found.");
 
-    const [runRows] = await conn.query(
-      `SELECT socialProfileId, sourceSnapshot
+    // Pick the newest run id first so the JSON snapshot is not part of the sort
+    // (sorting rows that carry it overflows MySQL's sort buffer), then load
+    // only those snapshots by primary key.
+    const [runIdRows] = await conn.query(
+      `SELECT id, socialProfileId
          FROM profile_analysis_runs
         WHERE socialProfileId IN (?)
-        ORDER BY createdAt DESC`,
+        ORDER BY createdAt DESC, id DESC`,
       [ids]
     );
+    const latestRunId = new Map<string, string>();
+    for (const row of runIdRows as Array<{ id: string; socialProfileId: string }>) {
+      if (!latestRunId.has(row.socialProfileId)) latestRunId.set(row.socialProfileId, row.id);
+    }
     const latestSnapshot = new Map<string, AnalysisSourceSnapshot | null>();
-    for (const row of runRows as Array<{ socialProfileId: string; sourceSnapshot: unknown }>) {
-      if (!latestSnapshot.has(row.socialProfileId)) {
+    const runIds = [...latestRunId.values()];
+    if (runIds.length) {
+      const [runRows] = await conn.query(
+        `SELECT socialProfileId, sourceSnapshot FROM profile_analysis_runs WHERE id IN (?)`,
+        [runIds]
+      );
+      for (const row of runRows as Array<{ socialProfileId: string; sourceSnapshot: unknown }>) {
         latestSnapshot.set(row.socialProfileId, json<AnalysisSourceSnapshot>(row.sourceSnapshot));
       }
     }
