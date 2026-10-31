@@ -1,0 +1,98 @@
+# Baseline evaluation of onboarding Goal / Audience / Pillars on today's code.
+# Explicitly authorized by the founder: 30 synthetic profiles plus a replay of
+# real SpyReels customers (public profile facts only, read-only DB login).
+# Runs only on this branch, only when the commit message carries the marker.
+# No deployment, no production writes. Hard spend caps total $6.00:
+# synthetic generation $1.20 + judging $0.30, real generation $3.80 + judging $0.70.
+name: SpyReels Personalization Baseline Evaluation
+
+on:
+  push:
+    branches:
+      - claude/personalization-baseline-eval
+
+permissions:
+  contents: read
+
+jobs:
+  baseline:
+    if: ${{ contains(github.event.head_commit.message, '[authorized-baseline-eval]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      EVAL_DB_READONLY_URL: ${{ secrets.EVAL_DB_READONLY_URL }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Require the AI key
+        shell: bash
+        run: |
+          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "ANTHROPIC_API_KEY GitHub secret is not configured."
+            exit 1
+          fi
+
+      - name: Synthetic 30 - generate (cap $1.20)
+        run: pnpm exec tsx scripts/personalization-intelligence-eval.ts --confirm-spend --cap=1.20 --out=baseline-synthetic
+
+      - name: Synthetic 30 - independent judge (cap $0.30)
+        run: pnpm exec tsx scripts/personalization-quality-judge.ts --confirm-spend --in=baseline-synthetic --cap=0.30
+
+      - name: Synthetic 30 - results
+        if: always()
+        run: |
+          pnpm exec tsx scripts/personalization-quality-judge.ts --in=baseline-synthetic --report-only || true
+          pnpm exec tsx scripts/personalization-eval-digest.ts --in=baseline-synthetic || true
+
+      - name: Real customers - export (read-only login)
+        id: export
+        shell: bash
+        run: |
+          if [ -z "${EVAL_DB_READONLY_URL:-}" ]; then
+            echo "EVAL_DB_READONLY_URL is not configured; skipping the real-customer replay."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          pnpm exec tsx scripts/personalization-real-customers-export.ts --out="$RUNNER_TEMP/real-cases.json"
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Real customers - generate (cap $3.80)
+        if: steps.export.outputs.ready == 'true'
+        run: pnpm exec tsx scripts/personalization-intelligence-eval.ts --confirm-spend --cap=3.80 --out=baseline-real --fixtures="$RUNNER_TEMP/real-cases.json"
+
+      - name: Real customers - independent judge (cap $0.70)
+        if: steps.export.outputs.ready == 'true'
+        run: pnpm exec tsx scripts/personalization-quality-judge.ts --confirm-spend --in=baseline-real --cap=0.70 --fixtures="$RUNNER_TEMP/real-cases.json"
+
+      - name: Real customers - results
+        if: always() && steps.export.outputs.ready == 'true'
+        run: |
+          pnpm exec tsx scripts/personalization-quality-judge.ts --in=baseline-real --report-only --fixtures="$RUNNER_TEMP/real-cases.json" || true
+          pnpm exec tsx scripts/personalization-eval-digest.ts --in=baseline-real || true
+
+      - name: Delete the real-customer cases file
+        if: always()
+        run: rm -f "$RUNNER_TEMP/real-cases.json"
+
+      - name: Upload results (outputs and scores only, no profile bios)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spyreels-personalization-baseline
+          path: |
+            docs/evals/personalization-intelligence/baseline-*.json
+            docs/evals/personalization-intelligence/baseline-*.md
+          if-no-files-found: warn
+          retention-days: 14

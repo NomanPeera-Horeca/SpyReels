@@ -279,6 +279,7 @@ class EvalStore implements RecommendationStore {
 }
 
 function snapshotFor(c: EvalCase): AnalysisSourceSnapshot | null {
+  if (c.snapshot !== undefined) return c.snapshot;
   if (!c.captions) return null;
   return {
     version: 1,
@@ -398,7 +399,7 @@ export async function runEvaluation(input: {
         id: "p",
         workspaceId: WS,
         deletedAt: null,
-        status: c.captions === null ? "private" : "confirmed",
+        status: c.profileStatus ?? (c.captions === null ? "private" : "confirmed"),
         platform: c.platform,
         displayName: c.displayName,
         bio: c.bio,
@@ -406,6 +407,7 @@ export async function runEvaluation(input: {
       snapshotFor(c)
     );
     if (c.language) store.typed("language", c.language);
+    if (c.typedNiche) store.typed("niche", c.typedNiche);
 
     // Goal
     const g: RecommendationResult = await generateRecommendations(deps(store), {

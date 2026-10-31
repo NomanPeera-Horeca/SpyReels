@@ -7,7 +7,10 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { estimateLlmCost } from "../server/analytics/aiCostModel";
-import { EVAL_CASES } from "../server/personalization/intelligence/eval/fixtures";
+import {
+  judgeProfileText,
+  loadEvalCases,
+} from "../server/personalization/intelligence/eval/caseSource";
 import {
   benchmarkDecision,
   type EvalReport,
@@ -106,8 +109,10 @@ function reportExisting(stem: string): void {
   const judged = JSON.parse(readFileSync(path.join(dir, `${stem}-judge.json`), "utf8")) as {
     rows: Array<{ caseId: string; scores: Scores | null }>;
   };
+  const fixtures = loadEvalCases(process.argv);
   const decision = benchmarkDecision(
-    report.cases.map(item => ({ caseId: item.caseId, goal: item.goal }))
+    report.cases.map(item => ({ caseId: item.caseId, goal: item.goal })),
+    fixtures
   );
   const byId = new Map(judged.rows.map(row => [row.caseId, row.scores]));
   const meanOf = (ids: string[]) => {
@@ -126,7 +131,7 @@ function reportExisting(stem: string): void {
     };
   };
   const required = new Set(
-    EVAL_CASES.filter(item => item.expect.clarification === "required").map(item => item.id)
+    fixtures.filter(item => item.expect.clarification === "required").map(item => item.id)
   );
   console.log(JSON.stringify({
     stem,
@@ -192,15 +197,11 @@ async function main() {
   const scored = [];
   let estimatedUsd = 0;
   let stoppedByCap = false;
+  const fixtures = loadEvalCases(process.argv);
   for (const row of report.cases) {
     if (only && !only.has(row.caseId)) continue;
-    const fixture = EVAL_CASES.find(item => item.id === row.caseId);
-    const profile = [
-      `Name: ${fixture?.displayName ?? ""}`,
-      `Bio: ${fixture?.bio ?? ""}`,
-      `Captions: ${(fixture?.captions ?? []).slice(0, 6).join(" | ")}`,
-      `Notes: ${fixture?.expect.notes ?? ""}`,
-    ].join("\n");
+    const fixture = fixtures.find(item => item.id === row.caseId);
+    const profile = judgeProfileText(fixture);
     const output = [
       `Niche label: ${row.niche.label ?? "(missing)"}`,
       `Discovery category: ${row.niche.categoryLabel ?? "(none)"}`,

@@ -6,8 +6,9 @@
  *
  * - Uses the production AI client (server/_core/llm.ts invokeLLM): same
  *   default model routing, prompts and guards as production.
- * - Synthetic profiles only (server/personalization/intelligence/eval/fixtures.ts).
- *   No scraping, no database, no customer data.
+ * - Synthetic profiles by default (server/personalization/intelligence/eval/fixtures.ts).
+ *   `--fixtures=<path>` replays cases written at run time (real-customer
+ *   replays); that file is never committed. No scraping.
  * - Hard cap: $5 (EVAL_SPEND_CAP_USD). Stops before a case that could exceed it.
  * - Refuses to run without a key. It never substitutes scripted answers.
  * - Writes docs/evals/personalization-intelligence/run-<timestamp>.{json,md}.
@@ -15,7 +16,7 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { EVAL_CASES } from "../server/personalization/intelligence/eval/fixtures";
+import { loadEvalCases } from "../server/personalization/intelligence/eval/caseSource";
 import {
   assertRealRunAllowed,
   runEvaluation,
@@ -67,8 +68,9 @@ export function renderMarkdown(r: EvalReport): string {
 }
 
 function selectedCases() {
+  const all = loadEvalCases(process.argv);
   const flag = process.argv.find(arg => arg.startsWith("--cases="));
-  if (!flag) return EVAL_CASES;
+  if (!flag) return all;
   const ids = new Set(
     flag
       .slice("--cases=".length)
@@ -76,7 +78,7 @@ function selectedCases() {
       .map(id => id.trim())
       .filter(Boolean)
   );
-  const cases = EVAL_CASES.filter(item => ids.has(item.id));
+  const cases = all.filter(item => ids.has(item.id));
   if (cases.length !== ids.size) {
     throw new Error("One or more --cases ids are not in the evaluation set.");
   }

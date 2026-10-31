@@ -11,8 +11,11 @@
  * continues with what a user in that scenario would type.
  */
 import type {
+  AnalysisSourceSnapshot,
   AudiencePayload,
+  NichePayload,
   SocialPlatform,
+  SocialProfileStatus,
 } from "@shared/personalization/model";
 
 export type EvalCategory =
@@ -23,12 +26,14 @@ export type EvalCategory =
   | "travel_lifestyle_family"
   | "education_services"
   | "small_new"
-  | "ambiguous_multilingual";
+  | "ambiguous_multilingual"
+  | "real_customer";
 
 export type EvalCase = {
   id: string;
   category: EvalCategory;
-  synthetic: true;
+  /** false only for real-customer replays loaded at run time (never committed). */
+  synthetic: boolean;
   platform: SocialPlatform | null;
   displayName: string | null;
   bio: string | null;
@@ -46,6 +51,12 @@ export type EvalCase = {
   };
   fallbackGoal: string;
   fallbackAudiences: AudiencePayload[];
+  /** Real-customer replays: the stored analysis snapshot, used as is. */
+  snapshot?: AnalysisSourceSnapshot | null;
+  /** Real-customer replays: the profile status production had. */
+  profileStatus?: SocialProfileStatus;
+  /** Real-customer replays: the niche the customer picked ("I don't post yet"). */
+  typedNiche?: NichePayload;
 };
 
 const many = (base: string[], n: number) =>
