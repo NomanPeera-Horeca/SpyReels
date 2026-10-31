@@ -96,6 +96,20 @@ async function loadOne(post: PostRef): Promise<PostImage | null> {
   }
 }
 
+/**
+ * Post thumbnails are off by default. A fair re-score of 68 real customers
+ * found the gain came from the post captions and the source rule; most
+ * provider thumbnail links had expired, and images that did load added about
+ * 40% to model cost without a measurable lift. Set
+ * PERSONALIZATION_POST_IMAGES_ENABLED=true to send them again.
+ */
+export function postImagesEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.PERSONALIZATION_POST_IMAGES_ENABLED?.trim().toLowerCase() === "true";
+}
+
+/** Used while thumbnails are switched off: no fetch, no image tokens. */
+export const noPostImages: PostImageLoader = async () => [];
+
 /** Thumbnails of the first posts with an image, in parallel. Failures are skipped. */
 export const loadPostImages: PostImageLoader = async posts => {
   const withImage = posts.filter(post => fetchableImageUrl(post.thumbnailUrl)).slice(0, MAX_POST_IMAGES);

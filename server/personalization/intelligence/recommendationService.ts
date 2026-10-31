@@ -54,6 +54,8 @@ import {
 import { buildCreatorEvidence, type CreatorEvidence } from "./evidence";
 import {
   loadPostImages,
+  noPostImages,
+  postImagesEnabled,
   postIndex,
   type PostContext,
   type PostImageLoader,
@@ -545,7 +547,10 @@ export async function generateRecommendations(
   const indexedPosts = postIndex(snapshot, snapshot?.profileEvidence ?? openEvidence);
   let postContextLoad: Promise<PostContext> | null = null;
   const postContext = () =>
-    (postContextLoad ??= loadPostContext(indexedPosts, deps.loadPostImages ?? loadPostImages));
+    (postContextLoad ??= loadPostContext(
+      indexedPosts,
+      deps.loadPostImages ?? (postImagesEnabled() ? loadPostImages : noPostImages)
+    ));
 
   // No confirmed goal and not enough profile evidence: ask, do not invent an audience or pillar.
   if (
