@@ -13,10 +13,19 @@ import {
   evidenceBlock,
   offerQuoteIsVerbatim,
   UNTRUSTED_DATA_RULE,
+  untrustedEvidenceBlock,
   type CreatorEvidence,
   type EvidenceSource,
 } from "./evidence";
 import {
+  EMPTY_POST_CONTEXT,
+  POST_EVIDENCE_RULE,
+  postImagesForCall,
+  postsPromptBlock,
+  type PostContext,
+} from "./postVisuals";
+import {
+  capitalizationMarksNames,
   commercialWordsAreTopic,
   copiesSourceText,
   inventsCommercialObjective,
@@ -33,7 +42,7 @@ import {
   type ParseResult,
 } from "./structuredLlm";
 
-export const GOAL_PROMPT_VERSION = "goal-v3";
+export const GOAL_PROMPT_VERSION = "goal-v4";
 /** Hard cap after parsing. The prompt still asks for 18 words; this only stops rambling. */
 const MAX_GOAL_WORDS = 24;
 const MAX_GOAL_CHARS = 170;
@@ -45,7 +54,7 @@ export type GoalInference =
       status: "suggested";
       goal: string;
       confidence: SuggestionConfidence;
-      evidenceBasis: EvidenceSource[];
+      evidenceBasis: (EvidenceSource | "posts")[];
       usage: LlmUsage;
       attempts: number;
     }
@@ -74,6 +83,7 @@ const SCHEMA = {
           "brand_description",
           "niche",
           "user_answers",
+          "posts",
         ],
       },
     },
@@ -103,6 +113,7 @@ const Shape = z.object({
       "brand_description",
       "niche",
       "user_answers",
+      "posts",
     ])
   ),
   clarifying_question: z.string(),
@@ -114,11 +125,14 @@ type Parsed =
       kind: "suggest";
       goal: string;
       confidence: SuggestionConfidence;
-      basis: EvidenceSource[];
+      basis: (EvidenceSource | "posts")[];
     }
   | { kind: "clarify"; question: string };
 
-export function buildGoalPrompt(e: CreatorEvidence): {
+export function buildGoalPrompt(
+  e: CreatorEvidence,
+  posts: PostContext = EMPTY_POST_CONTEXT
+): {
   system: string;
   user: string;
 } {
@@ -134,14 +148,18 @@ export function buildGoalPrompt(e: CreatorEvidence): {
     '- A niche the creator picked themselves (evidence source "niche") also names the subject, even with no bio and no posts. Then suggest one starter purpose for that niche instead of asking.',
     "- If several purposes fit that same subject, choose the most direct one. Do not ask the user to pick among purposes that all fit the evidence.",
     '- Choose decision "clarify" only when neither the bio nor a picked niche says what the content is about, or the evidence contradicts itself. Write one short question in the output language. Otherwise leave clarifying_question empty.',
-    "- evidence_basis lists only the evidence sources you actually relied on.",
+    '- evidence_basis lists only the evidence sources you actually relied on. Use "posts" for the creator\'s own posts and thumbnails.',
+    `- ${POST_EVIDENCE_RULE}`,
     `- Write in ${e.outputLanguage.label}. The evidence may be in any language.`,
   ].join("\n");
   const user = [
     `Evidence strength: ${e.strength}.`,
     evidenceBlock(e),
+    postsPromptBlock(posts, untrustedEvidenceBlock),
     "Return the JSON object.",
-  ].join("\n");
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("\n");
   return { system, user };
 }
 
@@ -153,7 +171,9 @@ function creatorTopicText(e: CreatorEvidence): string {
 
 export function parseGoalOutput(
   raw: unknown,
-  e: CreatorEvidence
+  e: CreatorEvidence,
+  /** The creator's posts were shown, so "posts" is a real evidence source. */
+  hasPosts = false
 ): ParseResult<Parsed> {
   const shape = Shape.safeParse(raw);
   if (!shape.success)
@@ -188,7 +208,9 @@ export function parseGoalOutput(
       ok: false,
       reason: `goal contains numbers not in the evidence (${nums.join(", ")})`,
     };
-  const names = unsupportedProperNouns(goal, e.corpus, [e.outputLanguage.label]);
+  const names = capitalizationMarksNames(e.outputLanguage.code)
+    ? unsupportedProperNouns(goal, e.corpus, [e.outputLanguage.label])
+    : [];
   if (names.length)
     return {
       ok: false,
@@ -206,7 +228,9 @@ export function parseGoalOutput(
       reason: "goal claims a business objective the evidence does not show",
     };
   }
-  const basis = o.evidence_basis.filter(b => e.sources.includes(b));
+  const basis = o.evidence_basis.filter(b =>
+    b === "posts" ? hasPosts : e.sources.includes(b)
+  );
   if (basis.length === 0)
     return { ok: false, reason: "evidence_basis must name sources that exist" };
   return {
@@ -222,6 +246,8 @@ export function parseGoalOutput(
 
 export async function inferGoal(input: {
   evidence: CreatorEvidence;
+  /** The creator's indexed posts and thumbnails. Omitted: text evidence only. */
+  posts?: PostContext;
   invoker?: LlmInvoker;
   timeoutMs?: number;
   onRejected?: (reason: string) => void;
@@ -236,18 +262,20 @@ export async function inferGoal(input: {
       attempts: 0,
     };
   }
-  const prompt = buildGoalPrompt(e);
+  const posts = input.posts ?? EMPTY_POST_CONTEXT;
+  const prompt = buildGoalPrompt(e, posts);
   const { value, usage, attempts } = await callStructured({
     operation: "personalization_goal_inference",
     system: prompt.system,
     user: prompt.user,
     schemaName: "creator_goal",
     schema: SCHEMA,
-    parse: raw => parseGoalOutput(raw, e),
+    parse: raw => parseGoalOutput(raw, e, posts.posts.length > 0),
     invoker: input.invoker,
     timeoutMs: input.timeoutMs,
     onRejected: input.onRejected,
     maxTokens: 400,
+    images: postImagesForCall(posts),
   });
   if (value.kind === "clarify") {
     return {

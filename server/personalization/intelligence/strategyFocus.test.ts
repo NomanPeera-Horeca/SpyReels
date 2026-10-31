@@ -26,11 +26,11 @@ function scripted(output: Record<string, unknown>) {
 }
 
 describe("targeted personalization quality contracts (no model calls)", () => {
-  it("preserves approved Pillar versions; Goal moved to v3 for picked niches and subject words", () => {
-    expect(GOAL_PROMPT_VERSION).toBe("goal-v3");
-    expect(PILLAR_PROMPT_VERSION).toBe("pillars-v2");
+  it("versions the approved prompts: post evidence moved Goal, Audience and Pillars", () => {
+    expect(GOAL_PROMPT_VERSION).toBe("goal-v4");
+    expect(PILLAR_PROMPT_VERSION).toBe("pillars-v3");
     expect(NICHE_PROMPT_VERSION).toBe("niche-v5");
-    expect(AUDIENCE_PROMPT_VERSION).toBe("audience-v4");
+    expect(AUDIENCE_PROMPT_VERSION).toBe("audience-v5");
   });
 
   it("accepts an evidence-supported personal reflection niche without inventing an occupation", async () => {

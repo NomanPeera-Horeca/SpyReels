@@ -33,6 +33,7 @@ import {
   type RecommendationStore,
 } from "./recommendationService";
 import {
+  capitalizationMarksNames,
   sanitizeCopy,
   unsupportedDemographics,
   unsupportedProperNouns,
@@ -1326,7 +1327,7 @@ describe("generateRecommendations: Goal -> Audience -> Pillars", () => {
     });
     expect(g.basedOnInputsHash).toMatch(/^[a-f0-9]{16}$/);
     expect(g.generationMeta).toMatchObject({
-      promptVersion: "goal-v3",
+      promptVersion: "goal-v4",
       model: "claude-sonnet-4-6",
       inputTokens: 900,
       outputTokens: 120,
@@ -2144,6 +2145,15 @@ describe("goal rules: subject words, one sentence, language names", () => {
     expect(parse("Share Stockholm weekend hikes with beginners.", swedish)).toMatchObject({ ok: false });
   });
 
+  it("does not treat German nouns as invented names", () => {
+    const german = { ...hiker, outputLanguage: { code: "de", label: "German" } };
+    expect(parse("Inspiriere Menschen, die Welt und neue Reiseziele zu entdecken.", german).ok).toBe(true);
+    expect(capitalizationMarksNames("de")).toBe(false);
+    expect(capitalizationMarksNames("de-AT")).toBe(false);
+    expect(capitalizationMarksNames("en")).toBe(true);
+    expect(capitalizationMarksNames("und")).toBe(true);
+  });
+
   it("tells the model a picked niche names the subject", () => {
     const prompt = buildGoalPrompt(hiker);
     expect(prompt.system).toContain('A niche the creator picked themselves (evidence source "niche") also names the subject');
@@ -2206,3 +2216,44 @@ describe("I don't post yet: a picked niche starts the strategy", () => {
     expect(llm.calls).toHaveLength(0);
   });
 });
+
+describe("post thumbnails reach the model", () => {
+  it("sends the most viewed posts with images to the pillar step, and loads them once", async () => {
+    const store = new MemoryRecoStore();
+    store.snapshot = {
+      ...snap(["Fryer buying guide", "Kitchen layout walkthrough"]),
+      posts: [
+        { postId: "p1", url: null, publishedAt: null, views: 5000, likes: null, comments: null, durationSec: null, caption: "Kitchen layout walkthrough", thumbnailUrl: "https://cdn.example.com/p1.jpg" },
+        { postId: "p2", url: null, publishedAt: null, views: 900, likes: null, comments: null, durationSec: null, caption: "Fryer buying guide", thumbnailUrl: "https://cdn.example.com/p2.jpg" },
+      ],
+    };
+    store.items.push(item("goal", { text: "Help restaurant owners buy the right equipment." }));
+    store.items.push(item("audience", { who: "Restaurant owners", outcome: "pick reliable equipment" }));
+    let loads = 0;
+    const loadPostImages = async (posts: { ref: string }[]) => {
+      loads++;
+      return posts.slice(0, 1).map(p => ({ ref: p.ref, dataUrl: "data:image/jpeg;base64,AAAA" }));
+    };
+    const llm = fakeLlm(pillarOut);
+    const r = await generateRecommendations(
+      { store, invoker: llm.invoker, loadPostImages },
+      { ctx, socialProfileId: "prof-1", step: "pillars" }
+    );
+    expect(r.status).toBe("generated");
+    expect(loads).toBe(1);
+    const call = llm.calls.find(c => c.operation === "personalization_pillar_recommendations")!;
+    const content = call.messages[1]!.content as Array<{ type: string; text?: string; image_url?: { url: string } }>;
+    expect(Array.isArray(content)).toBe(true);
+    expect(content[0]?.text).toContain('"ref":"P1","caption":"Kitchen layout walkthrough"');
+    expect(content.some(part => part.type === "text" && part.text === "Thumbnail of P1:")).toBe(true);
+    expect(content.some(part => part.type === "image_url" && part.image_url?.url === "data:image/jpeg;base64,AAAA")).toBe(true);
+
+    const again = await generateRecommendations(
+      { store, invoker: fakeLlm().invoker, loadPostImages },
+      { ctx, socialProfileId: "prof-1", step: "pillars" }
+    );
+    expect(again.status).toBe("reused");
+    expect(loads).toBe(1);
+  });
+});
+
