@@ -17,6 +17,7 @@ import {
   type EvidenceSource,
 } from "./evidence";
 import {
+  capitalizationMarksNames,
   commercialWordsAreTopic,
   copiesSourceText,
   inventsCommercialObjective,
@@ -188,7 +189,9 @@ export function parseGoalOutput(
       ok: false,
       reason: `goal contains numbers not in the evidence (${nums.join(", ")})`,
     };
-  const names = unsupportedProperNouns(goal, e.corpus, [e.outputLanguage.label]);
+  const names = capitalizationMarksNames(e.outputLanguage.code)
+    ? unsupportedProperNouns(goal, e.corpus, [e.outputLanguage.label])
+    : [];
   if (names.length)
     return {
       ok: false,

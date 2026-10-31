@@ -33,6 +33,7 @@ import {
   type RecommendationStore,
 } from "./recommendationService";
 import {
+  capitalizationMarksNames,
   sanitizeCopy,
   unsupportedDemographics,
   unsupportedProperNouns,
@@ -2142,6 +2143,15 @@ describe("goal rules: subject words, one sentence, language names", () => {
     const swedish = { ...hiker, outputLanguage: { code: "sv", label: "Swedish" } };
     expect(parse("Share Swedish weekend hikes and trail tips with beginners.", swedish).ok).toBe(true);
     expect(parse("Share Stockholm weekend hikes with beginners.", swedish)).toMatchObject({ ok: false });
+  });
+
+  it("does not treat German nouns as invented names", () => {
+    const german = { ...hiker, outputLanguage: { code: "de", label: "German" } };
+    expect(parse("Inspiriere Menschen, die Welt und neue Reiseziele zu entdecken.", german).ok).toBe(true);
+    expect(capitalizationMarksNames("de")).toBe(false);
+    expect(capitalizationMarksNames("de-AT")).toBe(false);
+    expect(capitalizationMarksNames("en")).toBe(true);
+    expect(capitalizationMarksNames("und")).toBe(true);
   });
 
   it("tells the model a picked niche names the subject", () => {

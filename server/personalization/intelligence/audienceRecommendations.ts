@@ -17,6 +17,7 @@ import {
   type CreatorEvidence,
 } from "./evidence";
 import {
+  capitalizationMarksNames,
   commercialIntentAllowed,
   inventsMonetization,
   isGenericAudience,
@@ -162,7 +163,9 @@ export function parseAudienceOutput(
       droppedFor = `audience contains numbers not in the evidence (${nums.join(", ")})`;
       continue;
     }
-    const names = unsupportedProperNouns(`${who}. ${outcome}.`, corpus);
+    const names = capitalizationMarksNames(e.outputLanguage.code)
+      ? unsupportedProperNouns(`${who}. ${outcome}.`, corpus)
+      : [];
     if (names.length) {
       droppedFor = `audience names things not in the evidence (${names.join(", ")})`;
       continue;

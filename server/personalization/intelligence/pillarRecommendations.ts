@@ -22,6 +22,7 @@ import {
   type CreatorEvidence,
 } from "./evidence";
 import {
+  capitalizationMarksNames,
   claimsPerformance,
   commercialIntentAllowed,
   copiesSourceText,
@@ -208,7 +209,10 @@ export function parsePillarOutput(
       droppedFor = "a pillar contains numbers that are not in the evidence";
       continue;
     }
-    if (unsupportedProperNouns(`${titleCaseAsWords(title)}. ${description}`, corpus).length) {
+    if (
+      capitalizationMarksNames(e.outputLanguage.code) &&
+      unsupportedProperNouns(`${titleCaseAsWords(title)}. ${description}`, corpus).length
+    ) {
       droppedFor = "a pillar names things that are not in the evidence";
       continue;
     }

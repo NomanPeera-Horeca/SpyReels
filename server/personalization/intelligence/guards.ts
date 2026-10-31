@@ -61,6 +61,11 @@ const ALLOWED_CAPITALIZED = new Set([
   "q&a",
 ]);
 
+/** German capitalizes every noun, so there a capital letter says nothing about a name. */
+export function capitalizationMarksNames(languageCode: string): boolean {
+  return !/^de\b/i.test(languageCode.trim());
+}
+
 /**
  * Capitalized words that are not the first word of a sentence and do not
  * appear in the evidence: usually invented brand, place or person names.
