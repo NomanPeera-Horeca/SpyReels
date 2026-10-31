@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { InstagramPrivateAccountError, InstagramProviderError } from "../../instagram";
 import { classifyLookupError } from "./profileLookupDeps";
 import {
+  INSTAGRAM_PROFILE_LOOKUP_ATTEMPT_TIMEOUT_MS,
+  INSTAGRAM_PROFILE_LOOKUP_DEADLINE_MS,
   PROFILE_LOOKUP_ATTEMPT_TIMEOUT_MS,
   PROFILE_LOOKUP_DEADLINE_MS,
   PROFILE_LOOKUP_MAX_ATTEMPTS,
@@ -10,6 +12,7 @@ import {
 import {
   PROFILE_LOOKUPS_PER_HOUR,
   lookupPublicProfile,
+  profileLookupDeadlineMs,
   profileLookupProviderBudget,
   recallCachedPublicProfile,
   resetLookupLimiterForTests,
@@ -158,16 +161,22 @@ describe("lookupPublicProfile", () => {
     expect(a.ok && b.ok).toBe(true);
   });
 
-  it("gives Instagram the full deadline and keeps the shorter cap for other platforms", async () => {
+  it("gives Instagram the Creator Radar request timeout and keeps the shorter cap for other platforms", async () => {
     expect(PROFILE_LOOKUP_SLOW_AFTER_MS).toBe(8_000);
     expect(PROFILE_LOOKUP_DEADLINE_MS).toBe(12_000);
     expect(PROFILE_LOOKUP_ATTEMPT_TIMEOUT_MS).toBe(8_000);
     expect(PROFILE_LOOKUP_MAX_ATTEMPTS).toBe(2);
-    expect(profileLookupProviderBudget("instagram", 12_000)).toEqual({
-      timeoutMs: 12_000,
+    expect(INSTAGRAM_PROFILE_LOOKUP_DEADLINE_MS).toBe(45_000);
+    expect(INSTAGRAM_PROFILE_LOOKUP_ATTEMPT_TIMEOUT_MS).toBe(30_000);
+    expect(profileLookupDeadlineMs("instagram")).toBe(45_000);
+    expect(profileLookupDeadlineMs("tiktok")).toBe(12_000);
+    expect(profileLookupDeadlineMs("youtube")).toBe(12_000);
+    expect(profileLookupProviderBudget("instagram", 45_000)).toEqual({
+      timeoutMs: 30_000,
       maxAttempts: 2,
-      deadlineMs: 12_000,
+      deadlineMs: 45_000,
     });
+    expect(profileLookupProviderBudget("instagram", 12_000).timeoutMs).toBe(12_000);
     expect(profileLookupProviderBudget("tiktok", 12_000).timeoutMs).toBe(8_000);
     expect(profileLookupProviderBudget("youtube", 12_000).timeoutMs).toBe(8_000);
 
@@ -219,11 +228,11 @@ describe("lookupPublicProfile", () => {
         };
       },
     });
-    expect((await lookupPublicProfile({ userId: 1, platform: "instagram", handle: "a", deps: d, deadlineMs: 12_000 })).ok).toBe(true);
-    expect((await lookupPublicProfile({ userId: 2, platform: "tiktok", handle: "b", deps: d, deadlineMs: 12_000 })).ok).toBe(true);
-    expect((await lookupPublicProfile({ userId: 3, platform: "youtube", handle: "c", deps: d, deadlineMs: 12_000 })).ok).toBe(true);
+    expect((await lookupPublicProfile({ userId: 1, platform: "instagram", handle: "a", deps: d })).ok).toBe(true);
+    expect((await lookupPublicProfile({ userId: 2, platform: "tiktok", handle: "b", deps: d })).ok).toBe(true);
+    expect((await lookupPublicProfile({ userId: 3, platform: "youtube", handle: "c", deps: d })).ok).toBe(true);
     expect(seen).toEqual([
-      { platform: "instagram", timeoutMs: 12_000, deadlineMs: 12_000, maxAttempts: 2 },
+      { platform: "instagram", timeoutMs: 30_000, deadlineMs: 45_000, maxAttempts: 2 },
       { platform: "tiktok", timeoutMs: 8_000, deadlineMs: 12_000, maxAttempts: 2 },
       { platform: "youtube", timeoutMs: 8_000, deadlineMs: 12_000, maxAttempts: 2 },
     ]);

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  PROFILE_LOOKUP_DEADLINE_MS,
+  INSTAGRAM_PROFILE_LOOKUP_ATTEMPT_TIMEOUT_MS,
+  INSTAGRAM_PROFILE_LOOKUP_DEADLINE_MS,
 } from "@shared/personalization/profileLookup";
 import {
   InstagramHandleNotFoundError,
@@ -9,9 +10,13 @@ import {
   resolveInstagramIdentity,
 } from "./instagram";
 import { classifyLookupError } from "./personalization/onboarding/profileLookupDeps";
-import { profileLookupProviderBudget } from "./personalization/onboarding/profileLookup";
+import {
+  profileLookupDeadlineMs,
+  profileLookupProviderBudget,
+} from "./personalization/onboarding/profileLookup";
 
-const DEADLINE_MS = PROFILE_LOOKUP_DEADLINE_MS;
+const DEADLINE_MS = profileLookupDeadlineMs("instagram");
+const ATTEMPT_MS = INSTAGRAM_PROFILE_LOOKUP_ATTEMPT_TIMEOUT_MS;
 
 function onboardingBudget(signal?: AbortSignal) {
   return {
@@ -158,6 +163,53 @@ describe("interactive Instagram profile lookup", () => {
     expect(Number(attempts[0]?.match(/ms=(\d+)/)?.[1])).toBeGreaterThanOrEqual(11_999);
   });
 
+  it("returns the profile when the direct request answers at 20 seconds", async () => {
+    await expectProfileAt(20_000);
+  });
+
+  it("waits the full Creator Radar request timeout before giving up on the first request", async () => {
+    expect(DEADLINE_MS).toBe(INSTAGRAM_PROFILE_LOOKUP_DEADLINE_MS);
+    vi.useFakeTimers();
+    const { fetchMock, signal } = installDelayedProfile(ATTEMPT_MS - 1);
+    const pending = resolveInstagramIdentity("noman_peera", onboardingBudget());
+    await vi.advanceTimersByTimeAsync(ATTEMPT_MS - 2);
+    expect(signal()?.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(1);
+    const identity = await pending;
+    expect(identity.username).toBe("noman_peera");
+    expect(profileCalls(fetchMock)).toBe(1);
+  });
+
+  it("retries once when the first request times out and returns the second answer", async () => {
+    vi.useFakeTimers();
+    let calls = 0;
+    const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
+      calls += 1;
+      const call = calls;
+      return new Promise<Response>((resolve, reject) => {
+        const abort = () => reject(Object.assign(new Error("aborted"), { name: "AbortError" }));
+        if (init?.signal?.aborted) {
+          abort();
+          return;
+        }
+        init?.signal?.addEventListener("abort", abort, { once: true });
+        if (call === 2) setTimeout(() => resolve(jsonResponse(200, graphProfile("noman_peera"))), 5_000);
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const pending = resolveInstagramIdentity("noman_peera", onboardingBudget());
+    await vi.advanceTimersByTimeAsync(ATTEMPT_MS + 400 + 5_000);
+    const identity = await pending;
+    expect(identity.username).toBe("noman_peera");
+    expect(profileCalls(fetchMock)).toBe(2);
+    expect(searchCalls(fetchMock)).toBe(0);
+    const attempts = logs.filter(line => line.includes("[Instagram] profile attempt"));
+    expect(attempts[0]).toContain("n=1/2");
+    expect(attempts[0]).toContain("detail=timeout");
+    expect(attempts[1]).toContain("n=2/2");
+    expect(attempts[1]).toContain("detail=ok");
+  });
+
   it("classifies a still-open profile request at the deadline as timeout", async () => {
     vi.useFakeTimers();
     const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {
@@ -173,9 +225,9 @@ describe("interactive Instagram profile lookup", () => {
       () => ({ ok: true as const }),
       (error: unknown) => ({ ok: false as const, error })
     );
-    await vi.advanceTimersByTimeAsync(8_000);
+    await vi.advanceTimersByTimeAsync(ATTEMPT_MS - 1);
     expect(profileCalls(fetchMock)).toBe(1);
-    await vi.advanceTimersByTimeAsync(4_000);
+    await vi.advanceTimersByTimeAsync(DEADLINE_MS - ATTEMPT_MS + 1);
     const outcome = await settled;
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
@@ -183,7 +235,7 @@ describe("interactive Instagram profile lookup", () => {
     expect(outcome.error).not.toBeInstanceOf(InstagramHandleNotFoundError);
     expect(outcome.error).toMatchObject({ httpStatus: 408, detail: "timeout" });
     expect(classifyLookupError(outcome.error)).toBe("timeout");
-    expect(profileCalls(fetchMock)).toBe(1);
+    expect(profileCalls(fetchMock)).toBe(2);
     expect(searchCalls(fetchMock)).toBe(0);
     const attempts = logs.filter(line => line.includes("[Instagram] profile attempt"));
     expect(attempts.some(line => line.includes("detail=timeout"))).toBe(true);
