@@ -15,10 +15,11 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   baseline:
-    if: "${{ startsWith(github.event.head_commit.message, 'eval: [authorized-baseline-eval]') }}"
+    if: "${{ startsWith(github.event.head_commit.message, 'eval: [authorized-baseline-eval]') && !contains(github.event.head_commit.message, '[rejudge]') }}"
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -99,5 +100,85 @@ jobs:
           path: |
             docs/evals/personalization-intelligence/baseline-*.json
             docs/evals/personalization-intelligence/baseline-*.md
+          if-no-files-found: warn
+          retention-days: 14
+
+  # Fair re-test: re-score two saved generation runs with the judge seeing the
+  # same posts and thumbnails the generator saw. No new generation.
+  # Commit subject: "eval: [authorized-baseline-eval] [rejudge] ..."
+  rejudge:
+    if: "${{ startsWith(github.event.head_commit.message, 'eval: [authorized-baseline-eval] [rejudge]') }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      EVAL_DB_READONLY_URL: ${{ secrets.EVAL_DB_READONLY_URL }}
+      BEFORE_RUN_ID: "41225653056"
+      AFTER_RUN_ID: "41235635420"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Saved results - before Phase 1 (goal-v3)
+        uses: actions/download-artifact@v4
+        with:
+          name: spyreels-personalization-baseline
+          path: ${{ runner.temp }}/before
+          run-id: ${{ env.BEFORE_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Saved results - after Phase 1
+        uses: actions/download-artifact@v4
+        with:
+          name: spyreels-personalization-baseline
+          path: ${{ runner.temp }}/after
+          run-id: ${{ env.AFTER_RUN_ID }}
+          github-token: ${{ github.token }}
+
+      - name: Real customers - export (read-only login)
+        shell: bash
+        run: |
+          pnpm exec tsx scripts/personalization-real-customers-export.ts --out="$RUNNER_TEMP/real-cases.json"
+          # Case ids follow sign-up order. Both saved runs had R001-R077 and N001-N035;
+          # a different count means ids may have shifted, so stop before spending.
+          node -e '
+            const ids = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).map(c => c.id);
+            const r = ids.filter(i => i.startsWith("R")).length, n = ids.filter(i => i.startsWith("N")).length;
+            console.log(JSON.stringify({ linked: r, notPosting: n }));
+            if (r !== 77 || n !== 35) { console.error("Customer ids no longer line up with the saved runs."); process.exit(1); }
+          ' "$RUNNER_TEMP/real-cases.json"
+          cp "$RUNNER_TEMP/before/baseline-real.json" docs/evals/personalization-intelligence/before-real.json
+          cp "$RUNNER_TEMP/after/baseline-real.json" docs/evals/personalization-intelligence/phase1-real.json
+
+      - name: Re-score before Phase 1 with posts and thumbnails (cap $1.40)
+        run: pnpm exec tsx scripts/personalization-quality-judge.ts --confirm-spend --cap=1.40 --in=before-real --with-posts --linked-only --ids-from=phase1-real --fixtures="$RUNNER_TEMP/real-cases.json"
+
+      - name: Re-score after Phase 1 with posts and thumbnails (cap $1.40)
+        if: always()
+        run: pnpm exec tsx scripts/personalization-quality-judge.ts --confirm-spend --cap=1.40 --in=phase1-real --with-posts --linked-only --ids-from=before-real --fixtures="$RUNNER_TEMP/real-cases.json"
+
+      - name: Compare
+        if: always()
+        run: pnpm exec tsx scripts/personalization-judge-compare.ts --before=before-real-judge-posts --after=phase1-real-judge-posts
+
+      - name: Delete the real-customer cases file
+        if: always()
+        run: rm -f "$RUNNER_TEMP/real-cases.json"
+
+      - name: Upload re-scores (scores only, no profile bios)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: spyreels-personalization-rejudge
+          path: docs/evals/personalization-intelligence/*-judge-posts.json
           if-no-files-found: warn
           retention-days: 14

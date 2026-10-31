@@ -15,6 +15,35 @@ import {
   benchmarkDecision,
   type EvalReport,
 } from "../server/personalization/intelligence/eval/runEval";
+import {
+  loadPostImages,
+  postIndex,
+  type PostImage,
+  type PostRef,
+} from "../server/personalization/intelligence/postVisuals";
+import type { EvalCase } from "../server/personalization/intelligence/eval/fixtures";
+
+/** Approximate input tokens for one 512px thumbnail, rounded up for the spend reserve. */
+const IMAGE_RESERVE_TOKENS = 900;
+
+/**
+ * --with-posts: the judge sees the same evidence the generator sees — the
+ * creator's most viewed posts (P1..Pn) and their thumbnails — so a detail taken
+ * from a thumbnail is not scored as invented.
+ */
+async function postEvidenceFor(
+  fixture: EvalCase | undefined
+): Promise<{ text: string; posts: PostRef[]; images: PostImage[] }> {
+  const snapshot = fixture?.snapshot ?? null;
+  const posts = postIndex(snapshot, snapshot?.profileEvidence ?? null);
+  if (posts.length === 0) return { text: "", posts, images: [] };
+  const images = await loadPostImages(posts);
+  const withImage = new Set(images.map(image => image.ref));
+  const lines = posts.map(
+    post => `${post.ref}${withImage.has(post.ref) ? " [thumbnail attached]" : ""}: ${post.caption ?? "(no caption)"}`
+  );
+  return { text: `Creator's own posts, most viewed first:\n${lines.join("\n")}`, posts, images };
+}
 
 function loadLocalEnv(): void {
   const file = path.resolve(import.meta.dirname, "../.env");
@@ -152,8 +181,9 @@ function reportExisting(stem: string): void {
 
 /** Conservative Sonnet 4.6 reservation: maximum output tokens plus a generous
  * input/tokenization allowance. This is an estimate, not provider invoicing. */
-export function judgeCallReserveUsd(profile: string, output: string): number {
-  const inputTokens = Math.ceil((profile.length + output.length + 1500) / 2) + 500;
+export function judgeCallReserveUsd(profile: string, output: string, images = 0): number {
+  const inputTokens =
+    Math.ceil((profile.length + output.length + 1500) / 2) + 500 + images * IMAGE_RESERVE_TOKENS;
   return estimateLlmCost({
     model: "claude-sonnet-4-6",
     inputTokens,
@@ -165,9 +195,10 @@ export function judgeFitsBudget(
   spentUsd: number,
   capUsd: number,
   profile: string,
-  output: string
+  output: string,
+  images = 0
 ): boolean {
-  return spentUsd + judgeCallReserveUsd(profile, output) <= capUsd + 0.0000001;
+  return spentUsd + judgeCallReserveUsd(profile, output, images) <= capUsd + 0.0000001;
 }
 
 async function main() {
@@ -194,14 +225,30 @@ async function main() {
   const { invokeLLM } = await import("../server/_core/llm");
   const onlyFlag = process.argv.find(arg => arg.startsWith("--only="));
   const only = onlyFlag ? new Set(onlyFlag.slice("--only=".length).split(",")) : null;
+  const withPosts = process.argv.includes("--with-posts");
+  const linkedOnly = process.argv.includes("--linked-only");
+  // --ids-from=<stem>: judge only cases that also exist in another report, so
+  // two runs are compared on exactly the same customers.
+  const idsFromFlag = process.argv.find(arg => arg.startsWith("--ids-from="));
+  const idsFrom = idsFromFlag
+    ? new Set(
+        (JSON.parse(
+          readFileSync(path.join(dir, `${idsFromFlag.slice("--ids-from=".length)}.json`), "utf8")
+        ) as EvalReport).cases.map(item => item.caseId)
+      )
+    : null;
+  let imagesSent = 0;
   const scored = [];
   let estimatedUsd = 0;
   let stoppedByCap = false;
   const fixtures = loadEvalCases(process.argv);
   for (const row of report.cases) {
     if (only && !only.has(row.caseId)) continue;
+    if (idsFrom && !idsFrom.has(row.caseId)) continue;
     const fixture = fixtures.find(item => item.id === row.caseId);
-    const profile = judgeProfileText(fixture);
+    if (linkedOnly && fixture?.profileStatus !== "confirmed") continue;
+    const evidence = withPosts ? await postEvidenceFor(fixture) : { text: "", posts: [], images: [] };
+    const profile = [judgeProfileText(fixture), evidence.text].filter(Boolean).join("\n");
     const output = [
       `Niche label: ${row.niche.label ?? "(missing)"}`,
       `Discovery category: ${row.niche.categoryLabel ?? "(none)"}`,
@@ -210,7 +257,7 @@ async function main() {
       `Audiences: ${row.audiences.items.map(item => `${item.who} -> ${item.outcome}`).join("; ") || row.audiences.status}`,
       `Pillars: ${row.pillars.items.map(item => `${item.title}: ${item.description}`).join("; ") || row.pillars.status}`,
     ].join("\n");
-    if (!judgeFitsBudget(estimatedUsd, capUsd, profile, output)) {
+    if (!judgeFitsBudget(estimatedUsd, capUsd, profile, output, evidence.images.length)) {
       stoppedByCap = true;
       console.warn("Judge stopped before an estimated-cost cap breach.");
       break;
@@ -232,13 +279,26 @@ async function main() {
             "Niche is out of 30. A label that only names a broad catalog bucket, such as Business & Entrepreneurship or Health & Fitness, scores 12 or lower when the profile is more specific. A missing niche scores 0. A specific accurate label scores 24 to 30.",
             "Goal is out of 25. Audience is out of 20. Pillars are out of 25. Specificity is out of 15. Clarity is out of 10. Evidence discipline is out of 5.",
             "Penalize invented products, audiences, and statistics.",
+            ...(withPosts
+              ? [
+                  "The creator's own posts are listed as P1, P2... and some thumbnails are attached with the same ids. What the captions and thumbnails show (subject, setting, activity, on-screen text) is evidence; a draft detail supported by them is not invented.",
+                ]
+              : []),
             "The reason is one sentence, 180 characters or fewer.",
             "Return only the JSON object.",
           ].join("\n"),
         },
         {
           role: "user",
-          content: `${profile}\n\nDraft:\n${output}`,
+          content: evidence.images.length
+            ? [
+                { type: "text", text: `${profile}\n\nDraft:\n${output}` },
+                ...evidence.images.flatMap(image => [
+                  { type: "text" as const, text: `Thumbnail of ${image.ref}:` },
+                  { type: "image_url" as const, image_url: { url: image.dataUrl } },
+                ]),
+              ]
+            : `${profile}\n\nDraft:\n${output}`,
         },
       ],
       response_format: {
@@ -259,8 +319,15 @@ async function main() {
       outputTokens: result.usage?.completion_tokens ?? 0,
     }).costUsd;
     estimatedUsd += cost;
-    scored.push({ caseId: row.caseId, scores, costUsd: Math.round(cost * 1_000_000) / 1_000_000 });
-    console.log(`${row.caseId} ${scores ? `niche ${scores.niche} goal ${scores.goal} audience ${scores.audience} pillars ${scores.pillars}` : "unscored"}`);
+    imagesSent += evidence.images.length;
+    scored.push({
+      caseId: row.caseId,
+      scores,
+      posts: evidence.posts.length,
+      images: evidence.images.length,
+      costUsd: Math.round(cost * 1_000_000) / 1_000_000,
+    });
+    console.log(`${row.caseId} ${scores ? `strategy ${strategyPoints(scores)} niche ${scores.niche} goal ${scores.goal} audience ${scores.audience} pillars ${scores.pillars}` : "unscored"} posts ${evidence.posts.length} images ${evidence.images.length}`);
   }
   const nums = scored.flatMap(row => (row.scores ? [row.scores] : []));
   const mean = (key: keyof Scores) =>
@@ -272,6 +339,8 @@ async function main() {
     cases: scored.length,
     scored: nums.length,
     estimatedUsd: Math.round(estimatedUsd * 1_000_000) / 1_000_000,
+    withPosts,
+    imagesSent,
     mean: {
       niche: mean("niche"),
       goal: mean("goal"),
@@ -286,7 +355,8 @@ async function main() {
     },
     rows: scored,
   };
-  if (!only) writeFileSync(path.join(dir, `${stem}-judge.json`), JSON.stringify(summary, null, 2));
+  const judgeFile = `${stem}-judge${withPosts ? "-posts" : ""}.json`;
+  if (!only) writeFileSync(path.join(dir, judgeFile), JSON.stringify(summary, null, 2));
   console.log(JSON.stringify(summary.mean));
   if (stoppedByCap) throw new Error("Judge stopped at its approved estimated spend cap.");
 }
