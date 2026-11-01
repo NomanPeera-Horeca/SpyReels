@@ -193,3 +193,27 @@ export const viralProcessingSpend = mysqlTable("viral_processing_spend", {
   usd: decimal("usd", { precision: 10, scale: 4 }).notNull(),
   videos: int("videos").notNull(),
 });
+
+/**
+ * Creators shown on Home, queued for background research (migration
+ * drizzle/0110_research_prefetch.sql). Runtime code: server/research/prefetch.ts.
+ */
+export const researchPrefetch = mysqlTable(
+  "research_prefetch",
+  {
+    platform: varchar("platform", { length: 16 }).notNull(),
+    handle: varchar("handle", { length: 128 }).notNull(),
+    /** pending | running | done | failed */
+    status: varchar("status", { length: 16 }).notNull(),
+    requestedAt: timestamp("requestedAt").notNull(),
+    startedAt: timestamp("startedAt"),
+    finishedAt: timestamp("finishedAt"),
+    jobId: int("jobId"),
+    attempts: int("attempts").notNull().default(0),
+    error: varchar("error", { length: 255 }),
+  },
+  table => ({
+    pk: primaryKey({ columns: [table.platform, table.handle] }),
+    statusIdx: index("idx_research_prefetch_status").on(table.status, table.requestedAt),
+  })
+);

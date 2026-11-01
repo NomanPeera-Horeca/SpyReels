@@ -162,6 +162,31 @@ function startViralTopicFill(): void {
 
 startViralTopicFill();
 
+/**
+ * Pre-research of the creators shown on Home (server/research/prefetch.ts):
+ * 2 creators every 2 minutes, daily cap RESEARCH_PREFETCH_DAILY_MAX (default
+ * 50). Off with RESEARCH_PREFETCH=false.
+ */
+function startResearchPrefetch(): void {
+  if (process.env.RESEARCH_PREFETCH === "false") return;
+  const everyMs = Math.max(60_000, Number(process.env.RESEARCH_PREFETCH_MS ?? 2 * 60_000));
+  let running = false;
+  const tick = () => {
+    if (running || draining) return;
+    running = true;
+    void import("../research/prefetch")
+      .then(m => m.runResearchPrefetch({ max: 2 }))
+      .catch(error => console.error("[research] prefetch tick failed", error))
+      .finally(() => {
+        running = false;
+      });
+  };
+  setInterval(tick, everyMs);
+  setTimeout(tick, 60_000);
+}
+
+startResearchPrefetch();
+
 process.on("SIGTERM", () => startDrain("SIGTERM"));
 process.on("SIGINT", () => startDrain("SIGINT"));
 

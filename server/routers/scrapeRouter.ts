@@ -58,16 +58,26 @@ async function runScrapeJob(
 }
 
 
-async function runScrapeJobInner(
+/**
+ * The research run itself. `system` runs (background pre-research, not a
+ * user's request) skip the per-user side effects: no usage refund and no
+ * onboarding "first research" flag.
+ */
+export async function runScrapeJobInner(
   jobId: number,
   userId: number,
   handle: string,
-  timeframeDays: number
+  timeframeDays: number,
+  opts: { system?: boolean; maxReels?: number } = {}
 ): Promise<void> {
+  const markFirstSpy = async (id: number) => {
+    if (!opts.system) await maybeMarkFirstSpyCompleted(id);
+  };
   // Centralized refund helper so the multiple failure paths stay in sync.
   // Only safe to call once per job (we never enter more than one failure
   // branch in a single run).
   const refundScrapeQuota = async (reason: string) => {
+    if (opts.system) return;
     try {
       await decrementUsage(userId, "scrapeCount");
       console.warn(
@@ -171,7 +181,7 @@ async function runScrapeJobInner(
               });
             }
           },
-          { maxReels: 500, timeoutMs: 5 * 60 * 1000 }
+          { maxReels: opts.maxReels ?? 500, timeoutMs: 5 * 60 * 1000 }
         )
     );
 
@@ -223,7 +233,7 @@ async function runScrapeJobInner(
           errorMessage: null,
           failureReason: null,
         });
-        await maybeMarkFirstSpyCompleted(jobId);
+        await markFirstSpy(jobId);
         console.log(
           `[runScrapeJob ${jobId}] completed with seeded catalog (live pull returned 0) handle=@${cleanHandleForLog} reels=${seededReelCount}`
         );
@@ -308,7 +318,7 @@ async function runScrapeJobInner(
         errorMessage: null,
         failureReason: null,
       });
-      await maybeMarkFirstSpyCompleted(jobId);
+      await markFirstSpy(jobId);
       console.log(
         `[runScrapeJob ${jobId}] completed handle=@${cleanHandleForLog} reels=0 followers=${followerCount}`
       );
@@ -358,7 +368,7 @@ async function runScrapeJobInner(
       errorMessage: null,
       failureReason: null,
     });
-    await maybeMarkFirstSpyCompleted(jobId);
+    await markFirstSpy(jobId);
     scheduleScrapeJobPostCompleteWork(jobId);
     console.log(
       `[runScrapeJob ${jobId}] completed handle=@${cleanHandleForLog} reels=${finalReelCount} followers=${followerCount}`

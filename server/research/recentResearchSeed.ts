@@ -29,7 +29,7 @@ export type ResearchPlatform = "instagram" | "tiktok" | "youtube";
 /** How old a research can be and still be copied. */
 export const RECENT_RESEARCH_MAX_AGE_DAYS = 14;
 
-type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
+export type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
 /** Videos inside the user's chosen window. Pure; exported for tests. */
 export function withinTimeframe<T extends { postedAt: Date | null }>(rows: T[], timeframeDays: number, now = new Date()): T[] {
@@ -37,7 +37,8 @@ export function withinTimeframe<T extends { postedAt: Date | null }>(rows: T[], 
   return rows.filter(r => !r.postedAt || r.postedAt.getTime() >= cutoff);
 }
 
-async function donorJobId(db: Db, platform: ResearchPlatform, handle: string, newJobId: number): Promise<number | null> {
+/** Most recent completed research of this creator in any workspace (last 14 days), or null. */
+export async function recentResearchJobId(db: Db, platform: ResearchPlatform, handle: string, newJobId = -1): Promise<number | null> {
   const since = new Date(Date.now() - RECENT_RESEARCH_MAX_AGE_DAYS * 86_400_000);
   if (platform === "instagram") {
     const [row] = await db
@@ -104,7 +105,7 @@ export async function seedFromRecentResearch(args: {
   try {
     const db = await getDb();
     if (!db) return 0;
-    const donor = await donorJobId(db, args.platform, handle, args.jobId);
+    const donor = await recentResearchJobId(db, args.platform, handle, args.jobId);
     if (donor == null) return 0;
     let copied = 0;
 
