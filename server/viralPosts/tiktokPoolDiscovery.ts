@@ -163,6 +163,12 @@ export function scoreTikTokSearchVideo(video: TikTokVideoData) {
   });
 }
 
+/** Pillars the semantic check may assign for this pool. Pure; exported for tests. */
+export function tiktokSemanticActivePillars(pillar: string): string[] | undefined {
+  const clean = pillar.trim();
+  return RESTAURANT_PILLARS.has(clean) ? undefined : [clean];
+}
+
 export function shouldUseTikTokSearchDiscovery(pillar: string): boolean {
   return pillar.trim() !== VIRAL_SEED_POOL_PILLAR && pillar.trim().length > 0;
 }
@@ -326,6 +332,10 @@ export async function discoverTikTokPoolCandidates(args: {
     try {
       const classified = await classifySemanticPoolRelevance({
         niche: args.niche,
+        // Restaurant pillars keep the six-pillar family (videos may move
+        // between them). Any other pool is judged against its own topic only,
+        // so videos are never pushed into restaurant pools by default.
+        activePillars: tiktokSemanticActivePillars(args.pillar),
         candidates: adaptedBeforeAdmission,
       });
       semanticHaikuCalls = classified.haikuCalls;
