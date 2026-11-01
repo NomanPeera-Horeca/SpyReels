@@ -37,6 +37,7 @@ import { useLibraryRemakeChain } from "@/hooks/useLibraryRemakeChain";
 import { ingestUrlAndStartLibraryRemake } from "@/lib/ingestUrlAndStartLibraryRemake";
 import { buildRemakeIntentMedia } from "@/lib/remakeIntent";
 import { ViralPostPlayer } from "@/components/ViralPostPlayer";
+import { researchReturnTo } from "@shared/researchIntent";
 import { HOME_COPY as C } from "./copy";
 import {
   AgentComposer,
@@ -578,9 +579,13 @@ export default function HomeV2Page() {
                     <CreatorRow
                       creator={c}
                       compact={compact}
-                      onSee={() => {
-                        track("creator_open");
-                        if (c.bestPost) setPlayingPost(c.bestPost);
+                      onOpen={() => {
+                        track("creator_open", { platform: c.platform });
+                        try {
+                          navigate(researchReturnTo(c.handle, c.platform));
+                        } catch {
+                          navigate("/research");
+                        }
                       }}
                     />
                     <div className={styles.divider} />
