@@ -35,6 +35,14 @@ import {
   PLATFORM_LABEL,
   USE_CASE_OPTIONS,
 } from "./copy";
+import {
+  CONTENT_PURPOSE_OPTIONS,
+  STARTER_AUDIENCE_CHIPS,
+  STARTER_AUDIENCE_MAX,
+  STARTER_TOPIC_CHIPS,
+  STARTER_TOPIC_MAX,
+  type ContentPurpose,
+} from "@shared/personalization/starterQuestions";
 import styles from "./OnboardingSteps.module.css";
 
 export type PlatformError = keyof typeof COPY.platform.errors;
@@ -86,6 +94,8 @@ function ChevronLeft() {
 /* ---------- Step 1: Where do you post? ---------- */
 
 const RETRYABLE_PLATFORM_ERRORS = new Set<PlatformError>(["timeout", "error", "rate_limited"]);
+/** When we cannot find or read the account, the "no posts" path becomes the way forward. */
+const NO_PROFILE_ERRORS = new Set<PlatformError>(["not_found", "unavailable", "private"]);
 
 function shownHandle(value: string): string {
   const handle = value.trim().replace(/^@+/, "");
@@ -133,7 +143,7 @@ export function PlatformStep({
   const actions = (
     <div className={styles.actionsRow}>
       <GhostButton onClick={onNoPost} disabled={busy} className={styles.ghostStart}>
-        {COPY.platform.noPost}
+        {error && NO_PROFILE_ERRORS.has(error) ? COPY.platform.continueWithout : COPY.platform.noPost}
       </GhostButton>
       {looking ? (
         <SecondaryButton type="button" onClick={onCancel}>
@@ -414,6 +424,137 @@ export function AttributionStep({
             onClick={() => onChange(o.value)}
           />
         ))}
+      </div>
+    </OnboardingShell>
+  );
+}
+
+/* ---------- Starter questions: no posts yet, or nothing public to read ---------- */
+
+function ChipRow({
+  label,
+  options,
+  value,
+  onPick,
+  disabled,
+}: {
+  label: string;
+  options: ReadonlyArray<{ value: string; label: string }>;
+  value: string | null;
+  onPick: (v: string) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className={styles.chipRow} role="radiogroup" aria-label={label}>
+      {options.map(o => {
+        const selected = value === o.value;
+        return (
+          <button
+            key={o.value}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            disabled={disabled}
+            onClick={() => onPick(o.value)}
+            className={[styles.chip, selected ? styles.chipSelected : ""].join(" ")}
+          >
+            <span className="sr-text-product-body-small">{o.label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function StarterQuestionsStep({
+  topic,
+  audience,
+  purpose,
+  busy,
+  preview,
+  onTopic,
+  onAudience,
+  onPurpose,
+  onBack,
+  onSkip,
+  onContinue,
+}: {
+  topic: string;
+  audience: string;
+  purpose: ContentPurpose | null;
+  busy: boolean;
+  preview: ReactNode;
+  onTopic: (v: string) => void;
+  onAudience: (v: string) => void;
+  onPurpose: (v: ContentPurpose) => void;
+  onBack: () => void;
+  onSkip: () => void;
+  onContinue: () => void;
+}) {
+  const topicId = useId();
+  const audienceId = useId();
+  const answered = Boolean(topic.trim() || audience.trim() || purpose);
+  const end = (
+    <>
+      <GhostButton onClick={onSkip} disabled={busy}>
+        {COPY.starter.skip}
+      </GhostButton>
+      <PrimaryButton onClick={onContinue} disabled={!answered || busy} aria-busy={busy}>
+        {COPY.continue}
+      </PrimaryButton>
+    </>
+  );
+  const chips = (list: readonly string[]) => list.map(v => ({ value: v, label: v }));
+  return (
+    <OnboardingShell
+      onBack={onBack}
+      preview={preview}
+      contentWidth="wide"
+      actions={
+        <div className={styles.actionsRow}>
+          <BackButton onClick={onBack} />
+          <div className={styles.actionsEnd}>{end}</div>
+        </div>
+      }
+      mobileActions={end}
+      testId="onboarding-step-starter"
+    >
+      <StepHeader title={COPY.starter.title} subtitle={COPY.starter.subtitle} />
+      <div className={styles.starterBlock}>
+        <FieldInput
+          id={topicId}
+          label={COPY.starter.topicLabel}
+          placeholder={COPY.starter.topicPlaceholder}
+          value={topic}
+          maxLength={STARTER_TOPIC_MAX}
+          onChange={e => onTopic(e.target.value)}
+          disabled={busy}
+        />
+        <p className={["sr-text-product-body-small", styles.chipHint].join(" ")}>{COPY.starter.examples}</p>
+        <ChipRow label={COPY.starter.topicLabel} options={chips(STARTER_TOPIC_CHIPS)} value={topic} onPick={onTopic} disabled={busy} />
+      </div>
+      <div className={styles.starterBlock}>
+        <FieldInput
+          id={audienceId}
+          label={COPY.starter.audienceLabel}
+          placeholder={COPY.starter.audiencePlaceholder}
+          value={audience}
+          maxLength={STARTER_AUDIENCE_MAX}
+          onChange={e => onAudience(e.target.value)}
+          disabled={busy}
+        />
+        <p className={["sr-text-product-body-small", styles.chipHint].join(" ")}>{COPY.starter.examples}</p>
+        <ChipRow label={COPY.starter.audienceLabel} options={chips(STARTER_AUDIENCE_CHIPS)} value={audience} onPick={onAudience} disabled={busy} />
+      </div>
+      <div className={styles.starterBlock}>
+        <p className={["sr-text-product-label", styles.starterQuestion].join(" ")}>{COPY.starter.purposeLabel}</p>
+        <ChipRow
+          label={COPY.starter.purposeLabel}
+          options={CONTENT_PURPOSE_OPTIONS}
+          value={purpose}
+          onPick={v => onPurpose(v as ContentPurpose)}
+          disabled={busy}
+        />
       </div>
     </OnboardingShell>
   );

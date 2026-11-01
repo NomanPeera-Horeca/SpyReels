@@ -353,5 +353,6 @@ describe("classifyLookupError", () => {
     expect(classifyLookupError(new InstagramPrivateAccountError("a"))).toBe("private");
     expect(classifyLookupError(new Error('Channel "@x" not found'))).toBe("not_found");
     expect(classifyLookupError(new Error("HTTP 500"))).toBe("error");
+    expect(classifyLookupError(new InstagramProviderError("a", { httpStatus: 403, detail: "http_403" }))).toBe("unavailable");
   });
 });

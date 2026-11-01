@@ -1031,6 +1031,18 @@ async function resolveInstagramIdentityBudgeted(
     budget,
     budget ? 1 : 3
   );
+  if (!search.ok && direct.kind === "not_found" && search.httpStatus === 404) {
+    // Both the profile and the username search answered "not found": the
+    // account does not exist under this spelling. Not a provider failure.
+    logIdentityResolution({
+      requestedHandle,
+      method: "failed",
+      fallbackUsed: true,
+      httpStatus: search.httpStatus,
+      failureClass: "handle_not_found",
+    });
+    throw new InstagramHandleNotFoundError(requestedHandle);
+  }
   if (!search.ok) {
     logIdentityResolution({
       requestedHandle,

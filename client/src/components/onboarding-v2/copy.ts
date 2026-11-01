@@ -38,7 +38,7 @@ export const COPY = {
       youtube: "YouTube is taking longer than expected.",
     },
     errors: {
-      not_found: "Handle not found. Try another handle.",
+      not_found: "We couldn't find this account. Check the spelling, or paste your profile link.",
       private: "This account is private. Try another handle.",
       invalid: "Enter a username or a profile link.",
       platform_mismatch: "This link is for a different platform.",
@@ -46,7 +46,9 @@ export const COPY = {
       error: "Something went wrong. Try again.",
       rate_limited: "Too many lookups. Try again in a few minutes.",
       timeout: "This is taking longer than expected.",
+      unavailable: "We can't read this profile right now. You can continue without it.",
     },
+    continueWithout: "Continue without my profile",
   },
   profile: {
     title: "Is this you?",
@@ -65,6 +67,17 @@ export const COPY = {
   },
   niche: {
     title: "What do you want to grow in?",
+  },
+  starter: {
+    title: "Tell us about your content",
+    subtitle: "Three quick answers so your strategy fits you. Answer what you can.",
+    topicLabel: "What do you create content about?",
+    topicPlaceholder: "e.g. Fitness, Personal Finance, AI Tools...",
+    audienceLabel: "Who are you talking to?",
+    audiencePlaceholder: "e.g. Busy moms who want to lose 20 lbs...",
+    purposeLabel: "What do you want your content to do for you?",
+    examples: "Or pick one",
+    skip: "Skip",
   },
   insight: {
     label: "Performance insight from your videos",

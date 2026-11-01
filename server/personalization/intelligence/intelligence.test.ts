@@ -2346,3 +2346,28 @@ describe("audience leads with existing owners when the bio speaks to them", () =
     expect(r.audiences).toHaveLength(1);
   });
 });
+
+describe("starter answers reach the strategy as trusted evidence", () => {
+  it("lets a not-posting creator get a goal from their own answers", async () => {
+    const evidence = buildCreatorEvidence({
+      platform: null,
+      displayName: null,
+      bio: null,
+      snapshot: null,
+      items: [
+        item("niche", { slug: "other", label: "Other" }),
+        item("brand_description", {
+          text: "I create content about home workouts for busy moms. I make it for busy moms who want to lose 20 lbs. I want my content to bring me clients for my services.",
+        }),
+      ],
+    });
+    expect(evidence.strength).not.toBe("none");
+    expect(evidence.commercialSignals).toBe(true);
+    const llm = fakeLlm(
+      goalOut("Help busy moms lose weight with short home workouts and book coaching clients.", { evidence_basis: ["brand_description"] })
+    );
+    const r = await inferGoal({ evidence, invoker: llm.invoker });
+    expect(r.status).toBe("suggested");
+    expect(JSON.stringify(llm.calls[0].messages)).toContain("home workouts for busy moms");
+  });
+});
