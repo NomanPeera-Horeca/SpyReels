@@ -145,23 +145,43 @@ export function postImagesForCall(ctx: PostContext): { label: string; dataUrl: s
   return ctx.images.map(image => ({ label: `Thumbnail of ${image.ref}:`, dataUrl: image.dataUrl }));
 }
 
-/** What a suggestion may cite: indexed posts plus the profile sources that exist. */
+/**
+ * What a suggestion may cite: indexed posts plus the profile sources that exist.
+ * Generous on purpose: this check only decides whether an extra item may be
+ * dropped, so a real source named loosely ("captions", the bio link) counts.
+ */
 export function citableSources(
   evidenceSources: readonly string[],
   ctx: PostContext,
-  goal: string
+  goal: string,
+  opts: { bioLink?: boolean } = {}
 ): Set<string> {
   const out = new Set(ctx.posts.map(post => post.ref));
-  if (evidenceSources.some(s => s === "bio" || s === "brand_description" || s === "display_name")) out.add("bio");
+  const hasBio = evidenceSources.some(s => s === "bio" || s === "brand_description" || s === "display_name");
+  if (hasBio) out.add("bio");
   for (const s of ["niche", "website", "category"]) if (evidenceSources.includes(s)) out.add(s);
+  if (opts.bioLink) out.add("website");
   if (goal.trim()) out.add("goal");
-  if (ctx.posts.length === 0 && evidenceSources.includes("captions")) out.add("captions");
+  if (ctx.posts.length > 0 || evidenceSources.includes("captions")) out.add("captions");
   return out;
 }
 
-function normalizeSource(source: string): string {
-  const s = source.trim();
-  return /^p\d+$/i.test(s) ? s.toUpperCase() : s.toLowerCase();
+const SOURCE_ALIASES: ReadonlyArray<[RegExp, string]> = [
+  [/^(?:captions?|posts?|post captions?|top posts?|content|videos?|reels?)$/, "captions"],
+  [/^(?:bio|biography|profile|username|handle|name|display ?name|brand|brand description|about)$/, "bio"],
+  [/^(?:website|site|link|url|link in bio|bio link)$/, "website"],
+  [/^(?:goal|confirmed goal|user goal)$/, "goal"],
+  [/^(?:niche|confirmed niche|topic)$/, "niche"],
+  [/^(?:category|profile category)$/, "category"],
+];
+
+/** "P1", "p 1", "post 1", "#1" -> "P1"; common names for profile fields -> their source id. */
+export function normalizeSource(source: string): string {
+  const s = source.trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
+  const post = s.match(/^(?:p|post|#)\s*#?\s*(\d+)$/);
+  if (post) return `P${post[1]}`;
+  for (const [re, id] of SOURCE_ALIASES) if (re.test(s)) return id;
+  return s;
 }
 
 /**

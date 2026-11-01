@@ -512,8 +512,11 @@ export async function browseIndexedViralPosts(args: {
   if (!isViralPostsLive) return { items: [], creators: [], niche: "", poolRefreshStarted: false };
   const taxonomy = args.matchMode === "taxonomy";
   const explicit = args.description?.trim() ?? "";
+  // Taxonomy mode plans from the stored category, but the restaurant-business
+  // exception (Business/Marketing + a restaurant-operations niche) needs the
+  // specific niche text. Passing "" here hid all restaurant supply from Home.
   const text = taxonomy
-    ? ""
+    ? args.specificNiche?.trim() ?? ""
     : explicit.length > 0
       ? explicit
       : await loadUserBusinessDescription(args.userId);
