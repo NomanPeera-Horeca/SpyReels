@@ -4,8 +4,7 @@ import { isViralPostsV1Platform } from "../../shared/viralPosts";
 import { scrapeTikTokVideos } from "../tiktok";
 import type { AdaptedCandidate } from "./candidateAdapter";
 import { VIRAL_POOL_DEFAULTS } from "./constants";
-import { classifyLibraryRowsInBackground, ingestResearchJobs } from "./library";
-import { matchProfileTopics } from "./topics";
+import { classifyLibraryRowsInBackground } from "./library";
 import {
   isViralPostsInstagramEnabled,
   isViralPostsLive,
@@ -808,12 +807,9 @@ export function startViralPostsPoolRefresher(): void {
           error: e instanceof Error ? e.message : String(e),
         })
       )
-      // Copy finished research into the shared library. No provider calls.
-      .then(() => ingestResearchJobs({ perSource: 5 }))
-      // Topics for new or changed creator strategies (text only, cheap).
-      // Video understanding (download, frames, transcripts) runs in the queue worker.
-      .then(() => matchProfileTopics({ maxProfiles: 10 }))
       .catch(() => undefined);
+  // Library work (research copy, creator topics, video understanding) runs in
+  // the queue worker, which is not restarted by every web deploy.
   }, intervalMs);
   setTimeout(() => {
     void refreshStalePools(1).catch(() => undefined);

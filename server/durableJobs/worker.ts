@@ -84,20 +84,37 @@ function startDrain(signal: string): void {
 }
 
 /**
- * Viral library video understanding: a few videos every few minutes, in the
- * worker (downloads + ffmpeg stay off the web server). Daily USD cap inside.
+ * Viral library work, every few minutes in the worker (not restarted by web
+ * deploys; downloads + ffmpeg stay off the web server), starting 30s after
+ * boot. Each step is idempotent and bounded:
+ *   1. copy finished research into the library (no paid calls);
+ *   2. match new or changed creator strategies to topics (text AI);
+ *   3. understand a few viral/rising videos (daily USD cap inside).
  * Off with VIRAL_LIBRARY_UNDERSTANDING=false.
  */
 function startViralLibraryUnderstanding(): void {
   if (process.env.VIRAL_LIBRARY_UNDERSTANDING === "false") return;
   const everyMs = Math.max(60_000, Number(process.env.VIRAL_LIBRARY_UNDERSTANDING_MS ?? 5 * 60_000));
   let running = false;
+  const step = async (name: string, run: () => Promise<unknown>) => {
+    try {
+      await run();
+    } catch (error) {
+      console.error(`[viralLibrary] ${name} failed`, error);
+    }
+  };
   const tick = () => {
     if (running || draining) return;
     running = true;
-    void import("../viralPosts/videoUnderstanding")
-      .then(m => m.processLibraryVideos({ maxVideos: 8 }))
-      .catch(error => console.error("[viralLibrary] understanding tick failed", error))
+    void (async () => {
+      const library = await import("../viralPosts/library");
+      const topics = await import("../viralPosts/topics");
+      const understanding = await import("../viralPosts/videoUnderstanding");
+      await step("ingest", () => library.ingestResearchJobs({ perSource: 5 }));
+      await step("profile topics", () => topics.matchProfileTopics({ maxProfiles: 10 }));
+      await step("understanding", () => understanding.processLibraryVideos({ maxVideos: 8 }));
+    })()
+      .catch(error => console.error("[viralLibrary] tick failed", error))
       .finally(() => {
         running = false;
       });
