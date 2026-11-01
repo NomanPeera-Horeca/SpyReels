@@ -213,9 +213,10 @@ export async function downloadVideo(
   return fail("NETWORK_ERROR", shortcode, lastError?.message);
 }
 
-async function extractAudio(
+export async function extractAudio(
   videoBuffer: Buffer,
-  shortcode: string
+  shortcode: string,
+  maxSeconds?: number
 ): Promise<Buffer> {
   console.log(`[transcribeReel] extracting audio for shortcode ${shortcode}`);
   return new Promise<Buffer>((resolve, reject) => {
@@ -224,6 +225,7 @@ async function extractAudio(
 
     const ffmpeg = spawn("ffmpeg", [
       "-i", "pipe:0",
+      ...(maxSeconds && maxSeconds > 0 ? ["-t", String(Math.floor(maxSeconds))] : []),
       "-vn",
       "-acodec", "libmp3lame",
       "-ar", "16000",
@@ -477,7 +479,86 @@ function reportTranscriptionUsage(result: Extract<TranscriptionResult, { success
   });
 }
 
+/**
+ * Transcribe audio we already have (e.g. the viral library downloaded the
+ * video for its frames). Same Deepgram call, parsing and usage reporting.
+ */
+export async function transcribeAudioBuffer(
+  audioBuffer: Buffer,
+  shortcode: string
+): Promise<TranscriptionResult> {
+  const overallStart = Date.now();
+  if (!process.env.DEEPGRAM_API_KEY) {
+    return fail("UNKNOWN", shortcode, "DEEPGRAM_API_KEY is not configured");
+  }
+  const client = new DeepgramClient({ apiKey: process.env.DEEPGRAM_API_KEY });
+  let response;
+  try {
+    response = await Promise.race([
+      client.listen.v1.media.transcribeFile(audioBuffer, DEEPGRAM_MEDIA_OPTIONS),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("DEEPGRAM_REQUEST_TIMEOUT")), DEEPGRAM_TRANSCRIBE_TIMEOUT_MS)
+      ),
+    ]);
+  } catch (err) {
+    return mapDeepgramCatch(err, shortcode);
+  }
+  const result = parseDeepgramResponse(response, shortcode, overallStart);
+  if (result.success) reportTranscriptionUsage(result);
+  return result;
+}
+
+/**
+ * Public entry point. With `cacheKey` (the public video's platform and id),
+ * a transcript saved earlier by any feature is reused instead of paying
+ * Deepgram again, and a new transcript is saved for everyone else.
+ */
 export async function transcribeReel(input: {
+  videoUrl: string;
+  shortcode: string;
+  cacheKey?: { platform: "instagram" | "tiktok"; sourceId: string };
+}): Promise<TranscriptionResult> {
+  const { getSharedTranscript, saveSharedTranscript } = await import(
+    "../transcripts/sharedTranscriptStore"
+  );
+  if (input.cacheKey) {
+    const cached = await getSharedTranscript(input.cacheKey.platform, input.cacheKey.sourceId);
+    if (cached?.status === "ok" && !cached.partial) {
+      console.log(`[transcribeReel] shared transcript reused for ${input.shortcode}`);
+      return {
+        success: true,
+        transcript: cached.transcript,
+        segments: cached.segments,
+        durationSec: cached.durationSec,
+      };
+    }
+    if (cached?.status === "no_speech") {
+      return fail("NO_SPEECH_DETECTED", input.shortcode, "music/visuals only (shared)");
+    }
+  }
+  const result = await transcribeReelUncached(input);
+  if (input.cacheKey) {
+    if (result.success) {
+      await saveSharedTranscript(input.cacheKey.platform, input.cacheKey.sourceId, {
+        status: "ok",
+        transcript: result.transcript,
+        segments: result.segments,
+        durationSec: result.durationSec,
+        source: "deepgram",
+        partial: false,
+      });
+    } else if (result.errorCode === "NO_SPEECH_DETECTED") {
+      await saveSharedTranscript(input.cacheKey.platform, input.cacheKey.sourceId, {
+        status: "no_speech",
+        durationSec: 0,
+        source: "deepgram",
+      });
+    }
+  }
+  return result;
+}
+
+async function transcribeReelUncached(input: {
   videoUrl: string;
   shortcode: string;
 }): Promise<TranscriptionResult> {

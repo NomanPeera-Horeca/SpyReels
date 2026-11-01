@@ -567,7 +567,47 @@ export async function scrapeYouTubeShorts(
   };
 }
 
+/** YouTube video id from a watch, shorts, embed or youtu.be URL. */
+export function youtubeVideoIdFromUrl(url: string): string | null {
+  const m = url
+    .trim()
+    .match(/(?:youtu\.be\/|youtube\.com\/(?:shorts\/|embed\/|live\/|watch\?(?:.*&)?v=))([A-Za-z0-9_-]{11})/);
+  return m ? m[1]! : null;
+}
+
+/**
+ * Captions transcript for a YouTube video. Reuses the shared transcript store
+ * (one per public video) and saves new results there for every feature.
+ */
 export async function fetchYouTubeTranscript(
+  videoPageUrl: string
+): Promise<YouTubeTranscriptResult | null> {
+  const videoId = youtubeVideoIdFromUrl(videoPageUrl);
+  const { getSharedTranscript, saveSharedTranscript } = await import(
+    "./transcripts/sharedTranscriptStore"
+  );
+  if (videoId) {
+    const cached = await getSharedTranscript("youtube", videoId);
+    if (cached?.status === "ok") {
+      return { transcript: cached.transcript, segments: cached.segments };
+    }
+  }
+  const result = await fetchYouTubeTranscriptFromProvider(videoPageUrl);
+  if (videoId && result) {
+    const last = result.segments[result.segments.length - 1];
+    await saveSharedTranscript("youtube", videoId, {
+      status: "ok",
+      transcript: result.transcript,
+      segments: result.segments,
+      durationSec: last ? Math.round(last.end) : 0,
+      source: "youtube_captions",
+      partial: false,
+    });
+  }
+  return result;
+}
+
+async function fetchYouTubeTranscriptFromProvider(
   videoPageUrl: string
 ): Promise<YouTubeTranscriptResult | null> {
   const url = videoPageUrl.trim();

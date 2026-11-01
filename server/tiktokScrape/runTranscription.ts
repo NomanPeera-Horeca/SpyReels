@@ -46,6 +46,7 @@ export async function runTikTokTranscription(
     const result = await transcribeReel({
       videoUrl,
       shortcode: video.awemeId,
+      cacheKey: { platform: "tiktok", sourceId: video.awemeId },
     });
 
     if (!result.success) {

@@ -2,13 +2,12 @@
  * Viral library topics (step B).
  *
  * - The approved starter list (shared/viralTopics.ts) is synced into
- *   viral_topics.
- * - Every viral or rising library video gets 1-3 topics, picked by AI only
- *   from that list (it cannot invent one). Each video is read once.
+ *   viral_topics. Videos are tagged by videoUnderstanding.ts (transcript,
+ *   frames, creator topics), using the helpers exported here.
  * - Every creator profile's confirmed niche, pillars and sub-topics are
- *   matched to topics. When nothing fits a pillar, AI may add up to 2 new
- *   topics, so the list grows with real creators. A changed strategy is
- *   matched again.
+ *   matched to topics, and get a meaning embedding. When nothing fits a
+ *   pillar, AI may add up to 2 new topics, so the list grows with real
+ *   creators. A changed strategy is matched again.
  *
  * Safe before migration 0109 (skips quietly). Bounded per call. Never throws
  * into the caller. Uses the same Haiku model and usage reporting as the
@@ -16,14 +15,11 @@
  */
 import { createHash } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
-import { viralPostCandidates } from "../../drizzle/schema";
+import { eq, sql } from "drizzle-orm";
 import {
-  viralLibraryStatus,
   viralProfileTopicRuns,
   viralProfileTopics,
   viralTopics,
-  viralVideoTagRuns,
   viralVideoTopics,
 } from "../../drizzle/viralLibrarySchema";
 import { STARTER_VIRAL_TOPICS, topicSlug, VIRAL_TOPIC_CATEGORIES } from "../../shared/viralTopics";
@@ -33,19 +29,23 @@ import {
   listConfirmedTopicStrategies,
   type ConfirmedTopicStrategy,
 } from "../personalization/home/topicStrategies";
+import { embedTexts, EMBEDDING_MODEL } from "./embeddings";
 import { SEMANTIC_POOL_MODEL } from "./semanticPoolRelevance";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
-type Topic = { slug: string; label: string; category: string };
+export type Topic = { slug: string; label: string; category: string };
 
+/** Migration 0109 tables (plus 0108's status table, which the video step reads). */
 const TOPIC_TABLES = [
   "viral_topics",
   "viral_video_topics",
-  "viral_video_tag_runs",
+  "viral_video_insights",
+  "viral_creator_topics",
   "viral_profile_topics",
   "viral_profile_topic_runs",
+  "shared_transcripts",
+  "viral_processing_spend",
 ];
-const VIDEO_BATCH = 20;
 const MAX_TOPICS_PER_VIDEO = 3;
 const MAX_TOPICS_PER_PROFILE = 8;
 const MAX_NEW_TOPICS_PER_PROFILE = 2;
@@ -76,15 +76,15 @@ export function resetTopicsReadyCacheForTests(): void {
   readyCache = null;
 }
 
-function stripCodeFences(text: string): string {
+export function stripCodeFences(text: string): string {
   return text.replace(/^\s*```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
 }
 
-function oneLine(text: string | null | undefined, max: number): string {
+export function oneLine(text: string | null | undefined, max: number): string {
   return (text ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 }
 
-async function syncStarterTopics(db: Db): Promise<void> {
+export async function syncStarterTopics(db: Db): Promise<void> {
   const now = new Date();
   await db
     .insert(viralTopics)
@@ -92,14 +92,14 @@ async function syncStarterTopics(db: Db): Promise<void> {
     .onDuplicateKeyUpdate({ set: { slug: sql`slug` } });
 }
 
-async function loadTopics(db: Db): Promise<Topic[]> {
+export async function loadTopics(db: Db): Promise<Topic[]> {
   return db
     .select({ slug: viralTopics.slug, label: viralTopics.label, category: viralTopics.category })
     .from(viralTopics)
     .orderBy(viralTopics.category, viralTopics.slug);
 }
 
-function topicListForPrompt(topics: Topic[]): string {
+export function topicListForPrompt(topics: Topic[]): string {
   const byCategory = new Map<string, Topic[]>();
   for (const t of topics) byCategory.set(t.category, [...(byCategory.get(t.category) ?? []), t]);
   return [...byCategory.entries()]
@@ -107,14 +107,12 @@ function topicListForPrompt(topics: Topic[]): string {
     .join("\n");
 }
 
-function anthropicClient(): Anthropic | null {
+export function anthropicClient(): Anthropic | null {
   const key = process.env.ANTHROPIC_API_KEY?.trim();
   return key ? new Anthropic({ apiKey: key }) : null;
 }
 
 /* ---------- videos ---------- */
-
-export type VideoForTagging = { id: number; platform: string; creator: string; caption: string };
 
 /** Keeps only known slugs, at most 3, no repeats. Pure; exported for tests. */
 export function cleanVideoTopics(raw: unknown, known: ReadonlySet<string>): string[] {
@@ -126,114 +124,6 @@ export function cleanVideoTopics(raw: unknown, known: ReadonlySet<string>): stri
     if (out.length >= MAX_TOPICS_PER_VIDEO) break;
   }
   return out;
-}
-
-async function tagBatch(
-  client: Anthropic,
-  topics: Topic[],
-  videos: VideoForTagging[]
-): Promise<Map<number, string[]>> {
-  const known = new Set(topics.map(t => t.slug));
-  const lines = videos
-    .map(v => `- id: ${v.id}\n  platform: ${v.platform}\n  creator: ${v.creator}\n  caption: ${v.caption || "(none)"}`)
-    .join("\n");
-  const response = await client.messages.create({
-    model: SEMANTIC_POOL_MODEL,
-    max_tokens: 1500,
-    temperature: 0,
-    system: [
-      "You label short-form social videos with topics so creators can find viral ideas in their niche.",
-      "Pick 1 to 3 topics per video, ONLY from the list below (use the exact slug).",
-      "Pick a topic only when the video is clearly about it. If none fits, return an empty list.",
-      "Return JSON only: {\"videos\":[{\"id\":123,\"topics\":[\"slug\"]}]}",
-      "",
-      "Topics by category:",
-      topicListForPrompt(topics),
-    ].join("\n"),
-    messages: [{ role: "user", content: `Videos:\n${lines}\n\nReturn JSON for every id.` }],
-  });
-  reportDirectAnthropicUsage(response, "viral_library_topics");
-  const text = response.content.find(b => b.type === "text");
-  if (!text || text.type !== "text") throw new Error("No text in topic tagging response");
-  const parsed = JSON.parse(stripCodeFences(text.text)) as { videos?: Array<{ id?: unknown; topics?: unknown }> };
-  const out = new Map<number, string[]>();
-  for (const row of parsed.videos ?? []) {
-    const id = Number(row.id);
-    if (Number.isInteger(id)) out.set(id, cleanVideoTopics(row.topics, known));
-  }
-  return out;
-}
-
-/**
- * Tag up to `maxVideos` viral or rising library videos that were never read,
- * newest first. Returns how many were read and how many got a topic.
- */
-export async function tagLibraryVideos(args: { maxVideos?: number } = {}): Promise<{
-  read: number;
-  tagged: number;
-  aiCalls: number;
-  skipped?: "db_unavailable" | "migration_missing" | "no_api_key";
-}> {
-  const totals = { read: 0, tagged: 0, aiCalls: 0 };
-  const db = await getDb();
-  if (!db) return { ...totals, skipped: "db_unavailable" };
-  if (!(await isTopicsReady(db))) return { ...totals, skipped: "migration_missing" };
-  const client = anthropicClient();
-  if (!client) return { ...totals, skipped: "no_api_key" };
-
-  await syncStarterTopics(db);
-  const topics = await loadTopics(db);
-  const maxVideos = Math.max(1, Math.min(500, args.maxVideos ?? 60));
-
-  const rows = await db
-    .select({
-      id: viralPostCandidates.id,
-      platform: viralPostCandidates.platform,
-      creatorHandle: viralPostCandidates.creatorHandle,
-      creatorName: viralPostCandidates.creatorName,
-      caption: viralPostCandidates.caption,
-    })
-    .from(viralLibraryStatus)
-    .innerJoin(viralPostCandidates, eq(viralPostCandidates.id, viralLibraryStatus.candidateId))
-    .leftJoin(viralVideoTagRuns, eq(viralVideoTagRuns.candidateId, viralLibraryStatus.candidateId))
-    .where(and(inArray(viralLibraryStatus.status, ["viral", "rising"]), isNull(viralVideoTagRuns.candidateId)))
-    .orderBy(desc(viralLibraryStatus.candidateId))
-    .limit(maxVideos);
-
-  const videos: VideoForTagging[] = rows.map(r => ({
-    id: r.id,
-    platform: r.platform,
-    creator: oneLine(r.creatorHandle || r.creatorName, 60),
-    caption: oneLine(r.caption, 400),
-  }));
-
-  for (let i = 0; i < videos.length; i += VIDEO_BATCH) {
-    const batch = videos.slice(i, i + VIDEO_BATCH);
-    let result: Map<number, string[]>;
-    try {
-      result = await tagBatch(client, topics, batch);
-      totals.aiCalls += 1;
-    } catch (err) {
-      console.warn("[viralLibrary] tag_batch_failed", {
-        videos: batch.length,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      continue; // leave them untagged; the next run tries again
-    }
-    const now = new Date();
-    const links = batch.flatMap(v => (result.get(v.id) ?? []).map(slug => ({ candidateId: v.id, topicSlug: slug, taggedAt: now })));
-    if (links.length > 0) {
-      await db.insert(viralVideoTopics).values(links).onDuplicateKeyUpdate({ set: { taggedAt: now } });
-    }
-    await db
-      .insert(viralVideoTagRuns)
-      .values(batch.map(v => ({ candidateId: v.id, topicCount: result.get(v.id)?.length ?? 0, taggedAt: now })))
-      .onDuplicateKeyUpdate({ set: { topicCount: sql`VALUES(topicCount)`, taggedAt: now } });
-    totals.read += batch.length;
-    totals.tagged += batch.filter(v => (result.get(v.id)?.length ?? 0) > 0).length;
-  }
-  if (totals.read > 0) console.info("[viralLibrary] tag_done", totals);
-  return totals;
 }
 
 /* ---------- creator profiles ---------- */
@@ -312,6 +202,18 @@ async function matchOneProfile(client: Anthropic, topics: Topic[], p: ProfileStr
   return cleanProfileMatch(JSON.parse(stripCodeFences(text.text)), known);
 }
 
+/** The text a creator's meaning embedding is made from. Pure; exported for tests. */
+export function profileEmbeddingText(p: ProfileStrategy): string {
+  return [
+    p.category && `Category: ${p.category}`,
+    p.niche && `Niche: ${p.niche}`,
+    p.pillars.length > 0 && `Pillars: ${p.pillars.join("; ")}`,
+    p.subtopics.length > 0 && `Sub-topics: ${p.subtopics.join("; ")}`,
+  ]
+    .filter(Boolean)
+    .join(". ");
+}
+
 /**
  * Match creator profiles whose strategy is new or changed, up to
  * `maxProfiles` per call (one AI call each).
@@ -359,10 +261,21 @@ export async function matchProfileTopics(args: { maxProfiles?: number } = {}): P
         );
       }
       const hash = strategyHash(p);
+      const [embedding] = (await embedTexts([profileEmbeddingText(p)])) ?? [null];
+      const embeddingModel = embedding ? EMBEDDING_MODEL : null;
       await db
         .insert(viralProfileTopicRuns)
-        .values({ socialProfileId: p.socialProfileId, workspaceId: p.workspaceId, strategyHash: hash, matchedAt: now })
-        .onDuplicateKeyUpdate({ set: { strategyHash: hash, workspaceId: p.workspaceId, matchedAt: now } });
+        .values({
+          socialProfileId: p.socialProfileId,
+          workspaceId: p.workspaceId,
+          strategyHash: hash,
+          embedding,
+          embeddingModel,
+          matchedAt: now,
+        })
+        .onDuplicateKeyUpdate({
+          set: { strategyHash: hash, workspaceId: p.workspaceId, embedding, embeddingModel, matchedAt: now },
+        });
       totals.matched += 1;
     } catch (err) {
       console.warn("[viralLibrary] profile_match_failed", {

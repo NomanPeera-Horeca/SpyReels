@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { STARTER_VIRAL_TOPICS, topicSlug, VIRAL_TOPIC_CATEGORIES } from "../../../shared/viralTopics";
 import { CONTENT_TAXONOMY } from "../../../shared/personalization/contentTaxonomy";
-import { cleanProfileMatch, cleanVideoTopics, strategyHash } from "../topics";
+import { cleanProfileMatch, cleanVideoTopics, profileEmbeddingText, strategyHash } from "../topics";
 
 describe("starter topic list", () => {
   it("has the 17 approved categories, 12 topics each, unique slugs", () => {
@@ -77,12 +77,30 @@ describe("strategyHash", () => {
 });
 
 describe("migration 0109", () => {
-  it("only creates the five topic tables", () => {
-    const code = readFileSync("drizzle/0109_viral_topics.sql", "utf8")
+  it("only creates the eight understanding tables", () => {
+    const code = readFileSync("drizzle/0109_viral_understanding.sql", "utf8")
       .split("\n")
       .filter(l => !l.trim().startsWith("--"))
       .join("\n");
-    expect(code.match(/CREATE TABLE IF NOT EXISTS/g)).toHaveLength(5);
+    expect(code.match(/CREATE TABLE IF NOT EXISTS/g)).toHaveLength(8);
     expect(code).not.toMatch(/\bALTER\b|\bDROP\b|\bTRUNCATE\b|\bDELETE\b|\bUPDATE\b/i);
+    for (const t of ["viral_video_insights", "viral_creator_topics", "shared_transcripts", "viral_processing_spend"]) {
+      expect(code).toContain(t);
+    }
+  });
+});
+
+describe("profileEmbeddingText", () => {
+  it("joins the confirmed strategy into one line", () => {
+    expect(
+      profileEmbeddingText({
+        socialProfileId: "p",
+        workspaceId: "w",
+        category: "Tech",
+        niche: "Apple and AI tech news",
+        pillars: ["iPhone tips"],
+        subtopics: [],
+      })
+    ).toBe("Category: Tech. Niche: Apple and AI tech news. Pillars: iPhone tips");
   });
 });
