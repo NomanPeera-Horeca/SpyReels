@@ -12,6 +12,7 @@ import { SCRAPE_JOB_STALE_MS, SCRAPE_JOB_ZOMBIE_MESSAGE } from "../scrapeJobSwee
 import { scheduleScrapeJobPostCompleteWork, reelIdsForJobShortcodes, scheduleScrapeReelPostCompleteWork } from "../scrapePostComplete";
 import { tryAcquireScrapeSlot, releaseScrapeSlot } from "../scrapeSemaphore";
 import { checkUsageLimit, incrementUsage, decrementUsage } from "../stripe/stripe-service";
+import { seedFromRecentResearch } from "../research/recentResearchSeed";
 import { normalizeInstagramHandle, isValidInstagramHandleNormalized, INSTAGRAM_HANDLE_INVALID_MESSAGE } from "@shared/instagramHandle";
 import { and, not, sql, eq, inArray, or } from "drizzle-orm";
 import { maybeMarkFirstSpyCompleted } from "./_shared";
@@ -645,6 +646,7 @@ export const scrapeRouter = router({
           await incrementUsage(ctx.user.id, "scrapeCount");
 
           let seededFromFeatured = false;
+          let seededFromRecent = false;
           if (featuredAccountId != null) {
             await seedFeaturedReelsIntoJob(
               jobId,
@@ -652,6 +654,17 @@ export const scrapeRouter = router({
               input.timeframeDays
             );
             seededFromFeatured = true;
+          } else {
+            // Anyone researched this creator recently: show those videos now;
+            // the live run below refreshes them (rows are de-duplicated).
+            seededFromRecent =
+              (await seedFromRecentResearch({
+                platform: "instagram",
+                handle: normalizedHandle,
+                jobId,
+                workspaceId: ctx.workspaceId,
+                timeframeDays: input.timeframeDays,
+              })) > 0;
           }
 
           // Run scraping in background (releases the semaphore in finally).
@@ -660,7 +673,9 @@ export const scrapeRouter = router({
           });
           launched = true;
 
-          return seededFromFeatured ? { jobId, seededFromFeatured: true as const } : { jobId };
+          if (seededFromFeatured) return { jobId, seededFromFeatured: true as const };
+          if (seededFromRecent) return { jobId, seededFromRecent: true as const };
+          return { jobId };
         } finally {
           if (!launched) releaseScrapeSlot();
         }

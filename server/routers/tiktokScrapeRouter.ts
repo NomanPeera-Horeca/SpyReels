@@ -19,6 +19,7 @@ import {
   normalizeTikTokHandle,
   TIKTOK_HANDLE_INVALID_MESSAGE,
 } from "../../shared/socialHandles";
+import { seedFromRecentResearch } from "../research/recentResearchSeed";
 
 type PublicTikTokProfilePreviewPayload =
   | {
@@ -214,17 +215,28 @@ export const tiktokScrapeRouter = router({
 
         await incrementUsage(ctx.user.id, "scrapeCount");
 
+        // Anyone researched this creator recently: show those videos now. The
+        // live run then replaces them in one step (keeping them if it fails).
+        const seeded =
+          (await seedFromRecentResearch({
+            platform: "tiktok",
+            handle,
+            jobId,
+            workspaceId: ctx.workspaceId,
+            timeframeDays,
+          })) > 0;
+
         runTikTokScrapeJob(
           jobId,
           ctx.user.id,
           ctx.workspaceId,
           handle,
-          { timeframeDays }
+          { timeframeDays, replaceExisting: seeded }
         ).catch((error) => {
           console.error(`TikTok scrape job ${jobId} failed:`, error);
         });
 
-        return { jobId };
+        return seeded ? { jobId, seededFromRecent: true as const } : { jobId };
       }),
 
     progress: protectedProcedure

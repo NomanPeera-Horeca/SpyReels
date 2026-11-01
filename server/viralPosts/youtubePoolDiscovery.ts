@@ -157,8 +157,19 @@ export function prequalifyYouTubeSearchShorts(
   );
 }
 
+/**
+ * Search filters. The provider returns empty lists whenever sortBy=popular is
+ * set (checked 2026-11-01), so we never send it. Even-numbered queries search
+ * all time (relevance favours proven hits); odd ones only this month (fresh,
+ * rising videos). Pure; exported for tests.
+ */
+export function youtubeSearchFilters(queryIndex: number): Record<string, string> {
+  return queryIndex % 2 === 1 ? { type: "shorts", uploadDate: "this_month" } : { type: "shorts" };
+}
+
 async function searchYouTubeShorts(args: {
   query: string;
+  queryIndex: number;
   region?: string;
 }): Promise<YouTubeVideoData[]> {
   const apiKey = process.env.SCRAPECREATORS_API_KEY?.trim();
@@ -166,9 +177,7 @@ async function searchYouTubeShorts(args: {
 
   const url = new URL(`${SCRAPECREATORS_API_BASE}/v1/youtube/search`);
   url.searchParams.set("query", args.query);
-  url.searchParams.set("type", "shorts");
-  url.searchParams.set("sortBy", "popular");
-  url.searchParams.set("uploadDate", "this_month");
+  for (const [k, v] of Object.entries(youtubeSearchFilters(args.queryIndex))) url.searchParams.set(k, v);
   url.searchParams.set("includeExtras", "true");
   if (args.region?.trim()) url.searchParams.set("region", args.region.trim());
 
@@ -228,7 +237,7 @@ export async function discoverYouTubePoolCandidates(args: {
     if (searchCalls >= maxScCalls) break;
     searchCalls++;
     try {
-      const shorts = await searchYouTubeShorts({ query, region: args.region });
+      const shorts = await searchYouTubeShorts({ query, queryIndex: searchCalls - 1, region: args.region });
       searchSuccesses++;
       rawShorts += shorts.length;
       for (const short of shorts) {

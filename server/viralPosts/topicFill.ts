@@ -31,6 +31,7 @@ import * as poolRepo from "./poolRepository";
 import { isTopicsReady } from "./topics";
 
 const FILL_SPEND_KEY = "fill-total";
+let warnedNoPlatforms = false;
 /** After the normal starter pools (100) and seed pools (80) in the regular refresher. */
 const FILL_POOL_PRIORITY = 110;
 
@@ -101,7 +102,15 @@ export async function runTopicFill(args: { maxPools?: number } = {}): Promise<{
   if (!db) return { ...out, skipped: "db_unavailable" };
   if (!(await isTopicsReady(db))) return { ...out, skipped: "migration_missing" };
   const platforms = topicFillPlatforms();
-  if (platforms.length === 0) return { ...out, skipped: "no_platforms" };
+  if (platforms.length === 0) {
+    if (!warnedNoPlatforms) {
+      warnedNoPlatforms = true;
+      console.warn(
+        "[viralLibrary] fill_idle: no platform is switched on in this service. Set VIRAL_POSTS_LIVE and VIRAL_POSTS_<PLATFORM>_ENABLED=true here (they are per service)."
+      );
+    }
+    return { ...out, skipped: "no_platforms" };
+  }
   const budget = topicFillBudgetUsd();
   let spent = (await fillSpent(db)).usd;
   out.spentTotalUsd = spent;

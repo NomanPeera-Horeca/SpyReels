@@ -6,6 +6,7 @@ import {
   extractYouTubeSearchShorts,
   parseYouTubeSearchShort,
   prequalifyYouTubeSearchShorts,
+  youtubeSearchFilters,
 } from "../youtubePoolDiscovery";
 
 describe("YouTube Shorts pool discovery foundation", () => {
@@ -113,5 +114,13 @@ describe("YouTube Shorts pool discovery foundation", () => {
       { ...base, videoId: "above", viewCount: 100_000 },
     ]);
     expect(rows.map((row) => row.videoId)).toEqual(["at", "above"]);
+  });
+});
+
+describe("youtubeSearchFilters", () => {
+  it("never sends sortBy (the provider returns empty lists with it) and alternates all-time / this month", () => {
+    expect(youtubeSearchFilters(0)).toEqual({ type: "shorts" });
+    expect(youtubeSearchFilters(1)).toEqual({ type: "shorts", uploadDate: "this_month" });
+    for (let i = 0; i < 6; i++) expect(youtubeSearchFilters(i)).not.toHaveProperty("sortBy");
   });
 });
