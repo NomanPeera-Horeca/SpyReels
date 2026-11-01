@@ -2289,3 +2289,37 @@ describe("post thumbnails reach the model", () => {
   });
 });
 
+describe("audience leads with existing owners when the bio speaks to them", () => {
+  const owner = buildCreatorEvidence({
+    platform: "instagram",
+    displayName: "Noman Peera",
+    bio: "CEO @ HorecaStore | 12+ Years Exp. Daily No-BS Strategies to grow your restaurant.",
+    snapshot: null,
+    items: [],
+  });
+  const goal = "Teach restaurant owners no-BS strategies to grow a profitable, well-run business.";
+  const onlyAspiring = { audiences: [{ who: "Aspiring first-time restaurant openers", outcome: "open a restaurant", why: "Opening posts.", sources: ["bio"] }], confidence: "medium" };
+  const corrected = {
+    audiences: [
+      { who: "Independent restaurant owners", outcome: "grow profit", why: "The bio speaks to them.", sources: ["bio"] },
+      { who: "Restaurant operators and managers", outcome: "cut costs", why: "Daily operations.", sources: ["goal"] },
+    ],
+    confidence: "high",
+  };
+
+  it("sends one corrected try when the only audience is aspiring", async () => {
+    const llm = fakeLlm(onlyAspiring, corrected);
+    const r = await recommendAudiences({ evidence: owner, confirmedGoal: goal, confirmedAudiences: [], invoker: llm.invoker });
+    expect(r.attempts).toBe(2);
+    expect(r.audiences.map(a => a.who)).toEqual(["Independent restaurant owners", "Restaurant operators and managers"]);
+    const retry = llm.calls[1]!.messages[1]!.content;
+    expect(JSON.stringify(retry)).toContain("existing owners or operators");
+  });
+
+  it("never fails the step: a second weak answer is kept", async () => {
+    const llm = fakeLlm(onlyAspiring, onlyAspiring);
+    const r = await recommendAudiences({ evidence: owner, confirmedGoal: goal, confirmedAudiences: [], invoker: llm.invoker });
+    expect(r.attempts).toBe(2);
+    expect(r.audiences).toHaveLength(1);
+  });
+});
