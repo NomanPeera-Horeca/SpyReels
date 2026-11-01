@@ -30,7 +30,7 @@ describe("targeted personalization quality contracts (no model calls)", () => {
     expect(GOAL_PROMPT_VERSION).toBe("goal-v4");
     expect(PILLAR_PROMPT_VERSION).toBe("pillars-v3");
     expect(NICHE_PROMPT_VERSION).toBe("niche-v5");
-    expect(AUDIENCE_PROMPT_VERSION).toBe("audience-v5");
+    expect(AUDIENCE_PROMPT_VERSION).toBe("audience-v6");
   });
 
   it("accepts an evidence-supported personal reflection niche without inventing an occupation", async () => {

@@ -44,7 +44,9 @@ import {
   type ParseResult,
 } from "./structuredLlm";
 
-export const AUDIENCE_PROMPT_VERSION = "audience-v5";
+export const AUDIENCE_PROMPT_VERSION = "audience-v6";
+/** Soft proof never leaves fewer audiences than this when the model returned more. */
+export const MIN_AUDIENCES_AFTER_PROOF = 2;
 export const MAX_AUDIENCES = 3;
 
 export type AudienceRecommendation = AudiencePayload & { why: string };
@@ -107,7 +109,8 @@ export function buildAudiencePrompt(
     UNTRUSTED_DATA_RULE,
     "Recommend INTENDED audiences who help the creator achieve their confirmed goal when one exists. When no goal is confirmed, use the profile evidence. Do not assume their current viewers are the right audience.",
     "Rules:",
-    `- Between 1 and ${MAX_AUDIENCES} distinct segments. Fewer, more useful segments beat many.`,
+    `- Between 2 and ${MAX_AUDIENCES} distinct segments. Return only 1 when the evidence names a single narrow audience and nothing else.`,
+    "- Who the bio and the confirmed goal speak to decides your first segment. If they address people who already run or own something (for example \"grow your restaurant\", \"restaurant owners\", \"your clinic\"), the first segment is those existing owners or operators. People who want to start the same thing (aspiring, would-be or future owners) may only be a later segment, and only when several posts are about starting.",
     "- who: a short noun phrase (max 8 words). outcome: what this audience wants to achieve (max 10 words). why: one short sentence on how this audience serves the goal.",
     "- Do not add age, gender, ethnicity, religion, family role or orientation unless the evidence or goal mentions it.",
     "- Do not invent names, numbers or facts about the creator.",
@@ -118,7 +121,7 @@ export function buildAudiencePrompt(
     "- A sensible audience names the role or situation implied by the subject, such as pet owners for pet videos or founders for someone building an app.",
     "- A link in bio, a favorite product, or an affiliate mention is not a business. Do not recommend shoppers or affiliate audiences unless the evidence or the confirmed goal shows the creator sells their own offer.",
     "- Do not use a generic viewer group such as people, viewers, fans, followers, or social-media browsers as the whole audience.",
-    "- When the evidence is thin, return one or two segments. Do not invent a lifestyle, product, or problem that is not in the evidence.",
+    "- When the evidence is thin, stay close to it. Do not invent a lifestyle, product, or problem that is not in the evidence.",
     "- Do not repeat audiences the user already confirmed.",
     `- ${SOURCES_RULE} Every audience needs at least one source.`,
     `- ${POST_EVIDENCE_RULE}`,
@@ -136,6 +139,23 @@ export function buildAudiencePrompt(
     .filter((line): line is string => Boolean(line))
     .join("\n");
   return { system, user };
+}
+
+const STARTING_OUT = /\b(?:aspiring|would[- ]be|wannabe|future|soon[- ]to[- ]be|prospective)\b/i;
+const SPEAKS_TO_EXISTING = /\b(?:your (?:restaurant|business|clinic|practice|store|shop|salon|gym|studio|cafe|caf\u00e9|bar|brand|team|company|agency)|owners?|operators?)\b/i;
+const ABOUT_STARTING = /\b(?:aspiring|start(?:ing)? (?:a|your)|open(?:ing)? (?:a|your)|launch(?:ing)? (?:a|your)|would[- ]be|future)\b/i;
+
+/**
+ * When the bio or confirmed goal speaks to people who already own or run
+ * something, an "aspiring/future" segment must not lead. Moves the first
+ * established-audience segment to the front; never adds or removes one.
+ */
+export function existingOwnersFirst<T extends { who: string }>(list: T[], declaredAndGoal: string): T[] {
+  if (list.length < 2 || !STARTING_OUT.test(list[0]!.who)) return list;
+  if (!SPEAKS_TO_EXISTING.test(declaredAndGoal) || ABOUT_STARTING.test(declaredAndGoal)) return list;
+  const lead = list.findIndex(a => !STARTING_OUT.test(a.who));
+  if (lead <= 0) return list;
+  return [list[lead]!, ...list.filter((_, i) => i !== lead)];
 }
 
 export function parseAudienceOutput(
@@ -206,12 +226,13 @@ export function parseAudienceOutput(
   if (out.length === 0 && keep.length === 0)
     return { ok: false, reason: droppedFor ?? "no usable audience" };
   const { kept, dropped } = citable
-    ? keepCited(out, citable, 1)
+    ? keepCited(out, citable, MIN_AUDIENCES_AFTER_PROOF)
     : { kept: out.map(entry => entry.item), dropped: 0 };
+  const ordered = existingOwnersFirst(kept, `${e.declaredText} ${goal.toLowerCase()}`);
   return {
     ok: true,
     value: {
-      audiences: kept.slice(0, MAX_AUDIENCES),
+      audiences: ordered.slice(0, MAX_AUDIENCES),
       confidence: shape.data.confidence,
       uncitedDropped: dropped,
     },
@@ -235,7 +256,9 @@ export async function recommendAudiences(input: {
     input.confirmedAudiences,
     posts
   );
-  const citable = citableSources(input.evidence.sources, posts, input.confirmedGoal);
+  const citable = citableSources(input.evidence.sources, posts, input.confirmedGoal, {
+    bioLink: Boolean(input.evidence.websiteUrlOnly),
+  });
   const { value, usage, attempts } = await callStructured({
     operation: "personalization_audience_recommendations",
     system: prompt.system,

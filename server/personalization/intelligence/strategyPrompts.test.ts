@@ -18,7 +18,7 @@ const evidence = buildCreatorEvidence({
 describe("approved strategy prompt contracts", () => {
   it("versions Goal, Audience and Pillars for the creator's own post evidence", () => {
     expect(GOAL_PROMPT_VERSION).toBe("goal-v4");
-    expect(AUDIENCE_PROMPT_VERSION).toBe("audience-v5");
+    expect(AUDIENCE_PROMPT_VERSION).toBe("audience-v6");
     expect(PILLAR_PROMPT_VERSION).toBe("pillars-v3");
   });
 
