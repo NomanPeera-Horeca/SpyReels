@@ -458,7 +458,24 @@ describe("Goal inference", () => {
     });
   });
 
+  it("strategy is written in English by default, even for a Spanish creator", async () => {
+    const evidence = buildCreatorEvidence({
+      platform: "instagram",
+      displayName: "Cocina con Ana",
+      bio: "Recetas faciles para cocinar en casa todos los dias. Pedidos de pasteles por DM.",
+      snapshot: snap(["Tortilla de patatas", "Paella para principiantes", "Flan casero"]),
+      items: [item("language", { code: "es", label: "Spanish" })],
+    });
+    expect(evidence.outputLanguage).toEqual({ code: "en", label: "English" });
+    expect(evidence.contentLanguage).toEqual({ code: "es", label: "Spanish" });
+    const llm = fakeLlm(goalOut("Teach easy home cooking recipes like tortilla and paella."));
+    const r = await inferGoal({ evidence, invoker: llm.invoker });
+    expect(r.status).toBe("suggested");
+    expect(String(llm.calls[0].messages[0].content)).toContain("Write in English");
+  });
+
   it("multilingual: Spanish bio, confirmed Spanish language, Spanish goal accepted", async () => {
+    vi.stubEnv("PERSONALIZATION_STRATEGY_IN_CONTENT_LANGUAGE", "true");
     const evidence = buildCreatorEvidence({
       platform: "instagram",
       displayName: "Cocina con Ana",
@@ -478,6 +495,7 @@ describe("Goal inference", () => {
     expect(String(llm.calls[0].messages[0].content)).toContain(
       "Write in Spanish"
     );
+    vi.unstubAllEnvs();
   });
 
   it("prompt injection in a bio stays inside the untrusted data block", async () => {
@@ -2140,9 +2158,14 @@ describe("goal rules: subject words, one sentence, language names", () => {
   });
 
   it("allows the content language's name but not invented places", () => {
-    const swedish = { ...hiker, outputLanguage: { code: "sv", label: "Swedish" } };
+    const swedish = { ...hiker, outputLanguage: { code: "sv", label: "Swedish" }, contentLanguage: { code: "sv", label: "Swedish" } };
     expect(parse("Share Swedish weekend hikes and trail tips with beginners.", swedish).ok).toBe(true);
     expect(parse("Share Stockholm weekend hikes with beginners.", swedish)).toMatchObject({ ok: false });
+  });
+
+  it("skips the invented-name check when the English strategy translates other-language posts", () => {
+    const arabic = { ...hiker, contentLanguage: { code: "ar", label: "Arabic" } };
+    expect(parse("Share Lebanon weekend hikes and trail tips with beginners.", arabic).ok).toBe(true);
   });
 
   it("does not treat German nouns as invented names", () => {
