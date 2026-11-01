@@ -61,6 +61,7 @@ import {
 } from "./pillarClassify";
 import * as poolRepo from "./poolRepository";
 import { schedulePoolRefresh } from "./poolRefresh";
+import { classifyLibraryRowsInBackground } from "./library";
 import * as repo from "./repository";
 import { scoreCandidate, TODAY_PICKS_SCORE_WEIGHTS } from "./scoring";
 import {
@@ -1417,6 +1418,7 @@ export async function searchViralPosts(args: {
     });
     const adapted = adaptDiscoveryResult(result);
     const upserted = await repo.upsertCandidates(adapted);
+    classifyLibraryRowsInBackground(upserted, "search");
     const hidden = await repo.getHiddenCreatorKeys(args.userId);
     const dismissed = await repo.getRecentlyDismissedCandidateIds(args.userId);
     const bySource = new Map(upserted.map((r) => [r.sourceId, r]));
