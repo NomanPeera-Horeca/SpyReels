@@ -4,6 +4,7 @@ import { isViralPostsV1Platform } from "../../shared/viralPosts";
 import { scrapeTikTokVideos } from "../tiktok";
 import type { AdaptedCandidate } from "./candidateAdapter";
 import { VIRAL_POOL_DEFAULTS } from "./constants";
+import { classifyLibraryRowsInBackground, ingestResearchJobs } from "./library";
 import {
   isViralPostsInstagramEnabled,
   isViralPostsLive,
@@ -138,6 +139,7 @@ async function linkAdaptedToPool(args: {
   if (adapted.length === 0) return 0;
 
   const upserted = await repo.upsertCandidates(adapted);
+  classifyLibraryRowsInBackground(upserted, "pool");
   const links = buildAdmittedPoolLinks({
     pool,
     adapted,
@@ -799,11 +801,15 @@ export function startViralPostsPoolRefresher(): void {
     note: "DB lease still prevents duplicate refreshes across instances",
   });
   setInterval(() => {
-    void refreshStalePools(2).catch((e) =>
-      console.error("[viralPosts.pool] refresher_tick_error", {
-        error: e instanceof Error ? e.message : String(e),
-      })
-    );
+    void refreshStalePools(2)
+      .catch((e) =>
+        console.error("[viralPosts.pool] refresher_tick_error", {
+          error: e instanceof Error ? e.message : String(e),
+        })
+      )
+      // Copy finished research into the shared library. No provider calls.
+      .then(() => ingestResearchJobs({ perSource: 5 }))
+      .catch(() => undefined);
   }, intervalMs);
   setTimeout(() => {
     void refreshStalePools(1).catch(() => undefined);

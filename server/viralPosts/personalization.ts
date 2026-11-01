@@ -184,7 +184,7 @@ function finitePositive(value: number | null | undefined): number | null {
   return value != null && Number.isFinite(value) && value > 0 ? value : null;
 }
 
-function adaptPublicMetadata(args: {
+export function adaptPublicMetadata(args: {
   platform: AdaptedCandidate["platform"];
   sourceId: string;
   sourceUrl: string;
