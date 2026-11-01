@@ -30,6 +30,8 @@ export const HOME_CREATOR_LIMIT = 3;
 
 export type HomeContext = {
   hasProfile: boolean;
+  /** Active social profile id (viral library topic matching), or null. */
+  socialProfileId: string | null;
   /** Confirmed specific niche label, or null (sidebar and subtitles say "not personalized yet"). */
   nicheLabel: string | null;
   /** Broad discovery category when the niche row has one. Pool matching uses this. */
@@ -66,6 +68,7 @@ export function homeContextFromState(state: OnboardingStateView | null): HomeCon
   if (!state) {
     return {
       hasProfile: false,
+      socialProfileId: null,
       nicheLabel: null,
       categoryLabel: null,
       featuredNicheSlug: null,
@@ -98,6 +101,7 @@ export function homeContextFromState(state: OnboardingStateView | null): HomeCon
   const inferred = niche?.label ? inferNicheFromText(niche.label) : null;
   return {
     hasProfile: Boolean(state.profile),
+    socialProfileId: state.profile?.id ?? null,
     nicheLabel: niche?.label ?? null,
     categoryLabel,
     featuredNicheSlug: inferred?.slug ?? null,

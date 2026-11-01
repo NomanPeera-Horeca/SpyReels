@@ -1,7 +1,9 @@
 /**
  * Home v2 API (Phase 5). Every procedure checks the server-side Home switch
  * (assertHomeV2Access) and is read only, except switching the active
- * profile. Nothing here scrapes, refreshes pools or calls a model.
+ * profile. Nothing here scrapes, refreshes pools or calls a model. Videos and
+ * creators come from today's niche pools first, then the shared viral library
+ * (matched to the profile's topics) so Home is never blank.
  */
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -24,6 +26,7 @@ import {
 } from "../personalization/home/homeService";
 import { contentInventoryPlan } from "../personalization/home/inventoryMatch";
 import { browseIndexedViralPosts } from "../viralPosts/browseService";
+import { libraryHomeForProfile, mergeHomeLists } from "../viralPosts/libraryHome";
 
 export const HOME_VIDEO_LIMIT = 4;
 
@@ -48,6 +51,15 @@ function indexedBrowseInput(userId: number, c: HomeContext) {
     limit: HOME_VIDEO_LIMIT,
     creatorLimit: HOME_CREATOR_LIMIT,
     recentDays: CREATOR_SIGNAL_RECENT_DAYS,
+  };
+}
+
+function libraryInput(userId: number, c: HomeContext) {
+  return {
+    userId,
+    socialProfileId: c.socialProfileId,
+    limit: HOME_VIDEO_LIMIT,
+    creatorLimit: HOME_CREATOR_LIMIT,
   };
 }
 
@@ -77,14 +89,28 @@ export const homeV2Router = router({
 
   creators: homeProcedure.query(async ({ ctx }) => {
     const c = await context(ctx);
-    const res = await browseIndexedViralPosts(indexedBrowseInput(ctx.user.id, c));
-    return { personalized: c.nicheLabel !== null, nicheLabel: c.nicheLabel, creators: res.creators };
+    const [res, library] = await Promise.all([
+      browseIndexedViralPosts(indexedBrowseInput(ctx.user.id, c)),
+      libraryHomeForProfile(libraryInput(ctx.user.id, c)),
+    ]);
+    // Today's results first; the shared library fills the rest so Home is never blank.
+    const creators = mergeHomeLists(
+      res.creators,
+      library?.creators ?? [],
+      HOME_CREATOR_LIMIT,
+      x => `${x.platform}:${x.handle.toLowerCase()}`
+    );
+    return { personalized: c.nicheLabel !== null, nicheLabel: c.nicheLabel, creators };
   }),
 
   videos: homeProcedure.query(async ({ ctx }) => {
     const c = await context(ctx);
-    const res = await browseIndexedViralPosts(indexedBrowseInput(ctx.user.id, c));
-    return { personalized: c.nicheLabel !== null, nicheLabel: c.nicheLabel, items: res.items };
+    const [res, library] = await Promise.all([
+      browseIndexedViralPosts(indexedBrowseInput(ctx.user.id, c)),
+      libraryHomeForProfile(libraryInput(ctx.user.id, c)),
+    ]);
+    const items = mergeHomeLists(res.items, library?.items ?? [], HOME_VIDEO_LIMIT, x => `${x.platform}:${x.sourceId}`);
+    return { personalized: c.nicheLabel !== null, nicheLabel: c.nicheLabel, items };
   }),
 
   profiles: homeProcedure.query(async ({ ctx }) => listWorkspaceProfiles(await requireDb(), octx(ctx))),
