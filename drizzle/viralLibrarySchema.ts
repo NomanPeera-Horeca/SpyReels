@@ -71,3 +71,58 @@ export const viralLibraryIngests = mysqlTable(
     pk: primaryKey({ columns: [table.source, table.jobId] }),
   })
 );
+
+/* ---------- topics (migration drizzle/0109_viral_topics.sql) ---------- */
+
+/** Topic list: the approved starter topics plus topics added for creators' pillars. */
+export const viralTopics = mysqlTable("viral_topics", {
+  slug: varchar("slug", { length: 80 }).primaryKey(),
+  label: varchar("label", { length: 120 }).notNull(),
+  category: varchar("category", { length: 32 }).notNull(),
+  source: varchar("source", { length: 16 }).notNull(),
+  createdAt: timestamp("createdAt").notNull(),
+});
+
+/** 1-3 topics per viral or rising library video. */
+export const viralVideoTopics = mysqlTable(
+  "viral_video_topics",
+  {
+    candidateId: int("candidateId").notNull(),
+    topicSlug: varchar("topicSlug", { length: 80 }).notNull(),
+    taggedAt: timestamp("taggedAt").notNull(),
+  },
+  table => ({
+    pk: primaryKey({ columns: [table.candidateId, table.topicSlug] }),
+    topicIdx: index("idx_viral_video_topics_topic").on(table.topicSlug),
+  })
+);
+
+/** One row per video the tagger has read, even when no topic fit, so it is not read again. */
+export const viralVideoTagRuns = mysqlTable("viral_video_tag_runs", {
+  candidateId: int("candidateId").primaryKey(),
+  topicCount: int("topicCount").notNull(),
+  taggedAt: timestamp("taggedAt").notNull(),
+});
+
+/** Topics matched to a creator's confirmed niche, pillars and sub-topics. */
+export const viralProfileTopics = mysqlTable(
+  "viral_profile_topics",
+  {
+    socialProfileId: varchar("socialProfileId", { length: 36 }).notNull(),
+    workspaceId: varchar("workspaceId", { length: 36 }).notNull(),
+    topicSlug: varchar("topicSlug", { length: 80 }).notNull(),
+    matchedAt: timestamp("matchedAt").notNull(),
+  },
+  table => ({
+    pk: primaryKey({ columns: [table.socialProfileId, table.topicSlug] }),
+    topicIdx: index("idx_viral_profile_topics_topic").on(table.topicSlug),
+  })
+);
+
+/** Which strategy version each profile was matched on; a changed strategy is matched again. */
+export const viralProfileTopicRuns = mysqlTable("viral_profile_topic_runs", {
+  socialProfileId: varchar("socialProfileId", { length: 36 }).primaryKey(),
+  workspaceId: varchar("workspaceId", { length: 36 }).notNull(),
+  strategyHash: varchar("strategyHash", { length: 64 }).notNull(),
+  matchedAt: timestamp("matchedAt").notNull(),
+});

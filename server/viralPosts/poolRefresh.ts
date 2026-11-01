@@ -5,6 +5,7 @@ import { scrapeTikTokVideos } from "../tiktok";
 import type { AdaptedCandidate } from "./candidateAdapter";
 import { VIRAL_POOL_DEFAULTS } from "./constants";
 import { classifyLibraryRowsInBackground, ingestResearchJobs } from "./library";
+import { matchProfileTopics, tagLibraryVideos } from "./topics";
 import {
   isViralPostsInstagramEnabled,
   isViralPostsLive,
@@ -809,6 +810,9 @@ export function startViralPostsPoolRefresher(): void {
       )
       // Copy finished research into the shared library. No provider calls.
       .then(() => ingestResearchJobs({ perSource: 5 }))
+      // Topic tags for new viral/rising videos and new/changed creator strategies.
+      .then(() => tagLibraryVideos({ maxVideos: 60 }))
+      .then(() => matchProfileTopics({ maxProfiles: 10 }))
       .catch(() => undefined);
   }, intervalMs);
   setTimeout(() => {
