@@ -22,6 +22,7 @@ import {
   IconToolScript,
 } from "@/design-system/icons";
 import { ResultCard } from "@/design-system/ResultCard";
+import { libraryPerformanceSignal } from "./libraryPerformance";
 import { PlatformFullColorMark } from "@/design-system/platformMarks";
 import { InstagramMark } from "@shared/ui/PlatformMarks";
 import {
@@ -411,7 +412,7 @@ export function HomeVideoCard({
       title={title}
       creator={handle ? `@${handle}` : null}
       metrics={metrics}
-      signal={null}
+      signal={libraryPerformanceSignal(post)}
       labels={{
         play: C.videos.play,
         expand: C.videos.expand,
