@@ -26,9 +26,9 @@ describe("parseMysqlVersion", () => {
 });
 
 describe("loadRepoMigrations", () => {
-  it("hashes every numbered drizzle/*.sql file; 0108 is the latest in the repo", () => {
+  it("hashes every numbered drizzle/*.sql file; 0109 is the latest in the repo", () => {
     expect(repoMigrations.length).toBeGreaterThan(100);
-    expect(repoMigrations.at(-1)?.prefix).toBe("0108");
+    expect(repoMigrations.at(-1)?.prefix).toBe("0109");
     expect(repoMigrations.every(m => /^[a-f0-9]{64}$/.test(m.sha256))).toBe(
       true
     );

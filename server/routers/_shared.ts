@@ -125,6 +125,7 @@ export async function runTranscription(
     const result = await transcribeReel({
       videoUrl,
       shortcode: reel.shortcode,
+      cacheKey: { platform: "instagram", sourceId: reel.shortcode },
     });
 
     if (!result.success) {
@@ -218,7 +219,11 @@ export async function runFeaturedReelTranscription(reel: {
     }
 
     const { transcribeReel } = await import("../services/transcribeReel.js");
-    const result = await transcribeReel({ videoUrl, shortcode: reel.shortcode });
+    const result = await transcribeReel({
+      videoUrl,
+      shortcode: reel.shortcode,
+      cacheKey: { platform: "instagram", sourceId: reel.shortcode },
+    });
 
     if (!result.success) {
       if (result.errorCode === "NO_SPEECH_DETECTED") {

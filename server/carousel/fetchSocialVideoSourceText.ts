@@ -71,6 +71,10 @@ async function fetchSpokenTranscript(opts: {
   const result = await transcribeReel({
     videoUrl,
     shortcode: parsed.externalId,
+    cacheKey:
+      parsed.platform === "instagram" || parsed.platform === "tiktok"
+        ? { platform: parsed.platform, sourceId: parsed.externalId }
+        : undefined,
   });
   if (!result.success) {
     console.warn(

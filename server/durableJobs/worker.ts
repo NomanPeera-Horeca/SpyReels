@@ -83,6 +83,31 @@ function startDrain(signal: string): void {
   console.info(`[durableJobs] received ${signal}; stopping new claims`);
 }
 
+/**
+ * Viral library video understanding: a few videos every few minutes, in the
+ * worker (downloads + ffmpeg stay off the web server). Daily USD cap inside.
+ * Off with VIRAL_LIBRARY_UNDERSTANDING=false.
+ */
+function startViralLibraryUnderstanding(): void {
+  if (process.env.VIRAL_LIBRARY_UNDERSTANDING === "false") return;
+  const everyMs = Math.max(60_000, Number(process.env.VIRAL_LIBRARY_UNDERSTANDING_MS ?? 5 * 60_000));
+  let running = false;
+  const tick = () => {
+    if (running || draining) return;
+    running = true;
+    void import("../viralPosts/videoUnderstanding")
+      .then(m => m.processLibraryVideos({ maxVideos: 8 }))
+      .catch(error => console.error("[viralLibrary] understanding tick failed", error))
+      .finally(() => {
+        running = false;
+      });
+  };
+  setInterval(tick, everyMs);
+  setTimeout(tick, 30_000);
+}
+
+startViralLibraryUnderstanding();
+
 process.on("SIGTERM", () => startDrain("SIGTERM"));
 process.on("SIGINT", () => startDrain("SIGINT"));
 
