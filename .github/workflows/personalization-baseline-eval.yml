@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   baseline:
-    if: "${{ startsWith(github.event.head_commit.message, 'eval: [authorized-baseline-eval]') && !contains(github.event.head_commit.message, '[rejudge]') && !contains(github.event.head_commit.message, '[review-pack]') && !contains(github.event.head_commit.message, '[spot-check]') && !contains(github.event.head_commit.message, '[starter-check]') }}"
+    if: "${{ startsWith(github.event.head_commit.message, 'eval: [authorized-baseline-eval]') && !contains(github.event.head_commit.message, '[rejudge]') && !contains(github.event.head_commit.message, '[review-pack]') && !contains(github.event.head_commit.message, '[spot-check]') && !contains(github.event.head_commit.message, '[starter-check]') && !contains(github.event.head_commit.message, '[lookup-probe]') }}"
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -324,3 +324,36 @@ jobs:
       - name: Delete the real-customer cases files
         if: always()
         run: rm -f "$RUNNER_TEMP/real-cases.json" "$RUNNER_TEMP/starter-cases.json"
+
+  # Live onboarding lookup health check: real public accounts on Instagram,
+  # TikTok and YouTube through the production lookup code. No database, no
+  # storage writes. Commit subject: "eval: [authorized-baseline-eval] [lookup-probe] ..."
+  lookup-probe:
+    if: "${{ startsWith(github.event.head_commit.message, 'eval: [authorized-baseline-eval] [lookup-probe]') }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SCRAPECREATORS_API_KEY: ${{ secrets.SCRAPECREATORS_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Require the provider key
+        shell: bash
+        run: |
+          if [ -z "${SCRAPECREATORS_API_KEY:-}" ]; then
+            echo "SCRAPECREATORS_API_KEY GitHub secret is not configured."
+            exit 1
+          fi
+
+      - name: Look up real accounts on all three platforms
+        run: pnpm exec tsx scripts/profile-lookup-probe.ts
