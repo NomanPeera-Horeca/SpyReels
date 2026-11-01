@@ -30,6 +30,24 @@ export type EvidenceSnippet = { source: EvidenceSource; text: string };
 
 export type EvidenceStrength = "none" | "weak" | "moderate" | "strong";
 
+export const STRATEGY_LANGUAGE = { code: "en", label: "English" } as const;
+
+export function strategyInContentLanguage(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.PERSONALIZATION_STRATEGY_IN_CONTENT_LANGUAGE?.trim().toLowerCase() === "true";
+}
+
+/**
+ * The invented-name check compares capitalized words with the evidence. It only
+ * works when the strategy is written in the same language as the evidence, and
+ * in a language that capitalizes names. A translated name ("Lebanon" from
+ * Arabic posts) would otherwise be rejected as invented.
+ */
+export function namesCheckApplies(e: Pick<CreatorEvidence, "outputLanguage" | "contentLanguage">, capitalizes: (code: string) => boolean): boolean {
+  if (!capitalizes(e.outputLanguage.code)) return false;
+  const content = e.contentLanguage?.code ?? e.outputLanguage.code;
+  return content === "und" || content === e.outputLanguage.code;
+}
+
 export type CreatorEvidence = {
   platform: SocialPlatform | null;
   snippets: EvidenceSnippet[];
@@ -41,7 +59,10 @@ export type CreatorEvidence = {
   corpus: string;
   /** Changes when the evidence changes; part of the goal cache key. */
   hash: string;
+  /** Language the strategy is written in. English for now (see STRATEGY_LANGUAGE). */
   outputLanguage: { code: string; label: string };
+  /** Language of the creator's own content: confirmed by the user, else detected. */
+  contentLanguage: { code: string; label: string };
   commercialSignals: boolean;
   /** Lowercased bio + brand description + display name: where an offer must be stated. */
   declaredText: string;
@@ -266,9 +287,13 @@ export function buildCreatorEvidence(input: {
   const detected = detectContentLanguage(
     [name, bio, ...captions.slice(0, MAX_CAPTIONS)].filter(Boolean).join("\n")
   );
-  const outputLanguage = language
+  const contentLanguage = language
     ? (language.payload as ItemPayloadByKind["language"])
     : (detected ?? { code: "und", label: "the same language as the evidence" });
+  // Product decision (Nov 2026): the strategy is shown in English for everyone
+  // for now; localized strategy comes later. PERSONALIZATION_STRATEGY_IN_CONTENT_LANGUAGE=true
+  // restores writing it in the creator's content language.
+  const outputLanguage = strategyInContentLanguage() ? contentLanguage : STRATEGY_LANGUAGE;
 
   const corpus = snippets
     .map(s => s.text)
@@ -286,6 +311,7 @@ export function buildCreatorEvidence(input: {
       JSON.stringify([snippets, topCaptions, outputLanguage.code, websiteUrlOnly])
     ),
     outputLanguage,
+    contentLanguage,
     commercialSignals: detectCommercialSignals({
       bio: [bio, ...siteFacts].filter(Boolean).join("\n") || null,
       brandDescription: brandText || null,

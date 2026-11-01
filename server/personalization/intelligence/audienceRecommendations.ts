@@ -16,6 +16,7 @@ import {
   UNTRUSTED_DATA_RULE,
   untrustedEvidenceBlock,
   type CreatorEvidence,
+  namesCheckApplies,
 } from "./evidence";
 import {
   citableSources,
@@ -221,7 +222,7 @@ export function parseAudienceOutput(
       droppedFor = `audience contains numbers not in the evidence (${nums.join(", ")})`;
       continue;
     }
-    const names = capitalizationMarksNames(e.outputLanguage.code)
+    const names = namesCheckApplies(e, capitalizationMarksNames)
       ? unsupportedProperNouns(`${who}. ${outcome}.`, corpus)
       : [];
     if (names.length) {

@@ -20,6 +20,7 @@ import {
   UNTRUSTED_DATA_RULE,
   untrustedEvidenceBlock,
   type CreatorEvidence,
+  namesCheckApplies,
 } from "./evidence";
 import {
   citableSources,
@@ -235,7 +236,7 @@ export function parsePillarOutput(
       continue;
     }
     if (
-      capitalizationMarksNames(e.outputLanguage.code) &&
+      namesCheckApplies(e, capitalizationMarksNames) &&
       unsupportedProperNouns(`${titleCaseAsWords(title)}. ${description}`, corpus).length
     ) {
       droppedFor = "a pillar names things that are not in the evidence";
