@@ -80,6 +80,35 @@ export function stripCodeFences(text: string): string {
   return text.replace(/^\s*```(?:json)?\s*/i, "").replace(/\s*```\s*$/i, "").trim();
 }
 
+/**
+ * The first complete JSON object in a model answer, ignoring code fences and
+ * any words before or after it. Throws when there is none. Pure; exported for tests.
+ */
+export function parseFirstJsonObject(text: string): unknown {
+  const s = stripCodeFences(text);
+  const start = s.indexOf("{");
+  if (start < 0) throw new Error("No JSON object in model answer");
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < s.length; i++) {
+    const ch = s[i]!;
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === "\\") escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') inString = true;
+    else if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) return JSON.parse(s.slice(start, i + 1));
+    }
+  }
+  throw new Error("Unfinished JSON object in model answer");
+}
+
 export function oneLine(text: string | null | undefined, max: number): string {
   return (text ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 }
@@ -199,7 +228,7 @@ async function matchOneProfile(client: Anthropic, topics: Topic[], p: ProfileStr
   reportDirectAnthropicUsage(response, "viral_profile_topics");
   const text = response.content.find(b => b.type === "text");
   if (!text || text.type !== "text") throw new Error("No text in profile topic response");
-  return cleanProfileMatch(JSON.parse(stripCodeFences(text.text)), known);
+  return cleanProfileMatch(parseFirstJsonObject(text.text), known);
 }
 
 /** The text a creator's meaning embedding is made from. Pure; exported for tests. */
@@ -286,6 +315,32 @@ export async function matchProfileTopics(args: { maxProfiles?: number } = {}): P
   }
   if (totals.matched > 0) console.info("[viralLibrary] profile_match_done", totals);
   return totals;
+}
+
+/**
+ * Add embeddings to matched creator profiles that missed one (e.g. OpenAI
+ * was out of quota). Only profiles whose strategy did not change since.
+ */
+export async function embedMissingProfiles(args: { max?: number } = {}): Promise<number> {
+  const db = await getDb();
+  if (!db || !(await isTopicsReady(db))) return 0;
+  const runs = await db.select().from(viralProfileTopicRuns);
+  const missing = new Map(runs.filter(r => !r.embedding).map(r => [r.socialProfileId, r.strategyHash]));
+  if (missing.size === 0) return 0;
+  const todo = (await listConfirmedTopicStrategies(2_000))
+    .filter(p => missing.get(p.socialProfileId) === strategyHash(p))
+    .slice(0, Math.max(1, Math.min(200, args.max ?? 50)));
+  if (todo.length === 0) return 0;
+  const vectors = await embedTexts(todo.map(profileEmbeddingText));
+  if (!vectors) return 0;
+  for (let i = 0; i < todo.length; i++) {
+    await db
+      .update(viralProfileTopicRuns)
+      .set({ embedding: vectors[i]!, embeddingModel: EMBEDDING_MODEL })
+      .where(eq(viralProfileTopicRuns.socialProfileId, todo[i]!.socialProfileId));
+  }
+  console.info("[viralLibrary] embeddings_backfilled", { profiles: todo.length });
+  return todo.length;
 }
 
 /** Report: videos per topic and profiles per topic. */

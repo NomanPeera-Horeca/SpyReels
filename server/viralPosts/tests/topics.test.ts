@@ -104,3 +104,12 @@ describe("profileEmbeddingText", () => {
     ).toBe("Category: Tech. Niche: Apple and AI tech news. Pillars: iPhone tips");
   });
 });
+
+describe("parseFirstJsonObject", () => {
+  it("reads the JSON even with words or fences around it", async () => {
+    const { parseFirstJsonObject } = await import("../topics");
+    expect(parseFirstJsonObject('{"topics":["ai-tools"]}\n\nThese fit because...')).toEqual({ topics: ["ai-tools"] });
+    expect(parseFirstJsonObject('Here you go:\n```json\n{"a":"x } y","b":{"c":1}}\n```')).toEqual({ a: "x } y", b: { c: 1 } });
+    expect(() => parseFirstJsonObject("no json here")).toThrow();
+  });
+});

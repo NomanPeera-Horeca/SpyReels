@@ -113,6 +113,10 @@ function startViralLibraryUnderstanding(): void {
       await step("ingest", () => library.ingestResearchJobs({ perSource: 5 }));
       await step("profile topics", () => topics.matchProfileTopics({ maxProfiles: 10 }));
       await step("understanding", () => understanding.processLibraryVideos({ maxVideos: 8 }));
+      await step("embeddings", async () => {
+        await understanding.embedMissingVideos({ max: 50 });
+        await topics.embedMissingProfiles({ max: 50 });
+      });
     })()
       .catch(error => console.error("[viralLibrary] tick failed", error))
       .finally(() => {

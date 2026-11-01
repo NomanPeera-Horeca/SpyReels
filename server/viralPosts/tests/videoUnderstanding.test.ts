@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { cleanViralFormat } from "../../../shared/viralFormats";
 import { cosineSimilarity } from "../embeddings";
 import { frameCountFor, parseAnalysis, planFrameTimes } from "../frames";
@@ -117,5 +117,23 @@ describe("helpers", () => {
     expect(cosineSimilarity([1, 0], [1, 0])).toBe(1);
     expect(cosineSimilarity([1, 0], [0, 1])).toBe(0);
     expect(cosineSimilarity([], [1])).toBe(0);
+  });
+});
+
+describe("embeddings pause", () => {
+  it("stops calling OpenAI for a while after it refuses", async () => {
+    const { embedTexts, resetEmbeddingPauseForTests } = await import("../embeddings");
+    resetEmbeddingPauseForTests();
+    const prev = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = "test";
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ error: { code: "insufficient_quota" } }), { status: 429 })
+    );
+    expect(await embedTexts(["a"])).toBeNull();
+    expect(await embedTexts(["b"])).toBeNull();
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    fetchSpy.mockRestore();
+    resetEmbeddingPauseForTests();
+    process.env.OPENAI_API_KEY = prev;
   });
 });
