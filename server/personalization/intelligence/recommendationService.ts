@@ -52,6 +52,15 @@ import {
   recommendAudiences,
 } from "./audienceRecommendations";
 import { buildCreatorEvidence, type CreatorEvidence } from "./evidence";
+import {
+  loadPostImages,
+  noPostImages,
+  postImagesEnabled,
+  postIndex,
+  type PostContext,
+  type PostImageLoader,
+  type PostRef,
+} from "./postVisuals";
 import { GOAL_PROMPT_VERSION, inferGoal } from "./goalInference";
 import {
   PILLAR_PROMPT_VERSION,
@@ -306,6 +315,26 @@ export function stepHasLiveSuggestions(
   );
 }
 
+/** The creator's indexed posts plus whichever thumbnails could be loaded. Never throws. */
+async function loadPostContext(posts: PostRef[], load: PostImageLoader): Promise<PostContext> {
+  if (posts.length === 0) return { posts, images: [] };
+  try {
+    return { posts, images: await load(posts) };
+  } catch {
+    return { posts, images: [] };
+  }
+}
+
+/** Counts only, no profile text. Shows how often post evidence and images are used. */
+function logPostEvidence(step: string, ctx: PostContext, uncitedDropped: number): void {
+  console.info("[personalization] post_evidence", {
+    step,
+    posts: ctx.posts.length,
+    images: ctx.images.length,
+    uncitedDropped,
+  });
+}
+
 /** Parser reason only. Drops parenthetical evidence so logs stay free of profile text. */
 export function safeValidationReason(message: string): string {
   const stripped = message.replace(/\([^)]*\)/g, "").replace(/\s+/g, " ").trim();
@@ -419,6 +448,8 @@ async function safeNicheEnrich(input: {
     timeoutMs?: number;
     onRejected?: (reason: string) => void;
     nicheExamples?: { read: NicheExampleReader };
+    /** Loads post thumbnails. Defaults to the server fetch. Tests pass a fake. */
+    loadPostImages?: PostImageLoader;
   };
   profile: GenerationProfile;
   evidence: CreatorEvidence;
@@ -460,6 +491,8 @@ export async function generateRecommendations(
     onRejected?: (reason: string) => void;
     /** Read-only niche supply. Absent in tests. Never blocks the first write. */
     nicheExamples?: { read: NicheExampleReader };
+    /** Loads post thumbnails. Defaults to the server fetch. Tests pass a fake. */
+    loadPostImages?: PostImageLoader;
   },
   input: {
     ctx: PersonalizationCtx;
@@ -510,6 +543,14 @@ export async function generateRecommendations(
   });
   const inputsHash = stepInputsHash(input.step, items, evidence);
   const versionAtStart = await deps.store.loadPersonalizationVersion(profile.id);
+  // Loaded once, only when a model call is about to happen.
+  const indexedPosts = postIndex(snapshot, snapshot?.profileEvidence ?? openEvidence);
+  let postContextLoad: Promise<PostContext> | null = null;
+  const postContext = () =>
+    (postContextLoad ??= loadPostContext(
+      indexedPosts,
+      deps.loadPostImages ?? (postImagesEnabled() ? loadPostImages : noPostImages)
+    ));
 
   // No confirmed goal and not enough profile evidence: ask, do not invent an audience or pillar.
   if (
@@ -542,6 +583,7 @@ export async function generateRecommendations(
       noteSaved,
       fingerprintAtStart,
       timeoutMs: deps.timeoutMs,
+      postContext,
     });
   }
 
@@ -582,14 +624,17 @@ export async function generateRecommendations(
   let subtopicGroups: { title: string; labels: string[] }[] = [];
   try {
     if (input.step === "audience") {
+      const posts = await postContext();
       const r = await recommendAudiences({
         evidence,
         confirmedGoal: goals.map(g => g.text).join(" "),
         confirmedAudiences: audiences,
+        posts,
         invoker: deps.invoker,
         timeoutMs: deps.timeoutMs,
         onRejected: deps.onRejected,
       });
+      logPostEvidence("audience", posts, r.uncitedDropped);
       usage = r.usage;
       attempts = r.attempts;
       confidence = r.confidence;
@@ -604,15 +649,18 @@ export async function generateRecommendations(
         analysisRunId: null,
       }));
     } else {
+      const posts = await postContext();
       const r = await recommendPillars({
         evidence,
         confirmedGoal: goals.map(g => g.text).join(" "),
         confirmedAudiences: audiences,
         confirmedPillars: confirmedOf(items, "pillar"),
+        posts,
         invoker: deps.invoker,
         timeoutMs: deps.timeoutMs,
         onRejected: deps.onRejected,
       });
+      logPostEvidence("pillars", posts, r.uncitedDropped);
       usage = r.usage;
       attempts = r.attempts;
       confidence = r.confidence;
@@ -787,6 +835,7 @@ async function runGoalStep(input: {
   fingerprintAtStart: string;
   noteSaved: (step: string) => void;
   timeoutMs?: number;
+  postContext: () => Promise<PostContext>;
 }): Promise<RecommendationResult> {
   const { deps, evidence } = input;
   const postsChanged = async () => {
@@ -826,8 +875,11 @@ async function runGoalStep(input: {
 
   const goalTask = (async () => {
     if (!input.needGoal || goalCached) return null;
+    const posts = await input.postContext();
+    logPostEvidence("goal", posts, 0);
     return inferGoal({
       evidence,
+      posts,
       invoker: deps.invoker,
       timeoutMs: input.timeoutMs,
       onRejected: deps.onRejected,

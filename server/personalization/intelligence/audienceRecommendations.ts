@@ -14,8 +14,19 @@ import { itemIdentity } from "@shared/personalization/state";
 import {
   evidenceBlock,
   UNTRUSTED_DATA_RULE,
+  untrustedEvidenceBlock,
   type CreatorEvidence,
 } from "./evidence";
+import {
+  citableSources,
+  EMPTY_POST_CONTEXT,
+  keepCited,
+  POST_EVIDENCE_RULE,
+  postImagesForCall,
+  postsPromptBlock,
+  SOURCES_RULE,
+  type PostContext,
+} from "./postVisuals";
 import {
   capitalizationMarksNames,
   commercialIntentAllowed,
@@ -33,7 +44,7 @@ import {
   type ParseResult,
 } from "./structuredLlm";
 
-export const AUDIENCE_PROMPT_VERSION = "audience-v4";
+export const AUDIENCE_PROMPT_VERSION = "audience-v5";
 export const MAX_AUDIENCES = 3;
 
 export type AudienceRecommendation = AudiencePayload & { why: string };
@@ -44,6 +55,8 @@ export type AudienceResult = {
   confidence: SuggestionConfidence;
   /** Public profile data does not include who actually watches. Never guessed. */
   observedAudience: null;
+  /** Audiences dropped because they cited nothing in the evidence. */
+  uncitedDropped: number;
   usage: LlmUsage;
   attempts: number;
 };
@@ -59,8 +72,9 @@ const SCHEMA = {
           who: { type: "string" },
           outcome: { type: "string" },
           why: { type: "string" },
+          sources: { type: "array", items: { type: "string" } },
         },
-        required: ["who", "outcome", "why"],
+        required: ["who", "outcome", "why", "sources"],
         additionalProperties: false,
       },
     },
@@ -72,7 +86,12 @@ const SCHEMA = {
 
 const Shape = z.object({
   audiences: z.array(
-    z.object({ who: z.string(), outcome: z.string(), why: z.string() })
+    z.object({
+      who: z.string(),
+      outcome: z.string(),
+      why: z.string(),
+      sources: z.array(z.string()).optional(),
+    })
   ),
   confidence: z.enum(["high", "medium", "low"]),
 });
@@ -80,7 +99,8 @@ const Shape = z.object({
 export function buildAudiencePrompt(
   e: CreatorEvidence,
   goal: string,
-  keep: AudiencePayload[]
+  keep: AudiencePayload[],
+  posts: PostContext = EMPTY_POST_CONTEXT
 ) {
   const system = [
     "You recommend who a short-form video creator should try to reach.",
@@ -100,6 +120,8 @@ export function buildAudiencePrompt(
     "- Do not use a generic viewer group such as people, viewers, fans, followers, or social-media browsers as the whole audience.",
     "- When the evidence is thin, return one or two segments. Do not invent a lifestyle, product, or problem that is not in the evidence.",
     "- Do not repeat audiences the user already confirmed.",
+    `- ${SOURCES_RULE} Every audience needs at least one source.`,
+    `- ${POST_EVIDENCE_RULE}`,
     `- Write in ${e.outputLanguage.label}.`,
   ].join("\n");
   const user = [
@@ -108,8 +130,11 @@ export function buildAudiencePrompt(
       : "No goal is confirmed yet. Use the profile evidence. Do not invent a business objective.",
     `Already confirmed audiences: ${JSON.stringify(keep.map(a => a.who))}`,
     evidenceBlock(e),
+    postsPromptBlock(posts, untrustedEvidenceBlock),
     "Return the JSON object.",
-  ].join("\n");
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("\n");
   return { system, user };
 }
 
@@ -117,17 +142,20 @@ export function parseAudienceOutput(
   raw: unknown,
   e: CreatorEvidence,
   goal: string,
-  keep: AudiencePayload[]
+  keep: AudiencePayload[],
+  /** What an audience may cite. Omitted: the source check is skipped. */
+  citable?: ReadonlySet<string>
 ): ParseResult<{
   audiences: AudienceRecommendation[];
   confidence: SuggestionConfidence;
+  uncitedDropped: number;
 }> {
   const shape = Shape.safeParse(raw);
   if (!shape.success)
     return { ok: false, reason: "output did not match the schema" };
   const corpus = `${e.corpus}\n${goal.toLowerCase()}`;
   const seen = new Set(keep.map(a => itemIdentity("audience", a)));
-  const out: AudienceRecommendation[] = [];
+  const out: { item: AudienceRecommendation; sources: string[] }[] = [];
   let droppedFor: string | null = null;
   const monetizationAllowed = commercialIntentAllowed(goal, e.commercialSignals);
   for (const a of shape.data.audiences) {
@@ -173,15 +201,19 @@ export function parseAudienceOutput(
     const key = itemIdentity("audience", { who, outcome });
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ who, outcome, why });
+    out.push({ item: { who, outcome, why }, sources: a.sources ?? [] });
   }
   if (out.length === 0 && keep.length === 0)
     return { ok: false, reason: droppedFor ?? "no usable audience" };
+  const { kept, dropped } = citable
+    ? keepCited(out, citable, 1)
+    : { kept: out.map(entry => entry.item), dropped: 0 };
   return {
     ok: true,
     value: {
-      audiences: out.slice(0, MAX_AUDIENCES),
+      audiences: kept.slice(0, MAX_AUDIENCES),
       confidence: shape.data.confidence,
+      uncitedDropped: dropped,
     },
   };
 }
@@ -190,15 +222,20 @@ export async function recommendAudiences(input: {
   evidence: CreatorEvidence;
   confirmedGoal: string;
   confirmedAudiences: AudiencePayload[];
+  /** The creator's indexed posts and thumbnails. Omitted: text evidence only. */
+  posts?: PostContext;
   invoker?: LlmInvoker;
   timeoutMs?: number;
   onRejected?: (reason: string) => void;
 }): Promise<AudienceResult> {
+  const posts = input.posts ?? EMPTY_POST_CONTEXT;
   const prompt = buildAudiencePrompt(
     input.evidence,
     input.confirmedGoal,
-    input.confirmedAudiences
+    input.confirmedAudiences,
+    posts
   );
+  const citable = citableSources(input.evidence.sources, posts, input.confirmedGoal);
   const { value, usage, attempts } = await callStructured({
     operation: "personalization_audience_recommendations",
     system: prompt.system,
@@ -210,18 +247,21 @@ export async function recommendAudiences(input: {
         raw,
         input.evidence,
         input.confirmedGoal,
-        input.confirmedAudiences
+        input.confirmedAudiences,
+        citable
       ),
     invoker: input.invoker,
     timeoutMs: input.timeoutMs,
     onRejected: input.onRejected,
-    maxTokens: 600,
+    maxTokens: 700,
+    images: postImagesForCall(posts),
   });
   return {
     status: "suggested",
     audiences: value.audiences,
     confidence: value.confidence,
     observedAudience: null,
+    uncitedDropped: value.uncitedDropped,
     usage,
     attempts,
   };

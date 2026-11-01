@@ -10,7 +10,7 @@
  * - clear failure kinds (timeout / invalid_output / llm_unavailable)
  * - accumulated token usage and estimated cost (existing aiCostModel)
  */
-import type { InvokeParams, InvokeResult } from "../../_core/llm";
+import type { InvokeParams, InvokeResult, MessageContent } from "../../_core/llm";
 import { estimateLlmCost } from "../../analytics/aiCostModel";
 import { withAiFormattingRules } from "../../utils/aiFormattingRules";
 
@@ -57,6 +57,20 @@ function contentText(result: InvokeResult): string {
   return "";
 }
 
+function userContent(
+  text: string,
+  images: { label: string; dataUrl: string }[] | undefined
+): string | MessageContent[] {
+  if (!images?.length) return text;
+  return [
+    { type: "text", text },
+    ...images.flatMap(image => [
+      { type: "text" as const, text: image.label },
+      { type: "image_url" as const, image_url: { url: image.dataUrl } },
+    ]),
+  ];
+}
+
 export async function callStructured<T>(input: {
   operation: string;
   system: string;
@@ -69,6 +83,8 @@ export async function callStructured<T>(input: {
   maxTokens?: number;
   /** Optional observer: called for every rejected model answer (evaluation and telemetry). */
   onRejected?: (reason: string) => void;
+  /** Labelled inline images (data URLs) sent after the text, e.g. post thumbnails. */
+  images?: { label: string; dataUrl: string }[];
 }): Promise<{ value: T; usage: LlmUsage; attempts: number }> {
   const invoker = input.invoker ?? defaultInvoker;
   const usage: LlmUsage = {
@@ -86,7 +102,7 @@ export async function callStructured<T>(input: {
       result = await invoker({
         messages: [
           { role: "system", content: withAiFormattingRules(input.system) },
-          { role: "user", content: input.user + repairNote },
+          { role: "user", content: userContent(input.user + repairNote, input.images) },
         ],
         response_format: {
           type: "json_schema",

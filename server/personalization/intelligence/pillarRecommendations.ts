@@ -22,6 +22,16 @@ import {
   type CreatorEvidence,
 } from "./evidence";
 import {
+  citableSources,
+  EMPTY_POST_CONTEXT,
+  keepCited,
+  POST_EVIDENCE_RULE,
+  postImagesForCall,
+  postsPromptBlock,
+  SOURCES_RULE,
+  type PostContext,
+} from "./postVisuals";
+import {
   capitalizationMarksNames,
   claimsPerformance,
   commercialIntentAllowed,
@@ -41,7 +51,7 @@ import {
   type ParseResult,
 } from "./structuredLlm";
 
-export const PILLAR_PROMPT_VERSION = "pillars-v2";
+export const PILLAR_PROMPT_VERSION = "pillars-v3";
 /** Accepted so main's enrichment call typechecks. The frozen prompt does not read it. */
 export type PillarNicheExample = { hook: string; format: string | null };
 export const MIN_PILLARS = 3;
@@ -54,6 +64,10 @@ export type PillarResult = {
   subtopics: string[][];
   confidence: SuggestionConfidence;
   usedHistoricalContext: boolean;
+  /** The creator's posts or thumbnails were part of the evidence. */
+  usedPostEvidence: boolean;
+  /** Pillars dropped because they cited nothing in the evidence. */
+  uncitedDropped: number;
   usage: LlmUsage;
   attempts: number;
 };
@@ -69,8 +83,9 @@ const SCHEMA = {
           title: { type: "string" },
           serves: { type: "string" },
           subtopics: { type: "array", items: { type: "string" } },
+          sources: { type: "array", items: { type: "string" } },
         },
-        required: ["title", "serves", "subtopics"],
+        required: ["title", "serves", "subtopics", "sources"],
         additionalProperties: false,
       },
     },
@@ -86,6 +101,7 @@ const Shape = z.object({
       title: z.string(),
       serves: z.string(),
       subtopics: z.array(z.string()).optional(),
+      sources: z.array(z.string()).optional(),
     })
   ),
   confidence: z.enum(["high", "medium", "low"]),
@@ -112,7 +128,8 @@ export function buildPillarPrompt(
   goal: string,
   audiences: AudiencePayload[],
   keep: PillarPayload[],
-  nicheExamples: PillarNicheExample[] = []
+  nicheExamples: PillarNicheExample[] = [],
+  posts: PostContext = EMPTY_POST_CONTEXT
 ) {
   const nicheBlock = nicheExampleBlock(nicheExamples);
   const system = [
@@ -124,6 +141,9 @@ export function buildPillarPrompt(
     `- Between ${MIN_PILLARS} and ${MAX_PILLARS} distinct pillars, not counting pillars the user already confirmed.`,
     "- title: 1 to 4 words. serves: one sentence (max 20 words) saying how it serves the goal and the audience.",
     "- subtopics: 3 short video topics under that pillar (2 to 4 words each). Specific themes, not a copy of the bio.",
+    `- ${SOURCES_RULE} Every pillar needs at least one source.`,
+    "- Prefer pillars the creator's most viewed posts already prove, then pillars that serve the goal and audience.",
+    `- ${POST_EVIDENCE_RULE}`,
     '- No numbers, percentages, view counts or claims about past performance (no "viral", "best performing").',
     "- Do not invent facts, names or products about the creator.",
     "- Do not add a pillar about products, affiliates, shopping, or monetization unless the evidence or the confirmed goal shows the creator sells that offer.",
@@ -144,6 +164,7 @@ export function buildPillarPrompt(
       : "No reliable performance history is available.",
     nicheBlock,
     evidenceBlock(e),
+    postsPromptBlock(posts, untrustedEvidenceBlock),
     "Return the JSON object.",
   ]
     .filter((line): line is string => Boolean(line))
@@ -156,11 +177,14 @@ export function parsePillarOutput(
   e: CreatorEvidence,
   goal: string,
   audiences: AudiencePayload[],
-  keep: PillarPayload[]
+  keep: PillarPayload[],
+  /** What a pillar may cite. Omitted: the source check is skipped. */
+  citable?: ReadonlySet<string>
 ): ParseResult<{
   pillars: PillarPayload[];
   subtopics: string[][];
   confidence: SuggestionConfidence;
+  uncitedDropped: number;
 }> {
   const shape = Shape.safeParse(raw);
   if (!shape.success)
@@ -170,8 +194,7 @@ export function parsePillarOutput(
     .join(" ")
     .toLowerCase()}`;
   const seen = new Set(keep.map(p => itemIdentity("pillar", p)));
-  const out: PillarPayload[] = [];
-  const subtopics: string[][] = [];
+  const out: { item: { pillar: PillarPayload; subtopics: string[] }; sources: string[] }[] = [];
   let droppedFor: string | null = null;
   for (const p of shape.data.pillars) {
     const title = sanitizeCopy(p.title).replace(/\.$/, "");
@@ -223,8 +246,13 @@ export function parsePillarOutput(
     });
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ title, description, viewSharePercent: null });
-    subtopics.push(cleanSubtopics(p.subtopics, corpus));
+    out.push({
+      item: {
+        pillar: { title, description, viewSharePercent: null },
+        subtopics: cleanSubtopics(p.subtopics, corpus),
+      },
+      sources: p.sources ?? [],
+    });
   }
   const needed = Math.max(0, MIN_PILLARS - keep.length);
   if (needed > 0 && out.length === 0)
@@ -232,13 +260,17 @@ export function parsePillarOutput(
       ok: false,
       reason: droppedFor ?? "no usable pillars in the model output",
     };
-  const capped = out.slice(0, MAX_PILLARS);
+  const { kept, dropped } = citable
+    ? keepCited(out, citable, needed)
+    : { kept: out.map(entry => entry.item), dropped: 0 };
+  const capped = kept.slice(0, MAX_PILLARS);
   return {
     ok: true,
     value: {
-      pillars: capped,
-      subtopics: subtopics.slice(0, capped.length),
+      pillars: capped.map(entry => entry.pillar),
+      subtopics: capped.map(entry => entry.subtopics),
       confidence: shape.data.confidence,
+      uncitedDropped: dropped,
     },
   };
 }
@@ -280,17 +312,22 @@ export async function recommendPillars(input: {
   confirmedAudiences: AudiencePayload[];
   confirmedPillars: PillarPayload[];
   nicheExamples?: PillarNicheExample[];
+  /** The creator's indexed posts and thumbnails. Omitted: text evidence only. */
+  posts?: PostContext;
   invoker?: LlmInvoker;
   timeoutMs?: number;
   onRejected?: (reason: string) => void;
 }): Promise<PillarResult> {
+  const posts = input.posts ?? EMPTY_POST_CONTEXT;
   const prompt = buildPillarPrompt(
     input.evidence,
     input.confirmedGoal,
     input.confirmedAudiences,
     input.confirmedPillars,
-    input.nicheExamples ?? []
+    input.nicheExamples ?? [],
+    posts
   );
+  const citable = citableSources(input.evidence.sources, posts, input.confirmedGoal);
   const { value, usage, attempts } = await callStructured({
     operation: "personalization_pillar_recommendations",
     system: prompt.system,
@@ -303,12 +340,14 @@ export async function recommendPillars(input: {
         input.evidence,
         input.confirmedGoal,
         input.confirmedAudiences,
-        input.confirmedPillars
+        input.confirmedPillars,
+        citable
       ),
     invoker: input.invoker,
     timeoutMs: input.timeoutMs,
     onRejected: input.onRejected,
-    maxTokens: 900,
+    maxTokens: 1100,
+    images: postImagesForCall(posts),
   });
   return {
     status: "suggested",
@@ -316,6 +355,8 @@ export async function recommendPillars(input: {
     subtopics: value.subtopics,
     confidence: value.confidence,
     usedHistoricalContext: input.evidence.topCaptions.length > 0,
+    usedPostEvidence: posts.posts.length > 0,
+    uncitedDropped: value.uncitedDropped,
     usage,
     attempts,
   };

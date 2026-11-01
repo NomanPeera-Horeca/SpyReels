@@ -16,10 +16,10 @@ const evidence = buildCreatorEvidence({
 });
 
 describe("approved strategy prompt contracts", () => {
-  it("keeps Pillars frozen while versioning the scoped Audience and Goal updates", () => {
-    expect(GOAL_PROMPT_VERSION).toBe("goal-v3");
-    expect(AUDIENCE_PROMPT_VERSION).toBe("audience-v4");
-    expect(PILLAR_PROMPT_VERSION).toBe("pillars-v2");
+  it("versions Goal, Audience and Pillars for the creator's own post evidence", () => {
+    expect(GOAL_PROMPT_VERSION).toBe("goal-v4");
+    expect(AUDIENCE_PROMPT_VERSION).toBe("audience-v5");
+    expect(PILLAR_PROMPT_VERSION).toBe("pillars-v3");
   });
 
   it("keeps the frozen pillar rules when no niche examples are passed", () => {
