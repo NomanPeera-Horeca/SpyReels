@@ -55,7 +55,7 @@ describe("researchJobToCandidates", () => {
         postedAt: daysAgo(3),
         ownerHandle: "chefmike",
       },
-      { ...emptyVideo(), sourceId: "222", postedAt: daysAgo(400) }, // too old for the library
+      { ...emptyVideo(), sourceId: "222", postedAt: daysAgo(400) }, // older than 1 year: not in the library
       { ...emptyVideo(), sourceId: "", postedAt: daysAgo(1) }, // no id
     ],
   };

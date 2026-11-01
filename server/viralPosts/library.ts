@@ -43,7 +43,7 @@ import { adaptPublicMetadata } from "./personalization";
 const LIBRARY_TABLES = ["viral_creator_baselines", "viral_library_status", "viral_library_ingests"];
 const READY_RECHECK_MS = 10 * 60 * 1000;
 /** Research videos older than this stay out of the library (baseline still uses them). */
-const LIBRARY_MAX_AGE_DAYS = 180;
+const LIBRARY_MAX_AGE_DAYS = 365;
 const UPSERT_CHUNK = 200;
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
