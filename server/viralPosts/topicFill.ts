@@ -18,7 +18,7 @@
  */
 import { eq, sql } from "drizzle-orm";
 import { viralProcessingSpend, viralProfileTopics, viralTopics } from "../../drizzle/viralLibrarySchema";
-import { CONTENT_TAXONOMY } from "../../shared/personalization/contentTaxonomy";
+import { VIRAL_TOPIC_CATEGORY_LABELS } from "../../shared/viralTopics";
 import { getDb } from "../db";
 import {
   isViralPostsInstagramEnabled,
@@ -60,7 +60,7 @@ export type FillTopic = { label: string; category: string; creators: number };
 
 /** Pool niche name for a topic category (the taxonomy label, e.g. "Tech"). */
 export function fillNicheForCategory(categorySlug: string): string {
-  return CONTENT_TAXONOMY.find(c => c.slug === categorySlug)?.label ?? categorySlug;
+  return VIRAL_TOPIC_CATEGORY_LABELS[categorySlug] ?? categorySlug;
 }
 
 /**

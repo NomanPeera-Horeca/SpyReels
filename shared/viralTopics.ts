@@ -113,6 +113,30 @@ export function topicSlug(label: string): string {
 
 export const VIRAL_TOPIC_CATEGORIES = Object.keys(STARTER);
 
+/**
+ * Display names for topic categories (same names as the content taxonomy,
+ * kept here so viral library code does not import personalization modules).
+ */
+export const VIRAL_TOPIC_CATEGORY_LABELS: Record<string, string> = {
+  tech: "Tech",
+  food: "Food",
+  hospitality: "Hospitality",
+  business: "Business",
+  marketing: "Marketing",
+  finance: "Finance",
+  real_estate: "Real Estate",
+  fitness: "Fitness",
+  beauty: "Beauty",
+  fashion: "Fashion",
+  travel: "Travel",
+  education: "Education",
+  lifestyle: "Lifestyle",
+  parenting: "Parenting",
+  spirituality: "Spirituality",
+  entertainment: "Entertainment",
+  outdoors: "Outdoors",
+};
+
 export const STARTER_VIRAL_TOPICS: ViralTopicSeed[] = Object.entries(STARTER).flatMap(
   ([category, labels]) => labels.map(label => ({ slug: topicSlug(label), label, category }))
 );
