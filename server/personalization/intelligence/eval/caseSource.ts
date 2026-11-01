@@ -6,6 +6,7 @@
  * real-customer replays. That file lives only on the runner and is never
  * committed, so customer profile text stays out of the repository.
  */
+import { composeStarterDescription, hasStarterAnswer } from "@shared/personalization/starterQuestions";
 import { readFileSync } from "node:fs";
 import { EVAL_CASES, type EvalCase } from "./fixtures";
 
@@ -45,6 +46,9 @@ export function judgeProfileText(c: EvalCase | undefined): string {
     `Bio: ${c?.bio ?? evidence?.bio ?? ""}`,
     evidence?.category ? `Category: ${evidence.category}` : null,
     c?.typedNiche ? `Niche the creator picked: ${c.typedNiche.label}` : null,
+    c?.starter && hasStarterAnswer(c.starter)
+      ? `The creator's own answers: ${composeStarterDescription(c.starter)}`
+      : null,
     `Captions: ${captions.slice(0, 6).join(" | ")}`,
     `Notes: ${c?.expect.notes ?? ""}`,
   ]

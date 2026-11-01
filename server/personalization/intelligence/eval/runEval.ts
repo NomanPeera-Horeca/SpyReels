@@ -20,6 +20,7 @@
  * Human rubric scores (100 points) are NOT computed here: the artifact
  * leaves them empty for reviewers. Only objective gates are automated.
  */
+import { composeStarterDescription, hasStarterAnswer } from "@shared/personalization/starterQuestions";
 import {
   categorySelectsRestaurantPillars,
   poolNicheForCategory,
@@ -408,6 +409,12 @@ export async function runEvaluation(input: {
     );
     if (c.language) store.typed("language", c.language);
     if (c.typedNiche) store.typed("niche", c.typedNiche);
+    if (c.starter && hasStarterAnswer(c.starter)) {
+      // Same writes as saveStarterAnswers: description + confirmed audience.
+      store.typed("brand_description", { text: composeStarterDescription(c.starter) });
+      const who = (c.starter.audience ?? "").trim();
+      if (who) store.typed("audience", { who, outcome: "" });
+    }
 
     // Goal
     const g: RecommendationResult = await generateRecommendations(deps(store), {

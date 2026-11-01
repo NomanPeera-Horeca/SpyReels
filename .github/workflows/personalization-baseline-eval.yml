@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   baseline:
-    if: "${{ startsWith(github.event.head_commit.message, 'eval: [authorized-baseline-eval]') && !contains(github.event.head_commit.message, '[rejudge]') && !contains(github.event.head_commit.message, '[review-pack]') && !contains(github.event.head_commit.message, '[spot-check]') }}"
+    if: "${{ startsWith(github.event.head_commit.message, 'eval: [authorized-baseline-eval]') && !contains(github.event.head_commit.message, '[rejudge]') && !contains(github.event.head_commit.message, '[review-pack]') && !contains(github.event.head_commit.message, '[spot-check]') && !contains(github.event.head_commit.message, '[starter-check]') }}"
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -275,3 +275,52 @@ jobs:
       - name: Delete the real-customer cases file
         if: always()
         run: rm -f "$RUNNER_TEMP/real-cases.json"
+
+  # Starter questions: each "I don't post yet" customer with and without
+  # (simulated) starter answers, generated and judged on the same code.
+  starter-check:
+    if: "${{ startsWith(github.event.head_commit.message, 'eval: [authorized-baseline-eval] [starter-check]') }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      EVAL_DB_READONLY_URL: ${{ secrets.EVAL_DB_READONLY_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Real customers - export (read-only login)
+        run: pnpm exec tsx scripts/personalization-real-customers-export.ts --out="$RUNNER_TEMP/real-cases.json" > /dev/null
+
+      - name: Not-posting customers, with and without answers
+        id: make
+        shell: bash
+        run: |
+          pnpm exec tsx scripts/personalization-starter-variants.ts --make --in="$RUNNER_TEMP/real-cases.json" --out="$RUNNER_TEMP/starter-cases.json" | tee "$RUNNER_TEMP/make.txt"
+          grep '^ids=' "$RUNNER_TEMP/make.txt" >> "$GITHUB_OUTPUT"
+
+      - name: Generate (cap $1.60)
+        run: pnpm exec tsx scripts/personalization-intelligence-eval.ts --confirm-spend --cap=1.60 --out=starter-check --cases="${{ steps.make.outputs.ids }}" --fixtures="$RUNNER_TEMP/starter-cases.json"
+
+      - name: Judge (cap $0.50)
+        if: always()
+        run: pnpm exec tsx scripts/personalization-quality-judge.ts --confirm-spend --cap=0.50 --in=starter-check --fixtures="$RUNNER_TEMP/starter-cases.json"
+
+      - name: Compare
+        if: always()
+        run: |
+          pnpm exec tsx scripts/personalization-starter-variants.ts --compare --judge=starter-check-judge || true
+          pnpm exec tsx scripts/personalization-eval-digest.ts --in=starter-check || true
+
+      - name: Delete the real-customer cases files
+        if: always()
+        run: rm -f "$RUNNER_TEMP/real-cases.json" "$RUNNER_TEMP/starter-cases.json"

@@ -10,6 +10,7 @@
  * when the engine asks for clarification (or for later steps), the harness
  * continues with what a user in that scenario would type.
  */
+import type { StarterAnswers } from "@shared/personalization/starterQuestions";
 import type {
   AnalysisSourceSnapshot,
   AudiencePayload,
@@ -57,6 +58,8 @@ export type EvalCase = {
   profileStatus?: SocialProfileStatus;
   /** Real-customer replays: the niche the customer picked ("I don't post yet"). */
   typedNiche?: NichePayload;
+  /** Starter-question answers given by (or simulated for) the creator. */
+  starter?: StarterAnswers;
   /** Real-customer replays: what the AI first showed this customer in onboarding. */
   productionShown?: ProductionShown;
 };
