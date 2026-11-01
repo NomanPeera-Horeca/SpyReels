@@ -482,6 +482,37 @@
   box-sizing: border-box;
 }
 
+/* The whole creator row is one button that highlights on hover and focus. */
+.creatorRowButton {
+  width: 100%;
+  margin: 0;
+  border: 0;
+  border-radius: var(--sr-radius-8);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.creatorRowButton:hover {
+  background: var(--home-surface-hover);
+}
+
+.creatorRowButton:hover .creatorAction {
+  text-decoration: underline;
+}
+
+.creatorRowButton:focus-visible {
+  outline: none;
+  box-shadow: var(--sr-elevation-focus-neutral-action);
+}
+
+.creatorAction {
+  pointer-events: none;
+}
+
 .divider {
   height: 1px;
   background: var(--home-border-subtle);

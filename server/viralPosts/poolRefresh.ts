@@ -5,8 +5,11 @@ import { scrapeTikTokVideos } from "../tiktok";
 import type { AdaptedCandidate } from "./candidateAdapter";
 import { VIRAL_POOL_DEFAULTS } from "./constants";
 import {
+  isViralPostsInstagramEnabled,
   isViralPostsLive,
   isViralPostsPoolRefresherEnabled,
+  isViralPostsTiktokEnabled,
+  isViralPostsYoutubeEnabled,
   viralPostsPoolRefreshMs,
 } from "./featureFlag";
 import { loadFeaturedTransferableCandidates } from "./featuredSupply";
@@ -751,7 +754,14 @@ export function schedulePoolRefresh(poolId: number, force = false): void {
  * or process-local interval when VIRAL_POSTS_POOL_REFRESHER=true.
  */
 export async function refreshStalePools(limit = 3): Promise<PoolRefreshResult[]> {
-  const needing = await poolRepo.listPoolsNeedingRefresh(limit);
+  const enabledPlatforms = new Set(
+    [
+      isViralPostsInstagramEnabled ? "instagram" : "",
+      isViralPostsTiktokEnabled ? "tiktok" : "",
+      isViralPostsYoutubeEnabled ? "youtube" : "",
+    ].filter(Boolean)
+  );
+  const needing = await poolRepo.listPoolsNeedingRefresh(limit, enabledPlatforms);
   const results: PoolRefreshResult[] = [];
   for (const pool of needing) {
     results.push(await refreshPoolById(pool.id));

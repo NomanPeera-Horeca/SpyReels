@@ -451,19 +451,28 @@ export type HomeCreatorView = {
   badge: FollowerViralBadge | null;
 };
 
+/**
+ * One creator in "Creators going viral". The whole row is one button: it opens
+ * Research for this creator, which adds them to Creator Radar.
+ */
 export function CreatorRow({
   creator,
-  onSee,
+  onOpen,
   compact = false,
 }: {
   creator: HomeCreatorView;
-  onSee: () => void;
+  onOpen: () => void;
   compact?: boolean;
 }) {
   const [imgFailed, setImgFailed] = useState(false);
   const name = creator.displayName?.trim() || `@${creator.handle}`;
   return (
-    <div className={styles.creatorRow}>
+    <button
+      type="button"
+      className={cx(styles.creatorRow, styles.creatorRowButton)}
+      onClick={onOpen}
+      aria-label={C.creators.openLabel(name)}
+    >
       <span className={styles.avatar} aria-hidden>
         {creator.profilePicUrl && !imgFailed ? (
           <img
@@ -494,10 +503,13 @@ export function CreatorRow({
         </span>
         <ViralBadge badge={creator.badge} />
       </div>
-      <button type="button" className={compact ? cx(styles.ghost, styles.ghostBrand) : styles.ghost} onClick={onSee}>
-        {compact ? C.mobile.seeVideos : C.creators.seeVideos}
-      </button>
-    </div>
+      <span
+        className={compact ? cx(styles.ghost, styles.ghostBrand, styles.creatorAction) : cx(styles.ghost, styles.creatorAction)}
+        aria-hidden
+      >
+        {compact ? C.mobile.addToRadar : C.creators.addToRadar}
+      </span>
+    </button>
   );
 }
 
