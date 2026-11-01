@@ -208,6 +208,39 @@ describe("Instagram identity resolution", () => {
     );
   });
 
+  it("treats a 404 from both profile and search as a missing account, not a provider failure", async () => {
+    installFetchMock((path) => {
+      if (path === "/v1/instagram/profile") {
+        return { status: 404, body: { error: "not_found" } };
+      }
+      if (path === "/v1/instagram/search") {
+        return { status: 404, body: { error: "not_found" } };
+      }
+      throw new Error(`unexpected path ${path}`);
+    });
+
+    vi.useFakeTimers();
+    const pending = resolveInstagramIdentity("hanzalah_web__creator");
+    const expectation = expect(pending).rejects.toBeInstanceOf(InstagramHandleNotFoundError);
+    await vi.runAllTimersAsync();
+    await expectation;
+  });
+
+  it("keeps a 403 refusal as a provider error with its status", async () => {
+    installFetchMock((path) => {
+      if (path === "/v1/instagram/profile") {
+        return { status: 403, body: { error: "forbidden" } };
+      }
+      throw new Error(`unexpected path ${path}`);
+    });
+
+    vi.useFakeTimers();
+    const pending = resolveInstagramIdentity("sistamedia.agency");
+    const expectation = expect(pending).rejects.toMatchObject({ name: "InstagramProviderError", httpStatus: 403 });
+    await vi.runAllTimersAsync();
+    await expectation;
+  });
+
   it("does not classify a temporary provider failure as handle_not_found", async () => {
     installFetchMock((path) => {
       if (path === "/v1/instagram/profile") {

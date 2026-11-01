@@ -94,6 +94,8 @@ function ChevronLeft() {
 /* ---------- Step 1: Where do you post? ---------- */
 
 const RETRYABLE_PLATFORM_ERRORS = new Set<PlatformError>(["timeout", "error", "rate_limited"]);
+/** When we cannot find or read the account, the "no posts" path becomes the way forward. */
+const NO_PROFILE_ERRORS = new Set<PlatformError>(["not_found", "unavailable", "private"]);
 
 function shownHandle(value: string): string {
   const handle = value.trim().replace(/^@+/, "");
@@ -141,7 +143,7 @@ export function PlatformStep({
   const actions = (
     <div className={styles.actionsRow}>
       <GhostButton onClick={onNoPost} disabled={busy} className={styles.ghostStart}>
-        {COPY.platform.noPost}
+        {error && NO_PROFILE_ERRORS.has(error) ? COPY.platform.continueWithout : COPY.platform.noPost}
       </GhostButton>
       {looking ? (
         <SecondaryButton type="button" onClick={onCancel}>

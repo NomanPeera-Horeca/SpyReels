@@ -62,7 +62,9 @@ export type ProfileLookupFailure =
   | "private"
   | "error"
   | "rate_limited"
-  | "timeout";
+  | "timeout"
+  /** The provider is refused for this account (HTTP 403). Retrying will not help. */
+  | "unavailable";
 
 export type ProfileLookupResult =
   | { ok: true; profile: PublicProfilePreview; meter: ScrapeCreatorsMeterReport }
