@@ -8,6 +8,7 @@ import {
   isViralPostsV1Platform,
   type ViralDailyFeedResponse,
   type ViralFeedbackType,
+  type ViralPost,
 } from "@shared/viralPosts";
 import { users } from "../../drizzle/schema";
 import { protectedProcedure, router } from "../_core/trpc";
@@ -28,11 +29,33 @@ import { preservesEmptyTaxonomyFeed } from "../personalization/home/inventoryMat
 import { browseViralPosts } from "./browseService";
 import * as repo from "./repository";
 import {
+  appendLibraryPosts,
   getFeedHistory,
   getOrCreateDailyFeed,
   getSavedViralPosts,
+  libraryPostsForUser,
   searchViralPosts,
 } from "./service";
+
+/** Explore shows up to this many posts (same as the pool browse limit). */
+const EXPLORE_LIBRARY_LIMIT = 24;
+
+/**
+ * Fill a short For You feed from the shared viral library (matched to the
+ * creator's topics), after today's picks. When the feed was empty, library
+ * videos make it a normal ready feed: no "refreshing" banner. Pure; exported
+ * for tests.
+ */
+export function fillFeedFromLibrary(
+  feed: ViralDailyFeedResponse,
+  library: ViralPost[]
+): ViralDailyFeedResponse {
+  if (feed.generationReason === "disabled") return feed;
+  const items = appendLibraryPosts(feed.items, library, VIRAL_DAILY_FEED_MAX);
+  if (items.length === feed.items.length) return feed;
+  if (feed.items.length > 0) return { ...feed, items };
+  return { ...feed, items, status: "ready", generationReason: "library_fill", errorMessage: null };
+}
 
 const viralPostsProcedure = protectedProcedure.use(({ next }) => {
   if (!isViralPostsLive) {
@@ -266,11 +289,18 @@ export const viralPostsRouter = router({
         feed = await getOrCreateDailyFeed({ ...request, force: true });
       }
 
-      return withNonEmptyFeedFallback({
+      const withFallback = await withNonEmptyFeedFallback({
         userId: ctx.user.id,
         localDate: input.localDate,
         feed,
       });
+      if (withFallback.items.length >= VIRAL_DAILY_FEED_MAX) return withFallback;
+      const library = await libraryPostsForUser({
+        userId: ctx.user.id,
+        workspaceId: ctx.workspaceId,
+        limit: VIRAL_DAILY_FEED_MAX,
+      });
+      return fillFeedFromLibrary(withFallback, library);
     }),
 
   getFeedHistory: viralPostsProcedure
@@ -298,7 +328,15 @@ export const viralPostsRouter = router({
     }),
 
   browse: viralPostsProcedure.query(async ({ ctx }) => {
-    return browseViralPosts(ctx.user.id);
+    const browse = await browseViralPosts(ctx.user.id);
+    if (browse.items.length >= EXPLORE_LIBRARY_LIMIT) return browse;
+    // Today's pool results first; the shared library fills the rest.
+    const library = await libraryPostsForUser({
+      userId: ctx.user.id,
+      workspaceId: ctx.workspaceId,
+      limit: EXPLORE_LIBRARY_LIMIT,
+    });
+    return { ...browse, items: appendLibraryPosts(browse.items, library, EXPLORE_LIBRARY_LIMIT) };
   }),
 
   search: viralPostsProcedure
