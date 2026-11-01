@@ -8,6 +8,8 @@ import {
   fetchableImageUrl,
   keepCited,
   loadPostImages,
+  noPostImages,
+  postImagesEnabled,
   postIndex,
   type PostContext,
 } from "./postVisuals";
@@ -123,6 +125,16 @@ describe("loadPostImages", () => {
     expect(images[0]?.dataUrl.startsWith("data:image/jpeg;base64,")).toBe(true);
     const meta = await sharp(Buffer.from(images[0]!.dataUrl.split(",")[1]!, "base64")).metadata();
     expect(Math.max(meta.width ?? 0, meta.height ?? 0)).toBeLessThanOrEqual(512);
+  });
+});
+
+describe("post images switch", () => {
+  it("is off unless explicitly enabled", async () => {
+    expect(postImagesEnabled({})).toBe(false);
+    expect(postImagesEnabled({ PERSONALIZATION_POST_IMAGES_ENABLED: "false" })).toBe(false);
+    expect(postImagesEnabled({ PERSONALIZATION_POST_IMAGES_ENABLED: "1" })).toBe(false);
+    expect(postImagesEnabled({ PERSONALIZATION_POST_IMAGES_ENABLED: " TRUE " })).toBe(true);
+    expect(await noPostImages([{ ref: "P1", caption: null, views: null, thumbnailUrl: "https://cdn.example.com/a.jpg" }])).toEqual([]);
   });
 });
 
