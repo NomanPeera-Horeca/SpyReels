@@ -19,6 +19,7 @@
     "viral-posts:refresh-pools": "tsx scripts/viral-posts-pool-refresh.ts",
     "viral-library:backfill": "tsx scripts/viral-library-backfill.ts",
     "viral-library:understand": "tsx scripts/viral-library-understand.ts",
+    "viral-library:fill": "tsx scripts/viral-library-fill.ts",
     "featured-demo:refresh": "tsx scripts/featured-demo-catalog-refresh.ts",
     "watermark:cron": "tsx scripts/process-watermark-jobs.ts",
     "watermark:worker": "tsx scripts/watermark-worker.ts",

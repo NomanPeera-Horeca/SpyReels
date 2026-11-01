@@ -10,10 +10,19 @@
 export const EMBEDDING_MODEL = "text-embedding-3-small";
 export const EMBEDDING_DIMENSIONS = 512;
 
+/** After OpenAI refuses (quota, rate limit), skip calls for a while instead of failing every video. */
+const PAUSE_AFTER_REFUSAL_MS = 30 * 60 * 1000;
+let pausedUntil = 0;
+
+export function resetEmbeddingPauseForTests(): void {
+  pausedUntil = 0;
+}
+
 export async function embedTexts(texts: string[]): Promise<number[][] | null> {
   const key = process.env.OPENAI_API_KEY?.trim();
   const input = texts.map(t => t.replace(/\s+/g, " ").trim().slice(0, 2_000));
   if (!key || input.length === 0 || input.some(t => !t)) return null;
+  if (Date.now() < pausedUntil) return null;
   try {
     const res = await fetch("https://api.openai.com/v1/embeddings", {
       method: "POST",
@@ -22,7 +31,21 @@ export async function embedTexts(texts: string[]): Promise<number[][] | null> {
       signal: AbortSignal.timeout(20_000),
     });
     if (!res.ok) {
-      console.warn("[viralLibrary] embedding_failed", { status: res.status });
+      let code = "";
+      try {
+        const body = (await res.json()) as { error?: { code?: string; type?: string } };
+        code = body.error?.code || body.error?.type || "";
+      } catch {
+        // no body
+      }
+      if (res.status === 429 || res.status === 401 || res.status === 403) {
+        pausedUntil = Date.now() + PAUSE_AFTER_REFUSAL_MS;
+      }
+      console.warn("[viralLibrary] embedding_failed", {
+        status: res.status,
+        code,
+        pausedMinutes: pausedUntil > Date.now() ? 30 : 0,
+      });
       return null;
     }
     const body = (await res.json()) as { data?: Array<{ index: number; embedding: number[] }> };

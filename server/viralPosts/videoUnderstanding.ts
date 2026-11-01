@@ -49,7 +49,7 @@ import {
   isTopicsReady,
   loadTopics,
   oneLine,
-  stripCodeFences,
+  parseFirstJsonObject,
   syncStarterTopics,
   topicListForPrompt,
   type Topic,
@@ -352,7 +352,7 @@ async function creatorTopics(db: Db, topics: Topic[], c: ViralPostCandidate): Pr
         outputTokens: response.usage.output_tokens,
       }).costUsd;
       const text = response.content.find(b => b.type === "text");
-      const parsed = text && text.type === "text" ? JSON.parse(stripCodeFences(text.text)) : {};
+      const parsed = text && text.type === "text" ? parseFirstJsonObject(text.text) : {};
       slugs = cleanVideoTopics((parsed as { topics?: unknown }).topics, new Set(topics.map(t => t.slug)));
       source = "ai";
     }
@@ -447,7 +447,7 @@ async function readVideo(
   }).costUsd;
   const text = response.content.find(b => b.type === "text");
   if (!text || text.type !== "text") return { reading: null, costUsd };
-  return { reading: cleanVideoReading(JSON.parse(stripCodeFences(text.text)), new Set(topics.map(t => t.slug))), costUsd };
+  return { reading: cleanVideoReading(parseFirstJsonObject(text.text), new Set(topics.map(t => t.slug))), costUsd };
 }
 
 /* ---------- one video ---------- */
@@ -574,4 +574,38 @@ export async function understandingReport(): Promise<{ byStatus: Record<string, 
     byStatus: Object.fromEntries(rows.map(r => [r.status, Number(r.n)])),
     spentTodayUsd: await spentToday(db),
   };
+}
+
+/**
+ * Add embeddings to processed videos that missed one (e.g. OpenAI was out of
+ * quota). Text only, from the saved summary and topics; no video work again.
+ */
+export async function embedMissingVideos(args: { max?: number } = {}): Promise<number> {
+  const db = await getDb();
+  if (!db || !(await isTopicsReady(db))) return 0;
+  const rows = await db
+    .select({ candidateId: viralVideoInsights.candidateId, summary: viralVideoInsights.summary })
+    .from(viralVideoInsights)
+    .where(and(eq(viralVideoInsights.status, "done"), isNull(viralVideoInsights.embedding)))
+    .limit(Math.max(1, Math.min(200, args.max ?? 50)));
+  const withText = rows.filter(r => r.summary?.trim());
+  if (withText.length === 0) return 0;
+  const topicRows = await db
+    .select({ candidateId: viralVideoTopics.candidateId, slug: viralVideoTopics.topicSlug })
+    .from(viralVideoTopics)
+    .where(inArray(viralVideoTopics.candidateId, withText.map(r => r.candidateId)));
+  const topicsBy = new Map<number, string[]>();
+  for (const t of topicRows) topicsBy.set(t.candidateId, [...(topicsBy.get(t.candidateId) ?? []), t.slug]);
+  const vectors = await embedTexts(
+    withText.map(r => `${r.summary} Topics: ${(topicsBy.get(r.candidateId) ?? []).join(", ")}`)
+  );
+  if (!vectors) return 0;
+  for (let i = 0; i < withText.length; i++) {
+    await db
+      .update(viralVideoInsights)
+      .set({ embedding: vectors[i]!, embeddingModel: EMBEDDING_MODEL })
+      .where(eq(viralVideoInsights.candidateId, withText[i]!.candidateId));
+  }
+  console.info("[viralLibrary] embeddings_backfilled", { videos: withText.length });
+  return withText.length;
 }

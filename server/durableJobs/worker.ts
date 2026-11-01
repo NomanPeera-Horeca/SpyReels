@@ -113,6 +113,10 @@ function startViralLibraryUnderstanding(): void {
       await step("ingest", () => library.ingestResearchJobs({ perSource: 5 }));
       await step("profile topics", () => topics.matchProfileTopics({ maxProfiles: 10 }));
       await step("understanding", () => understanding.processLibraryVideos({ maxVideos: 8 }));
+      await step("embeddings", async () => {
+        await understanding.embedMissingVideos({ max: 50 });
+        await topics.embedMissingProfiles({ max: 50 });
+      });
     })()
       .catch(error => console.error("[viralLibrary] tick failed", error))
       .finally(() => {
@@ -124,6 +128,39 @@ function startViralLibraryUnderstanding(): void {
 }
 
 startViralLibraryUnderstanding();
+
+/**
+ * One-time topic fill: first search of every topic pool on TikTok/YouTube,
+ * 3 pools every 5 minutes, own loop so long searches never delay the library
+ * steps above. Total cap VIRAL_TOPIC_FILL_BUDGET_USD (default $20); stops by
+ * itself when every topic was searched. Off with VIRAL_TOPIC_FILL=false.
+ */
+function startViralTopicFill(): void {
+  if (process.env.VIRAL_TOPIC_FILL === "false") return;
+  const everyMs = Math.max(60_000, Number(process.env.VIRAL_TOPIC_FILL_MS ?? 5 * 60_000));
+  let running = false;
+  let finished = false;
+  const tick = () => {
+    if (running || draining || finished) return;
+    running = true;
+    void import("../viralPosts/topicFill")
+      .then(m => m.runTopicFill({ maxPools: 3 }))
+      .then(r => {
+        if (r.skipped === "done" || r.skipped === "budget_reached") {
+          finished = true;
+          console.info(`[viralLibrary] fill stopped: ${r.skipped}`, r);
+        }
+      })
+      .catch(error => console.error("[viralLibrary] fill tick failed", error))
+      .finally(() => {
+        running = false;
+      });
+  };
+  setInterval(tick, everyMs);
+  setTimeout(tick, 90_000);
+}
+
+startViralTopicFill();
 
 process.on("SIGTERM", () => startDrain("SIGTERM"));
 process.on("SIGINT", () => startDrain("SIGINT"));
