@@ -364,4 +364,8 @@ jobs:
           first_line="$(printf '%s' "$COMMIT_SUBJECT" | head -n1)"
           handles="$(printf '%s' "$first_line" | grep -oE 'handles=[A-Za-z0-9_.,;:@-]+' | head -n1 | cut -d= -f2- || true)"
           export PROBE_HANDLES="$handles"
-          pnpm exec tsx scripts/profile-lookup-probe.ts
+          if printf '%s' "$first_line" | grep -q '\[yt-search-shape\]'; then
+            pnpm exec tsx scripts/youtube-search-shape-probe.mts
+          else
+            pnpm exec tsx scripts/profile-lookup-probe.ts
+          fi
