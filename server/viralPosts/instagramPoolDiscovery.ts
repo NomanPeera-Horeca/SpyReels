@@ -519,7 +519,10 @@ function emptySemanticAdmission(
 }
 
 /**
- * Final restaurant-family gate after strict scoreReel() + adapt.
+ * Final topic gate after strict scoreReel() + adapt, for every pool.
+ * Restaurant pillars keep the six-pillar family (videos may move between
+ * them). Any other pool is judged against its own topic only (the old keyword
+ * check only knew restaurant words and rejected everything else).
  * Semantic classification uses Haiku only. It does not call ScrapeCreators.
  * Fail closed: if the judge is unavailable, do not fall back to keywords.
  */
@@ -529,10 +532,11 @@ export async function applyInstagramPoolAdmission(args: {
   pillar: string;
   candidates: AdaptedCandidate[];
 }): Promise<InstagramPoolAdmissionResult> {
-  if (RESTAURANT_PILLARS.has(args.pillar)) {
+  if (RESTAURANT_PILLARS.has(args.pillar) || args.candidates.length > 0) {
     try {
       const classified = await classifySemanticPoolRelevance({
         niche: args.niche,
+        activePillars: RESTAURANT_PILLARS.has(args.pillar) ? undefined : [args.pillar.trim()],
         candidates: args.candidates,
       });
       const routed = routeSemanticPoolCandidates({
