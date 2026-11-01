@@ -57,6 +57,15 @@ export type EvalCase = {
   profileStatus?: SocialProfileStatus;
   /** Real-customer replays: the niche the customer picked ("I don't post yet"). */
   typedNiche?: NichePayload;
+  /** Real-customer replays: what the AI first showed this customer in onboarding. */
+  productionShown?: ProductionShown;
+};
+
+export type ProductionShown = {
+  niche: string | null;
+  goal: string | null;
+  audiences: Array<{ who: string; outcome: string }>;
+  pillars: Array<{ title: string; description: string }>;
 };
 
 const many = (base: string[], n: number) =>

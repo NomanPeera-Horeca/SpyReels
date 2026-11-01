@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   baseline:
-    if: "${{ startsWith(github.event.head_commit.message, 'eval: [authorized-baseline-eval]') && !contains(github.event.head_commit.message, '[rejudge]') }}"
+    if: "${{ startsWith(github.event.head_commit.message, 'eval: [authorized-baseline-eval]') && !contains(github.event.head_commit.message, '[rejudge]') && !contains(github.event.head_commit.message, '[review-pack]') }}"
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -181,4 +181,56 @@ jobs:
           name: spyreels-personalization-rejudge
           path: docs/evals/personalization-intelligence/*-judge-posts.json
           if-no-files-found: warn
+          retention-days: 14
+
+  # Founder blind review: what the AI showed real customers in onboarding
+  # (production) vs what today's code shows the same 30 customers.
+  # Commit subject: "eval: [authorized-baseline-eval] [review-pack] ..."
+  review-pack:
+    if: "${{ startsWith(github.event.head_commit.message, 'eval: [authorized-baseline-eval] [review-pack]') }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      EVAL_DB_READONLY_URL: ${{ secrets.EVAL_DB_READONLY_URL }}
+      REVIEW_SEED: founder-review-2026-11-01
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Real customers - export (read-only login)
+        run: pnpm exec tsx scripts/personalization-real-customers-export.ts --out="$RUNNER_TEMP/real-cases.json"
+
+      - name: Pick 30 customers who were shown AI suggestions
+        id: pick
+        shell: bash
+        run: |
+          pnpm exec tsx scripts/personalization-review-pack.ts --select --n=30 --seed="$REVIEW_SEED" --fixtures="$RUNNER_TEMP/real-cases.json" | tee "$RUNNER_TEMP/pick.txt"
+          grep '^ids=' "$RUNNER_TEMP/pick.txt" >> "$GITHUB_OUTPUT"
+
+      - name: Generate today's version for those customers (cap $1.50, images off as in production)
+        run: pnpm exec tsx scripts/personalization-intelligence-eval.ts --confirm-spend --cap=1.50 --out=review-after --cases="${{ steps.pick.outputs.ids }}" --fixtures="$RUNNER_TEMP/real-cases.json"
+
+      - name: Build the blind review page
+        run: pnpm exec tsx scripts/personalization-review-pack.ts --build --after=review-after --seed="$REVIEW_SEED" --out="$RUNNER_TEMP/review/strategy-review.html" --fixtures="$RUNNER_TEMP/real-cases.json"
+
+      - name: Delete the real-customer cases file
+        if: always()
+        run: rm -f "$RUNNER_TEMP/real-cases.json"
+
+      - name: Upload the review page (private to repository members)
+        uses: actions/upload-artifact@v4
+        with:
+          name: strategy-review
+          path: ${{ runner.temp }}/review/strategy-review.html
+          if-no-files-found: error
           retention-days: 14

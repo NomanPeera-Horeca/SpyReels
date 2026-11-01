@@ -21,7 +21,7 @@ import type {
   NichePayload,
   SocialPlatform,
 } from "../shared/personalization/model";
-import type { EvalCase } from "../server/personalization/intelligence/eval/fixtures";
+import type { EvalCase, ProductionShown } from "../server/personalization/intelligence/eval/fixtures";
 import { detectCommercialSignals } from "../server/personalization/intelligence/evidence";
 
 const WRITE_PRIVILEGE =
@@ -41,7 +41,10 @@ type ProfileRow = {
 };
 
 type ItemRow = {
+  id: string;
   socialProfileId: string;
+  supersedesItemId: string | null;
+  createdAt: Date | string;
   kind: string;
   source: "ai_suggested" | "user_entered" | "user_edited";
   status: "suggested" | "confirmed" | "dismissed" | "superseded";
@@ -93,6 +96,50 @@ function productionOutcome(items: ItemRow[], progress: ProgressRow | undefined) 
     pillarsAiUnconfirmed: count("pillar", i => i.source === "ai_suggested" && i.status === "suggested"),
     pillarsTyped: count("pillar", i => i.source !== "ai_suggested" && live(i)),
   };
+}
+
+/**
+ * What the AI first showed this customer during onboarding: per kind, the
+ * earliest batch of ai_suggested rows (any status, so later edits, deletes
+ * and regenerations do not hide the original wording).
+ */
+export function productionShown(items: ItemRow[]): ProductionShown {
+  const firstBatch = (kind: string) => {
+    const rows = items
+      .filter(i => i.kind === kind && i.source === "ai_suggested")
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    if (!rows.length) return [];
+    const start = new Date(rows[0]!.createdAt).getTime();
+    return rows.filter(r => new Date(r.createdAt).getTime() - start <= 120_000);
+  };
+  const text = (row: ItemRow | undefined, key: string) => {
+    const v = (row?.payload as Record<string, unknown> | null)?.[key];
+    return typeof v === "string" ? v : null;
+  };
+  return {
+    niche: text(firstBatch("niche")[0], "label"),
+    goal: text(firstBatch("goal")[0], "text"),
+    audiences: firstBatch("audience").map(r => ({ who: text(r, "who") ?? "", outcome: text(r, "outcome") ?? "" })),
+    pillars: firstBatch("pillar").map(r => ({ title: text(r, "title") ?? "", description: text(r, "description") ?? "" })),
+  };
+}
+
+/** Fate of every AI suggestion ever shown: kept, edited, deleted, or left untouched. Counts only. */
+export function suggestionFates(items: ItemRow[]) {
+  const editedIds = new Set(
+    items.filter(i => i.source === "user_edited" && i.supersedesItemId).map(i => i.supersedesItemId!)
+  );
+  const fates: Record<string, { shown: number; kept: number; edited: number; deleted: number; untouched: number; regenerated: number }> = {};
+  for (const i of items.filter(i => i.source === "ai_suggested" && ["goal", "audience", "pillar"].includes(i.kind))) {
+    const f = (fates[i.kind] ??= { shown: 0, kept: 0, edited: 0, deleted: 0, untouched: 0, regenerated: 0 });
+    f.shown += 1;
+    if (editedIds.has(i.id)) f.edited += 1;
+    else if (i.status === "confirmed") f.kept += 1;
+    else if (i.status === "dismissed") f.deleted += 1;
+    else if (i.status === "suggested") f.untouched += 1;
+    else f.regenerated += 1;
+  }
+  return fates;
 }
 
 async function main() {
@@ -151,7 +198,7 @@ async function main() {
     }
 
     const [itemRows] = await conn.query(
-      `SELECT socialProfileId, kind, source, status, payload
+      `SELECT id, socialProfileId, supersedesItemId, createdAt, kind, source, status, payload
          FROM personalization_items
         WHERE socialProfileId IN (?)`,
       [ids]
@@ -175,6 +222,13 @@ async function main() {
     await conn.query("ROLLBACK");
 
     const cases: EvalCase[] = [];
+    const fateTotals: Record<string, Record<string, number>> = {};
+    const addFates = (items: ItemRow[]) => {
+      for (const [kind, f] of Object.entries(suggestionFates(items))) {
+        const t = (fateTotals[kind] ??= {});
+        for (const [k, v] of Object.entries(f)) t[k] = (t[k] ?? 0) + v;
+      }
+    };
     const outcomes: Array<{ id: string } & ReturnType<typeof productionOutcome>> = [];
     let linkedN = 0;
     let notPostingN = 0;
@@ -213,7 +267,9 @@ async function main() {
           captions: (snapshot?.posts ?? []).map(post => post.caption ?? "").filter(Boolean),
           snapshot,
           profileStatus: "confirmed",
+          productionShown: productionShown(items),
         });
+        addFates(items);
         outcomes.push({ id, ...productionOutcome(items, progressByProfile.get(p.id)) });
         continue;
       }
@@ -230,7 +286,9 @@ async function main() {
           snapshot: null,
           profileStatus: "not_posting_yet",
           typedNiche: niche,
+          productionShown: productionShown(items),
         });
+        addFates(items);
         outcomes.push({ id, ...productionOutcome(items, progressByProfile.get(p.id)) });
         continue;
       }
@@ -241,6 +299,7 @@ async function main() {
     console.log(
       JSON.stringify({ linked: linkedN, notPostingYet: notPostingN, skippedWithoutUsableData: skipped })
     );
+    console.log(JSON.stringify({ suggestionFates: fateTotals }));
     console.log("Production outcomes (anonymized):");
     for (const row of outcomes) console.log(JSON.stringify(row));
   } finally {
