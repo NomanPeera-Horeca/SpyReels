@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AnalysisSourceSnapshot } from "@shared/personalization/model";
-import { parseAudienceOutput } from "./audienceRecommendations";
+import { existingOwnersFirst, parseAudienceOutput } from "./audienceRecommendations";
 import { buildCreatorEvidence } from "./evidence";
 import { buildPillarPrompt, parsePillarOutput } from "./pillarRecommendations";
 import {
@@ -9,6 +9,7 @@ import {
   keepCited,
   loadPostImages,
   noPostImages,
+  normalizeSource,
   postImagesEnabled,
   postIndex,
   type PostContext,
@@ -149,7 +150,7 @@ describe("soft proof", () => {
 
   it("lists what a suggestion may cite", () => {
     const allowed = citableSources(founder.sources, ctx, "Show how a supplement brand is built.");
-    expect([...allowed].sort()).toEqual(["P1", "P2", "bio", "goal"]);
+    expect([...allowed].sort()).toEqual(["P1", "P2", "bio", "captions", "goal"]);
   });
 
   it("drops uncited items only when enough cited ones remain", () => {
@@ -164,6 +165,12 @@ describe("soft proof", () => {
     expect(keepCited(items, allowed, 3)).toEqual({ kept: ["a", "b", "c", "d"], dropped: 0 });
   });
 
+  it("accepts the loose ways a model names a real source", () => {
+    expect(["p1", "P 2", "post 3", "#4", "Caption", "posts", "username", "Link in bio", "confirmed goal"].map(normalizeSource))
+      .toEqual(["P1", "P2", "P3", "P4", "captions", "captions", "bio", "website", "goal"]);
+    expect(citableSources(founder.sources, ctx, "", { bioLink: true }).has("website")).toBe(true);
+  });
+
   it("drops an invented pillar that cites nothing and keeps the proven ones", () => {
     const allowed = citableSources(founder.sources, ctx, "Show how a supplement brand is built.");
     const r = parsePillarOutput(
@@ -172,6 +179,7 @@ describe("soft proof", () => {
           { title: "Warehouse Tours", serves: "Shows founders how a supplement brand really runs.", subtopics: [], sources: ["P1"] },
           { title: "Brand Building Lessons", serves: "Teaches founders what built the brand.", subtopics: [], sources: ["bio"] },
           { title: "Founder Money Moves", serves: "Shows what building a brand made possible.", subtopics: [], sources: ["P2"] },
+          { title: "Supplement Launch Diaries", serves: "Shows founders the brand build step by step.", subtopics: [], sources: ["post 1"] },
           { title: "Developer Tools", serves: "Explains developer workflows for founders.", subtopics: [], sources: [] },
         ],
         confidence: "high",
@@ -184,8 +192,30 @@ describe("soft proof", () => {
     );
     expect(r).toMatchObject({ ok: true, value: { uncitedDropped: 1 } });
     if (!r.ok) return;
-    expect(r.value.pillars.map(p => p.title)).toEqual(["Warehouse Tours", "Brand Building Lessons", "Founder Money Moves"]);
-    expect(r.value.subtopics).toHaveLength(3);
+    expect(r.value.pillars.map(p => p.title)).toEqual(["Warehouse Tours", "Brand Building Lessons", "Founder Money Moves", "Supplement Launch Diaries"]);
+    expect(r.value.subtopics).toHaveLength(4);
+  });
+
+  it("keeps four pillars when the model returned four, even if one cites nothing", () => {
+    const allowed = citableSources(founder.sources, ctx, "Show how a supplement brand is built.");
+    const r = parsePillarOutput(
+      {
+        pillars: [
+          { title: "Warehouse Tours", serves: "Shows founders how a supplement brand really runs.", subtopics: [], sources: ["P1"] },
+          { title: "Brand Building Lessons", serves: "Teaches founders what built the brand.", subtopics: [], sources: ["bio"] },
+          { title: "Founder Money Moves", serves: "Shows what building a brand made possible.", subtopics: [], sources: ["P2"] },
+          { title: "Supplement Formulation Basics", serves: "Explains how founders pick a formula.", subtopics: [], sources: [] },
+        ],
+        confidence: "high",
+      },
+      founder,
+      "Show how a supplement brand is built.",
+      [],
+      [],
+      allowed
+    );
+    expect(r).toMatchObject({ ok: true, value: { uncitedDropped: 0 } });
+    if (r.ok) expect(r.value.pillars).toHaveLength(4);
   });
 
   it("keeps every audience when none of them cite anything, so the step never ends empty", () => {
@@ -200,6 +230,67 @@ describe("soft proof", () => {
       citableSources(founder.sources, ctx, "x")
     );
     expect(r).toMatchObject({ ok: true, value: { uncitedDropped: 0 } });
+  });
+
+  it("never cuts a restaurant owner down to one aspiring audience", () => {
+    const owner = buildCreatorEvidence({
+      platform: "instagram",
+      displayName: "Noman Peera",
+      bio: "CEO @ HorecaStore | 12+ Years Exp. Daily No-BS Strategies to grow your restaurant. Shop Our Catalog & Supplies",
+      snapshot: null,
+      items: [],
+    });
+    const goal = "Teach restaurant owners no-BS strategies to grow a profitable, well-run business.";
+    const posts: PostContext = {
+      posts: [
+        { ref: "P1", caption: "Why opening a restaurant is brutal", views: 1200, thumbnailUrl: null },
+        { ref: "P2", caption: "Why labor costs kill restaurants", views: 2400, thumbnailUrl: null },
+      ],
+      images: [],
+    };
+    const r = parseAudienceOutput(
+      {
+        audiences: [
+          { who: "Aspiring restaurant entrepreneurs", outcome: "open a restaurant that lasts", why: "Opening posts.", sources: ["P1"] },
+          { who: "Independent restaurant owners", outcome: "grow profit and cut labor costs", why: "The bio speaks to them.", sources: ["Bio"] },
+        ],
+        confidence: "high",
+      },
+      owner,
+      goal,
+      [],
+      citableSources(owner.sources, posts, goal)
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.uncitedDropped).toBe(0);
+    expect(r.value.audiences.map(a => a.who)).toEqual(["Independent restaurant owners", "Aspiring restaurant entrepreneurs"]);
+  });
+
+  it("keeps two audiences when one of two cites nothing", () => {
+    const allowed = citableSources(founder.sources, ctx, "Show how a supplement brand is built.");
+    const r = parseAudienceOutput(
+      {
+        audiences: [
+          { who: "Aspiring supplement brand founders", outcome: "launch a product brand", why: "They follow the build.", sources: ["P1"] },
+          { who: "Early-stage ecommerce founders", outcome: "learn how a brand scales", why: "They follow the numbers.", sources: [] },
+        ],
+        confidence: "medium",
+      },
+      founder,
+      "Show how a supplement brand is built.",
+      [],
+      allowed
+    );
+    expect(r).toMatchObject({ ok: true, value: { uncitedDropped: 0 } });
+    if (r.ok) expect(r.value.audiences).toHaveLength(2);
+  });
+
+  it("existingOwnersFirst only reorders when the bio speaks to existing owners", () => {
+    const list = [{ who: "Aspiring cafe owners" }, { who: "Cafe owners" }];
+    expect(existingOwnersFirst(list, "tips to grow your cafe for cafe owners").map(a => a.who)).toEqual(["Cafe owners", "Aspiring cafe owners"]);
+    expect(existingOwnersFirst(list, "helping you open a cafe").map(a => a.who)).toEqual(["Aspiring cafe owners", "Cafe owners"]);
+    expect(existingOwnersFirst([{ who: "Aspiring cafe owners" }], "grow your cafe")).toHaveLength(1);
   });
 
   it("shows the posts and the source rule in the pillar prompt", () => {

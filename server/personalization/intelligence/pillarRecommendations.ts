@@ -56,6 +56,8 @@ export const PILLAR_PROMPT_VERSION = "pillars-v3";
 export type PillarNicheExample = { hook: string; format: string | null };
 export const MIN_PILLARS = 3;
 export const MAX_PILLARS = 5;
+/** Soft proof never leaves fewer pillars than this when the model returned more. */
+export const MIN_PILLARS_AFTER_PROOF = 4;
 
 export type PillarResult = {
   status: "suggested";
@@ -261,7 +263,7 @@ export function parsePillarOutput(
       reason: droppedFor ?? "no usable pillars in the model output",
     };
   const { kept, dropped } = citable
-    ? keepCited(out, citable, needed)
+    ? keepCited(out, citable, Math.max(needed, MIN_PILLARS_AFTER_PROOF - keep.length))
     : { kept: out.map(entry => entry.item), dropped: 0 };
   const capped = kept.slice(0, MAX_PILLARS);
   return {
@@ -327,7 +329,9 @@ export async function recommendPillars(input: {
     input.nicheExamples ?? [],
     posts
   );
-  const citable = citableSources(input.evidence.sources, posts, input.confirmedGoal);
+  const citable = citableSources(input.evidence.sources, posts, input.confirmedGoal, {
+    bioLink: Boolean(input.evidence.websiteUrlOnly),
+  });
   const { value, usage, attempts } = await callStructured({
     operation: "personalization_pillar_recommendations",
     system: prompt.system,
