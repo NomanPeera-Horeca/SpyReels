@@ -14,16 +14,17 @@ import {
 import { ensureProfilePicOnR2 } from "../../profilePicR2";
 import { fetchTikTokProfile } from "../../tiktok";
 import { fetchYouTubeChannel } from "../../youtube";
-import type { ProfileLookupDeps } from "./profileLookup";
+import type { ProfileLookupDeps, ProfileLookupFailure } from "./profileLookup";
 
 export function classifyLookupError(
   err: unknown
-): "not_found" | "private" | "error" | "rate_limited" | "timeout" {
+): ProfileLookupFailure {
   if (err instanceof InstagramHandleNotFoundError) return "not_found";
   if (err instanceof InstagramPrivateAccountError) return "private";
   if (err instanceof InstagramProviderError) {
     const detail = `${err.detail} ${err.message}`;
     if (err.httpStatus === 429 || /rate.?limit|too many requests/i.test(detail)) return "rate_limited";
+    if (err.httpStatus === 403) return "unavailable";
     if (
       err.httpStatus === 408 ||
       err.httpStatus === 504 ||
