@@ -29,6 +29,7 @@ import {
 import {
   AttributionStep,
   GrowthNicheStep,
+  StarterQuestionsStep,
   PlatformStep,
   ProfileStep,
   UseCaseStep,
@@ -49,6 +50,7 @@ import type {
   GoalPayload,
   PillarPayload,
 } from "@shared/personalization/model";
+import type { ContentPurpose } from "@shared/personalization/starterQuestions";
 
 const FAKE: PublicProfilePreview = {
   platform: "instagram",
@@ -260,6 +262,8 @@ export default function DevOnboardingV2Preview() {
       return <AudienceStep common={common} audiences={empty ? [] : FAKE_AUDIENCES} onSave={noopSave} onRemove={noop} />;
     case "pillars":
       return <PillarsStep common={common} pillars={empty ? [] : FAKE_PILLARS} subtopics={empty ? [] : FAKE_SUBTOPICS} onSave={noopSave} onRemove={noop} onRemoveSubtopic={noop} topics={{}} onRequestTopics={noop} topicStoreReady={true} />;
+    case "starter":
+      return <StarterPreview />;
     case "niche":
       return (
         <GrowthNicheStep
@@ -290,3 +294,26 @@ export default function DevOnboardingV2Preview() {
       );
   }
 }
+
+/** ?screen=starter: the starter questions with live local state. */
+function StarterPreview() {
+  const [topic, setTopic] = useState("");
+  const [audience, setAudience] = useState("");
+  const [purpose, setPurpose] = useState<ContentPurpose | null>(null);
+  return (
+    <StarterQuestionsStep
+      topic={topic}
+      audience={audience}
+      purpose={purpose}
+      busy={false}
+      preview={<ViralStackPreview />}
+      onTopic={setTopic}
+      onAudience={setAudience}
+      onPurpose={setPurpose}
+      onBack={() => undefined}
+      onSkip={() => undefined}
+      onContinue={() => undefined}
+    />
+  );
+}
+

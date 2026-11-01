@@ -73,6 +73,10 @@ import {
   type SubtopicStoreCheck,
 } from "../subtopics";
 import { loadTopicStates, type PillarTopicState } from "../subtopicJobs";
+import {
+  composeStarterDescription,
+  type StarterAnswers,
+} from "@shared/personalization/starterQuestions";
 
 export type OnboardingCtx = { userId: number; workspaceId: string };
 
@@ -759,6 +763,35 @@ export async function addItem<K extends PersonalizationItemKind>(
     userItem(kind, payload, progress.personalizationVersion) as Omit<ItemRecord, "id">,
   ]);
   return { itemId: id };
+}
+
+/**
+ * Starter questions for creators the AI cannot read. The answers are saved as
+ * the creator's own brand description (replacing an earlier one) and, when an
+ * audience was given, as a confirmed audience. Both are user_entered, so the
+ * Goal, Audience and Pillar steps treat them as trusted inputs.
+ */
+export async function saveStarterAnswers(
+  db: Db,
+  ctx: OnboardingCtx,
+  answers: StarterAnswers
+): Promise<{ ok: true; descriptionItemId: string; audienceItemId: string | null }> {
+  const text = composeStarterDescription(answers);
+  if (!text) throw new TRPCError({ code: "BAD_REQUEST", message: "Answer at least one question." });
+  const profile = await requireActiveProfile(db, ctx);
+  const items = liveItems(await loadItems(db, profile.id));
+  const existing = items.find(i => i.kind === "brand_description");
+  const { itemId: descriptionItemId } = existing
+    ? await editItem(db, ctx, existing.id, { text })
+    : await addItem(db, ctx, "brand_description", { text });
+  const who = (answers.audience ?? "").replace(/\s+/g, " ").trim().slice(0, 120);
+  const norm = (v: string) => v.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const known = items.some(
+    i => i.kind === "audience" && norm((i.payload as ItemPayloadByKind["audience"]).who) === norm(who)
+  );
+  const audienceItemId =
+    who && !known ? (await addItem(db, ctx, "audience", { who, outcome: "" })).itemId : null;
+  return { ok: true, descriptionItemId, audienceItemId };
 }
 
 /**

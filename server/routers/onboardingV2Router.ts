@@ -54,10 +54,16 @@ import {
   saveAttribution,
   saveUseCase,
   startNotPostingYet,
+  saveStarterAnswers,
   type OnboardingCtx,
 } from "../personalization/onboarding/onboardingService";
 import { lookupPublicProfile, recallCachedPublicProfile } from "../personalization/onboarding/profileLookup";
 import { productionLookupDeps } from "../personalization/onboarding/profileLookupDeps";
+import {
+  CONTENT_PURPOSES,
+  STARTER_AUDIENCE_MAX,
+  STARTER_TOPIC_MAX,
+} from "@shared/personalization/starterQuestions";
 
 const v2Procedure = protectedProcedure.use(async ({ ctx, next }) => {
   await assertOnboardingV2Access(ctx.user);
@@ -266,6 +272,19 @@ export const onboardingV2Router = router({
       if (!niche) throw new TRPCError({ code: "BAD_REQUEST", message: "Unknown niche" });
       return startNotPostingYet(await requireDb(), octx(ctx), { slug: niche.slug, label: niche.label });
     }),
+
+  /** Starter questions (empty profile / not posting yet). At least one answer is required. */
+  saveStarterAnswers: v2Procedure
+    .input(
+      z
+        .object({
+          topic: z.string().trim().max(STARTER_TOPIC_MAX).optional(),
+          audience: z.string().trim().max(STARTER_AUDIENCE_MAX).optional(),
+          purpose: z.enum(CONTENT_PURPOSES).optional(),
+        })
+        .refine(a => Boolean(a.topic || a.audience || a.purpose), { message: "Answer at least one question." })
+    )
+    .mutation(async ({ ctx, input }) => saveStarterAnswers(await requireDb(), octx(ctx), input)),
 
   saveUseCase: v2Procedure
     .input(z.object({ value: z.enum(PRIMARY_USE_CASES) }))
