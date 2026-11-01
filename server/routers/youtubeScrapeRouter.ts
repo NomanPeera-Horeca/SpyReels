@@ -12,6 +12,7 @@ import {
   loadFeaturedDemoPublicPayload,
 } from "../featuredDemo/publicDemo";
 import { not, eq, desc, sql, and, inArray } from "drizzle-orm";
+import { seedFromRecentResearch } from "../research/recentResearchSeed";
 
 
 
@@ -108,17 +109,28 @@ export const youtubeScrapeRouter = router({
 
         await incrementUsage(ctx.user.id, "scrapeCount");
 
+        // Anyone researched this creator recently: show those videos now. The
+        // live run then replaces them in one step (keeping them if it fails).
+        const seeded =
+          (await seedFromRecentResearch({
+            platform: "youtube",
+            handle,
+            jobId,
+            workspaceId: ctx.workspaceId,
+            timeframeDays,
+          })) > 0;
+
         runYouTubeScrapeJob(
           jobId,
           ctx.user.id,
           ctx.workspaceId,
           handle,
-          { timeframeDays }
+          { timeframeDays, replaceExisting: seeded }
         ).catch((error) => {
           console.error(`YouTube scrape job ${jobId} failed:`, error);
         });
 
-        return { jobId };
+        return seeded ? { jobId, seededFromRecent: true as const } : { jobId };
       }),
 
     progress: protectedProcedure
