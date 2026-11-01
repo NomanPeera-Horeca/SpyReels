@@ -36,7 +36,20 @@ const ACCOUNTS: Record<SocialPlatform, string[]> = {
 async function main() {
   if (!process.env.SCRAPECREATORS_API_KEY) throw new Error("SCRAPECREATORS_API_KEY is not set.");
   const onlyFlag = process.argv.find(a => a.startsWith("--only="))?.slice(7);
-  const platforms = (Object.keys(ACCOUNTS) as SocialPlatform[]).filter(p => !onlyFlag || p === onlyFlag);
+  // PROBE_HANDLES="instagram:a,b;tiktok:c" checks just those accounts instead of the fixed list.
+  const custom = (process.env.PROBE_HANDLES ?? "").trim();
+  if (custom) {
+    for (const p of Object.keys(ACCOUNTS) as SocialPlatform[]) ACCOUNTS[p] = [];
+    for (const part of custom.split(";")) {
+      const [p, list] = part.split(":");
+      if (p && list && p.trim() in ACCOUNTS) {
+        ACCOUNTS[p.trim() as SocialPlatform] = list.split(",").map(h => h.trim()).filter(Boolean);
+      }
+    }
+  }
+  const platforms = (Object.keys(ACCOUNTS) as SocialPlatform[]).filter(
+    p => (!onlyFlag || p === onlyFlag) && ACCOUNTS[p].length > 0
+  );
   // No mirroring: the probe must not write to storage.
   const deps = { ...productionLookupDeps(), mirrorAvatar: async (_h: string, url: string) => url, mirrorThumbnails: async <T,>(items: T[]) => items };
   const summary: Record<string, { ok: number; total: number; reasons: Record<string, number>; ms: number[] }> = {};

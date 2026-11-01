@@ -356,4 +356,12 @@ jobs:
           fi
 
       - name: Look up real accounts on all three platforms
-        run: pnpm exec tsx scripts/profile-lookup-probe.ts
+        env:
+          COMMIT_SUBJECT: ${{ github.event.head_commit.message }}
+        shell: bash
+        run: |
+          # Optional "handles=instagram:a,b;tiktok:c" in the commit subject checks only those.
+          first_line="$(printf '%s' "$COMMIT_SUBJECT" | head -n1)"
+          handles="$(printf '%s' "$first_line" | grep -oE 'handles=[A-Za-z0-9_.,;:@-]+' | head -n1 | cut -d= -f2- || true)"
+          export PROBE_HANDLES="$handles"
+          pnpm exec tsx scripts/profile-lookup-probe.ts
