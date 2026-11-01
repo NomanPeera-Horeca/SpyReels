@@ -44,6 +44,7 @@ import {
 import {
   AttributionStep,
   GrowthNicheStep,
+  StarterQuestionsStep,
   PlatformStep,
   ProfileStep,
   UseCaseStep,
@@ -62,6 +63,7 @@ import {
 } from "./profileLookupSession";
 import { WhatWorksStep } from "./step3c";
 import { screenFromResume } from "./resumeScreen";
+import { needsStarterQuestions, type ContentPurpose } from "@shared/personalization/starterQuestions";
 
 /** Same breakpoint as OnboardingShell: below it there is no right panel. */
 const NO_PANEL_QUERY = "(max-width: 900px)";
@@ -86,6 +88,7 @@ type Screen =
   | "use_case"
   | "attribution"
   | "what_works"
+  | "starter"
   | PersonalizationStep;
 
 const STEP_ORDER: PersonalizationStep[] = ["goal", "audience", "pillars"];
@@ -161,6 +164,11 @@ export default function OnboardingV2Flow() {
   const [preview, setPreview] = useState<PublicProfilePreview | null>(null);
   const [typedHandle, setTypedHandle] = useState<string | null>(null);
   const [useCase, setUseCase] = useState<PrimaryUseCase | null>(null);
+  const [starterTopic, setStarterTopic] = useState("");
+  const [starterAudience, setStarterAudience] = useState("");
+  const [starterPurpose, setStarterPurpose] = useState<ContentPurpose | null>(null);
+  /** Set once the starter screen was shown, so Back from Goal returns to it. */
+  const starterShown = useRef(false);
   const [source, setSource] = useState<AttributionSource | null>(null);
   const [niche, setNiche] = useState<string | null>(null);
   const [requested, setRequested] = useState<Partial<Record<PersonalizationStep, string>>>({});
@@ -207,6 +215,7 @@ export default function OnboardingV2Flow() {
   const confirm = trpc.onboardingV2.confirmProfile.useMutation();
   const notPosting = trpc.onboardingV2.startNotPostingYet.useMutation();
   const saveUseCase = trpc.onboardingV2.saveUseCase.useMutation();
+  const saveStarter = trpc.onboardingV2.saveStarterAnswers.useMutation();
   const saveAttribution = trpc.onboardingV2.saveAttribution.useMutation();
   const requestRecs = trpc.onboardingV2.requestRecommendations.useMutation();
   const addItem = trpc.onboardingV2.addItem.useMutation();
@@ -336,6 +345,7 @@ export default function OnboardingV2Flow() {
     confirm.isPending ||
     notPosting.isPending ||
     saveUseCase.isPending ||
+    saveStarter.isPending ||
     saveAttribution.isPending ||
     addItem.isPending ||
     editItem.isPending ||
@@ -584,7 +594,22 @@ export default function OnboardingV2Flow() {
 
   // Mobile 3c appears only with real best-Reel data; desktop shows insights in the right panel.
   const showWhatWorks = noRightPanel && Boolean(state?.analysis?.bestPost);
-  const afterAttribution = () => setScreen(showWhatWorks ? "what_works" : "goal");
+  const needsStarter = needsStarterQuestions({
+    profileStatus: state?.profile?.status,
+    bio: state?.profile?.bio,
+    postCount: state?.analysis?.postsInWindow ?? state?.profile?.postCount,
+    hasCreatorDescription: Boolean(
+      state?.items.some(i => i.kind === "brand_description" && i.source !== "ai_suggested")
+    ),
+  });
+  const afterAttribution = () => {
+    if (needsStarter) {
+      starterShown.current = true;
+      setScreen("starter");
+      return;
+    }
+    setScreen(showWhatWorks ? "what_works" : "goal");
+  };
 
   const goStep4 = (from: PersonalizationStep, action: "confirm" | "skip") =>
     run(async () => {
@@ -699,7 +724,15 @@ export default function OnboardingV2Flow() {
     onBack: () => {
       track("back", { step });
       const i = STEP_ORDER.indexOf(step);
-      setScreen(i > 0 ? STEP_ORDER[i - 1] : showWhatWorks ? "what_works" : "attribution");
+      setScreen(
+        i > 0
+          ? STEP_ORDER[i - 1]
+          : starterShown.current
+            ? "starter"
+            : showWhatWorks
+              ? "what_works"
+              : "attribution"
+      );
     },
     onSkip: () => void goStep4(step, "skip"),
     onConfirm: () => void goStep4(step, "confirm"),
@@ -836,6 +869,41 @@ export default function OnboardingV2Flow() {
               await refresh();
               afterAttribution();
             }, "attribution")
+          }
+        />
+      );
+    case "starter":
+      return (
+        <StarterQuestionsStep
+          topic={starterTopic}
+          audience={starterAudience}
+          purpose={starterPurpose}
+          busy={mutating}
+          preview={analysisPanel}
+          onTopic={setStarterTopic}
+          onAudience={setStarterAudience}
+          onPurpose={setStarterPurpose}
+          onBack={() => setScreen("attribution")}
+          onSkip={() => {
+            track("step_skipped", { step: "starter" });
+            setScreen("goal");
+          }}
+          onContinue={() =>
+            void run(async () => {
+              await saveStarter.mutateAsync({
+                topic: starterTopic.trim() || undefined,
+                audience: starterAudience.trim() || undefined,
+                purpose: starterPurpose ?? undefined,
+              });
+              track("step_completed", {
+                step: "starter",
+                topic: Boolean(starterTopic.trim()),
+                audience: Boolean(starterAudience.trim()),
+                purpose: starterPurpose,
+              });
+              await refresh();
+              setScreen("goal");
+            }, "starter")
           }
         />
       );

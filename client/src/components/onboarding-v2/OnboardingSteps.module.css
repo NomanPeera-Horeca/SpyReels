@@ -182,3 +182,54 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* ---------- Starter questions ---------- */
+.starterBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-space-2);
+  margin-top: var(--sr-space-6);
+}
+
+.starterQuestion {
+  margin: 0;
+  color: var(--sr-color-text-primary);
+}
+
+.chipRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sr-space-2);
+}
+
+.chip {
+  box-sizing: border-box;
+  min-height: 32px;
+  padding: var(--sr-space-1) var(--sr-space-3);
+  border: var(--sr-shape-border-default-width) solid var(--sr-color-border-default);
+  border-radius: var(--sr-radius-full);
+  background: var(--sr-color-surface-default);
+  color: var(--sr-color-text-primary);
+  cursor: pointer;
+  font: inherit;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.chip:hover:not(.chipSelected):not(:disabled) {
+  background: var(--sr-color-surface-hover);
+}
+
+.chip:focus-visible {
+  outline: none;
+  box-shadow: var(--sr-elevation-focus-neutral-action);
+}
+
+.chipSelected {
+  background: var(--sr-color-brand-surface-selected);
+  border-color: var(--sr-color-brand-primary);
+}
+
+.chipHint {
+  margin: 0;
+  color: var(--sr-color-text-secondary);
+}

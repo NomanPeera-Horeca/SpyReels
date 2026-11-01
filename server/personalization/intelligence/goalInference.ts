@@ -16,6 +16,7 @@ import {
   untrustedEvidenceBlock,
   type CreatorEvidence,
   type EvidenceSource,
+  namesCheckApplies,
 } from "./evidence";
 import {
   EMPTY_POST_CONTEXT,
@@ -208,7 +209,7 @@ export function parseGoalOutput(
       ok: false,
       reason: `goal contains numbers not in the evidence (${nums.join(", ")})`,
     };
-  const names = capitalizationMarksNames(e.outputLanguage.code)
+  const names = namesCheckApplies(e, capitalizationMarksNames)
     ? unsupportedProperNouns(goal, e.corpus, [e.outputLanguage.label])
     : [];
   if (names.length)
