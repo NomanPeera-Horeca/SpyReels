@@ -62,6 +62,7 @@ import {
 import * as poolRepo from "./poolRepository";
 import { schedulePoolRefresh } from "./poolRefresh";
 import { classifyLibraryRowsInBackground } from "./library";
+import { libraryHomeForProfile, mergeHomeLists } from "./libraryHome";
 import * as repo from "./repository";
 import { scoreCandidate, TODAY_PICKS_SCORE_WEIGHTS } from "./scoring";
 import {
@@ -527,6 +528,43 @@ function scheduleDailyFeedRecovery(
     schedulePoolRefresh(pool.id, false);
   }
   return true;
+}
+
+/**
+ * Shared viral library videos for the user's active creator profile, matched
+ * to its topics (same tiers and labels as Home). Read only; [] when the user
+ * has no confirmed profile yet, the library is not ready, or on any error.
+ */
+export async function libraryPostsForUser(args: {
+  userId: number;
+  workspaceId?: string | null;
+  limit: number;
+}): Promise<ViralPost[]> {
+  if (args.limit <= 0) return [];
+  try {
+    const workspaceId =
+      args.workspaceId?.trim() || (await readPersonalWorkspaceId(args.userId)) || "";
+    const stored = workspaceId ? await loadStoredContentInventory(args.userId, workspaceId) : null;
+    if (!stored?.socialProfileId) return [];
+    const library = await libraryHomeForProfile({
+      userId: args.userId,
+      socialProfileId: stored.socialProfileId,
+      limit: args.limit,
+      creatorLimit: 0,
+    });
+    return library?.items ?? [];
+  } catch (err) {
+    console.warn("[viralLibrary] page_read_failed", {
+      userId: args.userId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return [];
+  }
+}
+
+/** Current list first, library after, no duplicates. Pure; exported for tests. */
+export function appendLibraryPosts(current: ViralPost[], library: ViralPost[], limit: number): ViralPost[] {
+  return mergeHomeLists(current, library, limit, (p) => `${p.platform}:${p.sourceId}`);
 }
 
 export async function getOrCreateDailyFeed(args: {
