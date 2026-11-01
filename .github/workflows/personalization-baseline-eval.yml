@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   baseline:
-    if: "${{ startsWith(github.event.head_commit.message, 'eval: [authorized-baseline-eval]') && !contains(github.event.head_commit.message, '[rejudge]') && !contains(github.event.head_commit.message, '[review-pack]') }}"
+    if: "${{ startsWith(github.event.head_commit.message, 'eval: [authorized-baseline-eval]') && !contains(github.event.head_commit.message, '[rejudge]') && !contains(github.event.head_commit.message, '[review-pack]') && !contains(github.event.head_commit.message, '[spot-check]') }}"
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -234,3 +234,44 @@ jobs:
           path: ${{ runner.temp }}/review/strategy-review.html
           if-no-files-found: error
           retention-days: 14
+
+  # Generation only, for the customer ids listed in the commit subject:
+  # "eval: [authorized-baseline-eval] [spot-check] cases=R001,R012 ..."
+  spot-check:
+    if: "${{ startsWith(github.event.head_commit.message, 'eval: [authorized-baseline-eval] [spot-check]') }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      EVAL_DB_READONLY_URL: ${{ secrets.EVAL_DB_READONLY_URL }}
+      COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Real customers - export (read-only login)
+        run: pnpm exec tsx scripts/personalization-real-customers-export.ts --out="$RUNNER_TEMP/real-cases.json" > /dev/null
+
+      - name: Generate for the listed customers (cap $0.80)
+        shell: bash
+        run: |
+          ids=$(printf '%s' "$COMMIT_MESSAGE" | head -1 | grep -o 'cases=[A-Z0-9,]*' | cut -d= -f2)
+          test -n "$ids"
+          pnpm exec tsx scripts/personalization-intelligence-eval.ts --confirm-spend --cap=0.80 --out=spot-check --cases="$ids" --fixtures="$RUNNER_TEMP/real-cases.json"
+
+      - name: Results (strategy outputs only, no profile text)
+        if: always()
+        run: pnpm exec tsx scripts/personalization-eval-digest.ts --in=spot-check || true
+
+      - name: Delete the real-customer cases file
+        if: always()
+        run: rm -f "$RUNNER_TEMP/real-cases.json"
