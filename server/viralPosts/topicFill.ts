@@ -1,6 +1,5 @@
 /**
- * One-time topic fill: search every topic on TikTok and YouTube (Instagram
- * later) with the existing pool pipeline, so the shared library has viral
+ * One-time topic fill: search every topic on TikTok, YouTube and Instagram with the existing pool pipeline, so the shared library has viral
  * videos in every niche before users arrive.
  *
  * - Reuses pools: one pool per (platform, category, topic), refreshed with the
@@ -13,7 +12,7 @@
  * - Hard total cap: VIRAL_TOPIC_FILL_BUDGET_USD (default $20), counted from the
  *   provider calls each search reports, kept in viral_processing_spend under
  *   the key "fill-total". Platforms: VIRAL_TOPIC_FILL_PLATFORMS
- *   (default "tiktok,youtube").
+ *   (default "tiktok,youtube,instagram").
  * Never throws into the caller.
  */
 import { eq, sql } from "drizzle-orm";
@@ -51,7 +50,7 @@ export function topicFillPlatforms(): string[] {
     youtube: isViralPostsYoutubeEnabled,
     instagram: isViralPostsInstagramEnabled,
   };
-  return (process.env.VIRAL_TOPIC_FILL_PLATFORMS ?? "tiktok,youtube")
+  return (process.env.VIRAL_TOPIC_FILL_PLATFORMS ?? "tiktok,youtube,instagram")
     .split(",")
     .map(p => p.trim().toLowerCase())
     .filter(p => enabled[p]);
