@@ -4,6 +4,7 @@ import {
   MIN_SEMANTIC_POOL_CONFIDENCE,
   SEMANTIC_POOL_PROMPT,
   buildSemanticPoolPrompt,
+  clipForPrompt,
   normalizeSemanticPoolVerdict,
   routeSemanticPoolCandidates,
   type SemanticPoolVerdict,
@@ -262,5 +263,17 @@ describe("semantic pool relevance", () => {
       "tiktok",
       "youtube",
     ]);
+  });
+});
+
+describe("clipForPrompt", () => {
+  it("never leaves half an emoji when the cut lands inside one", () => {
+    const clipped = clipForPrompt("ab😀cd", 3); // "ab" + high surrogate
+    expect(clipped).toBe("ab");
+    expect(() => encodeURIComponent(clipped)).not.toThrow();
+  });
+  it("keeps whole emoji and squashes whitespace", () => {
+    expect(clipForPrompt("  hi\n\n😀 there ", 50)).toBe("hi 😀 there");
+    expect(clipForPrompt(null, 10)).toBe("");
   });
 });
