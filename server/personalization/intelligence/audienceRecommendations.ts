@@ -150,9 +150,13 @@ const ABOUT_STARTING = /\b(?:aspiring|start(?:ing)? (?:a|your)|open(?:ing)? (?:a
  * something, an "aspiring/future" segment must not lead. Moves the first
  * established-audience segment to the front; never adds or removes one.
  */
+export function speaksToExistingOwners(declaredAndGoal: string): boolean {
+  return SPEAKS_TO_EXISTING.test(declaredAndGoal) && !ABOUT_STARTING.test(declaredAndGoal);
+}
+
 export function existingOwnersFirst<T extends { who: string }>(list: T[], declaredAndGoal: string): T[] {
   if (list.length < 2 || !STARTING_OUT.test(list[0]!.who)) return list;
-  if (!SPEAKS_TO_EXISTING.test(declaredAndGoal) || ABOUT_STARTING.test(declaredAndGoal)) return list;
+  if (!speaksToExistingOwners(declaredAndGoal)) return list;
   const lead = list.findIndex(a => !STARTING_OUT.test(a.who));
   if (lead <= 0) return list;
   return [list[lead]!, ...list.filter((_, i) => i !== lead)];
@@ -164,7 +168,13 @@ export function parseAudienceOutput(
   goal: string,
   keep: AudiencePayload[],
   /** What an audience may cite. Omitted: the source check is skipped. */
-  citable?: ReadonlySet<string>
+  citable?: ReadonlySet<string>,
+  /**
+   * First attempt only: when the bio/goal speak to existing owners, reject an
+   * answer that does not lead with them or has a single segment, so the model
+   * gets one corrected try. Later attempts accept the best answer.
+   */
+  strictOwnerLead = false
 ): ParseResult<{
   audiences: AudienceRecommendation[];
   confidence: SuggestionConfidence;
@@ -228,7 +238,20 @@ export function parseAudienceOutput(
   const { kept, dropped } = citable
     ? keepCited(out, citable, MIN_AUDIENCES_AFTER_PROOF)
     : { kept: out.map(entry => entry.item), dropped: 0 };
-  const ordered = existingOwnersFirst(kept, `${e.declaredText} ${goal.toLowerCase()}`);
+  const addressed = `${e.declaredText} ${goal.toLowerCase()}`;
+  const ordered = existingOwnersFirst(kept, addressed);
+  if (strictOwnerLead && speaksToExistingOwners(addressed) && !keep.length) {
+    if (ordered.length === 0 || STARTING_OUT.test(ordered[0]!.who)) {
+      return {
+        ok: false,
+        reason:
+          "the bio and goal address people who already own or run the business, so the first audience must be those existing owners or operators, not aspiring or future owners",
+      };
+    }
+    if (ordered.length < 2) {
+      return { ok: false, reason: "return 2 or 3 distinct audiences; this profile supports more than one" };
+    }
+  }
   return {
     ok: true,
     value: {
@@ -259,6 +282,7 @@ export async function recommendAudiences(input: {
   const citable = citableSources(input.evidence.sources, posts, input.confirmedGoal, {
     bioLink: Boolean(input.evidence.websiteUrlOnly),
   });
+  let parseCalls = 0;
   const { value, usage, attempts } = await callStructured({
     operation: "personalization_audience_recommendations",
     system: prompt.system,
@@ -271,7 +295,8 @@ export async function recommendAudiences(input: {
         input.evidence,
         input.confirmedGoal,
         input.confirmedAudiences,
-        citable
+        citable,
+        ++parseCalls === 1
       ),
     invoker: input.invoker,
     timeoutMs: input.timeoutMs,
