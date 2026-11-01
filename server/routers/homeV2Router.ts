@@ -1,7 +1,9 @@
 /**
  * Home v2 API (Phase 5). Every procedure checks the server-side Home switch
  * (assertHomeV2Access) and is read only, except switching the active
- * profile. Nothing here scrapes, refreshes pools or calls a model. Videos and
+ * profile and queueing the shown public creators for background
+ * pre-research (no user data). Nothing here scrapes, refreshes pools or
+ * calls a model. Videos and
  * creators come from today's niche pools first, then the shared viral library
  * (matched to the profile's topics) so Home is never blank.
  */
@@ -27,6 +29,7 @@ import {
 import { contentInventoryPlan } from "../personalization/home/inventoryMatch";
 import { browseIndexedViralPosts } from "../viralPosts/browseService";
 import { libraryHomeForProfile, mergeHomeLists } from "../viralPosts/libraryHome";
+import { requestPrefetch } from "../research/prefetch";
 
 export const HOME_VIDEO_LIMIT = 4;
 
@@ -100,6 +103,8 @@ export const homeV2Router = router({
       HOME_CREATOR_LIMIT,
       x => `${x.platform}:${x.handle.toLowerCase()}`
     );
+    // Research these in the background so a click opens instantly. Never awaited.
+    void requestPrefetch(creators);
     return { personalized: c.nicheLabel !== null, nicheLabel: c.nicheLabel, creators };
   }),
 
