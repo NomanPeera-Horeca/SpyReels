@@ -112,6 +112,10 @@ function startViralLibraryUnderstanding(): void {
       const understanding = await import("../viralPosts/videoUnderstanding");
       await step("ingest", () => library.ingestResearchJobs({ perSource: 5 }));
       await step("profile topics", () => topics.matchProfileTopics({ maxProfiles: 10 }));
+      await step("rising recheck", async () => {
+        const rising = await import("../viralPosts/risingRecheck");
+        await rising.runRisingRecheck({ max: 30 });
+      });
       await step("youtube channels", async () => {
         const yt = await import("../viralPosts/youtubeChannels");
         await yt.repairYouTubeLibraryCreators({ max: 40 });
@@ -134,26 +138,34 @@ function startViralLibraryUnderstanding(): void {
 startViralLibraryUnderstanding();
 
 /**
- * One-time topic fill: first search of every topic pool on TikTok/YouTube,
- * 3 pools every 5 minutes, own loop so long searches never delay the library
- * steps above. Total cap VIRAL_TOPIC_FILL_BUDGET_USD (default $20); stops by
- * itself when every topic was searched. Off with VIRAL_TOPIC_FILL=false.
+ * One-time topic fill: first search of every topic pool, 3 pools every 5
+ * minutes, own loop so long searches never delay the library steps above.
+ * Total cap VIRAL_TOPIC_FILL_BUDGET_USD (default $20). When every topic was
+ * searched (or the cap is reached) the same loop switches to the recurring
+ * topic refresh (weekly cap VIRAL_TOPIC_REFRESH_WEEKLY_USD, default $10; off
+ * with VIRAL_TOPIC_REFRESH=false). Off entirely with VIRAL_TOPIC_FILL=false.
  */
 function startViralTopicFill(): void {
   if (process.env.VIRAL_TOPIC_FILL === "false") return;
   const everyMs = Math.max(60_000, Number(process.env.VIRAL_TOPIC_FILL_MS ?? 5 * 60_000));
   let running = false;
-  let finished = false;
+  let fillFinished = false;
   const tick = () => {
-    if (running || draining || finished) return;
+    if (running || draining) return;
     running = true;
     void import("../viralPosts/topicFill")
-      .then(m => m.runTopicFill({ maxPools: 3 }))
-      .then(r => {
-        if (r.skipped === "done" || r.skipped === "budget_reached") {
-          finished = true;
-          console.info(`[viralLibrary] fill stopped: ${r.skipped}`, r);
+      .then(async m => {
+        if (!fillFinished) {
+          const r = await m.runTopicFill({ maxPools: 3 });
+          if (r.skipped === "done" || r.skipped === "budget_reached") {
+            fillFinished = true;
+            console.info(`[viralLibrary] fill stopped: ${r.skipped}; recurring topic refresh takes over`, r);
+          } else {
+            return;
+          }
         }
+        // After the one-time fill: search topics again on a schedule (weekly cap).
+        if (process.env.VIRAL_TOPIC_REFRESH !== "false") await m.runTopicRefresh({ maxPools: 3 });
       })
       .catch(error => console.error("[viralLibrary] fill tick failed", error))
       .finally(() => {

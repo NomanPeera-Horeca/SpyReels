@@ -17,7 +17,7 @@
  * Needs migration drizzle/0110_research_prefetch.sql (table + system
  * workspace); without it everything here is a quiet no-op.
  */
-import { and, asc, eq, gte, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, sql } from "drizzle-orm";
 import { normalizeInstagramHandle } from "@shared/socialHandles";
 import { VIRAL_RULE } from "@shared/viralRule";
 import {
@@ -26,7 +26,7 @@ import {
   workspaces,
   youtubeScrapeJobs,
 } from "../../drizzle/schema";
-import { researchPrefetch } from "../../drizzle/viralLibrarySchema";
+import { researchPrefetch, viralProcessingSpend } from "../../drizzle/viralLibrarySchema";
 import { createScrapeJob, getDb } from "../db";
 import { scrapeCreatorsOutOfCredits, scrapeCreatorsOutOfCreditsSince } from "../scrapeCreatorsMeter";
 import {
@@ -142,6 +142,77 @@ export async function requestPrefetchForPosts(
   posts: Array<{ platform: string; creatorHandle?: string | null }>
 ): Promise<void> {
   await requestPrefetch(posts.map(p => ({ platform: p.platform, handle: p.creatorHandle ?? "" })));
+}
+
+/* ---------- creator watchlist ---------- */
+
+/** A watchlist creator is researched again once its last research is this old. */
+export const WATCHLIST_REFRESH_DAYS = 7;
+
+export function watchlistPerDay(): number {
+  const n = Number(process.env.RESEARCH_WATCHLIST_PER_DAY);
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 40;
+}
+
+/** Spend-table key counting watchlist creators queued today (10 chars). Pure; exported for tests. */
+export function watchlistDayKey(d = new Date()): string {
+  return `wl${d.toISOString().slice(0, 10).replace(/-/g, "")}`;
+}
+
+/**
+ * Weekly watchlist: the creators behind the library's strongest recent viral
+ * videos are researched again about every week, the cheapest steady source
+ * of new viral videos (strong creators keep producing outliers) and of fresh
+ * view counts. Queues up to `limit` (within RESEARCH_WATCHLIST_PER_DAY,
+ * default 40) creators last researched by anyone more than 7 days ago.
+ * Returns how many were queued; 0 on any error.
+ */
+export async function queueWatchlist(db: Db, limit: number): Promise<number> {
+  try {
+    const dayKey = watchlistDayKey();
+    const [today] = await db.select().from(viralProcessingSpend).where(eq(viralProcessingSpend.day, dayKey)).limit(1);
+    const room = Math.min(limit, watchlistPerDay() - (today?.videos ?? 0));
+    if (room <= 0) return 0;
+
+    const [rows] = (await db.execute(sql`
+      SELECT c.platform AS platform, c.creatorHandle AS handle, MAX(s.multiple) AS best
+      FROM viral_library_status s
+      JOIN viral_post_candidates c ON c.id = s.candidateId
+      LEFT JOIN research_prefetch p
+        ON p.platform = c.platform AND p.handle = LOWER(TRIM(LEADING '@' FROM c.creatorHandle))
+      WHERE s.status = 'viral'
+        AND c.creatorHandle IS NOT NULL AND c.creatorHandle <> ''
+        AND LOWER(TRIM(LEADING '@' FROM c.creatorHandle)) <> 'youtube'
+        AND (c.publishedAt IS NULL OR c.publishedAt >= (NOW() - INTERVAL 60 DAY))
+        AND (p.handle IS NULL OR (p.status IN ('done','failed') AND p.finishedAt < (NOW() - INTERVAL ${WATCHLIST_REFRESH_DAYS} DAY)))
+      GROUP BY c.platform, c.creatorHandle
+      ORDER BY best DESC
+      LIMIT ${room * 4}
+    `)) as unknown as [Array<{ platform: string; handle: string }>];
+
+    const picked: Array<{ platform: ResearchPlatform; handle: string }> = [];
+    for (const t of prefetchTargets(rows ?? [])) {
+      if (picked.length >= room) break;
+      // Skip creators someone researched in the last week anyway.
+      if ((await recentResearchJobId(db, t.platform, t.handle, -1, WATCHLIST_REFRESH_DAYS)) != null) continue;
+      picked.push(t);
+    }
+    if (picked.length === 0) return 0;
+    const now = new Date();
+    await db
+      .insert(researchPrefetch)
+      .values(picked.map(t => ({ ...t, status: "watch", requestedAt: now })))
+      .onDuplicateKeyUpdate({ set: { status: "watch", requestedAt: now, attempts: 0 } });
+    await db
+      .insert(viralProcessingSpend)
+      .values({ day: dayKey, usd: "0", videos: picked.length })
+      .onDuplicateKeyUpdate({ set: { videos: sql`videos + ${picked.length}` } });
+    console.info("[research] watchlist_queued", { creators: picked.length });
+    return picked.length;
+  } catch (err) {
+    console.warn("[research] watchlist_failed", { error: err instanceof Error ? err.message : String(err) });
+    return 0;
+  }
 }
 
 /** Library rows read for seeding (more than needed: some are already queued). */
@@ -292,18 +363,22 @@ export async function runResearchPrefetch(args: { max?: number } = {}): Promise<
     if (budget <= 0) return { ...out, skipped: "daily_cap" };
 
     const take = Math.max(1, Math.min(10, args.max ?? 2));
+    // Creators shown to users first ("pending"), then the weekly watchlist ("watch").
     const pending = () =>
       db
-        .select({ platform: researchPrefetch.platform, handle: researchPrefetch.handle })
+        .select({ platform: researchPrefetch.platform, handle: researchPrefetch.handle, status: researchPrefetch.status })
         .from(researchPrefetch)
-        .where(eq(researchPrefetch.status, "pending"))
-        .orderBy(asc(researchPrefetch.requestedAt))
+        .where(inArray(researchPrefetch.status, ["pending", "watch"]))
+        .orderBy(sql`${researchPrefetch.status} = 'watch'`, asc(researchPrefetch.requestedAt))
         .limit(take);
     let due = await pending();
     if (due.length === 0) {
-      // Nothing shown to users is waiting: start on the library's strongest
-      // viral creators, so even creators nobody has looked at yet are ready.
-      if ((await seedPrefetchFromLibrary(db, take)) > 0) due = await pending();
+      // Nothing shown to users is waiting: re-check the top creators we
+      // already know (watchlist), then start on library creators nobody has
+      // looked at yet.
+      if ((await queueWatchlist(db, take)) > 0 || (await seedPrefetchFromLibrary(db, take)) > 0) {
+        due = await pending();
+      }
     }
     if (due.length === 0) return { ...out, skipped: "empty" };
 
@@ -315,7 +390,7 @@ export async function runResearchPrefetch(args: { max?: number } = {}): Promise<
       const [claim] = await db
         .update(researchPrefetch)
         .set({ status: "running", startedAt: new Date(), attempts: sql`attempts + 1`, error: null })
-        .where(and(key, eq(researchPrefetch.status, "pending")));
+        .where(and(key, eq(researchPrefetch.status, row.status)));
       if (!(claim as unknown as { affectedRows?: number })?.affectedRows) continue;
 
       const finish = (status: "done" | "failed", jobId: number | null, error: string | null) =>
@@ -325,7 +400,14 @@ export async function runResearchPrefetch(args: { max?: number } = {}): Promise<
           .where(key);
 
       try {
-        const fresh = await recentResearchJobId(db, platform, row.handle);
+        // Watchlist re-checks want research newer than a week; others two weeks.
+        const fresh = await recentResearchJobId(
+          db,
+          platform,
+          row.handle,
+          -1,
+          row.status === "watch" ? WATCHLIST_REFRESH_DAYS : RECENT_RESEARCH_MAX_AGE_DAYS
+        );
         if (fresh != null) {
           // Someone researched it recently: nothing to pay for. jobId stays
           // null so it does not count against the daily cap.
@@ -334,7 +416,7 @@ export async function runResearchPrefetch(args: { max?: number } = {}): Promise<
           continue;
         }
         if (budget <= 0) {
-          await db.update(researchPrefetch).set({ status: "pending" }).where(key);
+          await db.update(researchPrefetch).set({ status: row.status }).where(key);
           break;
         }
         budget -= 1;
@@ -345,7 +427,7 @@ export async function runResearchPrefetch(args: { max?: number } = {}): Promise<
           // queued (not failed) and stop until credits are back.
           await db
             .update(researchPrefetch)
-            .set({ status: "pending", jobId: null, startedAt: null, attempts: sql`GREATEST(attempts - 1, 0)` })
+            .set({ status: row.status, jobId: null, startedAt: null, attempts: sql`GREATEST(attempts - 1, 0)` })
             .where(key);
           console.warn("[research] prefetch_paused_out_of_credits", { platform, handle: row.handle });
           return { ...out, skipped: "out_of_credits" };
@@ -359,7 +441,7 @@ export async function runResearchPrefetch(args: { max?: number } = {}): Promise<
         }
       } catch (err) {
         if (scrapeCreatorsOutOfCredits()) {
-          await db.update(researchPrefetch).set({ status: "pending", startedAt: null }).where(key);
+          await db.update(researchPrefetch).set({ status: row.status, startedAt: null }).where(key);
           return { ...out, skipped: "out_of_credits" };
         }
         await finish("failed", null, err instanceof Error ? err.message : String(err));

@@ -38,8 +38,14 @@ export function withinTimeframe<T extends { postedAt: Date | null }>(rows: T[], 
 }
 
 /** Most recent completed research of this creator in any workspace (last 14 days), or null. */
-export async function recentResearchJobId(db: Db, platform: ResearchPlatform, handle: string, newJobId = -1): Promise<number | null> {
-  const since = new Date(Date.now() - RECENT_RESEARCH_MAX_AGE_DAYS * 86_400_000);
+export async function recentResearchJobId(
+  db: Db,
+  platform: ResearchPlatform,
+  handle: string,
+  newJobId = -1,
+  maxAgeDays = RECENT_RESEARCH_MAX_AGE_DAYS
+): Promise<number | null> {
+  const since = new Date(Date.now() - maxAgeDays * 86_400_000);
   if (platform === "instagram") {
     const [row] = await db
       .select({ id: scrapeJobs.id })
