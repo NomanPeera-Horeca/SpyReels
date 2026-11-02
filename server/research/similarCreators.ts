@@ -10,6 +10,10 @@
  * - Instagram account search (33 accounts, names only): keeps the first few.
  * YouTube has no channel search; its channels already come from Shorts search.
  *
+ * Searches use a proven phrase from the keyword bank when there is one, and
+ * one cheap AI check drops creators whose name and bio are clearly off-topic
+ * before any research is paid for.
+ *
  * Found creators go to pre-research (status "similar", after creators shown
  * to users and the weekly watchlist). Their videos then pass the same viral
  * rule, so only real outliers reach users. Each topic and platform is searched
@@ -19,6 +23,7 @@ import { createHash } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
 import { researchPrefetch, viralProcessingSpend } from "../../drizzle/viralLibrarySchema";
 import { noteScrapeCreatorsStatus, scrapeCreatorsOutOfCredits } from "../scrapeCreatorsMeter";
+import { keywordQueriesFor, recordCreatorSearch } from "../viralPosts/keywords";
 import { prefetchTargets } from "./prefetch";
 import type { Db } from "./recentResearchSeed";
 
@@ -95,15 +100,60 @@ async function scSearch(path: string, query: string): Promise<Record<string, unk
   }
 }
 
-async function searchCreators(platform: "tiktok" | "instagram", query: string): Promise<string[]> {
+type FoundCreator = { handle: string; about: string };
+
+async function searchCreators(platform: "tiktok" | "instagram", query: string): Promise<FoundCreator[]> {
   if (platform === "tiktok") {
     const data = await scSearch("/v1/tiktok/search/users", query);
     const list = Array.isArray(data?.user_list) ? (data!.user_list as Array<{ user_info?: TikTokUser }>) : [];
-    return pickTikTokCreators(list.map(x => x.user_info ?? (x as TikTokUser)));
+    const users = list.map(x => x.user_info ?? (x as TikTokUser));
+    const about = new Map(
+      users.map(u => [
+        String(u.unique_id ?? "").trim(),
+        `${String((u as { nickname?: unknown }).nickname ?? "")} - ${String((u as { signature?: unknown }).signature ?? "")}`,
+      ])
+    );
+    return pickTikTokCreators(users).map(handle => ({ handle, about: about.get(handle) ?? "" }));
   }
   const data = await scSearch("/v1/instagram/search", query);
-  const users = Array.isArray(data?.users) ? (data!.users as Array<{ username?: unknown }>) : [];
-  return pickInstagramCreators(users);
+  const users = Array.isArray(data?.users) ? (data!.users as Array<{ username?: unknown; full_name?: unknown }>) : [];
+  const about = new Map(users.map(u => [String(u.username ?? "").trim(), String(u.full_name ?? "")]));
+  return pickInstagramCreators(users).map(handle => ({ handle, about: about.get(handle) ?? "" }));
+}
+
+/**
+ * One cheap AI check before paying for research: keep creators whose name and
+ * bio fit the topic. Unclear ones are kept (research is the real test);
+ * if the AI is unavailable, all are kept.
+ */
+async function keepOnNiche(topic: string, creators: FoundCreator[]): Promise<FoundCreator[]> {
+  if (creators.length === 0 || !process.env.ANTHROPIC_API_KEY?.trim()) return creators;
+  try {
+    const { default: Anthropic } = await import("@anthropic-ai/sdk");
+    const { SEMANTIC_POOL_MODEL } = await import("../viralPosts/semanticPoolRelevance");
+    const { reportDirectAnthropicUsage } = await import("../_core/llmMeasured");
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const list = creators.map((c, i) => `${i + 1}. @${c.handle}: ${c.about.slice(0, 200) || "(no bio)"}`).join("\n");
+    const res = await client.messages.create({
+      model: SEMANTIC_POOL_MODEL,
+      max_tokens: 200,
+      temperature: 0,
+      system: "You decide whether social media creators post about a topic. Return JSON only.",
+      messages: [
+        {
+          role: "user",
+          content: `Topic: "${topic}".\nCreators:\n${list}\nReturn {"off":[numbers]} listing ONLY creators whose name or bio clearly show they post about something unrelated. Keep unclear ones.`,
+        },
+      ],
+    });
+    reportDirectAnthropicUsage(res, "similar_creator_niche_check");
+    const text = res.content.find(b => b.type === "text");
+    const parsed = JSON.parse((text && text.type === "text" ? text.text : "{}").replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "")) as { off?: unknown };
+    const off = new Set(Array.isArray(parsed.off) ? parsed.off.map(Number) : []);
+    return creators.filter((_, i) => !off.has(i + 1));
+  } catch {
+    return creators;
+  }
 }
 
 /**
@@ -139,7 +189,13 @@ export async function queueSimilarCreators(db: Db, limit: number): Promise<numbe
         const marker = searchedKey(topic.slug, platform);
         const [seen] = await db.select().from(viralProcessingSpend).where(eq(viralProcessingSpend.day, marker)).limit(1);
         if (seen) continue; // searched this week already
-        const handles = await searchCreators(platform, topic.label);
+        // A proven phrase from the keyword bank when there is one, else the topic name.
+        const pick = await keywordQueriesFor({ pillar: topic.label, platform, count: 1 });
+        const query = pick?.queries[0] ?? topic.label;
+        const found = await keepOnNiche(topic.label, await searchCreators(platform, query));
+        const handles = found.map(f => f.handle);
+        const keywordId = pick?.idByQuery.get(query);
+        if (keywordId != null) await recordCreatorSearch({ keywordId, platform, handles });
         await db
           .insert(viralProcessingSpend)
           .values({ day: marker, usd: "0.0020", videos: handles.length })

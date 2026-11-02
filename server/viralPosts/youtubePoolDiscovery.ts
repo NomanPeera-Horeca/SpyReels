@@ -1,6 +1,7 @@
 import type { YouTubeVideoData } from "../youtube";
 import { noteScrapeCreatorsStatus } from "../scrapeCreatorsMeter";
 import { resolveShortChannels } from "./youtubeChannels";
+import { keywordQueriesFor, recordVideoSearch } from "./keywords";
 import type { AdaptedCandidate } from "./candidateAdapter";
 import { adaptYouTubeShorts } from "./platformAdapters";
 import {
@@ -223,12 +224,19 @@ export async function discoverYouTubePoolCandidates(args: {
   region?: string;
 }): Promise<YouTubePoolDiscoveryResult> {
   const maxScCalls = Math.max(0, Math.floor(args.maxScCalls));
-  const queryGeneration = await generateYouTubeShortsSearchQueries({
-    niche: args.niche,
-    pillar: args.pillar,
-    limit: Math.min(YOUTUBE_POOL_MAX_SEARCH_QUERIES, maxScCalls || 1),
-  });
+  const queryLimit = Math.min(YOUTUBE_POOL_MAX_SEARCH_QUERIES, maxScCalls || 1);
+  // Real search phrases from the keyword bank first; AI-written ones only
+  // when the bank has none for this topic yet.
+  const bank = await keywordQueriesFor({ pillar: args.pillar, platform: "youtube", count: queryLimit });
+  const queryGeneration = bank
+    ? { queries: bank.queries, aiGenerated: false }
+    : await generateYouTubeShortsSearchQueries({
+        niche: args.niche,
+        pillar: args.pillar,
+        limit: queryLimit,
+      });
   const queries = queryGeneration.queries;
+  const queryById = new Map<string, string>();
 
   const allShorts = new Map<string, YouTubeVideoData>();
   let searchCalls = 0;
@@ -244,7 +252,10 @@ export async function discoverYouTubePoolCandidates(args: {
       searchSuccesses++;
       rawShorts += shorts.length;
       for (const short of shorts) {
-        if (!allShorts.has(short.videoId)) allShorts.set(short.videoId, short);
+        if (!allShorts.has(short.videoId)) {
+          allShorts.set(short.videoId, short);
+          queryById.set(short.videoId, query);
+        }
       }
     } catch (error) {
       searchFailures++;
@@ -298,6 +309,21 @@ export async function discoverYouTubePoolCandidates(args: {
         reason: "off_domain" as const,
       })),
     ];
+  }
+
+  if (bank) {
+    // Per phrase: Shorts sent to the topic check, and those that passed.
+    const foundByQuery = new Map<string, number>();
+    for (const c of beforeSemantic) {
+      const q = queryById.get(c.sourceId);
+      if (q) foundByQuery.set(q, (foundByQuery.get(q) ?? 0) + 1);
+    }
+    const passedByQuery = new Map<string, string[]>();
+    for (const c of adapted) {
+      const q = queryById.get(c.sourceId);
+      if (q) passedByQuery.set(q, [...(passedByQuery.get(q) ?? []), c.sourceId]);
+    }
+    await recordVideoSearch({ pick: bank, platform: "youtube", foundByQuery, passedByQuery });
   }
 
   // Search results have no channel: look it up for Shorts that could be viral,
