@@ -6,7 +6,17 @@ import { lookupLlmPricing } from "../carousel/generationPricing";
  * speech-to-text is metered per audio minute. All figures are estimates.
  */
 
-export const DEEPGRAM_NOVA3_USD_PER_MINUTE = 0.03; // nova-3 audio transcription
+/**
+ * Deepgram nova-3 pre-recorded, pay as you go. Was booked at $0.03, about 7x
+ * the real price: Deepgram billing for 2026-11-01/02 showed about $0.55/day
+ * for the library while we booked about $5/day, so the daily caps stopped
+ * work far too early. DEEPGRAM_USD_PER_MINUTE overrides it (for example on a
+ * discounted plan).
+ */
+export const DEEPGRAM_NOVA3_USD_PER_MINUTE = (() => {
+  const n = Number(process.env.DEEPGRAM_USD_PER_MINUTE);
+  return Number.isFinite(n) && n > 0 ? n : 0.0043;
+})();
 export const OPENAI_WHISPER_USD_PER_MINUTE = 0.006; // whisper-1 (dormant path)
 
 function roundUsd(value: number): number {
