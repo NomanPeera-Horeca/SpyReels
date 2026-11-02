@@ -34,6 +34,7 @@ import {
   viralVideoTopics,
 } from "../../drizzle/viralLibrarySchema";
 import { cleanViralFormat, VIRAL_VIDEO_FORMATS } from "../../shared/viralFormats";
+import { claudeUnavailable, isCreditError } from "../_core/claudeClient";
 import { reportDirectAnthropicUsage } from "../_core/llmMeasured";
 import { estimateLlmCost, estimateSttCost } from "../analytics/aiCostModel";
 import { getDb } from "../db";
@@ -585,13 +586,15 @@ export async function processLibraryVideos(args: { maxVideos?: number } = {}): P
   processed: number;
   failed: number;
   costUsd: number;
-  skipped?: "db_unavailable" | "migration_missing" | "no_api_key" | "daily_budget";
+  skipped?: "db_unavailable" | "migration_missing" | "no_api_key" | "daily_budget" | "ai_out_of_credit";
 }> {
   const totals = { processed: 0, failed: 0, costUsd: 0 };
   const db = await getDb();
   if (!db) return { ...totals, skipped: "db_unavailable" };
   if (!(await isTopicsReady(db))) return { ...totals, skipped: "migration_missing" };
   if (!anthropicClient()) return { ...totals, skipped: "no_api_key" };
+  // Claude out of credit and no OpenAI backup: wait, so no transcription is paid for nothing.
+  if (claudeUnavailable()) return { ...totals, skipped: "ai_out_of_credit" };
   const limit = await currentLimit(db);
   if (limit.left <= 0) return { ...totals, skipped: "daily_budget" };
   const addSpend = async (usd: number) => {
@@ -612,6 +615,7 @@ export async function processLibraryVideos(args: { maxVideos?: number } = {}): P
     console.info("[viralLibrary] understand_catchup_finished", { remainingBacklog: ids.length });
   }
   const one = async (id: number) => {
+    if (claudeUnavailable()) return;
     if (!(await claim(db, id))) return;
     try {
       let timer: ReturnType<typeof setTimeout> | undefined;
@@ -631,7 +635,12 @@ export async function processLibraryVideos(args: { maxVideos?: number } = {}): P
       totals.costUsd += cost;
       await db
         .update(viralVideoInsights)
-        .set({ status: "failed", error: (err instanceof Error ? err.message : String(err)).slice(0, 200) })
+        .set({
+          status: "failed",
+          error: (err instanceof Error ? err.message : String(err)).slice(0, 200),
+          // Out of AI credit is not the video's fault: give the try back.
+          ...(isCreditError(err) ? { attempts: sql`GREATEST(attempts - 1, 0)` } : {}),
+        })
         .where(eq(viralVideoInsights.candidateId, id));
       console.warn("[viralLibrary] understand_failed", {
         candidateId: id,

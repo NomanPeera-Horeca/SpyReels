@@ -129,10 +129,10 @@ async function searchCreators(platform: "tiktok" | "instagram", query: string): 
 async function keepOnNiche(topic: string, creators: FoundCreator[]): Promise<FoundCreator[]> {
   if (creators.length === 0 || !process.env.ANTHROPIC_API_KEY?.trim()) return creators;
   try {
-    const { default: Anthropic } = await import("@anthropic-ai/sdk");
+    const { createClaudeClient } = await import("../_core/claudeClient");
     const { SEMANTIC_POOL_MODEL } = await import("../viralPosts/semanticPoolRelevance");
     const { reportDirectAnthropicUsage } = await import("../_core/llmMeasured");
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const client = createClaudeClient({ apiKey: process.env.ANTHROPIC_API_KEY });
     const list = creators.map((c, i) => `${i + 1}. @${c.handle}: ${c.about.slice(0, 200) || "(no bio)"}`).join("\n");
     const res = await client.messages.create({
       model: SEMANTIC_POOL_MODEL,
