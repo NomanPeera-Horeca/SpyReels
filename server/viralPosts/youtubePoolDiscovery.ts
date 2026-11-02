@@ -1,5 +1,6 @@
 import type { YouTubeVideoData } from "../youtube";
 import { noteScrapeCreatorsStatus } from "../scrapeCreatorsMeter";
+import { resolveShortChannels } from "./youtubeChannels";
 import type { AdaptedCandidate } from "./candidateAdapter";
 import { adaptYouTubeShorts } from "./platformAdapters";
 import {
@@ -299,6 +300,11 @@ export async function discoverYouTubePoolCandidates(args: {
     ];
   }
 
+  // Search results have no channel: look it up for Shorts that could be viral,
+  // so the viral rule, Home and pre-research see the real creator.
+  const channelLookup = await resolveShortChannels(adapted);
+  const totalScCalls = searchCalls + channelLookup.calls;
+
   const usdPerCredit =
     Number(process.env.SCRAPECREATORS_USD_PER_CREDIT) || DEFAULT_SC_USD_PER_CREDIT;
 
@@ -316,6 +322,7 @@ export async function discoverYouTubePoolCandidates(args: {
     semanticHaikuCalls,
     semanticRejected: semanticRejectedCandidates.length,
     currentPoolAdmitted: adapted.length,
+    channelLookups: channelLookup.calls,
   });
 
   return {
@@ -330,7 +337,7 @@ export async function discoverYouTubePoolCandidates(args: {
     prequalifiedShorts: prequalified.length,
     semanticHaikuCalls,
     semanticRejected: semanticRejectedCandidates.length,
-    totalScCalls: searchCalls,
-    costEstimateUsd: searchCalls * usdPerCredit,
+    totalScCalls,
+    costEstimateUsd: totalScCalls * usdPerCredit,
   };
 }

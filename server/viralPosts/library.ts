@@ -358,6 +358,29 @@ export function researchJobToCandidates(job: ResearchJob, now = new Date()): Ada
     );
 }
 
+/**
+ * A creator just got usual views: re-judge their library videos that were
+ * "unknown" for lack of it (for example YouTube Shorts found by search).
+ */
+async function reclassifyCreatorUnknowns(db: Db, platform: ResearchSource, handle: string, now: Date): Promise<void> {
+  const { viralPostCandidates } = await import("../../drizzle/schema");
+  const rows = await db
+    .select({ candidate: viralPostCandidates })
+    .from(viralLibraryStatus)
+    .innerJoin(viralPostCandidates, eq(viralPostCandidates.id, viralLibraryStatus.candidateId))
+    .where(
+      and(
+        eq(viralLibraryStatus.status, "unknown"),
+        eq(viralPostCandidates.platform, platform),
+        sql`LOWER(TRIM(LEADING '@' FROM ${viralPostCandidates.creatorHandle})) = ${handle}`
+      )
+    )
+    .limit(500);
+  if (rows.length > 0) {
+    await classifyLibraryRows({ rows: rows.map(r => r.candidate), source: "baseline", now });
+  }
+}
+
 async function ingestOne(db: Db, source: ResearchSource, jobId: number, now: Date) {
   const job = await loadResearchJob(db, source, jobId);
   let videoCount = 0;
@@ -387,6 +410,7 @@ async function ingestOne(db: Db, source: ResearchSource, jobId: number, now: Dat
           },
         });
     }
+    if (handle && usual) await reclassifyCreatorUnknowns(db, source, handle, now);
     const adapted = researchJobToCandidates(job, now);
     const resolved = await resolvePersonalCandidates(adapted);
     const fresh = new Map(
