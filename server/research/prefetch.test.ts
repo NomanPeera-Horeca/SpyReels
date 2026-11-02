@@ -23,14 +23,14 @@ describe("prefetchTargets", () => {
 });
 
 describe("prefetchDailyMax", () => {
-  it("defaults to 50 and honours a valid setting", () => {
+  it("defaults to 150 and honours a valid setting", () => {
     const before = process.env.RESEARCH_PREFETCH_DAILY_MAX;
     delete process.env.RESEARCH_PREFETCH_DAILY_MAX;
-    expect(prefetchDailyMax()).toBe(50);
+    expect(prefetchDailyMax()).toBe(150);
     process.env.RESEARCH_PREFETCH_DAILY_MAX = "10";
     expect(prefetchDailyMax()).toBe(10);
     process.env.RESEARCH_PREFETCH_DAILY_MAX = "nope";
-    expect(prefetchDailyMax()).toBe(50);
+    expect(prefetchDailyMax()).toBe(150);
     if (before === undefined) delete process.env.RESEARCH_PREFETCH_DAILY_MAX;
     else process.env.RESEARCH_PREFETCH_DAILY_MAX = before;
   });

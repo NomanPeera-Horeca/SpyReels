@@ -7,7 +7,7 @@
  *   the worker starts on the library's strongest recent viral creators.
  * - The queue worker researches a few at a time in a hidden system workspace
  *   (runResearchPrefetch), with the normal research runners: last 30 days,
- *   at most 60 videos. A daily cap (RESEARCH_PREFETCH_DAILY_MAX, default 50
+ *   at most 60 videos. A daily cap (RESEARCH_PREFETCH_DAILY_MAX, default 150
  *   creators) bounds cost; RESEARCH_PREFETCH=false turns it off.
  * - When a user then researches that creator, the existing recent-research
  *   seeding (recentResearchSeed.ts) copies these videos into their job
@@ -46,7 +46,7 @@ let warnedNotReady = false;
 
 export function prefetchDailyMax(): number {
   const n = Number(process.env.RESEARCH_PREFETCH_DAILY_MAX);
-  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 50;
+  return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 150;
 }
 
 function prefetchEnabled(): boolean {

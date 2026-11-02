@@ -169,7 +169,7 @@ startViralTopicFill();
 /**
  * Pre-research of the creators shown on Home (server/research/prefetch.ts):
  * 2 creators every 2 minutes, daily cap RESEARCH_PREFETCH_DAILY_MAX (default
- * 50). Off with RESEARCH_PREFETCH=false.
+ * 150). Off with RESEARCH_PREFETCH=false.
  */
 function startResearchPrefetch(): void {
   if (process.env.RESEARCH_PREFETCH === "false") return;
