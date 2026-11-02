@@ -74,17 +74,57 @@ function utcDay(d = new Date()): string {
   return d.toISOString().slice(0, 10);
 }
 
-async function spentToday(db: Db): Promise<number> {
-  const [row] = await db.select().from(viralProcessingSpend).where(eq(viralProcessingSpend.day, utcDay())).limit(1);
+/**
+ * One-time catch-up: until this total is spent (or nothing is left to
+ * understand), the daily cap is ignored so the backlog is done in hours, not
+ * weeks. Then the daily cap applies again. VIRAL_LIBRARY_CATCHUP_BUDGET_USD,
+ * default $30; 0 turns it off. Kept in viral_processing_spend under CATCHUP_KEY.
+ */
+const CATCHUP_KEY = "und-catch";
+/** Videos per tick while catching up (VIRAL_LIBRARY_UNDERSTAND_PER_TICK still wins when set). */
+const CATCHUP_PER_TICK = 60;
+
+export function catchupBudgetUsd(): number {
+  const n = Number(process.env.VIRAL_LIBRARY_CATCHUP_BUDGET_USD);
+  return Number.isFinite(n) && n >= 0 ? n : 30;
+}
+
+async function spentOn(db: Db, key: string): Promise<number> {
+  const [row] = await db.select().from(viralProcessingSpend).where(eq(viralProcessingSpend.day, key)).limit(1);
   return row ? Number(row.usd) : 0;
 }
 
-async function addSpend(db: Db, usd: number): Promise<void> {
+async function spentToday(db: Db): Promise<number> {
+  return spentOn(db, utcDay());
+}
+
+async function addSpendTo(db: Db, key: string, usd: number): Promise<void> {
   const v = Math.max(0, usd).toFixed(4);
   await db
     .insert(viralProcessingSpend)
-    .values({ day: utcDay(), usd: v, videos: 1 })
+    .values({ day: key, usd: v, videos: 1 })
     .onDuplicateKeyUpdate({ set: { usd: sql`usd + ${v}`, videos: sql`videos + 1` } });
+}
+
+/** Which limit applies now. Pure; exported for tests. */
+export function understandingLimit(args: {
+  catchupBudget: number;
+  catchupSpent: number;
+  dailyBudget: number;
+  spentToday: number;
+}): { mode: "catchup" | "daily"; left: number } {
+  const catchupLeft = args.catchupBudget - args.catchupSpent;
+  if (catchupLeft > 0) return { mode: "catchup", left: catchupLeft };
+  return { mode: "daily", left: args.dailyBudget - args.spentToday };
+}
+
+async function currentLimit(db: Db): Promise<{ mode: "catchup" | "daily"; left: number }> {
+  return understandingLimit({
+    catchupBudget: catchupBudgetUsd(),
+    catchupSpent: await spentOn(db, CATCHUP_KEY),
+    dailyBudget: dailyBudgetUsd(),
+    spentToday: await spentToday(db),
+  });
 }
 
 /* ---------- claiming ---------- */
@@ -537,22 +577,35 @@ export async function processLibraryVideos(args: { maxVideos?: number } = {}): P
   if (!db) return { ...totals, skipped: "db_unavailable" };
   if (!(await isTopicsReady(db))) return { ...totals, skipped: "migration_missing" };
   if (!anthropicClient()) return { ...totals, skipped: "no_api_key" };
-  const budget = dailyBudgetUsd();
-  if ((await spentToday(db)) >= budget) return { ...totals, skipped: "daily_budget" };
+  const limit = await currentLimit(db);
+  if (limit.left <= 0) return { ...totals, skipped: "daily_budget" };
+  const addSpend = async (usd: number) => {
+    await addSpendTo(db, utcDay(), usd);
+    if (limit.mode === "catchup") await addSpendTo(db, CATCHUP_KEY, usd);
+  };
 
   await syncStarterTopics(db);
   const topics = await loadTopics(db);
-  const ids = await pickVideos(db, Math.max(1, Math.min(200, args.maxVideos ?? understandPerTick())));
+  const want = Math.max(
+    1,
+    Math.min(200, args.maxVideos ?? (limit.mode === "catchup" && !process.env.VIRAL_LIBRARY_UNDERSTAND_PER_TICK ? CATCHUP_PER_TICK : understandPerTick()))
+  );
+  const ids = await pickVideos(db, want);
+  if (limit.mode === "catchup" && ids.length < want) {
+    // Backlog done: end the catch-up so the daily cap applies from now on.
+    await addSpendTo(db, CATCHUP_KEY, limit.left);
+    console.info("[viralLibrary] understand_catchup_finished", { remainingBacklog: ids.length });
+  }
   const one = async (id: number) => {
     if (!(await claim(db, id))) return;
     try {
       const r = await processOne(db, topics, id);
-      await addSpend(db, r.costUsd);
+      await addSpend(r.costUsd);
       totals.processed += 1;
       totals.costUsd += r.costUsd;
     } catch (err) {
       const cost = Number((err as { costUsd?: number })?.costUsd ?? 0);
-      if (cost > 0) await addSpend(db, cost);
+      if (cost > 0) await addSpend(cost);
       totals.failed += 1;
       totals.costUsd += cost;
       await db
@@ -567,7 +620,7 @@ export async function processLibraryVideos(args: { maxVideos?: number } = {}): P
   };
   // A few at a time: each video waits on downloads and AI calls, not CPU.
   for (let i = 0; i < ids.length; i += UNDERSTAND_CONCURRENCY) {
-    if ((await spentToday(db)) >= budget) return { ...totals, skipped: "daily_budget" };
+    if (i > 0 && (await currentLimit(db)).left <= 0) return { ...totals, skipped: "daily_budget" };
     await Promise.all(ids.slice(i, i + UNDERSTAND_CONCURRENCY).map(one));
   }
   if (ids.length > 0) console.info("[viralLibrary] understand_done", { ...totals, costUsd: Number(totals.costUsd.toFixed(4)) });

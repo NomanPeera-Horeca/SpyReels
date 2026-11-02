@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { cleanViralFormat } from "../../../shared/viralFormats";
 import { cosineSimilarity } from "../embeddings";
 import { frameCountFor, parseAnalysis, planFrameTimes } from "../frames";
-import { buildVideoPrompt, cleanVideoReading, creatorTopicsFromVideos } from "../videoUnderstanding";
+import { buildVideoPrompt, cleanVideoReading, creatorTopicsFromVideos, understandingLimit } from "../videoUnderstanding";
 import { youtubeVideoIdFromUrl } from "../../youtube";
 
 describe("frames", () => {
@@ -135,5 +135,21 @@ describe("embeddings pause", () => {
     fetchSpy.mockRestore();
     resetEmbeddingPauseForTests();
     process.env.OPENAI_API_KEY = prev;
+  });
+});
+
+describe("understandingLimit", () => {
+  it("uses the one-time catch-up budget first, ignoring the daily cap", () => {
+    expect(understandingLimit({ catchupBudget: 30, catchupSpent: 12, dailyBudget: 5, spentToday: 9 })).toEqual({
+      mode: "catchup",
+      left: 18,
+    });
+  });
+  it("falls back to the daily cap once the catch-up is used up or off", () => {
+    expect(understandingLimit({ catchupBudget: 30, catchupSpent: 30, dailyBudget: 5, spentToday: 2 })).toEqual({
+      mode: "daily",
+      left: 3,
+    });
+    expect(understandingLimit({ catchupBudget: 0, catchupSpent: 0, dailyBudget: 5, spentToday: 5 }).left).toBe(0);
   });
 });
