@@ -29,7 +29,7 @@ import {
 import { contentInventoryPlan } from "../personalization/home/inventoryMatch";
 import { browseIndexedViralPosts } from "../viralPosts/browseService";
 import { libraryHomeForProfile, mergeHomeLists } from "../viralPosts/libraryHome";
-import { requestPrefetch } from "../research/prefetch";
+import { requestPrefetch, requestPrefetchForPosts } from "../research/prefetch";
 
 export const HOME_VIDEO_LIMIT = 4;
 
@@ -115,6 +115,7 @@ export const homeV2Router = router({
       libraryHomeForProfile(libraryInput(ctx.user.id, c)),
     ]);
     const items = mergeHomeLists(res.items, library?.items ?? [], HOME_VIDEO_LIMIT, x => `${x.platform}:${x.sourceId}`);
+    void requestPrefetchForPosts(items);
     return { personalized: c.nicheLabel !== null, nicheLabel: c.nicheLabel, items };
   }),
 

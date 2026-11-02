@@ -2,7 +2,9 @@
  * Pre-research of the creators shown on Home, so clicking one opens at once
  * even when no SpyReels user researched that creator yet.
  *
- * - Home queues the creators it shows (requestPrefetch, never blocks Home).
+ * - Home and the Viral Posts page queue the creators they show
+ *   (requestPrefetch, never blocks the page). When nothing shown is waiting,
+ *   the worker starts on the library's strongest recent viral creators.
  * - The queue worker researches a few at a time in a hidden system workspace
  *   (runResearchPrefetch), with the normal research runners: last 30 days,
  *   at most 60 videos. A daily cap (RESEARCH_PREFETCH_DAILY_MAX, default 50
@@ -133,6 +135,56 @@ export async function requestPrefetch(creators: Array<{ platform: string; handle
   }
 }
 
+/** Queue the creators of videos a user is being shown (Home, Viral Posts). Never throws. */
+export async function requestPrefetchForPosts(
+  posts: Array<{ platform: string; creatorHandle?: string | null }>
+): Promise<void> {
+  await requestPrefetch(posts.map(p => ({ platform: p.platform, handle: p.creatorHandle ?? "" })));
+}
+
+/** Library rows read for seeding (more than needed: some are already queued). */
+const LIBRARY_SEED_SCAN = 200;
+/** Only creators active lately are worth pre-researching. */
+const LIBRARY_SEED_RECENT_DAYS = 60;
+
+/**
+ * Queue up to `limit` creators of the library's strongest recent viral
+ * videos that were never queued. Returns how many were queued; 0 on any
+ * error (for example before the library migration).
+ */
+export async function seedPrefetchFromLibrary(db: Db, limit: number): Promise<number> {
+  try {
+    const [rows] = (await db.execute(sql`
+      SELECT c.platform AS platform, c.creatorHandle AS handle
+      FROM viral_library_status s
+      JOIN viral_post_candidates c ON c.id = s.candidateId
+      WHERE s.status = 'viral'
+        AND c.creatorHandle IS NOT NULL AND c.creatorHandle <> ''
+        AND (c.publishedAt IS NULL OR c.publishedAt >= (NOW() - INTERVAL ${LIBRARY_SEED_RECENT_DAYS} DAY))
+      ORDER BY s.multiple DESC
+      LIMIT ${LIBRARY_SEED_SCAN}
+    `)) as unknown as [Array<{ platform: string; handle: string }>];
+    const targets = prefetchTargets(rows ?? []);
+    if (targets.length === 0) return 0;
+    const queued = await db
+      .select({ platform: researchPrefetch.platform, handle: researchPrefetch.handle })
+      .from(researchPrefetch);
+    const known = new Set(queued.map(q => `${q.platform}:${q.handle}`));
+    const fresh = targets.filter(t => !known.has(`${t.platform}:${t.handle}`)).slice(0, limit);
+    if (fresh.length === 0) return 0;
+    const now = new Date();
+    await db
+      .insert(researchPrefetch)
+      .ignore()
+      .values(fresh.map(t => ({ ...t, status: "pending", requestedAt: now })));
+    console.info("[research] prefetch_seeded_from_library", { creators: fresh.length });
+    return fresh.length;
+  } catch (err) {
+    console.warn("[research] prefetch_seed_failed", { error: err instanceof Error ? err.message : String(err) });
+    return 0;
+  }
+}
+
 type Runner = (args: { db: Db; ownerUserId: number; handle: string }) => Promise<number>;
 
 const runners: Record<ResearchPlatform, Runner> = {
@@ -227,12 +279,20 @@ export async function runResearchPrefetch(args: { max?: number } = {}): Promise<
     let budget = prefetchDailyMax() - Number(n);
     if (budget <= 0) return { ...out, skipped: "daily_cap" };
 
-    const due = await db
-      .select({ platform: researchPrefetch.platform, handle: researchPrefetch.handle })
-      .from(researchPrefetch)
-      .where(eq(researchPrefetch.status, "pending"))
-      .orderBy(asc(researchPrefetch.requestedAt))
-      .limit(Math.max(1, Math.min(10, args.max ?? 2)));
+    const take = Math.max(1, Math.min(10, args.max ?? 2));
+    const pending = () =>
+      db
+        .select({ platform: researchPrefetch.platform, handle: researchPrefetch.handle })
+        .from(researchPrefetch)
+        .where(eq(researchPrefetch.status, "pending"))
+        .orderBy(asc(researchPrefetch.requestedAt))
+        .limit(take);
+    let due = await pending();
+    if (due.length === 0) {
+      // Nothing shown to users is waiting: start on the library's strongest
+      // viral creators, so even creators nobody has looked at yet are ready.
+      if ((await seedPrefetchFromLibrary(db, take)) > 0) due = await pending();
+    }
     if (due.length === 0) return { ...out, skipped: "empty" };
 
     for (const row of due) {
