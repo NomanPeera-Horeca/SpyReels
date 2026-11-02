@@ -24,6 +24,7 @@ import {
   primaryKey,
   timestamp,
   tinyint,
+  uniqueIndex,
   varchar,
 } from "drizzle-orm/mysql-core";
 
@@ -215,5 +216,58 @@ export const researchPrefetch = mysqlTable(
   table => ({
     pk: primaryKey({ columns: [table.platform, table.handle] }),
     statusIdx: index("idx_research_prefetch_status").on(table.status, table.requestedAt),
+  })
+);
+
+/**
+ * Keyword bank (migration drizzle/0111_viral_keywords.sql): real search
+ * phrases per topic and platform, with how well each finds on-topic viral
+ * videos and creators. Runtime code: server/viralPosts/keywords.ts.
+ */
+export const viralKeywords = mysqlTable(
+  "viral_keywords",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    topicSlug: varchar("topicSlug", { length: 80 }).notNull(),
+    /** youtube | tiktok | instagram */
+    platform: varchar("platform", { length: 16 }).notNull(),
+    phrase: varchar("phrase", { length: 160 }).notNull(),
+    /** youtube_autocomplete | google_autocomplete | viral_hashtag | ai */
+    source: varchar("source", { length: 24 }).notNull(),
+    /** 0-100: how strongly real searches suggest this phrase. */
+    demand: int("demand").notNull().default(0),
+    runs: int("runs").notNull().default(0),
+    found: int("found").notNull().default(0),
+    passed: int("passed").notNull().default(0),
+    viral: int("viral").notNull().default(0),
+    creatorsFound: int("creatorsFound").notNull().default(0),
+    goodCreators: int("goodCreators").notNull().default(0),
+    retired: tinyint("retired").notNull().default(0),
+    lastUsedAt: timestamp("lastUsedAt"),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+    updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+  },
+  table => ({
+    uniq: uniqueIndex("uniq_viral_keywords_topic_platform_phrase").on(table.topicSlug, table.platform, table.phrase),
+    byTopic: index("idx_viral_keywords_topic_platform").on(table.topicSlug, table.platform, table.retired),
+  })
+);
+
+/**
+ * Which videos (platform + sourceId) and creators (sourceId '') each phrase
+ * found, so viral videos and good creators can be counted per phrase later.
+ */
+export const viralKeywordHits = mysqlTable(
+  "viral_keyword_hits",
+  {
+    keywordId: int("keywordId").notNull(),
+    platform: varchar("platform", { length: 16 }).notNull(),
+    sourceId: varchar("sourceId", { length: 64 }).notNull().default(""),
+    creatorHandle: varchar("creatorHandle", { length: 128 }).notNull().default(""),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    pk: primaryKey({ columns: [table.keywordId, table.sourceId, table.creatorHandle] }),
+    byVideo: index("idx_viral_keyword_hits_video").on(table.platform, table.sourceId),
   })
 );

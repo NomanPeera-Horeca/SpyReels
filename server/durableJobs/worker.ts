@@ -112,6 +112,12 @@ function startViralLibraryUnderstanding(): void {
       const understanding = await import("../viralPosts/videoUnderstanding");
       await step("ingest", () => library.ingestResearchJobs({ perSource: 5 }));
       await step("profile topics", () => topics.matchProfileTopics({ maxProfiles: 10 }));
+      await step("keyword bank", async () => {
+        const kw = await import("../viralPosts/keywords");
+        await kw.harvestDueTopics({ max: 2 });
+        // Viral counts per phrase change slowly: refresh about once an hour.
+        if (new Date().getUTCMinutes() < 5) await kw.refreshKeywordOutcomes();
+      });
       await step("rising recheck", async () => {
         const rising = await import("../viralPosts/risingRecheck");
         await rising.runRisingRecheck({ max: 30 });
