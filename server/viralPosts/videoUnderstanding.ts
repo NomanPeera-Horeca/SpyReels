@@ -518,6 +518,14 @@ async function processOne(db: Db, topics: Topic[], candidateId: number): Promise
  * Process up to `maxVideos` viral or rising videos, newest first, while
  * today's spend is under the cap. Safe to call from several workers.
  */
+const UNDERSTAND_CONCURRENCY = 4;
+
+/** Videos understood per worker tick (every 5 minutes). VIRAL_LIBRARY_UNDERSTAND_PER_TICK, default 24. */
+export function understandPerTick(): number {
+  const n = Number(process.env.VIRAL_LIBRARY_UNDERSTAND_PER_TICK);
+  return Number.isFinite(n) && n >= 1 ? Math.min(200, Math.floor(n)) : 24;
+}
+
 export async function processLibraryVideos(args: { maxVideos?: number } = {}): Promise<{
   processed: number;
   failed: number;
@@ -534,10 +542,9 @@ export async function processLibraryVideos(args: { maxVideos?: number } = {}): P
 
   await syncStarterTopics(db);
   const topics = await loadTopics(db);
-  const ids = await pickVideos(db, Math.max(1, Math.min(200, args.maxVideos ?? 10)));
-  for (const id of ids) {
-    if ((await spentToday(db)) >= budget) return { ...totals, skipped: "daily_budget" };
-    if (!(await claim(db, id))) continue;
+  const ids = await pickVideos(db, Math.max(1, Math.min(200, args.maxVideos ?? understandPerTick())));
+  const one = async (id: number) => {
+    if (!(await claim(db, id))) return;
     try {
       const r = await processOne(db, topics, id);
       await addSpend(db, r.costUsd);
@@ -557,6 +564,11 @@ export async function processLibraryVideos(args: { maxVideos?: number } = {}): P
         error: err instanceof Error ? err.message : String(err),
       });
     }
+  };
+  // A few at a time: each video waits on downloads and AI calls, not CPU.
+  for (let i = 0; i < ids.length; i += UNDERSTAND_CONCURRENCY) {
+    if ((await spentToday(db)) >= budget) return { ...totals, skipped: "daily_budget" };
+    await Promise.all(ids.slice(i, i + UNDERSTAND_CONCURRENCY).map(one));
   }
   if (ids.length > 0) console.info("[viralLibrary] understand_done", { ...totals, costUsd: Number(totals.costUsd.toFixed(4)) });
   return totals;
