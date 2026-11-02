@@ -363,20 +363,26 @@ export async function runResearchPrefetch(args: { max?: number } = {}): Promise<
     if (budget <= 0) return { ...out, skipped: "daily_cap" };
 
     const take = Math.max(1, Math.min(10, args.max ?? 2));
-    // Creators shown to users first ("pending"), then the weekly watchlist ("watch").
+    // Creators shown to users first ("pending"), then the weekly watchlist
+    // ("watch"), then new creators found in thin niches ("similar").
     const pending = () =>
       db
         .select({ platform: researchPrefetch.platform, handle: researchPrefetch.handle, status: researchPrefetch.status })
         .from(researchPrefetch)
-        .where(inArray(researchPrefetch.status, ["pending", "watch"]))
-        .orderBy(sql`${researchPrefetch.status} = 'watch'`, asc(researchPrefetch.requestedAt))
+        .where(inArray(researchPrefetch.status, ["pending", "watch", "similar"]))
+        .orderBy(sql`FIELD(${researchPrefetch.status}, 'pending', 'watch', 'similar')`, asc(researchPrefetch.requestedAt))
         .limit(take);
     let due = await pending();
     if (due.length === 0) {
       // Nothing shown to users is waiting: re-check the top creators we
-      // already know (watchlist), then start on library creators nobody has
-      // looked at yet.
-      if ((await queueWatchlist(db, take)) > 0 || (await seedPrefetchFromLibrary(db, take)) > 0) {
+      // already know (watchlist), then search thin niches for new creators
+      // (similarCreators.ts), then library creators nobody has looked at yet.
+      const { queueSimilarCreators } = await import("./similarCreators");
+      if (
+        (await queueWatchlist(db, take)) > 0 ||
+        (await queueSimilarCreators(db, take)) > 0 ||
+        (await seedPrefetchFromLibrary(db, take)) > 0
+      ) {
         due = await pending();
       }
     }
