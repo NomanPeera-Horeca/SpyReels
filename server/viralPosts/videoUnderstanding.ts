@@ -82,7 +82,7 @@ function utcDay(d = new Date()): string {
  */
 const CATCHUP_KEY = "und-catch";
 /** Videos per tick while catching up (VIRAL_LIBRARY_UNDERSTAND_PER_TICK still wins when set). */
-const CATCHUP_PER_TICK = 60;
+const CATCHUP_PER_TICK = 30;
 
 export function catchupBudgetUsd(): number {
   const n = Number(process.env.VIRAL_LIBRARY_CATCHUP_BUDGET_USD);
@@ -236,21 +236,30 @@ async function freshVideoUrl(c: ViralPostCandidate): Promise<string | null> {
   return null;
 }
 
+/**
+ * Larger videos are read from their thumbnail (plus any saved transcript)
+ * instead: a few 40MB files held at once ran the small worker out of memory.
+ */
+const MAX_LIBRARY_VIDEO_BYTES = 25 * 1024 * 1024;
+
 async function downloadedMedia(c: ViralPostCandidate): Promise<Media> {
   let costUsd = 0;
   const platform = c.platform as "instagram" | "tiktok";
   let buffer: Buffer | null = null;
+  const keep = (r: unknown) => (Buffer.isBuffer(r) && r.length <= MAX_LIBRARY_VIDEO_BYTES ? r : null);
+  let tooLarge = false;
   if (c.videoUrl) {
     const r = await downloadVideo(c.videoUrl, c.sourceId);
-    if (Buffer.isBuffer(r)) buffer = r;
+    buffer = keep(r);
+    tooLarge = Buffer.isBuffer(r) && !buffer;
   }
-  if (!buffer) {
+  if (!buffer && !tooLarge) {
     // Instagram/TikTok links expire; ask the provider for a fresh one once.
     const url = await freshVideoUrl(c);
     costUsd += PROVIDER_CALL_USD;
     if (url) {
       const r = await downloadVideo(url, c.sourceId);
-      if (Buffer.isBuffer(r)) buffer = r;
+      buffer = keep(r);
     }
   }
   if (!buffer) {
@@ -558,7 +567,13 @@ async function processOne(db: Db, topics: Topic[], candidateId: number): Promise
  * Process up to `maxVideos` viral or rising videos, newest first, while
  * today's spend is under the cap. Safe to call from several workers.
  */
-const UNDERSTAND_CONCURRENCY = 4;
+/** Videos understood at once (VIRAL_LIBRARY_UNDERSTAND_CONCURRENCY, default 2): each holds a video in memory. */
+const UNDERSTAND_CONCURRENCY = (() => {
+  const n = Number(process.env.VIRAL_LIBRARY_UNDERSTAND_CONCURRENCY);
+  return Number.isFinite(n) && n >= 1 ? Math.min(8, Math.floor(n)) : 2;
+})();
+/** One slow download or AI call must not hold up the whole batch. */
+const PER_VIDEO_TIMEOUT_MS = 4 * 60_000;
 
 /** Videos understood per worker tick (every 5 minutes). VIRAL_LIBRARY_UNDERSTAND_PER_TICK, default 24. */
 export function understandPerTick(): number {
@@ -599,7 +614,13 @@ export async function processLibraryVideos(args: { maxVideos?: number } = {}): P
   const one = async (id: number) => {
     if (!(await claim(db, id))) return;
     try {
-      const r = await processOne(db, topics, id);
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const r = await Promise.race([
+        processOne(db, topics, id),
+        new Promise<never>((_, reject) => {
+          timer = setTimeout(() => reject(new Error("video took longer than 4 minutes")), PER_VIDEO_TIMEOUT_MS);
+        }),
+      ]).finally(() => clearTimeout(timer));
       await addSpend(r.costUsd);
       totals.processed += 1;
       totals.costUsd += r.costUsd;
