@@ -16,6 +16,8 @@
  * Never throws into the caller.
  */
 import { eq, sql } from "drizzle-orm";
+import { viralPostPools } from "../../drizzle/schema";
+import { scrapeCreatorsOutOfCredits, scrapeCreatorsOutOfCreditsSince } from "../scrapeCreatorsMeter";
 import { viralProcessingSpend, viralProfileTopics, viralTopics } from "../../drizzle/viralLibrarySchema";
 import { VIRAL_TOPIC_CATEGORY_LABELS } from "../../shared/viralTopics";
 import { getDb } from "../db";
@@ -94,7 +96,7 @@ export async function runTopicFill(args: { maxPools?: number } = {}): Promise<{
   costUsd: number;
   spentTotalUsd: number;
   remaining: number;
-  skipped?: "db_unavailable" | "migration_missing" | "budget_reached" | "no_platforms" | "done";
+  skipped?: "db_unavailable" | "migration_missing" | "budget_reached" | "no_platforms" | "done" | "out_of_credits";
 }> {
   const out = { searched: 0, candidates: 0, costUsd: 0, spentTotalUsd: 0, remaining: 0 };
   const db = await getDb();
@@ -110,6 +112,8 @@ export async function runTopicFill(args: { maxPools?: number } = {}): Promise<{
     }
     return { ...out, skipped: "no_platforms" };
   }
+  // Provider out of credits: searching now would only record empty topics.
+  if (scrapeCreatorsOutOfCredits()) return { ...out, skipped: "out_of_credits" };
   const budget = topicFillBudgetUsd();
   let spent = (await fillSpent(db)).usd;
   out.spentTotalUsd = spent;
@@ -141,7 +145,15 @@ export async function runTopicFill(args: { maxPools?: number } = {}): Promise<{
   for (const pool of pools) {
     if (spent >= budget) return { ...out, skipped: "budget_reached" };
     try {
+      const started = Date.now();
       const r = await refreshPoolById(pool.id, { force: true });
+      if (scrapeCreatorsOutOfCreditsSince(started)) {
+        // The provider ran out of credits during this search: its empty result
+        // is not real. Leave the topic unsearched (and unbilled) and stop.
+        await db.update(viralPostPools).set({ lastRefreshedAt: null }).where(eq(viralPostPools.id, pool.id));
+        console.warn("[viralLibrary] fill_paused_out_of_credits", { poolKey: pool.poolKey });
+        return { ...out, spentTotalUsd: spent, remaining: pending.length - out.searched, skipped: "out_of_credits" };
+      }
       const cost = r.scCalls * usdPerCredit();
       spent += cost;
       out.searched += 1;

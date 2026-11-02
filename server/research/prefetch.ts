@@ -27,6 +27,7 @@ import {
 } from "../../drizzle/schema";
 import { researchPrefetch } from "../../drizzle/viralLibrarySchema";
 import { createScrapeJob, getDb } from "../db";
+import { scrapeCreatorsOutOfCredits, scrapeCreatorsOutOfCreditsSince } from "../scrapeCreatorsMeter";
 import {
   RECENT_RESEARCH_MAX_AGE_DAYS,
   recentResearchJobId,
@@ -250,7 +251,7 @@ export async function runResearchPrefetch(args: { max?: number } = {}): Promise<
   researched: number;
   alreadyFresh: number;
   failed: number;
-  skipped?: "disabled" | "not_ready" | "daily_cap" | "empty";
+  skipped?: "disabled" | "not_ready" | "daily_cap" | "empty" | "out_of_credits";
 }> {
   const out = { researched: 0, alreadyFresh: 0, failed: 0 };
   if (!prefetchEnabled()) return { ...out, skipped: "disabled" };
@@ -258,6 +259,8 @@ export async function runResearchPrefetch(args: { max?: number } = {}): Promise<
   if (!db) return { ...out, skipped: "not_ready" };
   const ownerUserId = await systemOwner(db);
   if (ownerUserId == null) return { ...out, skipped: "not_ready" };
+  // Provider out of credits: research would only fail. Try again later.
+  if (scrapeCreatorsOutOfCredits()) return { ...out, skipped: "out_of_credits" };
   try {
     // A worker restart mid-research leaves rows "running": queue them again.
     await db
@@ -326,7 +329,18 @@ export async function runResearchPrefetch(args: { max?: number } = {}): Promise<
           break;
         }
         budget -= 1;
+        const started = Date.now();
         const jobId = await runners[platform]({ db, ownerUserId, handle: row.handle });
+        if (scrapeCreatorsOutOfCreditsSince(started)) {
+          // Failed only because the provider ran out of credits: keep it
+          // queued (not failed) and stop until credits are back.
+          await db
+            .update(researchPrefetch)
+            .set({ status: "pending", jobId: null, startedAt: null, attempts: sql`GREATEST(attempts - 1, 0)` })
+            .where(key);
+          console.warn("[research] prefetch_paused_out_of_credits", { platform, handle: row.handle });
+          return { ...out, skipped: "out_of_credits" };
+        }
         if (await jobCompleted(db, platform, jobId)) {
           await finish("done", jobId, null);
           out.researched += 1;
@@ -335,6 +349,10 @@ export async function runResearchPrefetch(args: { max?: number } = {}): Promise<
           out.failed += 1;
         }
       } catch (err) {
+        if (scrapeCreatorsOutOfCredits()) {
+          await db.update(researchPrefetch).set({ status: "pending", startedAt: null }).where(key);
+          return { ...out, skipped: "out_of_credits" };
+        }
         await finish("failed", null, err instanceof Error ? err.message : String(err));
         out.failed += 1;
       }

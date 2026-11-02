@@ -13,6 +13,7 @@
  * Uses AsyncLocalStorage so concurrent jobs never share a meter.
  */
 import { AsyncLocalStorage } from "node:async_hooks";
+import { alertOwnerThrottled } from "./monitoring/alerts";
 
 export const SCRAPECREATORS_BUDGET_STATUS = 498;
 /** Same convention as discovery and Viral Posts: 1 credit per request. */
@@ -63,8 +64,49 @@ export function meterScrapeCreatorsRequest(): {
   return null;
 }
 
+// ─── Out-of-credits safety stop ──────────────────────────────────────
+// ScrapeCreators answers 402 when the account has no credits left. Background
+// work (library fill, pre-research) checks scrapeCreatorsOutOfCredits() and
+// pauses instead of recording empty results; the owner gets one alert.
+
+/** How long background work pauses after a 402 before trying again. */
+export const SCRAPECREATORS_CREDIT_PAUSE_MS = 30 * 60_000;
+let lastOutOfCreditsAt: number | null = null;
+
+/** Remember a provider answer: 402 starts the pause, any success ends it. */
+export function noteScrapeCreatorsStatus(status: number, now = Date.now()): void {
+  if (status === 402) {
+    const first = lastOutOfCreditsAt == null;
+    lastOutOfCreditsAt = now;
+    if (first) {
+      alertOwnerThrottled({
+        kind: "scrapecreators_out_of_credits",
+        message:
+          "ScrapeCreators is out of credits (HTTP 402). Creator research fails and the library fill and pre-research are paused until credits are topped up.",
+      });
+    }
+  } else if (status >= 200 && status < 300) {
+    lastOutOfCreditsAt = null;
+  }
+}
+
+/** True while background work should not spend provider calls. */
+export function scrapeCreatorsOutOfCredits(now = Date.now()): boolean {
+  return lastOutOfCreditsAt != null && now - lastOutOfCreditsAt < SCRAPECREATORS_CREDIT_PAUSE_MS;
+}
+
+/** True when a 402 was seen at or after `since` (ms): that work's results are not real. */
+export function scrapeCreatorsOutOfCreditsSince(since: number): boolean {
+  return lastOutOfCreditsAt != null && lastOutOfCreditsAt >= since;
+}
+
+export function resetScrapeCreatorsCreditStateForTests(): void {
+  lastOutOfCreditsAt = null;
+}
+
 /** Called by each integration's scGet after the provider answered (or timed out). */
 export function meterScrapeCreatorsResponse(status: number): void {
+  noteScrapeCreatorsStatus(status);
   const state = storage.getStore();
   if (!state) return;
   const key = String(status);
