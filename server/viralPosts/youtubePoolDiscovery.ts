@@ -1,4 +1,5 @@
 import type { YouTubeVideoData } from "../youtube";
+import { noteScrapeCreatorsStatus } from "../scrapeCreatorsMeter";
 import type { AdaptedCandidate } from "./candidateAdapter";
 import { adaptYouTubeShorts } from "./platformAdapters";
 import {
@@ -197,6 +198,7 @@ async function searchYouTubeShorts(args: {
         data = text;
       }
     }
+    noteScrapeCreatorsStatus(response.status);
     if (!response.ok) {
       throw new Error(`YouTube Shorts search failed: HTTP ${response.status}`);
     }
