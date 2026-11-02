@@ -1,51 +1,38 @@
 /**
- * Does ScrapeCreators return related / similar accounts? One profile call per
- * platform (3 calls). Prints the paths of any field whose name looks like
- * related/similar/suggested/chaining/recommended, how many items it holds and
- * a few handles. No secrets, no database.
+ * Which ScrapeCreators endpoints can search for CREATORS by niche keywords?
+ * One call per endpoint. Prints status, array sizes and the first item's keys
+ * (with follower-like numbers). No secrets, no database.
  */
 const key = process.env.SCRAPECREATORS_API_KEY?.trim();
 if (!key) throw new Error("SCRAPECREATORS_API_KEY is not set.");
+const q = "home workout coach";
 const calls: Array<[string, string, Record<string, string>]> = [
-  ["instagram", "/v1/instagram/profile", { handle: "garyvee" }],
-  ["tiktok", "/v1/tiktok/profile", { handle: "garyvee" }],
-  ["youtube", "/v1/youtube/channel", { handle: "GaryVee" }],
+  ["tiktok users", "/v1/tiktok/search/users", { query: q }],
+  ["youtube channels", "/v1/youtube/search", { query: q, type: "channel" }],
+  ["instagram search", "/v1/instagram/search", { query: q }],
+  ["instagram reels search", "/v1/instagram/reels/search", { query: q }],
 ];
-const pattern = /related|similar|suggest|chain|recommend|also_follow|edge_related/i;
-function walk(value: unknown, path: string, out: string[], depth = 0): void {
-  if (depth > 6 || value == null || typeof value !== "object") return;
-  if (Array.isArray(value)) {
-    if (value.length > 0) walk(value[0], `${path}[0]`, out, depth + 1);
-    return;
-  }
-  for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-    const p = path ? `${path}.${k}` : k;
-    if (pattern.test(k)) {
-      const arr = Array.isArray(v)
-        ? v
-        : v && typeof v === "object" && Array.isArray((v as { edges?: unknown[] }).edges)
-          ? ((v as { edges: unknown[] }).edges)
-          : null;
-      const sample = (arr ?? []).slice(0, 5).map(x => {
-        const o = (x && typeof x === "object" ? ((x as { node?: unknown }).node ?? x) : x) as Record<string, unknown>;
-        return o && typeof o === "object" ? String(o.username ?? o.handle ?? o.uniqueId ?? o.title ?? o.id ?? "?") : String(o);
-      });
-      out.push(`${p} type=${Array.isArray(v) ? "array" : typeof v} items=${arr ? arr.length : "-"} sample=${JSON.stringify(sample)}`);
-    }
-    walk(v, p, out, depth + 1);
-  }
-}
-for (const [platform, path, params] of calls) {
+for (const [name, path, params] of calls) {
   const url = new URL(`https://api.scrapecreators.com${path}`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-  const res = await fetch(url, { headers: { "x-api-key": key } });
-  const text = await res.text();
-  let data: unknown = null;
-  try { data = JSON.parse(text); } catch { data = null; }
-  const found: string[] = [];
-  walk(data, "", found);
-  const top = data && typeof data === "object" ? Object.keys(data as object).slice(0, 25).join(",") : "";
-  console.log(`PLATFORM ${platform} STATUS ${res.status} BYTES ${text.length} TOP ${top}`);
-  for (const line of found.slice(0, 15)) console.log(`  FOUND ${line}`);
-  if (found.length === 0) console.log("  FOUND none");
+  try {
+    const res = await fetch(url, { headers: { "x-api-key": key } });
+    const text = await res.text();
+    let data: Record<string, unknown> = {};
+    try { data = JSON.parse(text); } catch { /* not json */ }
+    const arrays = Object.entries(data).filter(([, v]) => Array.isArray(v)).map(([k, v]) => `${k}=${(v as unknown[]).length}`);
+    console.log(`ENDPOINT ${name} ${path} STATUS ${res.status} BYTES ${text.length} ARRAYS ${arrays.join(" ") || "-"} TOP ${Object.keys(data).slice(0, 12).join(",")}`);
+    const firstArr = Object.values(data).find(v => Array.isArray(v) && v.length > 0) as unknown[] | undefined;
+    const first = firstArr?.[0];
+    if (first && typeof first === "object") {
+      const o = ((first as { user?: unknown; user_info?: unknown }).user ?? (first as { user_info?: unknown }).user_info ?? first) as Record<string, unknown>;
+      const keys = Object.keys(o).slice(0, 30).join(",");
+      const pick = ["unique_id", "uniqueId", "username", "handle", "nickname", "title", "follower_count", "followerCount", "subscriberCount", "subscriberCountText", "followers"]
+        .filter(k => k in o).map(k => `${k}=${JSON.stringify(o[k]).slice(0, 40)}`).join(" ");
+      console.log(`  FIRST keys=${keys}`);
+      console.log(`  FIRST ${pick}`);
+    }
+  } catch (e) {
+    console.log(`ENDPOINT ${name} ERROR ${e instanceof Error ? e.message : String(e)}`);
+  }
 }
