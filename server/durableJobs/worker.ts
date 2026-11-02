@@ -112,6 +112,10 @@ function startViralLibraryUnderstanding(): void {
       const understanding = await import("../viralPosts/videoUnderstanding");
       await step("ingest", () => library.ingestResearchJobs({ perSource: 5 }));
       await step("profile topics", () => topics.matchProfileTopics({ maxProfiles: 10 }));
+      await step("youtube channels", async () => {
+        const yt = await import("../viralPosts/youtubeChannels");
+        await yt.repairYouTubeLibraryCreators({ max: 40 });
+      });
       await step("understanding", () => understanding.processLibraryVideos({ maxVideos: 8 }));
       await step("embeddings", async () => {
         await understanding.embedMissingVideos({ max: 50 });

@@ -19,6 +19,7 @@
  */
 import { and, asc, eq, gte, sql } from "drizzle-orm";
 import { normalizeInstagramHandle } from "@shared/socialHandles";
+import { VIRAL_RULE } from "@shared/viralRule";
 import {
   scrapeJobs,
   tiktokScrapeJobs,
@@ -150,7 +151,8 @@ const LIBRARY_SEED_RECENT_DAYS = 60;
 
 /**
  * Queue up to `limit` creators of the library's strongest recent viral
- * videos that were never queued. Returns how many were queued; 0 on any
+ * videos (and YouTube channels still waiting for a verdict) that were never
+ * queued. Returns how many were queued; 0 on any
  * error (for example before the library migration).
  */
 export async function seedPrefetchFromLibrary(db: Db, limit: number): Promise<number> {
@@ -159,10 +161,17 @@ export async function seedPrefetchFromLibrary(db: Db, limit: number): Promise<nu
       SELECT c.platform AS platform, c.creatorHandle AS handle
       FROM viral_library_status s
       JOIN viral_post_candidates c ON c.id = s.candidateId
-      WHERE s.status = 'viral'
+      WHERE (
+          s.status = 'viral'
+          -- YouTube Shorts from search stay "unknown" until their channel is
+          -- researched (that gives its usual views): those go first, since
+          -- they cannot show anywhere until then.
+          OR (c.platform = 'youtube' AND s.status = 'unknown' AND c.views >= ${VIRAL_RULE.minViews})
+        )
         AND c.creatorHandle IS NOT NULL AND c.creatorHandle <> ''
+        AND LOWER(TRIM(LEADING '@' FROM c.creatorHandle)) <> 'youtube'
         AND (c.publishedAt IS NULL OR c.publishedAt >= (NOW() - INTERVAL ${LIBRARY_SEED_RECENT_DAYS} DAY))
-      ORDER BY s.multiple DESC
+      ORDER BY (s.status = 'unknown') DESC, s.multiple DESC, c.views DESC
       LIMIT ${LIBRARY_SEED_SCAN}
     `)) as unknown as [Array<{ platform: string; handle: string }>];
     const targets = prefetchTargets(rows ?? []);
