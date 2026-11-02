@@ -16,7 +16,36 @@ import path from "node:path";
 export const FRAME_WIDTH = 384;
 const FFMPEG_TIMEOUT_MS = 90_000;
 
+/**
+ * At most this many ffmpeg processes at once (VIRAL_FFMPEG_CONCURRENCY,
+ * default 2). The worker is a small machine: four full video decodes at once
+ * made each one slow enough to hit the timeout.
+ */
+const FFMPEG_CONCURRENCY = (() => {
+  const n = Number(process.env.VIRAL_FFMPEG_CONCURRENCY);
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 2;
+})();
+let ffmpegRunning = 0;
+const ffmpegWaiting: Array<() => void> = [];
+
+async function withFfmpegSlot<T>(run: () => Promise<T>): Promise<T> {
+  if (ffmpegRunning >= FFMPEG_CONCURRENCY) {
+    await new Promise<void>(resolve => ffmpegWaiting.push(resolve));
+  }
+  ffmpegRunning += 1;
+  try {
+    return await run();
+  } finally {
+    ffmpegRunning -= 1;
+    ffmpegWaiting.shift()?.();
+  }
+}
+
 function runFfmpeg(args: string[], opts: { binaryOut?: boolean } = {}): Promise<{ stdout: Buffer; stderr: string }> {
+  return withFfmpegSlot(() => runFfmpegNow(args, opts));
+}
+
+function runFfmpegNow(args: string[], opts: { binaryOut?: boolean } = {}): Promise<{ stdout: Buffer; stderr: string }> {
   return new Promise((resolve, reject) => {
     const proc = spawn("ffmpeg", ["-hide_banner", "-nostdin", ...args]);
     const out: Buffer[] = [];
@@ -114,9 +143,13 @@ export async function openVideo(buffer: Buffer): Promise<VideoWorkspace> {
   await writeFile(file, buffer);
   const cleanup = () => rm(dir, { recursive: true, force: true });
   try {
+    // Scene changes from keyframes only, at a small size: about 10x less work
+    // than decoding every frame at full size, and scene cuts start on
+    // keyframes in short-form video anyway.
     const { stderr } = await runFfmpeg([
+      "-skip_frame", "nokey",
       "-i", file,
-      "-vf", "select='gt(scene,0.3)',showinfo",
+      "-vf", "scale=160:-2,select='gt(scene,0.3)',showinfo",
       "-af", "silencedetect=noise=-35dB:d=0.5",
       "-f", "null", "-",
     ]);
