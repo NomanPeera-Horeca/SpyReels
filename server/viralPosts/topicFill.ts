@@ -181,3 +181,129 @@ export async function runTopicFill(args: { maxPools?: number } = {}): Promise<{
   console.info("[viralLibrary] fill_done", { ...out, costUsd: Number(out.costUsd.toFixed(4)) });
   return out;
 }
+
+/* ---------- recurring topic refresh (after the one-time fill) ---------- */
+
+/** Topics our creators have: searched again after this many days. */
+export const REFRESH_DEMAND_DAYS = 3;
+/** Every other topic: searched again after this many days. */
+export const REFRESH_OTHER_DAYS = 14;
+
+export function topicRefreshWeeklyBudgetUsd(): number {
+  const n = Number(process.env.VIRAL_TOPIC_REFRESH_WEEKLY_USD);
+  return Number.isFinite(n) && n >= 0 ? n : 10;
+}
+
+/** Spend key for the ISO-like week of `d` (max 10 chars, fits viral_processing_spend.day). Pure; exported for tests. */
+export function refreshWeekKey(d = new Date()): string {
+  const start = Date.UTC(d.getUTCFullYear(), 0, 1);
+  const week = Math.floor((d.getTime() - start) / (7 * 86_400_000)) + 1;
+  return `rf${d.getUTCFullYear()}w${String(week).padStart(2, "0")}`;
+}
+
+/**
+ * Which already-searched topic pools are due again, most wanted first.
+ * Pure; exported for tests.
+ */
+export function pickDueRefreshes<T extends { creators: number; lastRefreshedAt: Date | null }>(
+  rows: T[],
+  now = new Date()
+): T[] {
+  const dayMs = 86_400_000;
+  return rows
+    .filter(r => {
+      if (!r.lastRefreshedAt) return false; // never searched: that is the fill's job
+      const days = r.creators > 0 ? REFRESH_DEMAND_DAYS : REFRESH_OTHER_DAYS;
+      return now.getTime() - r.lastRefreshedAt.getTime() >= days * dayMs;
+    })
+    .sort(
+      (a, b) =>
+        b.creators - a.creators ||
+        (a.lastRefreshedAt?.getTime() ?? 0) - (b.lastRefreshedAt?.getTime() ?? 0)
+    );
+}
+
+/**
+ * Keep the library fresh: search topics again on a schedule (topics our
+ * creators have every 3 days, the rest every 14), new viral videos flow into
+ * the library as with the fill. Weekly cap VIRAL_TOPIC_REFRESH_WEEKLY_USD
+ * (default $10). Pauses while ScrapeCreators is out of credits. Never throws.
+ */
+export async function runTopicRefresh(args: { maxPools?: number } = {}): Promise<{
+  searched: number;
+  candidates: number;
+  costUsd: number;
+  spentWeekUsd: number;
+  due: number;
+  skipped?: "db_unavailable" | "migration_missing" | "no_platforms" | "budget_reached" | "out_of_credits" | "none_due";
+}> {
+  const out = { searched: 0, candidates: 0, costUsd: 0, spentWeekUsd: 0, due: 0 };
+  const db = await getDb();
+  if (!db) return { ...out, skipped: "db_unavailable" };
+  if (!(await isTopicsReady(db))) return { ...out, skipped: "migration_missing" };
+  const platforms = topicFillPlatforms();
+  if (platforms.length === 0) return { ...out, skipped: "no_platforms" };
+  if (scrapeCreatorsOutOfCredits()) return { ...out, skipped: "out_of_credits" };
+  const weekKey = refreshWeekKey();
+  const budget = topicRefreshWeeklyBudgetUsd();
+  const [weekRow] = await db.select().from(viralProcessingSpend).where(eq(viralProcessingSpend.day, weekKey)).limit(1);
+  let spent = weekRow ? Number(weekRow.usd) : 0;
+  out.spentWeekUsd = spent;
+  if (spent >= budget) return { ...out, skipped: "budget_reached" };
+
+  const [topics, demand] = await Promise.all([
+    db.select({ slug: viralTopics.slug, label: viralTopics.label, category: viralTopics.category }).from(viralTopics),
+    db
+      .select({ slug: viralProfileTopics.topicSlug, n: sql<number>`count(*)` })
+      .from(viralProfileTopics)
+      .groupBy(viralProfileTopics.topicSlug),
+  ]);
+  const creators = new Map(demand.map(d => [d.slug, Number(d.n)]));
+  const plan = planFill(
+    topics.map(t => ({ label: t.label, category: t.category, creators: creators.get(t.slug) ?? 0 })),
+    platforms
+  );
+  const demandByKey = new Map(
+    topics.flatMap(t =>
+      platforms.map(platform => [
+        buildPoolKey({ platform, niche: fillNicheForCategory(t.category), pillar: t.label }),
+        creators.get(t.slug) ?? 0,
+      ] as const)
+    )
+  );
+  const existing = await poolRepo.findExistingPools(plan);
+  const due = pickDueRefreshes(
+    existing.map(p => ({ pool: p, creators: demandByKey.get(p.poolKey) ?? 0, lastRefreshedAt: p.lastRefreshedAt }))
+  );
+  out.due = due.length;
+  if (due.length === 0) return { ...out, skipped: "none_due" };
+
+  for (const { pool } of due.slice(0, Math.max(1, Math.min(10, args.maxPools ?? 3)))) {
+    if (spent >= budget) return { ...out, skipped: "budget_reached" };
+    try {
+      const started = Date.now();
+      const r = await refreshPoolById(pool.id, { force: true });
+      if (scrapeCreatorsOutOfCreditsSince(started)) {
+        console.warn("[viralLibrary] topic_refresh_paused_out_of_credits", { poolKey: pool.poolKey });
+        return { ...out, spentWeekUsd: spent, skipped: "out_of_credits" };
+      }
+      const cost = r.scCalls * usdPerCredit();
+      spent += cost;
+      out.searched += 1;
+      out.candidates += r.status === "refreshed" ? r.candidateCount : 0;
+      out.costUsd += cost;
+      await db
+        .insert(viralProcessingSpend)
+        .values({ day: weekKey, usd: cost.toFixed(4), videos: 1 })
+        .onDuplicateKeyUpdate({ set: { usd: sql`usd + ${cost.toFixed(4)}`, videos: sql`videos + 1` } });
+    } catch (err) {
+      console.warn("[viralLibrary] topic_refresh_failed", {
+        poolKey: pool.poolKey,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  out.spentWeekUsd = spent;
+  console.info("[viralLibrary] topic_refresh_done", { ...out, costUsd: Number(out.costUsd.toFixed(4)) });
+  return out;
+}
