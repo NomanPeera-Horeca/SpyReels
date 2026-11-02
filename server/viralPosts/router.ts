@@ -27,6 +27,7 @@ import {
 } from "./canonicalSaved";
 import { preservesEmptyTaxonomyFeed } from "../personalization/home/inventoryMatch";
 import { browseViralPosts } from "./browseService";
+import { requestPrefetchForPosts } from "../research/prefetch";
 import * as repo from "./repository";
 import {
   appendLibraryPosts,
@@ -294,13 +295,20 @@ export const viralPostsRouter = router({
         localDate: input.localDate,
         feed,
       });
-      if (withFallback.items.length >= VIRAL_DAILY_FEED_MAX) return withFallback;
-      const library = await libraryPostsForUser({
-        userId: ctx.user.id,
-        workspaceId: ctx.workspaceId,
-        limit: VIRAL_DAILY_FEED_MAX,
-      });
-      return fillFeedFromLibrary(withFallback, library);
+      const filled =
+        withFallback.items.length >= VIRAL_DAILY_FEED_MAX
+          ? withFallback
+          : fillFeedFromLibrary(
+              withFallback,
+              await libraryPostsForUser({
+                userId: ctx.user.id,
+                workspaceId: ctx.workspaceId,
+                limit: VIRAL_DAILY_FEED_MAX,
+              })
+            );
+      // Research these creators in the background so a click opens instantly.
+      void requestPrefetchForPosts(filled.items);
+      return filled;
     }),
 
   getFeedHistory: viralPostsProcedure
@@ -329,14 +337,21 @@ export const viralPostsRouter = router({
 
   browse: viralPostsProcedure.query(async ({ ctx }) => {
     const browse = await browseViralPosts(ctx.user.id);
-    if (browse.items.length >= EXPLORE_LIBRARY_LIMIT) return browse;
     // Today's pool results first; the shared library fills the rest.
-    const library = await libraryPostsForUser({
-      userId: ctx.user.id,
-      workspaceId: ctx.workspaceId,
-      limit: EXPLORE_LIBRARY_LIMIT,
-    });
-    return { ...browse, items: appendLibraryPosts(browse.items, library, EXPLORE_LIBRARY_LIMIT) };
+    const items =
+      browse.items.length >= EXPLORE_LIBRARY_LIMIT
+        ? browse.items
+        : appendLibraryPosts(
+            browse.items,
+            await libraryPostsForUser({
+              userId: ctx.user.id,
+              workspaceId: ctx.workspaceId,
+              limit: EXPLORE_LIBRARY_LIMIT,
+            }),
+            EXPLORE_LIBRARY_LIMIT
+          );
+    void requestPrefetchForPosts(items);
+    return { ...browse, items };
   }),
 
   search: viralPostsProcedure
