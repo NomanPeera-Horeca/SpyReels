@@ -5,6 +5,10 @@
  * Where phrases come from (real demand first, AI last):
  * - YouTube autocomplete: what people type into YouTube search;
  * - Google autocomplete: what people type into Google;
+ * - TikTok autocomplete (ScrapeCreators, 1 credit per call): what people
+ *   type into TikTok search;
+ * - Google monthly search volume (DataForSEO, searchVolume.ts) raises the
+ *   demand of phrases that turn out to be searched a lot;
  * - hashtags of the topic's viral videos in our library: proven creator
  *   language;
  * - AI-written phrases stay the fallback when the bank has nothing.
@@ -19,8 +23,10 @@
  * function here is a quiet no-op and discovery keeps using AI phrases.
  */
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { viralKeywordHits, viralKeywords, viralTopics } from "../../drizzle/viralLibrarySchema";
+import { viralKeywordHits, viralKeywords, viralProcessingSpend, viralTopics } from "../../drizzle/viralLibrarySchema";
+import { createHash } from "node:crypto";
 import { getDb } from "../db";
+import { noteScrapeCreatorsStatus, scrapeCreatorsOutOfCredits } from "../scrapeCreatorsMeter";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 export type KeywordPlatform = "youtube" | "tiktok" | "instagram";
@@ -133,7 +139,51 @@ async function fetchAutocomplete(query: string, youtube: boolean): Promise<strin
   }
 }
 
+/** TikTok search suggestions answer {suggestions:[{text, position, language}]}. English only. Pure; exported for tests. */
+export function parseTikTokSuggestions(body: unknown): string[] {
+  const list = (body as { suggestions?: unknown })?.suggestions;
+  if (!Array.isArray(list)) return [];
+  return list
+    .filter((s): s is { text: string; language?: string } => typeof (s as { text?: unknown })?.text === "string")
+    .filter(s => !s.language || s.language === "en")
+    .map(s => s.text);
+}
+
+/** What people type into TikTok search (ScrapeCreators, 1 credit). [] on any problem. */
+async function fetchTikTokSuggestions(query: string): Promise<string[]> {
+  const key = process.env.SCRAPECREATORS_API_KEY?.trim();
+  if (!key || process.env.KEYWORD_TIKTOK_SUGGESTIONS === "false" || scrapeCreatorsOutOfCredits()) return [];
+  const url = new URL("https://api.scrapecreators.com/v1/tiktok/search/suggestions");
+  url.searchParams.set("query", query);
+  try {
+    const res = await fetch(url, { headers: { "x-api-key": key }, signal: AbortSignal.timeout(20_000) });
+    noteScrapeCreatorsStatus(res.status);
+    if (!res.ok) return [];
+    return parseTikTokSuggestions(await res.json());
+  } catch {
+    return [];
+  }
+}
+
+/** "Topic got TikTok suggestions" marker in viral_processing_spend (10 chars). Pure; exported for tests. */
+export function tiktokHarvestKey(topicSlug: string): string {
+  return `tk${createHash("sha1").update(topicSlug).digest("hex").slice(0, 8)}`;
+}
+
 type Harvested = { phrase: string; source: string; demand: number; platforms: KeywordPlatform[] };
+
+/** TikTok's own suggestions for a topic (2 calls): TikTok demand, also a good social signal for Instagram. */
+async function harvestTikTokPhrases(label: string): Promise<Harvested[]> {
+  const out: Harvested[] = [];
+  for (const seed of [label, `how to ${label}`]) {
+    const list = await fetchTikTokSuggestions(seed);
+    list.forEach((raw, i) => {
+      const phrase = normalizePhrase(raw);
+      if (phrase) out.push({ phrase, source: "tiktok_autocomplete", demand: demandFromRank(i, list.length), platforms: ["tiktok", "instagram"] });
+    });
+  }
+  return out;
+}
 
 /** Real search phrases for one topic. No paid calls. */
 export async function harvestTopicPhrases(db: Db, topic: { slug: string; label: string }): Promise<Harvested[]> {
@@ -159,6 +209,8 @@ export async function harvestTopicPhrases(db: Db, topic: { slug: string; label: 
     const google = await fetchAutocomplete(seed, false);
     google.forEach((s, i) => add(s, "google_autocomplete", demandFromRank(i, google.length, 0.85), ["youtube", "tiktok", "instagram"]));
   }
+
+  for (const h of await harvestTikTokPhrases(label)) add(h.phrase, h.source, h.demand, h.platforms);
 
   // Hashtags of this topic's viral videos: the words creators who win use.
   const [tagRows] = (await db.execute(sql`
@@ -199,6 +251,13 @@ async function saveHarvest(db: Db, topicSlug: string, phrases: Harvested[]): Pro
   return rows.length;
 }
 
+async function markTikTokHarvested(db: Db, topicSlug: string): Promise<void> {
+  await db
+    .insert(viralProcessingSpend)
+    .values({ day: tiktokHarvestKey(topicSlug), usd: "0.0040", videos: 2 })
+    .onDuplicateKeyUpdate({ set: { videos: sql`videos + 2` } });
+}
+
 /** Harvest phrases for up to `max` topics that have none or a stale set (30+ days). Never throws. */
 export async function harvestDueTopics(args: { max?: number } = {}): Promise<{ topics: number; phrases: number }> {
   const out = { topics: 0, phrases: 0 };
@@ -218,6 +277,27 @@ export async function harvestDueTopics(args: { max?: number } = {}): Promise<{ t
       const phrases = await harvestTopicPhrases(db, topic);
       out.phrases += await saveHarvest(db, topic.slug, phrases);
       out.topics += 1;
+      await markTikTokHarvested(db, topic.slug);
+    }
+    // Topics harvested before TikTok suggestions existed: add TikTok's phrases once.
+    if ((due ?? []).length === 0 && !scrapeCreatorsOutOfCredits()) {
+      const [all] = (await db.execute(sql`
+        SELECT t.slug AS slug, t.label AS label FROM viral_topics t
+        ORDER BY (SELECT COUNT(*) FROM viral_profile_topics pt WHERE pt.topicSlug = t.slug) DESC
+      `)) as unknown as [Array<{ slug: string; label: string }>];
+      const marks = new Set(
+        (await db.select({ day: viralProcessingSpend.day }).from(viralProcessingSpend).where(sql`${viralProcessingSpend.day} LIKE 'tk%'`)).map(r => r.day)
+      );
+      let done = 0;
+      for (const topic of all ?? []) {
+        if (done >= Math.max(1, Math.min(10, args.max ?? 2))) break;
+        if (marks.has(tiktokHarvestKey(topic.slug))) continue;
+        const phrases = await harvestTikTokPhrases(topic.label.toLowerCase());
+        out.phrases += await saveHarvest(db, topic.slug, phrases);
+        await markTikTokHarvested(db, topic.slug);
+        out.topics += 1;
+        done += 1;
+      }
     }
     if (out.topics > 0) console.info("[viralLibrary] keywords_harvested", out);
   } catch (err) {

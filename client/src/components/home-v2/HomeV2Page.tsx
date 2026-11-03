@@ -197,7 +197,12 @@ export default function HomeV2Page() {
       id: `search:${i.phrase}`,
       title: i.title,
       hook: null,
-      badge: i.viralFound > 0 ? C.ideas.searchedProven(i.viralFound) : C.ideas.searched,
+      badge:
+        i.searchVolume != null && i.searchVolume >= 10
+          ? C.ideas.searchedVolume(compactNumber(i.searchVolume))
+          : i.viralFound > 0
+            ? C.ideas.searchedProven(i.viralFound)
+            : C.ideas.searched,
     }));
     return [...planIdeas, ...searched].slice(0, 2);
   }, [planQ.data, searchIdeasQ.data]);
@@ -685,4 +690,11 @@ export default function HomeV2Page() {
       </div>
     </div>
   );
+}
+
+/** 12100 -> "12K", 1500 -> "1.5K", 900 -> "900". */
+function compactNumber(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1).replace(/\.0$/, "")}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1).replace(/\.0$/, "")}K`;
+  return String(Math.round(n));
 }

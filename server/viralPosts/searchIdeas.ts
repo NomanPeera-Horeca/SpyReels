@@ -11,10 +11,23 @@
  * Read only: no provider calls, no AI calls. Returns [] before migration
  * 0111 or when the profile has no matched topics yet.
  */
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { viralKeywords, viralProfileTopics, viralTopics } from "../../drizzle/viralLibrarySchema";
 import { getDb } from "../db";
 import { isKeywordsReady } from "./keywords";
+import { isVolumeReady } from "./searchVolume";
+
+/** Attach Google monthly searches (migration 0112) when known. */
+async function withSearchVolumes(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, ideas: SearchIdea[]): Promise<SearchIdea[]> {
+  if (ideas.length === 0 || !(await isVolumeReady(db))) return ideas;
+  const [rows] = (await db.execute(sql`
+    SELECT phrase, MAX(searchVolume) AS v FROM viral_keywords
+    WHERE phrase IN (${sql.join(ideas.map(i => sql`${i.phrase}`), sql`, `)})
+    GROUP BY phrase
+  `)) as unknown as [Array<{ phrase: string; v: number | string | null }>];
+  const byPhrase = new Map((rows ?? []).map(r => [r.phrase, r.v == null ? null : Number(r.v)]));
+  return ideas.map(i => ({ ...i, searchVolume: byPhrase.get(i.phrase) ?? null }));
+}
 
 export type SearchIdea = {
   phrase: string;
@@ -24,6 +37,8 @@ export type SearchIdea = {
   demand: number;
   /** Viral videos our searches found with this phrase (all platforms). */
   viralFound: number;
+  /** Google monthly searches (DataForSEO), when known. */
+  searchVolume?: number | null;
 };
 
 type Row = {
@@ -110,7 +125,8 @@ export async function searchIdeasForProfile(args: { socialProfileId: string | nu
       .from(viralKeywords)
       .where(and(inArray(viralKeywords.topicSlug, topics.map(t => t.slug)), eq(viralKeywords.retired, 0)))
       .limit(2000);
-    return rankSearchIdeas(rows as Row[], new Map(topics.map(t => [t.slug, t.label])), args.limit);
+    const ideas = rankSearchIdeas(rows as Row[], new Map(topics.map(t => [t.slug, t.label])), args.limit);
+    return await withSearchVolumes(db, ideas);
   } catch (err) {
     console.warn("[home] search_ideas_failed", { error: err instanceof Error ? err.message : String(err) });
     return [];

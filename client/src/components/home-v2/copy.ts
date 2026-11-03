@@ -31,6 +31,7 @@ export const HOME_COPY = {
     errorTitle: "We couldn't build your plan",
     errorBody: "Nothing was lost. Try again in a moment.",
     searched: "Searched a lot on Google and YouTube",
+    searchedVolume: (v: string) => `~${v} Google searches a month`,
     searchedProven: (n: number) => `Searched a lot · found ${n} viral video${n === 1 ? "" : "s"}`,
   },
   videos: {
