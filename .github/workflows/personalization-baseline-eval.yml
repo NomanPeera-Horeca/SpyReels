@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   baseline:
-    if: "${{ startsWith(github.event.head_commit.message, 'eval: [authorized-baseline-eval]') && !contains(github.event.head_commit.message, '[rejudge]') && !contains(github.event.head_commit.message, '[review-pack]') && !contains(github.event.head_commit.message, '[spot-check]') && !contains(github.event.head_commit.message, '[starter-check]') && !contains(github.event.head_commit.message, '[lookup-probe]') }}"
+    if: "${{ startsWith(github.event.head_commit.message, 'eval: [authorized-baseline-eval]') && !contains(github.event.head_commit.message, '[rejudge]') && !contains(github.event.head_commit.message, '[review-pack]') && !contains(github.event.head_commit.message, '[spot-check]') && !contains(github.event.head_commit.message, '[starter-check]') && !contains(github.event.head_commit.message, '[lookup-probe]') && !contains(github.event.head_commit.message, '[library-stats]') }}"
     runs-on: ubuntu-latest
     timeout-minutes: 90
     env:
@@ -371,3 +371,27 @@ jobs:
           else
             pnpm exec tsx scripts/profile-lookup-probe.ts
           fi
+
+  # Viral library counts (aggregates only, read-only login, no AI or provider
+  # spend). Commit subject: "eval: [authorized-baseline-eval] [library-stats] ..."
+  library-stats:
+    if: "${{ startsWith(github.event.head_commit.message, 'eval: [authorized-baseline-eval] [library-stats]') }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      EVAL_DB_READONLY_URL: ${{ secrets.EVAL_DB_READONLY_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Library counts
+        run: pnpm exec tsx scripts/library-stats.mts
