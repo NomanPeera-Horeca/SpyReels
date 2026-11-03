@@ -37,6 +37,18 @@ const queries: Array<[string, string]> = [
             SUM(found) AS found, SUM(passed) AS on_topic, SUM(viral) AS viral, SUM(goodCreators) AS good_creators,
             SUM(retired) AS retired FROM viral_keywords GROUP BY platform`,
   ],
+  [
+    "Search volume columns (migration 0112)",
+    `SELECT COLUMN_NAME AS col FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'viral_keywords' AND COLUMN_NAME IN ('searchVolume','volumeCheckedAt')`,
+  ],
+  [
+    "Search volume progress",
+    `SELECT SUM(volumeCheckedAt IS NOT NULL) AS checked, SUM(searchVolume > 0) AS with_volume, MAX(searchVolume) AS max_volume, COUNT(DISTINCT phrase) AS phrases FROM viral_keywords`,
+  ],
+  [
+    "Phrase sources",
+    `SELECT source, COUNT(*) AS rows_ FROM viral_keywords GROUP BY source`,
+  ],
   ["Phrase bank topics covered", `SELECT COUNT(DISTINCT topicSlug) AS topics FROM viral_keywords`],
   [
     "Topics with viral/rising videos",
@@ -48,7 +60,7 @@ const queries: Array<[string, string]> = [
     "Spend markers (last 3 days and catch-up)",
     `SELECT day, usd, videos FROM viral_processing_spend
       WHERE day IN ('fill-total','und-catch') OR day >= DATE_FORMAT(NOW() - INTERVAL 3 DAY, '%Y-%m-%d')
-         OR day LIKE CONCAT('wl', DATE_FORMAT(NOW(), '%Y%m'), '%') OR day LIKE CONCAT('sc', DATE_FORMAT(NOW(), '%Y%m'), '%')
+         OR day LIKE CONCAT('wl', DATE_FORMAT(NOW(), '%Y%m'), '%') OR day LIKE CONCAT('sc', DATE_FORMAT(NOW(), '%Y%m'), '%') OR day LIKE 'df%'
       ORDER BY day`,
   ],
 ];
