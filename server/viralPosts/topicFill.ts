@@ -184,10 +184,15 @@ export async function runTopicFill(args: { maxPools?: number } = {}): Promise<{
 
 /* ---------- recurring topic refresh (after the one-time fill) ---------- */
 
-/** Topics our creators have: searched again after this many days. */
+/** Topics our creators have: searched again after this many days (VIRAL_TOPIC_REFRESH_DAYS). */
 export const REFRESH_DEMAND_DAYS = 3;
-/** Every other topic: searched again after this many days. */
+/** Every other topic: searched again after this many days (VIRAL_TOPIC_REFRESH_OTHER_DAYS). */
 export const REFRESH_OTHER_DAYS = 14;
+
+function envDays(name: string, fallback: number): number {
+  const n = Number(process.env[name]);
+  return Number.isFinite(n) && n > 0 ? n : fallback;
+}
 
 export function topicRefreshWeeklyBudgetUsd(): number {
   const n = Number(process.env.VIRAL_TOPIC_REFRESH_WEEKLY_USD);
@@ -210,10 +215,12 @@ export function pickDueRefreshes<T extends { creators: number; lastRefreshedAt: 
   now = new Date()
 ): T[] {
   const dayMs = 86_400_000;
+  const demandDays = envDays("VIRAL_TOPIC_REFRESH_DAYS", REFRESH_DEMAND_DAYS);
+  const otherDays = envDays("VIRAL_TOPIC_REFRESH_OTHER_DAYS", REFRESH_OTHER_DAYS);
   return rows
     .filter(r => {
       if (!r.lastRefreshedAt) return false; // never searched: that is the fill's job
-      const days = r.creators > 0 ? REFRESH_DEMAND_DAYS : REFRESH_OTHER_DAYS;
+      const days = r.creators > 0 ? demandDays : otherDays;
       return now.getTime() - r.lastRefreshedAt.getTime() >= days * dayMs;
     })
     .sort(

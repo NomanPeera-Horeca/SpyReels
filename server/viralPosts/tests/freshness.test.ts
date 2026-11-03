@@ -45,3 +45,18 @@ describe("mergedViews", () => {
     expect(mergedViews(null, 5_000)).toBe(5_000);
   });
 });
+
+describe("refresh interval from env", () => {
+  it("VIRAL_TOPIC_REFRESH_DAYS shortens the wait", async () => {
+    const { pickDueRefreshes } = await import("../topicFill");
+    const now = new Date("2026-11-03T12:00:00Z");
+    const rows = [{ creators: 2, lastRefreshedAt: new Date("2026-11-02T10:00:00Z") }];
+    expect(pickDueRefreshes(rows, now)).toHaveLength(0);
+    process.env.VIRAL_TOPIC_REFRESH_DAYS = "1";
+    try {
+      expect(pickDueRefreshes(rows, now)).toHaveLength(1);
+    } finally {
+      delete process.env.VIRAL_TOPIC_REFRESH_DAYS;
+    }
+  });
+});
