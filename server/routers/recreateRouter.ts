@@ -1,3 +1,4 @@
+import { searchPhrasesBlockForWorkspace } from "../viralPosts/searchIdeas";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
@@ -51,6 +52,22 @@ Place cues at the START of the line they apply to. Every 2-3 lines should have a
 }
 
 
+/** Searched phrases (keyword bank) for this remake's workspace that fit the idea; "" when none. Never throws. */
+async function remakeSearchPhrasesBlock(scriptId: number, idea: string): Promise<string> {
+  try {
+    const db = await getDb();
+    if (!db) return "";
+    const [row] = await db
+      .select({ workspaceId: recreatedScripts.workspaceId })
+      .from(recreatedScripts)
+      .where(eq(recreatedScripts.id, scriptId))
+      .limit(1);
+    return await searchPhrasesBlockForWorkspace({ workspaceId: row?.workspaceId ?? null, idea });
+  } catch {
+    return "";
+  }
+}
+
 export async function runScriptGeneration(
   scriptId: number,
   userId: number,
@@ -89,6 +106,7 @@ export async function runScriptGeneration(
     });
 
     const researchGroundingBlock = formatResearchGroundingForPrompt(researchItems);
+    const searchPhrasesBlock = await remakeSearchPhrasesBlock(scriptId, researchIdea);
     const generated = await generateRemakeContent({
       originalTranscript,
       caption,
@@ -101,6 +119,7 @@ export async function runScriptGeneration(
       gradeLevel,
       addCues,
       researchGroundingBlock,
+      searchPhrasesBlock,
       trustedResearchTexts: researchItems.flatMap((item) => [
         item.title,
         item.snippet ?? "",

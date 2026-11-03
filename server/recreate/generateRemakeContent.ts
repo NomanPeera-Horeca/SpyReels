@@ -323,6 +323,8 @@ export async function generateRemakeContent(input: {
   gradeLevel: string;
   addCues: boolean;
   researchGroundingBlock?: string;
+  /** Real searched phrases that fit the remake (keyword bank); "" or absent when none. */
+  searchPhrasesBlock?: string;
   trustedResearchTexts?: string[];
   platformLabel?: "Instagram Reel" | "TikTok video" | "YouTube Short";
   /** Spoken remake language. Defaults to English for the creator's camera script. */
@@ -365,6 +367,7 @@ export async function generateRemakeContent(input: {
   const researchGroundingBlock = input.researchGroundingBlock?.trim() ?? "";
   const factsBlock = groundingRules(researchGroundingBlock, isSameTopic);
   const formatFidelityBlock = buildFormatFidelityRules(viralStructure);
+  const searchPhrasesBlock = input.searchPhrasesBlock?.trim() ?? "";
 
   const scriptPrompt = isSameTopic
     ? `You are an expert ${platformLabel} scriptwriter. Rewrite the following viral ${platformLabel} script on the SAME TOPIC and core message, but make it fresh and original.
@@ -377,7 +380,7 @@ ${v13Context}
 ${input.originalTranscript}
 
 ${factsBlock}
-
+${searchPhrasesBlock ? `\n${searchPhrasesBlock}\n` : ""}
 ${formatFidelityBlock}
 
 ${languageRules}
@@ -410,7 +413,7 @@ ${input.topic}
 ${hasExplicitUserAngleInTopic(input.topic) ? RECREATE_EXPLICIT_ANGLE_RULES : RECREATE_DEFAULT_TOPIC_RULES}
 
 ${factsBlock}
-
+${searchPhrasesBlock ? `\n${searchPhrasesBlock}\n` : ""}
 ${formatFidelityBlock}
 
 ${languageRules}
@@ -432,6 +435,7 @@ ${scriptFormatClosing}`;
   const trustedTexts = [
     input.topic,
     researchGroundingBlock,
+    searchPhrasesBlock,
     ...(input.trustedResearchTexts ?? []),
     ...(isSameTopic ? [input.originalTranscript, input.caption] : []),
   ];
