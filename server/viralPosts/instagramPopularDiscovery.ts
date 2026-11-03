@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createClaudeClient } from "../_core/claudeClient";
 import { reportDirectAnthropicUsage } from "../_core/llmMeasured";
 import {
   createDiscoveryScCallTracker,
@@ -416,7 +417,7 @@ async function generatePopularQueries(args: {
   }
 
   try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const client = createClaudeClient({ apiKey: process.env.ANTHROPIC_API_KEY });
     const response = await client.messages.create({
       model: SEMANTIC_POOL_MODEL,
       max_tokens: 400,

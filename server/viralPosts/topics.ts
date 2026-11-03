@@ -15,6 +15,7 @@
  */
 import { createHash } from "node:crypto";
 import Anthropic from "@anthropic-ai/sdk";
+import { createClaudeClient } from "../_core/claudeClient";
 import { eq, sql } from "drizzle-orm";
 import {
   viralProfileTopicRuns,
@@ -138,7 +139,7 @@ export function topicListForPrompt(topics: Topic[]): string {
 
 export function anthropicClient(): Anthropic | null {
   const key = process.env.ANTHROPIC_API_KEY?.trim();
-  return key ? new Anthropic({ apiKey: key }) : null;
+  return key ? createClaudeClient({ apiKey: key }) : null;
 }
 
 /* ---------- videos ---------- */

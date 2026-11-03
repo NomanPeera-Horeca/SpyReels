@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createClaudeClient } from "../_core/claudeClient";
 import { reportDirectAnthropicUsage } from "../_core/llmMeasured";
 import type { AdaptedCandidate } from "./candidateAdapter";
 import { DEFAULT_CONTENT_PILLARS } from "./constants";
@@ -243,7 +244,7 @@ export async function classifySemanticPoolRelevance(args: {
     throw new Error("ANTHROPIC_API_KEY is not configured for semantic pool relevance");
   }
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client = createClaudeClient({ apiKey: process.env.ANTHROPIC_API_KEY });
   const verdicts: SemanticPoolVerdict[] = [];
   let haikuCalls = 0;
   for (const batch of chunkArray(args.candidates, SEMANTIC_BATCH_SIZE)) {

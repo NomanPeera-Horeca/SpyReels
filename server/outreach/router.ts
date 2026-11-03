@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createClaudeClient } from "../_core/claudeClient";
 import { TRPCError } from "@trpc/server";
 import { and, asc, desc, eq, gte, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -175,7 +176,7 @@ async function generateDraftForUser(userId: number): Promise<{
     throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "ANTHROPIC_API_KEY is not set" });
   }
 
-  const client = new Anthropic({ apiKey });
+  const client = createClaudeClient({ apiKey });
   const displayName = ctx.user.name?.trim() || "unknown";
   const systemPrompt = buildOutreachSystemPrompt({
     name: displayName,

@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createClaudeClient } from "../../_core/claudeClient";
 import { reportDirectAnthropicUsage } from "../../_core/llmMeasured";
 import type {
   TranslationInput,
@@ -69,7 +70,7 @@ export async function translateReel(
     throw new Error("ANTHROPIC_API_KEY environment variable is not set");
   }
 
-  const client = new Anthropic({ apiKey });
+  const client = createClaudeClient({ apiKey });
 
   const response = await client.messages.create({
     model: "claude-sonnet-4-6",

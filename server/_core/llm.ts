@@ -43,6 +43,7 @@ function asUserFacingLlmError(
   return next;
 }
 import Anthropic from "@anthropic-ai/sdk";
+import { createClaudeClient } from "./claudeClient";
 
 const DEFAULT_LLM_MODEL = "claude-sonnet-4-6";
 const FALLBACK_LLM_MODEL = "claude-haiku-4-5-20251001";
@@ -451,7 +452,7 @@ export async function invokeLLM(params: InvokeParams): Promise<InvokeResult> {
   } = params;
 
   const deadline = createInvokeDeadline(timeoutMs);
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client = createClaudeClient({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   const systemMessages = messages.filter(m => m.role === "system");
   const nonSystemMessages = messages.filter(m => m.role !== "system");
