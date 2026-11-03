@@ -42,6 +42,14 @@ const queries: Array<[string, string]> = [
     `SELECT source, provider, metric, location, COUNT(*) AS checked, SUM(volume > 0) AS with_volume, MAX(volume) AS max_volume, MAX(checkedAt) AS last_checked FROM viral_keyword_volumes GROUP BY source, provider, metric, location`,
   ],
   [
+    "Google volume: checked, with volume, missing (NULL), zero",
+    `SELECT COUNT(*) AS checked, SUM(volume > 0) AS with_volume, SUM(volume IS NULL) AS missing_unknown, SUM(volume = 0) AS zero FROM viral_keyword_volumes WHERE source = 'google'`,
+  ],
+  [
+    "Sample: saved volume vs phrase demand",
+    `SELECT v.phrase, v.volume, v.metric, v.location, MAX(k.demand) AS demand FROM viral_keyword_volumes v JOIN viral_keywords k ON k.phrase = v.phrase WHERE v.source = 'google' GROUP BY v.phrase, v.volume, v.metric, v.location ORDER BY RAND() LIMIT 12`,
+  ],
+  [
     "Top Google volumes",
     `SELECT phrase, volume FROM viral_keyword_volumes WHERE source = 'google' ORDER BY volume DESC LIMIT 10`,
   ],
