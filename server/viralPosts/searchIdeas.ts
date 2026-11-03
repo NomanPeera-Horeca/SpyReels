@@ -17,12 +17,12 @@ import { getDb } from "../db";
 import { isKeywordsReady } from "./keywords";
 import { isVolumeReady } from "./searchVolume";
 
-/** Attach Google monthly searches (migration 0112) when known. */
+/** Attach Google monthly searches (viral_keyword_volumes, migration 0113) when known. */
 async function withSearchVolumes(db: NonNullable<Awaited<ReturnType<typeof getDb>>>, ideas: SearchIdea[]): Promise<SearchIdea[]> {
   if (ideas.length === 0 || !(await isVolumeReady(db))) return ideas;
   const [rows] = (await db.execute(sql`
-    SELECT phrase, MAX(searchVolume) AS v FROM viral_keywords
-    WHERE phrase IN (${sql.join(ideas.map(i => sql`${i.phrase}`), sql`, `)})
+    SELECT phrase, MAX(volume) AS v FROM viral_keyword_volumes
+    WHERE source = 'google' AND phrase IN (${sql.join(ideas.map(i => sql`${i.phrase}`), sql`, `)})
     GROUP BY phrase
   `)) as unknown as [Array<{ phrase: string; v: number | string | null }>];
   const byPhrase = new Map((rows ?? []).map(r => [r.phrase, r.v == null ? null : Number(r.v)]));

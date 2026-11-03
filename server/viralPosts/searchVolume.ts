@@ -11,10 +11,15 @@
  * - The number is Google's, labelled as such; it is not TikTok or Instagram
  *   search volume.
  *
+ * Stored in viral_keyword_volumes (migration 0113): one row per phrase and
+ * source (google, youtube, tiktok, instagram, tiktok_ads), with the provider
+ * and the provider's own metric name, so estimates from different platforms
+ * are never mixed. This file fills the Google rows.
+ *
  * Needs DATAFORSEO_LOGIN and DATAFORSEO_PASSWORD (API credentials from the
- * DataForSEO dashboard) and migration drizzle/0112_keyword_search_volume.sql.
- * Without either it is a quiet no-op. DATAFORSEO_MONTHLY_USD caps spend
- * (default $5). Never throws.
+ * DataForSEO dashboard) and migration drizzle/0113_keyword_volumes.sql.
+ * When something is missing it logs why once and does nothing.
+ * DATAFORSEO_MONTHLY_USD caps spend (default $5). Never throws.
  */
 import { sql } from "drizzle-orm";
 import { viralProcessingSpend } from "../../drizzle/viralLibrarySchema";
@@ -27,24 +32,41 @@ const TASK_USD = 0.09;
 const MAX_PER_TASK = 1000;
 const RECHECK_DAYS = 30;
 
-let columnsReady: { ok: boolean; at: number } | null = null;
+let tableReady: { ok: boolean; at: number } | null = null;
 
-/** True once migration 0112 added searchVolume to viral_keywords. Cached for 10 minutes. */
+/** True once migration 0113 created viral_keyword_volumes. Cached for 10 minutes. */
 export async function isVolumeReady(db: Db): Promise<boolean> {
-  if (columnsReady && (columnsReady.ok || Date.now() - columnsReady.at < 600_000)) return columnsReady.ok;
+  if (tableReady && (tableReady.ok || Date.now() - tableReady.at < 600_000)) return tableReady.ok;
   try {
     const [rows] = (await db.execute(
-      sql`SELECT COUNT(*) AS n FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'viral_keywords' AND COLUMN_NAME IN ('searchVolume','volumeCheckedAt')`
+      sql`SELECT COUNT(*) AS n FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'viral_keyword_volumes'`
     )) as unknown as [Array<{ n: number | string }>];
-    columnsReady = { ok: Number(rows?.[0]?.n ?? 0) === 2, at: Date.now() };
+    tableReady = { ok: Number(rows?.[0]?.n ?? 0) === 1, at: Date.now() };
   } catch {
-    columnsReady = { ok: false, at: Date.now() };
+    tableReady = { ok: false, at: Date.now() };
   }
-  return columnsReady.ok;
+  return tableReady.ok;
+}
+
+/** Log a skip reason once per process (until it changes), so a silent no-op is visible. */
+let lastSkip: string | null = null;
+function noteSkip(reason: string): void {
+  if (reason === lastSkip) return;
+  lastSkip = reason;
+  console.info("[viralLibrary] search_volume_skipped", { reason });
 }
 
 export function dataForSeoConfigured(): boolean {
   return Boolean(process.env.DATAFORSEO_LOGIN?.trim() && process.env.DATAFORSEO_PASSWORD?.trim());
+}
+
+function locationCode(): number {
+  return Number(process.env.DATAFORSEO_LOCATION_CODE) || 2840; // United States
+}
+
+/** Stored location label: "US" for the default, else the DataForSEO location code. */
+function locationLabel(): string {
+  return locationCode() === 2840 ? "US" : String(locationCode());
 }
 
 function monthlyBudgetUsd(): number {
@@ -106,21 +128,37 @@ export async function refreshSearchVolumes(): Promise<{
   skipped?: "not_configured" | "not_ready" | "budget_reached" | "none_due" | "request_failed";
 }> {
   const out = { checked: 0, withVolume: 0, costUsd: 0 };
-  if (!dataForSeoConfigured()) return { ...out, skipped: "not_configured" };
+  if (!dataForSeoConfigured()) {
+    noteSkip("not_configured: DATAFORSEO_LOGIN / DATAFORSEO_PASSWORD missing");
+    return { ...out, skipped: "not_configured" };
+  }
   const db = await getDb();
-  if (!db || !(await isKeywordsReady(db)) || !(await isVolumeReady(db))) return { ...out, skipped: "not_ready" };
+  if (!db || !(await isKeywordsReady(db)) || !(await isVolumeReady(db))) {
+    noteSkip("not_ready: run migration 0113 (viral_keyword_volumes)");
+    return { ...out, skipped: "not_ready" };
+  }
   try {
-    if ((await spentThisMonth(db)) + TASK_USD > monthlyBudgetUsd()) return { ...out, skipped: "budget_reached" };
+    if ((await spentThisMonth(db)) + TASK_USD > monthlyBudgetUsd()) {
+      noteSkip("budget_reached: DATAFORSEO_MONTHLY_USD");
+      return { ...out, skipped: "budget_reached" };
+    }
+    const location = locationLabel();
     const [due] = (await db.execute(sql`
-      SELECT phrase, MAX(demand) AS demand
-      FROM viral_keywords
-      WHERE retired = 0 AND (volumeCheckedAt IS NULL OR volumeCheckedAt < (NOW() - INTERVAL ${RECHECK_DAYS} DAY))
-      GROUP BY phrase
-      ORDER BY MAX(demand) DESC
+      SELECT k.phrase AS phrase, MAX(k.demand) AS demand
+      FROM viral_keywords k
+      LEFT JOIN viral_keyword_volumes v
+        ON v.phrase = k.phrase AND v.source = 'google' AND v.location = ${location}
+      WHERE k.retired = 0 AND (v.checkedAt IS NULL OR v.checkedAt < (NOW() - INTERVAL ${RECHECK_DAYS} DAY))
+      GROUP BY k.phrase
+      ORDER BY MAX(k.demand) DESC
       LIMIT ${MAX_PER_TASK * 2}
     `)) as unknown as [Array<{ phrase: string }>];
     const phrases = [...new Set((due ?? []).map(r => r.phrase).filter(acceptedByGoogleAds))].slice(0, MAX_PER_TASK);
-    if (phrases.length === 0) return { ...out, skipped: "none_due" };
+    if (phrases.length === 0) {
+      noteSkip("none_due: every phrase checked in the last 30 days");
+      return { ...out, skipped: "none_due" };
+    }
+    lastSkip = null;
 
     const auth = Buffer.from(`${process.env.DATAFORSEO_LOGIN!.trim()}:${process.env.DATAFORSEO_PASSWORD!.trim()}`).toString("base64");
     const res = await fetch("https://api.dataforseo.com/v3/keywords_data/google_ads/search_volume/live", {
@@ -129,7 +167,7 @@ export async function refreshSearchVolumes(): Promise<{
       body: JSON.stringify([
         {
           keywords: phrases,
-          location_code: Number(process.env.DATAFORSEO_LOCATION_CODE) || 2840, // United States
+          location_code: locationCode(),
           language_code: process.env.DATAFORSEO_LANGUAGE_CODE?.trim() || "en",
         },
       ]),
@@ -148,12 +186,15 @@ export async function refreshSearchVolumes(): Promise<{
     const volumes = parseSearchVolumes(await res.json());
     for (const phrase of phrases) {
       const v = volumes.get(phrase.toLowerCase()) ?? null;
-      const demand = volumeDemand(v);
       await db.execute(sql`
-        UPDATE viral_keywords
-        SET searchVolume = ${v}, volumeCheckedAt = NOW(), demand = GREATEST(demand, ${demand})
-        WHERE phrase = ${phrase}
+        INSERT INTO viral_keyword_volumes (phrase, source, location, volume, provider, metric, checkedAt)
+        VALUES (${phrase}, 'google', ${location}, ${v}, 'dataforseo', 'google_ads_avg_monthly_searches', NOW())
+        ON DUPLICATE KEY UPDATE volume = VALUES(volume), provider = VALUES(provider), metric = VALUES(metric), checkedAt = NOW()
       `);
+      const demand = volumeDemand(v);
+      if (demand > 0) {
+        await db.execute(sql`UPDATE viral_keywords SET demand = GREATEST(demand, ${demand}) WHERE phrase = ${phrase}`);
+      }
       out.checked += 1;
       if (v != null && v > 0) out.withVolume += 1;
     }
