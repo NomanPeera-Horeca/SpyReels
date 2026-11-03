@@ -9,6 +9,7 @@ vi.mock("@anthropic-ai/sdk", () => ({
 vi.mock("../monitoring/alerts", () => ({ alertOwnerThrottled: vi.fn() }));
 
 import {
+  cleanRequestText,
   claudeOutOfCredit,
   claudeUnavailable,
   createClaudeClient,
@@ -110,5 +111,20 @@ describe("claudeClient backup", () => {
     const msg = fromOpenAiResponse({ choices: [{ message: { tool_calls: [{ id: "c1", function: { name: "answer", arguments: '{"a":1}' } }] } }] });
     expect(msg.content[0]).toMatchObject({ type: "tool_use", name: "answer", input: { a: 1 } });
     expect(msg.stop_reason).toBe("tool_use");
+  });
+
+  it("removes half emoji from request text but keeps whole emoji and image bytes", async () => {
+    const half = "great food \uD83D"; // emoji cut in half
+    const cleaned = cleanRequestText({
+      messages: [{ role: "user", content: [{ type: "text", text: `${half} 🍕` }, { type: "image", source: { type: "base64", data: "AB\uD83DC" } }] }],
+    });
+    expect(cleaned.messages[0]!.content[0]!.text).toBe("great food  🍕");
+    expect((cleaned.messages[0]!.content[1] as { source: { data: string } }).source.data).toBe("AB\uD83DC");
+
+    create.mockResolvedValue({ content: [{ type: "text", text: "ok" }] });
+    await createClaudeClient().messages.create({ model: "m", max_tokens: 10, system: half, messages: [{ role: "user", content: half }] });
+    const sent = create.mock.calls[0]![0] as { system: string; messages: Array<{ content: string }> };
+    expect(sent.system).toBe("great food ");
+    expect(sent.messages[0]!.content).toBe("great food ");
   });
 });

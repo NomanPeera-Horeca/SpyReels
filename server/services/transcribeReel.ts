@@ -246,7 +246,12 @@ export async function extractAudio(
       const stderr = Buffer.concat(stderrChunks).toString("utf8").slice(-500);
       reject(new Error(`ffmpeg exited with code ${code}: ${stderr}`));
     });
-    ffmpeg.stdin.on("error", (err) => reject(err));
+    ffmpeg.stdin.on("error", (err) => {
+      // EPIPE: ffmpeg stopped reading early (for example "-t" already has
+      // enough audio). Not a failure: the exit code in "close" decides.
+      if ((err as NodeJS.ErrnoException).code === "EPIPE") return;
+      reject(err);
+    });
     ffmpeg.stdin.end(videoBuffer);
   });
 }
