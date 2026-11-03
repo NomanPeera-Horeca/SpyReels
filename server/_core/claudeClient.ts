@@ -89,6 +89,28 @@ type OpenAiPart =
 
 class NotTranslatable extends Error {}
 
+const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g;
+
+/**
+ * Remove half-emoji characters (lone surrogates) from every text in a
+ * request. Captions and transcripts cut in the middle of an emoji contain
+ * them, and the API rejects the whole request ("not valid JSON: unexpected
+ * end of hex escape"). Pure; exported for tests.
+ */
+export function cleanRequestText<T>(value: T): T {
+  if (typeof value === "string") return value.replace(LONE_SURROGATE, "") as T;
+  if (Array.isArray(value)) return value.map(v => cleanRequestText(v)) as T;
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      // Image bytes and tool schemas are not prose: leave them alone.
+      out[k] = k === "data" || k === "input_schema" ? v : cleanRequestText(v);
+    }
+    return out as T;
+  }
+  return value;
+}
+
 function toOpenAiParts(content: unknown): string | OpenAiPart[] {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) throw new NotTranslatable("content");
@@ -194,7 +216,12 @@ async function askOpenAi(params: Record<string, unknown>, options: unknown): Pro
 export function createClaudeClient(opts: ConstructorParameters<typeof Anthropic>[0] = {}): Anthropic {
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, ...opts });
   const original = client.messages.create.bind(client.messages) as (p: unknown, o?: unknown) => Promise<unknown>;
-  const wrapped = async (params: Record<string, unknown>, options?: unknown): Promise<unknown> => {
+  const wrapped = async (rawParams: Record<string, unknown>, options?: unknown): Promise<unknown> => {
+    const params: Record<string, unknown> = {
+      ...rawParams,
+      ...(rawParams.system !== undefined ? { system: cleanRequestText(rawParams.system) } : {}),
+      messages: cleanRequestText(rawParams.messages),
+    };
     if (params.stream) return original(params, options);
     const backupReady = openAiFallbackAvailable();
     // While Claude is out of credit, go straight to the backup (no wasted call).
