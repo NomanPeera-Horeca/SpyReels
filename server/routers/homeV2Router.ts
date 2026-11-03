@@ -30,6 +30,7 @@ import { contentInventoryPlan } from "../personalization/home/inventoryMatch";
 import { browseIndexedViralPosts } from "../viralPosts/browseService";
 import { libraryHomeForProfile, mergeHomeLists } from "../viralPosts/libraryHome";
 import { requestPrefetch, requestPrefetchForPosts } from "../research/prefetch";
+import { searchIdeasForProfile } from "../viralPosts/searchIdeas";
 
 export const HOME_VIDEO_LIMIT = 4;
 
@@ -117,6 +118,12 @@ export const homeV2Router = router({
     const items = mergeHomeLists(res.items, library?.items ?? [], HOME_VIDEO_LIMIT, x => `${x.platform}:${x.sourceId}`);
     void requestPrefetchForPosts(items);
     return { personalized: c.nicheLabel !== null, nicheLabel: c.nicheLabel, items };
+  }),
+
+  /** Video ideas from phrases people really search in the profile's topics (keyword bank). */
+  searchIdeas: homeProcedure.query(async ({ ctx }) => {
+    const c = await context(ctx);
+    return { ideas: await searchIdeasForProfile({ socialProfileId: c.socialProfileId, limit: 4 }) };
   }),
 
   profiles: homeProcedure.query(async ({ ctx }) => listWorkspaceProfiles(await requireDb(), octx(ctx))),

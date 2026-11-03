@@ -316,7 +316,14 @@ export function SetupBanner({
 
 /* ---------- ideas ---------- */
 
-export type HomeIdea = { id: number; title: string; hook: string | null };
+export type HomeIdea = {
+  /** Plan card id, or "search:<phrase>" for an idea from real searches. */
+  id: number | string;
+  title: string;
+  hook: string | null;
+  /** Small label under the title, for example "Searched a lot on Google and YouTube". */
+  badge?: string | null;
+};
 
 export function IdeaCard({
   idea,
@@ -336,6 +343,9 @@ export function IdeaCard({
       >
         {idea.title}
       </p>
+      {idea.badge ? (
+        <p className={cx("sr-text-product-body-small", styles.muted)}>{idea.badge}</p>
+      ) : null}
       {idea.hook ? (
         <p
           className={cx("sr-text-product-body-small", styles.muted)}

@@ -30,6 +30,8 @@ export const HOME_COPY = {
     emptyAction: "Create my plan",
     errorTitle: "We couldn't build your plan",
     errorBody: "Nothing was lost. Try again in a moment.",
+    searched: "Searched a lot on Google and YouTube",
+    searchedProven: (n: number) => `Searched a lot · found ${n} viral video${n === 1 ? "" : "s"}`,
   },
   videos: {
     title: "Viral Videos for you",

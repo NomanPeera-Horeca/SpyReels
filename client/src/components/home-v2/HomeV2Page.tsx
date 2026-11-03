@@ -118,6 +118,9 @@ export default function HomeV2Page() {
   const planQ = trpc.plan.listCards.useQuery(undefined, {
     refetchOnWindowFocus: false,
   });
+  const searchIdeasQ = trpc.homeV2.searchIdeas.useQuery(undefined, {
+    refetchOnWindowFocus: false,
+  });
   const creatorsQ = trpc.homeV2.creators.useQuery(undefined, {
     staleTime: 0,
     refetchOnWindowFocus: true,
@@ -185,14 +188,36 @@ export default function HomeV2Page() {
 
   const ideas: HomeIdea[] = useMemo(() => {
     const cards = planQ.data?.calendarCards ?? [];
-    return cards
+    const planIdeas: HomeIdea[] = cards
       .filter(c => c.status !== "posted" && c.coachScriptId == null)
       .slice(0, 2)
       .map(c => ({ id: c.id, title: c.title, hook: c.hook || null }));
-  }, [planQ.data]);
+    // Fill the rest with phrases people really search in this niche.
+    const searched: HomeIdea[] = (searchIdeasQ.data?.ideas ?? []).map(i => ({
+      id: `search:${i.phrase}`,
+      title: i.title,
+      hook: null,
+      badge: i.viralFound > 0 ? C.ideas.searchedProven(i.viralFound) : C.ideas.searched,
+    }));
+    return [...planIdeas, ...searched].slice(0, 2);
+  }, [planQ.data, searchIdeasQ.data]);
   const hasPlan = (planQ.data?.calendarCards.length ?? 0) > 0;
 
-  const writeIdea = (id: number) => {
+  const writeIdea = (id: number | string) => {
+    if (typeof id === "string") {
+      const phrase = id.replace(/^search:/, "");
+      track("idea_write_searched", { words: phrase.split(/\s+/).length });
+      try {
+        sessionStorage.setItem(
+          STUDIO_PREFILL_KEY,
+          `Write a short-form video script about "${phrase}".\n\nPeople search this exact phrase on Google and YouTube, so use it word for word in the hook, the on-screen text and the caption.`
+        );
+      } catch {
+        // Storage blocked: the Agent opens empty; the user can still type.
+      }
+      navigate("/studio");
+      return;
+    }
     const card = planQ.data?.calendarCards.find(c => c.id === id);
     if (!card) return;
     track("idea_write", { day: card.day });
@@ -399,11 +424,23 @@ export default function HomeV2Page() {
                 >
                   {compact ? C.mobile.viewPlan : C.ideas.viewPlan}
                 </button>
+              ) : ideas.length > 0 ? (
+                // Search ideas fill the section: keep the way to a full plan.
+                <button
+                  type="button"
+                  className={ghostLink}
+                  onClick={() => {
+                    track("create_plan");
+                    navigate("/plan");
+                  }}
+                >
+                  {C.ideas.emptyAction}
+                </button>
               ) : null}
             </div>
             {planQ.isLoading ? (
               <IdeasSkeleton />
-            ) : planQ.isError ? (
+            ) : planQ.isError && ideas.length === 0 ? (
               <StateCard
                 stack
                 title={C.ideas.errorTitle}
