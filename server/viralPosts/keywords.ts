@@ -228,6 +228,26 @@ export async function harvestDueTopics(args: { max?: number } = {}): Promise<{ t
 
 /* ---------- use in discovery ---------- */
 
+/**
+ * Instagram hashtag for a search phrase: "Meal prep for beginners" ->
+ * "mealprepforbeginners". Null when too short or too long to be a real tag.
+ * Pure; exported for tests.
+ */
+export function phraseToHashtag(phrase: string): string | null {
+  const tag = phrase.toLowerCase().replace(/[^a-z0-9\s]+/g, "").split(/\s+/).filter(Boolean).join("");
+  return tag.length >= 3 && tag.length <= 40 ? tag : null;
+}
+
+/** The same pick, limited to the phrases that were actually searched. Pure; exported for tests. */
+export function searchedPick(pick: KeywordPick, searched: Iterable<string>): KeywordPick {
+  const keep = new Set(searched);
+  return {
+    topicSlug: pick.topicSlug,
+    queries: pick.queries.filter(q => keep.has(q)),
+    idByQuery: new Map([...pick.idByQuery].filter(([q]) => keep.has(q))),
+  };
+}
+
 export type KeywordPick = { topicSlug: string; queries: string[]; idByQuery: Map<string, number> };
 
 async function topicSlugForPillar(db: Db, pillar: string): Promise<string | null> {

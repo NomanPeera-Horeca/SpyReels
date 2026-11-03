@@ -19,6 +19,7 @@ import {
   type AdaptedCandidate,
 } from "./candidateAdapter";
 import { DEFAULT_CONTENT_PILLARS, VIRAL_POOL_DEFAULTS } from "./constants";
+import { keywordQueriesFor, phraseToHashtag, recordVideoSearch, searchedPick } from "./keywords";
 import { classifyCandidateForPoolAdmission } from "./poolAdmission";
 import {
   classifySemanticPoolRelevance,
@@ -635,6 +636,18 @@ export async function discoverInstagramPoolCandidates(args: {
     skipRelevanceFilter: true,
   });
 
+  // Real search phrases from the keyword bank, as hashtags, go first; the
+  // AI-picked hashtags fill the rest. Same call budget as before.
+  const bank = await keywordQueriesFor({ pillar: args.pillar, platform: "instagram", count: 2 });
+  const phraseByTag = new Map<string, string>();
+  for (const phrase of bank?.queries ?? []) {
+    const tag = phraseToHashtag(phrase);
+    if (tag && !phraseByTag.has(tag)) phraseByTag.set(tag, phrase);
+  }
+  const hashtags = [...new Set([...phraseByTag.keys(), ...routeProbe.hashtagsUsed])];
+  const postsByTag = new Map<string, number>();
+  const handlesByTag = new Map<string, Set<string>>();
+
   const reserveForDrilling = Math.min(
     VIRAL_POOL_DEFAULTS.instagramPoolDrillReserveCalls,
     Math.max(0, maxScCalls - routeProbe.scCallCount)
@@ -642,7 +655,7 @@ export async function discoverInstagramPoolCandidates(args: {
   const rawHashtagBudget = Math.max(
     0,
     Math.min(
-      routeProbe.hashtagsUsed.length,
+      hashtags.length,
       maxScCalls - routeProbe.scCallCount - reserveForDrilling
     )
   );
@@ -654,8 +667,9 @@ export async function discoverInstagramPoolCandidates(args: {
   if (rawHashtagBudget > 0) {
     const tracker = createDiscoveryScCallTracker(rawHashtagBudget);
     await runWithDiscoveryScCallTracker(tracker, async () => {
-      for (const hashtag of routeProbe.hashtagsUsed) {
+      for (const hashtag of hashtags) {
         if (tracker.count >= tracker.maxCalls) break;
+        postsByTag.set(hashtag, 0);
         try {
           const response = await searchHashtagReels(hashtag);
           if (!response.success) {
@@ -664,6 +678,7 @@ export async function discoverInstagramPoolCandidates(args: {
           }
           const posts = extractSearchPosts(response.data);
           rawHashtagPosts += posts.length;
+          postsByTag.set(hashtag, posts.length);
           for (const post of posts) {
             const seed = parseMetriclessHashtagSeed({
               post,
@@ -671,7 +686,12 @@ export async function discoverInstagramPoolCandidates(args: {
               pillar: args.pillar,
               niche: args.niche,
             });
-            if (seed) mergeMetriclessSeed(rawSeedsByHandle, seed);
+            if (seed) {
+              mergeMetriclessSeed(rawSeedsByHandle, seed);
+              const handles = handlesByTag.get(hashtag) ?? new Set<string>();
+              handles.add(normalizeHandle(seed.handle));
+              handlesByTag.set(hashtag, handles);
+            }
           }
           console.info("[viralPosts.pool] instagram_metricless_hashtag_seed", {
             hashtag,
@@ -799,11 +819,38 @@ export async function discoverInstagramPoolCandidates(args: {
     candidates: adaptedBeforeAdmission,
   });
 
+  if (bank) {
+    // Per phrase: creators its hashtag led to (hashtag rows carry no views,
+    // so viral videos come from drilling those creators), and the admitted
+    // videos from them. Counting creators, not raw reels, keeps a good
+    // hashtag from looking like a 2% hit rate and being retired.
+    const searched = [...phraseByTag].filter(([tag]) => postsByTag.has(tag));
+    const foundByQuery = new Map<string, number>();
+    const passedByQuery = new Map<string, string[]>();
+    for (const [tag, phrase] of searched) {
+      const handles = handlesByTag.get(tag) ?? new Set<string>();
+      foundByQuery.set(phrase, handles.size);
+      passedByQuery.set(
+        phrase,
+        admission.adapted.filter(c => handles.has(normalizeHandle(c.creatorHandle ?? ""))).map(c => c.sourceId)
+      );
+    }
+    if (searched.length > 0) {
+      await recordVideoSearch({
+        pick: searchedPick(bank, searched.map(([, phrase]) => phrase)),
+        platform: "instagram",
+        foundByQuery,
+        passedByQuery,
+      });
+    }
+  }
+
   console.info("[viralPosts.pool] instagram_retrieval_depth", {
     pillar: args.pillar,
     niche: args.niche,
     routedNiche: routeProbe.routedNiche,
-    hashtags: routeProbe.hashtagsUsed,
+    hashtags,
+    bankHashtags: [...phraseByTag.keys()],
     hashtagFailures: [...hashtagFailures],
     routeProbeScCalls: routeProbe.scCallCount,
     rawHashtagScCalls,
@@ -834,7 +881,7 @@ export async function discoverInstagramPoolCandidates(args: {
     adapted: admission.adapted,
     description,
     routedNiche: routeProbe.routedNiche,
-    hashtagsUsed: routeProbe.hashtagsUsed,
+    hashtagsUsed: hashtags,
     hashtagFailures: [...hashtagFailures],
     routeProbeScCalls: routeProbe.scCallCount,
     rawHashtagScCalls,
