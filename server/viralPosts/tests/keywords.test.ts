@@ -60,3 +60,20 @@ describe("scoring", () => {
     expect(picked).toEqual(["a", "c", "new-high"]);
   });
 });
+
+describe("Instagram phrases", () => {
+  it("turns a search phrase into a hashtag", async () => {
+    const { phraseToHashtag } = await import("../keywords");
+    expect(phraseToHashtag("Meal prep for beginners!")).toBe("mealprepforbeginners");
+    expect(phraseToHashtag("a")).toBeNull();
+    expect(phraseToHashtag("x".repeat(60))).toBeNull();
+  });
+
+  it("records only the phrases that were searched", async () => {
+    const { searchedPick } = await import("../keywords");
+    const pick = { topicSlug: "t", queries: ["a b", "c d"], idByQuery: new Map([["a b", 1], ["c d", 2]]) };
+    const out = searchedPick(pick, ["c d"]);
+    expect(out.queries).toEqual(["c d"]);
+    expect([...out.idByQuery]).toEqual([["c d", 2]]);
+  });
+});
