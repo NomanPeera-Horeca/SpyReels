@@ -117,6 +117,9 @@ function startViralLibraryUnderstanding(): void {
         await kw.harvestDueTopics({ max: 2 });
         // Viral counts per phrase change slowly: refresh about once an hour.
         if (new Date().getUTCMinutes() < 5) await kw.refreshKeywordOutcomes();
+        // Google search volume (DataForSEO): up to 1,000 phrases per tick until all are checked.
+        const volume = await import("../viralPosts/searchVolume");
+        await volume.refreshSearchVolumes();
       });
       await step("rising recheck", async () => {
         const rising = await import("../viralPosts/risingRecheck");
