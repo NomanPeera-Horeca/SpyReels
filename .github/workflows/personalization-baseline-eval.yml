@@ -366,6 +366,8 @@ jobs:
           export PROBE_HANDLES="$handles"
           if printf '%s' "$first_line" | grep -q '\[yt-search-shape\]'; then
             pnpm exec tsx scripts/youtube-search-shape-probe.mts
+          elif printf '%s' "$first_line" | grep -q '\[tt-suggest-probe\]'; then
+            pnpm exec tsx scripts/tiktok-suggest-probe.mts
           elif printf '%s' "$first_line" | grep -q '\[related-probe\]'; then
             pnpm exec tsx scripts/related-creators-probe.mts
           else
