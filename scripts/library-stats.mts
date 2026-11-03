@@ -38,12 +38,12 @@ const queries: Array<[string, string]> = [
             SUM(retired) AS retired FROM viral_keywords GROUP BY platform`,
   ],
   [
-    "Search volume columns (migration 0112)",
-    `SELECT COLUMN_NAME AS col FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'viral_keywords' AND COLUMN_NAME IN ('searchVolume','volumeCheckedAt')`,
+    "Search volume estimates (viral_keyword_volumes)",
+    `SELECT source, provider, metric, location, COUNT(*) AS checked, SUM(volume > 0) AS with_volume, MAX(volume) AS max_volume, MAX(checkedAt) AS last_checked FROM viral_keyword_volumes GROUP BY source, provider, metric, location`,
   ],
   [
-    "Search volume progress",
-    `SELECT SUM(volumeCheckedAt IS NOT NULL) AS checked, SUM(searchVolume > 0) AS with_volume, MAX(searchVolume) AS max_volume, COUNT(DISTINCT phrase) AS phrases FROM viral_keywords`,
+    "Top Google volumes",
+    `SELECT phrase, volume FROM viral_keyword_volumes WHERE source = 'google' ORDER BY volume DESC LIMIT 10`,
   ],
   [
     "Phrase sources",
