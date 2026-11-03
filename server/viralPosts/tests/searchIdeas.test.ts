@@ -44,3 +44,33 @@ describe("search ideas for Home", () => {
     expect(searchIdeaScore({ demand: 95, viralFound: 0 })).toBeGreaterThan(searchIdeaScore({ demand: 60, viralFound: 3 }));
   });
 });
+
+describe("search phrases for scripts and remakes", () => {
+  const idea = (phrase: string, demand: number, viralFound = 0) => ({
+    phrase,
+    title: phrase,
+    topicLabel: "Meal prep",
+    demand,
+    viralFound,
+  });
+
+  it("offers only phrases that share a real word with the idea, best match first", async () => {
+    const { phrasesForIdea } = await import("../searchIdeas");
+    const bank = [
+      idea("meal prep for beginners", 90),
+      idea("high protein meal prep ideas", 70, 5),
+      idea("home workout no equipment", 99),
+    ];
+    const out = phrasesForIdea(bank, "My easy high protein meal prep for the week", 3);
+    expect(out.map(p => p.phrase)).toEqual(["high protein meal prep ideas", "meal prep for beginners"]);
+    expect(phrasesForIdea(bank, "how I edit videos fast", 3)).toEqual([]);
+  });
+
+  it("formats a block that never forces a phrase", async () => {
+    const { formatSearchPhrasesBlock } = await import("../searchIdeas");
+    expect(formatSearchPhrasesBlock([])).toBe("");
+    const block = formatSearchPhrasesBlock([idea("meal prep for beginners", 90, 3)]);
+    expect(block).toContain('"meal prep for beginners" (already found viral videos)');
+    expect(block).toContain("if none fits, ignore this list");
+  });
+});
