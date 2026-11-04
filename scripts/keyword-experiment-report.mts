@@ -25,6 +25,13 @@ if (!url) throw new Error("EVAL_DB_READONLY_URL is not configured.");
 const USD_PER_CALL = Number(process.env.SCRAPECREATORS_USD_PER_CREDIT) || 0.002;
 const conn = await mysql.createConnection({ uri: url });
 
+const [allExps] = (await conn.query(
+  `SELECT e.id, e.name, e.status, e.snapshotAt, e.startedAt, e.endedAt, e.createdAt,
+          (SELECT COUNT(DISTINCT searchId) FROM viral_keyword_searches s WHERE s.experimentId = e.id) AS searches
+   FROM viral_keyword_experiments e ORDER BY e.id`
+)) as unknown as [Array<Record<string, unknown>>];
+console.log("ALL EXPERIMENTS");
+console.table(allExps);
 const wanted = Number(process.argv[2]) || null;
 const [exps] = (await conn.query(
   wanted ? `SELECT * FROM viral_keyword_experiments WHERE id = ?` : `SELECT * FROM viral_keyword_experiments WHERE snapshotAt IS NOT NULL ORDER BY id DESC LIMIT 1`,
