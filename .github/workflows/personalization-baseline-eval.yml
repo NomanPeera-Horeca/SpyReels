@@ -395,8 +395,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Scoring experiment report
+        if: ${{ contains(github.event.head_commit.message, '[experiment-report]') }}
+        run: pnpm exec tsx scripts/keyword-experiment-report.mts
+
       - name: Library counts
-        if: ${{ !contains(github.event.head_commit.message, '[scoring-sample]') }}
+        if: ${{ !contains(github.event.head_commit.message, '[scoring-sample]') && !contains(github.event.head_commit.message, '[experiment-report]') }}
         run: pnpm exec tsx scripts/library-stats.mts
 
       - name: Keyword scoring sample
