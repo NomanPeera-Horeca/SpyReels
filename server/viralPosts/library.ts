@@ -362,7 +362,7 @@ export function researchJobToCandidates(job: ResearchJob, now = new Date()): Ada
  * A creator just got usual views: re-judge their library videos that were
  * "unknown" for lack of it (for example YouTube Shorts found by search).
  */
-async function reclassifyCreatorUnknowns(db: Db, platform: ResearchSource, handle: string, now: Date): Promise<void> {
+export async function reclassifyCreatorUnknowns(db: Db, platform: ResearchSource, handle: string, now: Date): Promise<void> {
   const { viralPostCandidates } = await import("../../drizzle/schema");
   const rows = await db
     .select({ candidate: viralPostCandidates })

@@ -26,3 +26,11 @@ describe("channelFields", () => {
     expect(channelFields({ username: "YouTube", fullName: "YouTube" })).toBeNull();
   });
 });
+
+describe("can't-judge YouTube Shorts", () => {
+  it("keys today's channel count within 10 characters and defaults to 200 a day", async () => {
+    const { youtubeBaselineDayKey, youtubeBaselinesPerDay } = await import("../youtubeChannels");
+    expect(youtubeBaselineDayKey(new Date("2026-11-04T10:00:00Z"))).toBe("yb20261104");
+    expect(youtubeBaselinesPerDay()).toBe(200);
+  });
+});
