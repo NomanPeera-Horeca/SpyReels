@@ -279,8 +279,13 @@ export async function runTopicRefresh(args: { maxPools?: number } = {}): Promise
     )
   );
   const existing = await poolRepo.findExistingPools(plan);
+  // Topics in a running scoring experiment are searched only by the experiment.
+  const { experimentTopicLabels } = await import("./keywordExperiment");
+  const held = await experimentTopicLabels();
   const due = pickDueRefreshes(
-    existing.map(p => ({ pool: p, creators: demandByKey.get(p.poolKey) ?? 0, lastRefreshedAt: p.lastRefreshedAt }))
+    existing
+      .filter(p => !held.has((p.pillar ?? "").trim().toLowerCase()))
+      .map(p => ({ pool: p, creators: demandByKey.get(p.poolKey) ?? 0, lastRefreshedAt: p.lastRefreshedAt }))
   );
   out.due = due.length;
   if (due.length === 0) return { ...out, skipped: "none_due" };

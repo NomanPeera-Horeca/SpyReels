@@ -24,7 +24,8 @@
  */
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { viralKeywordHits, viralKeywords, viralProcessingSpend, viralTopics } from "../../drizzle/viralLibrarySchema";
-import { createHash } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { createHash, randomUUID } from "node:crypto";
 import { getDb } from "../db";
 import { noteScrapeCreatorsStatus, scrapeCreatorsOutOfCredits } from "../scrapeCreatorsMeter";
 
@@ -322,13 +323,36 @@ export function phraseToHashtag(phrase: string): string | null {
 export function searchedPick(pick: KeywordPick, searched: Iterable<string>): KeywordPick {
   const keep = new Set(searched);
   return {
+    ...pick,
     topicSlug: pick.topicSlug,
     queries: pick.queries.filter(q => keep.has(q)),
     idByQuery: new Map([...pick.idByQuery].filter(([q]) => keep.has(q))),
   };
 }
 
-export type KeywordPick = { topicSlug: string; queries: string[]; idByQuery: Map<string, number> };
+export type KeywordPick = {
+  topicSlug: string;
+  queries: string[];
+  idByQuery: Map<string, number>;
+  /** Which scoring picked these phrases and in which lane (for the search log). */
+  scoring?: "v1" | "v2";
+  laneByQuery?: Map<string, string>;
+};
+
+/* ---------- scoring mode, experiment arm ---------- */
+
+/** KEYWORD_SCORING: "current" (default) or "v2". Anything else is "current". */
+export function keywordScoringMode(): "current" | "v2" {
+  return (process.env.KEYWORD_SCORING ?? "").trim() === "v2" ? "v2" : "current";
+}
+
+type ArmContext = { scoring: "v1" | "v2"; experimentId: number | null; searchId: string };
+const armStorage = new AsyncLocalStorage<ArmContext>();
+
+/** Run one pool search with a fixed scoring (used by the scoring experiment). */
+export function runWithKeywordArm<T>(ctx: { scoring: "v1" | "v2"; experimentId: number | null; searchId?: string }, fn: () => Promise<T>): Promise<T> {
+  return armStorage.run({ ...ctx, searchId: ctx.searchId ?? randomUUID() }, fn);
+}
 
 async function topicSlugForPillar(db: Db, pillar: string): Promise<string | null> {
   const [row] = await db
@@ -341,7 +365,8 @@ async function topicSlugForPillar(db: Db, pillar: string): Promise<string | null
 
 /**
  * Phrases for one pool search, or null when the bank has none (the caller
- * then uses its AI-written phrases, as before). Never throws.
+ * then uses its AI-written phrases, as before). Scoring: the experiment arm
+ * when one is set, else KEYWORD_SCORING (default current). Never throws.
  */
 export async function keywordQueriesFor(args: {
   pillar: string;
@@ -353,19 +378,32 @@ export async function keywordQueriesFor(args: {
     if (!db || !(await isKeywordsReady(db))) return null;
     const topicSlug = await topicSlugForPillar(db, args.pillar);
     if (!topicSlug) return null;
-    const rows = await db
-      .select()
-      .from(viralKeywords)
-      .where(and(eq(viralKeywords.topicSlug, topicSlug), eq(viralKeywords.platform, args.platform), eq(viralKeywords.retired, 0)))
-      .orderBy(desc(viralKeywords.demand))
-      .limit(200);
-    const picked = pickKeywords(rows, args.count);
-    if (picked.length === 0) return null;
+    const arm = armStorage.getStore();
+    const scoring = arm?.scoring ?? (keywordScoringMode() === "v2" ? "v2" : "v1");
+    const experimentId = arm?.experimentId ?? null;
+    let pick: KeywordPick | null;
+    if (scoring === "v1" && experimentId == null) {
+      // Current production scoring, unchanged.
+      const rows = await db
+        .select()
+        .from(viralKeywords)
+        .where(and(eq(viralKeywords.topicSlug, topicSlug), eq(viralKeywords.platform, args.platform), eq(viralKeywords.retired, 0)))
+        .orderBy(desc(viralKeywords.demand))
+        .limit(200);
+      const picked = pickKeywords(rows, args.count);
+      pick = picked.length
+        ? { topicSlug, queries: picked.map(p => p.phrase), idByQuery: new Map(picked.map(p => [p.phrase, p.id])), scoring: "v1", laneByQuery: new Map(picked.map(p => [p.phrase, p.runs > 0 ? "exploit" : "explore"])) }
+        : null;
+    } else {
+      const { pickForArm } = await import("./keywordPicker");
+      pick = await pickForArm(db, { topicSlug, platform: args.platform, count: args.count, scoring, experimentId });
+    }
+    if (!pick || pick.queries.length === 0) return null;
     await db
       .update(viralKeywords)
       .set({ lastUsedAt: new Date() })
-      .where(inArray(viralKeywords.id, picked.map(p => p.id)));
-    return { topicSlug, queries: picked.map(p => p.phrase), idByQuery: new Map(picked.map(p => [p.phrase, p.id])) };
+      .where(inArray(viralKeywords.id, [...pick.idByQuery.values()]));
+    return pick;
   } catch (err) {
     console.warn("[viralLibrary] keyword_pick_failed", { error: err instanceof Error ? err.message : String(err) });
     return null;
@@ -401,6 +439,39 @@ export async function recordVideoSearch(args: {
     }
   } catch (err) {
     console.warn("[viralLibrary] keyword_record_failed", { error: err instanceof Error ? err.message : String(err) });
+  }
+  await logSearch(args);
+}
+
+/**
+ * Search log (migration 0114): one row per phrase per search, with the
+ * scoring and lane that picked it and the on-topic video ids. Used for
+ * cooldowns (v2) and to measure both scorings the same way. Never throws.
+ */
+async function logSearch(args: {
+  pick: KeywordPick;
+  platform: KeywordPlatform;
+  foundByQuery: Map<string, number>;
+  passedByQuery: Map<string, string[]>;
+}): Promise<void> {
+  try {
+    const db = await getDb();
+    if (!db) return;
+    const { isScoringV2Ready } = await import("./keywordRelevance");
+    if (!(await isScoringV2Ready(db))) return;
+    const arm = armStorage.getStore();
+    const searchId = arm?.searchId ?? randomUUID();
+    for (const [query, id] of args.pick.idByQuery) {
+      const passed = args.passedByQuery.get(query) ?? [];
+      await db.execute(sql`
+        INSERT INTO viral_keyword_searches (searchId, keywordId, topicSlug, platform, phrase, scoring, lane, experimentId, found, passed, passedIds)
+        VALUES (${searchId}, ${id}, ${args.pick.topicSlug}, ${args.platform}, ${query.slice(0, 160)}, ${args.pick.scoring ?? "v1"},
+                ${args.pick.laneByQuery?.get(query) ?? "unknown"}, ${arm?.experimentId ?? null}, ${args.foundByQuery.get(query) ?? 0},
+                ${passed.length}, ${JSON.stringify(passed.slice(0, 200))})
+      `);
+    }
+  } catch (err) {
+    console.warn("[viralLibrary] keyword_search_log_failed", { error: err instanceof Error ? err.message : String(err) });
   }
 }
 

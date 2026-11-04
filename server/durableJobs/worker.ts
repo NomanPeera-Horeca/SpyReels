@@ -120,6 +120,14 @@ function startViralLibraryUnderstanding(): void {
         // Google search volume (DataForSEO): up to 1,000 phrases per tick until all are checked.
         const volume = await import("../viralPosts/searchVolume");
         await volume.refreshSearchVolumes();
+        // Scoring v2 preparation (topic aliases, relevance labels): only when v2 or the experiment is switched on.
+        const relevance = await import("../viralPosts/keywordRelevance");
+        await relevance.prepareKeywordRelevance({ maxTopics: 2 });
+      });
+      await step("keyword experiment", async () => {
+        // Off unless KEYWORD_EXPERIMENT_RUNNER=on and an experiment row is 'ready' or 'running'.
+        const experiment = await import("../viralPosts/keywordExperiment");
+        await experiment.runKeywordExperimentTick();
       });
       await step("rising recheck", async () => {
         const rising = await import("../viralPosts/risingRecheck");

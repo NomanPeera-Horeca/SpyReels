@@ -19,10 +19,16 @@
  * Needs DATAFORSEO_LOGIN and DATAFORSEO_PASSWORD (API credentials from the
  * DataForSEO dashboard) and migration drizzle/0113_keyword_volumes.sql.
  * When something is missing it logs why once and does nothing.
- * DATAFORSEO_MONTHLY_USD caps spend (default $5). Never throws.
+ *
+ * Monthly cap DATAFORSEO_MONTHLY_USD (default $5), enforced in code: before
+ * each request the estimated cost is reserved with one conditional UPDATE
+ * (usd + estimate <= cap), so overlapping workers cannot both pass. After
+ * the response the reservation is replaced by DataForSEO's reported "cost".
+ * Timeouts, network errors and unreadable responses keep the full
+ * reservation (treated as charged). At the cap, lookups stop until the next
+ * UTC month; saved volumes keep working. Never throws.
  */
 import { sql } from "drizzle-orm";
-import { viralProcessingSpend } from "../../drizzle/viralLibrarySchema";
 import { getDb } from "../db";
 import { isKeywordsReady } from "./keywords";
 
@@ -110,12 +116,34 @@ export function parseSearchVolumes(body: unknown): Map<string, number | null> {
   return out;
 }
 
-async function spentThisMonth(db: Db): Promise<number> {
-  const [rows] = (await db.execute(
-    sql`SELECT usd FROM viral_processing_spend WHERE day = ${volumeMonthKey()} LIMIT 1`
-  )) as unknown as [Array<{ usd: string | number }>];
-  return Number(rows?.[0]?.usd ?? 0);
+/** DataForSEO's reported charge for a response ("cost" at the top), or null when absent. Pure; exported for tests. */
+export function reportedCost(body: unknown): number | null {
+  const c = (body as { cost?: unknown } | null)?.cost;
+  return typeof c === "number" && Number.isFinite(c) && c >= 0 ? c : null;
 }
+
+/**
+ * Add `usd` to this month's spend only if the total stays within `cap`.
+ * One conditional UPDATE, so concurrent workers cannot both pass the check.
+ * True when reserved.
+ */
+export async function reserveSpend(db: Db, usd: number, cap: number): Promise<boolean> {
+  const key = volumeMonthKey();
+  await db.execute(sql`INSERT IGNORE INTO viral_processing_spend (day, usd, videos) VALUES (${key}, 0, 0)`);
+  const [res] = (await db.execute(sql`
+    UPDATE viral_processing_spend SET usd = usd + ${usd} WHERE day = ${key} AND usd + ${usd} <= ${cap}
+  `)) as unknown as [{ affectedRows?: number }];
+  return (res?.affectedRows ?? 0) === 1;
+}
+
+/** Replace the reserved estimate with the reported cost (and count the phrases). */
+async function reconcileSpend(db: Db, reserved: number, actual: number, phrases: number): Promise<void> {
+  await db.execute(sql`
+    UPDATE viral_processing_spend SET usd = GREATEST(0, usd - ${reserved} + ${actual}), videos = videos + ${phrases}
+    WHERE day = ${volumeMonthKey()}
+  `);
+}
+
 
 /**
  * Look up Google volume for up to 1,000 phrases that have none yet (or a
@@ -138,10 +166,6 @@ export async function refreshSearchVolumes(): Promise<{
     return { ...out, skipped: "not_ready" };
   }
   try {
-    if ((await spentThisMonth(db)) + TASK_USD > monthlyBudgetUsd()) {
-      noteSkip("budget_reached: DATAFORSEO_MONTHLY_USD");
-      return { ...out, skipped: "budget_reached" };
-    }
     const location = locationLabel();
     const [due] = (await db.execute(sql`
       SELECT k.phrase AS phrase, MAX(k.demand) AS demand
@@ -158,32 +182,43 @@ export async function refreshSearchVolumes(): Promise<{
       noteSkip("none_due: every phrase checked in the last 30 days");
       return { ...out, skipped: "none_due" };
     }
+    // Reserve the estimated cost first, atomically against the monthly cap
+    // (two workers cannot both pass), then reconcile with the reported cost.
+    if (!(await reserveSpend(db, TASK_USD, monthlyBudgetUsd()))) {
+      noteSkip("budget_reached: DATAFORSEO_MONTHLY_USD");
+      return { ...out, skipped: "budget_reached" };
+    }
     lastSkip = null;
 
     const auth = Buffer.from(`${process.env.DATAFORSEO_LOGIN!.trim()}:${process.env.DATAFORSEO_PASSWORD!.trim()}`).toString("base64");
-    const res = await fetch("https://api.dataforseo.com/v3/keywords_data/google_ads/search_volume/live", {
-      method: "POST",
-      headers: { authorization: `Basic ${auth}`, "content-type": "application/json" },
-      body: JSON.stringify([
-        {
-          keywords: phrases,
-          location_code: locationCode(),
-          language_code: process.env.DATAFORSEO_LANGUAGE_CODE?.trim() || "en",
-        },
-      ]),
-      signal: AbortSignal.timeout(120_000),
-    });
-    // A sent task is billed even when it fails: book it either way.
-    await db
-      .insert(viralProcessingSpend)
-      .values({ day: volumeMonthKey(), usd: TASK_USD.toFixed(4), videos: phrases.length })
-      .onDuplicateKeyUpdate({ set: { usd: sql`usd + ${TASK_USD}`, videos: sql`videos + ${phrases.length}` } });
-    out.costUsd = TASK_USD;
-    if (!res.ok) {
-      console.warn("[viralLibrary] search_volume_failed", { status: res.status });
+    let body: unknown = null;
+    let status = 0;
+    try {
+      const res = await fetch("https://api.dataforseo.com/v3/keywords_data/google_ads/search_volume/live", {
+        method: "POST",
+        headers: { authorization: `Basic ${auth}`, "content-type": "application/json" },
+        body: JSON.stringify([
+          {
+            keywords: phrases,
+            location_code: locationCode(),
+            language_code: process.env.DATAFORSEO_LANGUAGE_CODE?.trim() || "en",
+          },
+        ]),
+        signal: AbortSignal.timeout(120_000),
+      });
+      status = res.status;
+      body = await res.json().catch(() => null);
+    } catch {
+      // Timeout or network error after sending: it may have been charged. Keep the reservation.
+    }
+    const actual = reportedCost(body);
+    if (actual != null) await reconcileSpend(db, TASK_USD, actual, phrases.length);
+    out.costUsd = actual ?? TASK_USD;
+    if (status !== 200 || body == null) {
+      console.warn("[viralLibrary] search_volume_failed", { status, bookedUsd: out.costUsd });
       return { ...out, skipped: "request_failed" };
     }
-    const volumes = parseSearchVolumes(await res.json());
+    const volumes = parseSearchVolumes(body);
     for (const phrase of phrases) {
       const v = volumes.get(phrase.toLowerCase()) ?? null;
       await db.execute(sql`

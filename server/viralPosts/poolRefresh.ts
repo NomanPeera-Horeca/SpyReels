@@ -547,7 +547,7 @@ async function refreshYouTubePool(
  */
 export async function refreshPoolById(
   poolId: number,
-  opts?: { force?: boolean; owner?: string }
+  opts?: { force?: boolean; owner?: string; /** Fixed call ceiling (scoring experiment: equal budget per search). */ maxScCalls?: number }
 ): Promise<PoolRefreshResult> {
   const { getDb } = await import("../db");
   const { viralPostPools } = await import("../../drizzle/schema");
@@ -616,7 +616,7 @@ export async function refreshPoolById(
   }
 
   const used = await poolRepo.getBudgetUsed(pool.id);
-  const remaining = Math.max(0, pool.dailyCallBudget - used);
+  const remaining = Math.min(Math.max(0, pool.dailyCallBudget - used), opts?.maxScCalls ?? Number.POSITIVE_INFINITY);
   const minBudget =
     pool.platform === "youtube" ? 1 : pool.platform === "tiktok" ? 3 : 5;
   if (remaining < minBudget) {
