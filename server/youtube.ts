@@ -425,6 +425,24 @@ async function fetchYouTubeShortsPage(
   return { videos: [], nextContinuationToken: null };
 }
 
+/**
+ * A channel's newest Shorts with views: one provider call, no retries (the
+ * viral library uses it to measure usual views). Null when the call fails.
+ */
+export async function fetchChannelRecentShortViews(
+  handle: string
+): Promise<Array<{ views: number; postedAt: Date }> | null> {
+  const cleanHandle = cleanYouTubeHandle(handle);
+  if (!cleanHandle) return null;
+  const { status, data } = await scGet("/v1/youtube/channel/shorts", { handle: cleanHandle, sort: "newest" });
+  const items = status === 200 && data && Array.isArray((data as any).shorts) ? ((data as any).shorts as unknown[]) : null;
+  if (!items) return null;
+  return items
+    .map(item => parseYouTubeShort(item, cleanHandle))
+    .filter((v): v is YouTubeVideoData => v !== null)
+    .map(v => ({ views: v.viewCount, postedAt: v.postedAt }));
+}
+
 export async function scrapeYouTubeShorts(
   handle: string,
   onProgress?: (count: number, pageBatch?: YouTubeVideoData[]) => void,

@@ -136,6 +136,8 @@ function startViralLibraryUnderstanding(): void {
       await step("youtube channels", async () => {
         const yt = await import("../viralPosts/youtubeChannels");
         await yt.repairYouTubeLibraryCreators({ max: 40 });
+        // "Can't judge" Shorts: settle the hopeless ones, measure channels' usual views (daily cap).
+        await yt.measureYouTubeBaselines({ maxChannels: 10 });
       });
       await step("understanding", () => understanding.processLibraryVideos());
       await step("embeddings", async () => {
