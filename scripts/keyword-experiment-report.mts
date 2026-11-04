@@ -27,7 +27,7 @@ const conn = await mysql.createConnection({ uri: url });
 
 const wanted = Number(process.argv[2]) || null;
 const [exps] = (await conn.query(
-  wanted ? `SELECT * FROM viral_keyword_experiments WHERE id = ?` : `SELECT * FROM viral_keyword_experiments ORDER BY id DESC LIMIT 1`,
+  wanted ? `SELECT * FROM viral_keyword_experiments WHERE id = ?` : `SELECT * FROM viral_keyword_experiments WHERE snapshotAt IS NOT NULL ORDER BY id DESC LIMIT 1`,
   wanted ? [wanted] : []
 )) as unknown as [Array<Record<string, unknown>>];
 const exp = exps[0];
