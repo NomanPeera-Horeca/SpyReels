@@ -401,4 +401,6 @@ jobs:
 
       - name: Keyword scoring sample
         if: ${{ contains(github.event.head_commit.message, '[scoring-sample]') }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: pnpm exec tsx scripts/keyword-scoring-sample.mts
