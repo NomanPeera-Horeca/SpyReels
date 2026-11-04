@@ -67,8 +67,8 @@ const queries: Array<[string, string]> = [
   [
     "Spend markers (last 3 days and catch-up)",
     `SELECT day, usd, videos FROM viral_processing_spend
-      WHERE day IN ('fill-total','und-catch') OR day >= DATE_FORMAT(NOW() - INTERVAL 3 DAY, '%Y-%m-%d')
-         OR day LIKE CONCAT('wl', DATE_FORMAT(NOW(), '%Y%m'), '%') OR day LIKE CONCAT('sc', DATE_FORMAT(NOW(), '%Y%m'), '%') OR day LIKE 'df%') AND day NOT LIKE 'tk%' AND (1=1
+      WHERE day NOT LIKE 'tk%' AND day NOT LIKE 'c%' AND (day IN ('fill-total','und-catch') OR day >= DATE_FORMAT(NOW() - INTERVAL 3 DAY, '%Y-%m-%d')
+         OR day LIKE CONCAT('wl', DATE_FORMAT(NOW(), '%Y%m'), '%') OR day LIKE CONCAT('sc', DATE_FORMAT(NOW(), '%Y%m'), '%') OR day LIKE 'df%' OR day LIKE 'rf%')
       ORDER BY day`,
   ],
 ];
