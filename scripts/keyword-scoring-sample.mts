@@ -40,7 +40,8 @@ for (const slug of topics) {
   const [rows] = (await conn.query(
     `SELECT k.id, k.phrase, k.demand, k.runs, k.found, k.passed, k.viral, k.creatorsFound, k.goodCreators, k.retired,
             v.volume AS googleVolume, (v.phrase IS NOT NULL) AS checked,
-            EXISTS (SELECT 1 FROM viral_keywords x WHERE x.topicSlug = k.topicSlug AND x.phrase = k.phrase AND x.source = 'tiktok_autocomplete') AS tt
+            EXISTS (SELECT 1 FROM viral_keywords x WHERE x.topicSlug = k.topicSlug AND x.phrase = k.phrase AND x.source = 'tiktok_autocomplete') AS tt,
+            EXISTS (SELECT 1 FROM viral_keywords x WHERE x.topicSlug = k.topicSlug AND x.phrase = k.phrase AND x.source = 'viral_hashtag') AS vh
      FROM viral_keywords k LEFT JOIN viral_keyword_volumes v ON v.phrase = k.phrase AND v.source = 'google' AND v.location = 'US'
      WHERE k.topicSlug = ? AND k.platform = 'tiktok'`,
     [slug]
@@ -48,7 +49,7 @@ for (const slug of topics) {
   const R = rows.map(r => ({
     id: Number(r.id), phrase: String(r.phrase), demand: Number(r.demand), runs: Number(r.runs), found: Number(r.found), passed: Number(r.passed),
     viral: Number(r.viral), creatorsFound: Number(r.creatorsFound), goodCreators: Number(r.goodCreators), retired: Number(r.retired),
-    googleVolume: Number(r.checked) ? (r.googleVolume == null ? null : Number(r.googleVolume)) : null, tt: Boolean(Number(r.tt)),
+    googleVolume: Number(r.checked) ? (r.googleVolume == null ? null : Number(r.googleVolume)) : null, tt: Boolean(Number(r.tt)), vh: Boolean(Number(r.vh)),
   }));
   // Aliases + labels (same prompt as the PR's prepareKeywordRelevance).
   let aliases: string[] = [];
@@ -73,7 +74,7 @@ Return {"aliases":[...],"labels":{"1":"R",...}}.` }],
   const terms = topicTerms(t.label, aliases);
   const inputs: V2Input[] = R.map((r, i) => ({
     id: r.id, phrase: r.phrase, demand: r.demand, searches: r.runs, found: r.found, passed: r.passed, googleVolume: r.googleVolume,
-    tiktokSuggested: r.tt, label: classifyRelevance({ phrase: r.phrase, terms, aiLabel: labels.get(i + 1) ?? null }),
+    tiktokSuggested: r.tt, label: classifyRelevance({ phrase: r.phrase, terms, aiLabel: labels.get(i + 1) ?? null, fromTopicVideos: r.vh }),
     recentPassed: r.runs > 0 ? [r.passed] : [], lastSearchedAt: r.runs > 0 ? new Date(Date.now() - 2 * 86_400_000) : null, firstSearchedAt: r.runs > 0 ? new Date(Date.now() - 2 * 86_400_000) : null,
   }));
   const scored = scoreV2(inputs, median);
@@ -90,6 +91,8 @@ Return {"aliases":[...],"labels":{"1":"R",...}}.` }],
   }
   console.log("--- blocked (all)");
   scored.filter(s => s.lane === "blocked").forEach(s => console.log(`   ${line(s)}`));
+  console.log("--- disputed (all)");
+  scored.filter(s => s.label === "disputed").forEach(s => console.log(`   ${line(s)} | lane ${s.lane}`));
   const oldFive = oldPick(R.filter(r => !r.retired), 5, oldScore).map(r => r.phrase);
   const newFive = pickV2(scored, 5).map(p => `${p.phrase} [${p.pickedLane}]`);
   console.log(`--- a 5-phrase TikTok search picks\n  current: ${oldFive.join(" | ")}\n  v2:      ${newFive.join(" | ")}`);

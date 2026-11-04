@@ -1,4 +1,4 @@
-export type RelevanceLabel = "relevant" | "plausible" | "irrelevant";
+export type RelevanceLabel = "relevant" | "plausible" | "disputed" | "irrelevant";
 
 const STOP = new Set(
   "a an and are as at be by for from how i in is it my of on or that the this to what why with you your vs".split(" ")
@@ -37,10 +37,16 @@ export function phraseHasTerm(phrase: string, term: string): boolean {
   return p.join("").includes(t.joined) || p.some(w => w.includes(t.joined));
 }
 
-/** Label one phrase from topic terms and an optional AI label. Pure; exported for tests. */
-export function classifyRelevance(args: { phrase: string; terms: string[]; aiLabel?: RelevanceLabel | null }): RelevanceLabel {
+/** Label one phrase from topic terms, an optional AI label and its provenance. Pure; exported for tests. */
+export function classifyRelevance(args: {
+  phrase: string;
+  terms: string[];
+  aiLabel?: RelevanceLabel | null;
+  /** The phrase is a hashtag of this topic's own viral videos. */
+  fromTopicVideos?: boolean;
+}): RelevanceLabel {
   if (args.terms.some(term => phraseHasTerm(args.phrase, term))) return "relevant";
-  if (args.aiLabel === "irrelevant") return "irrelevant";
+  if (args.aiLabel === "irrelevant") return args.fromTopicVideos ? "disputed" : "irrelevant";
   if (args.aiLabel === "relevant") return "relevant";
   return "plausible";
 }

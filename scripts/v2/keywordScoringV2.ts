@@ -3,7 +3,8 @@
  * experiment arm asks for it). Three separate signals, two lanes.
  *
  * R  relevance 0-1 (gate)
- *    prior by label: relevant 0.85, plausible 0.55, irrelevant 0.10
+ *    prior by label: relevant 0.85, plausible 0.55, disputed 0.40,
+ *    irrelevant 0.10
  *    (+0.05 when TikTok suggested the phrase, capped at 1);
  *    observed on-topic rate o = (passed + 1) / (found + 2);
  *    R = (1 - w) * prior + w * o, with w = found / (found + 8).
@@ -53,7 +54,7 @@ export type V2Input = {
   passed: number;
   googleVolume: number | null; // null = unknown
   tiktokSuggested: boolean;
-  label: "relevant" | "plausible" | "irrelevant";
+  label: "relevant" | "plausible" | "disputed" | "irrelevant";
   /** Most recent first: passed count per search of this phrase (logged searches only). */
   recentPassed: number[];
   lastSearchedAt: Date | null;
@@ -77,6 +78,7 @@ const DAY = 86_400_000;
 export const V2 = {
   priorRelevant: 0.85,
   priorPlausible: 0.55,
+  priorDisputed: 0.4,
   priorIrrelevant: 0.1,
   tiktokRelevanceBonus: 0.05,
   relevanceEvidence: 8,
@@ -95,7 +97,8 @@ export const V2 = {
 
 /** Relevance R (gate input). */
 export function relevanceScore(x: Pick<V2Input, "label" | "tiktokSuggested" | "found" | "passed">): number {
-  const base = x.label === "relevant" ? V2.priorRelevant : x.label === "irrelevant" ? V2.priorIrrelevant : V2.priorPlausible;
+  const base =
+    x.label === "relevant" ? V2.priorRelevant : x.label === "irrelevant" ? V2.priorIrrelevant : x.label === "disputed" ? V2.priorDisputed : V2.priorPlausible;
   const prior = Math.min(1, base + (x.tiktokSuggested ? V2.tiktokRelevanceBonus : 0));
   const w = x.found / (x.found + V2.relevanceEvidence);
   const observed = (x.passed + 1) / (x.found + 2);
