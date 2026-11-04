@@ -33,33 +33,34 @@ const clamp = (x: number) => Math.max(0, Math.min(1, x));
 
 function v2(rows: Row[], label: string, platformUsefulMedian: number) {
   const L = words(label);
-  const known = rows.filter(r => r.googleChecked && r.googleVolume != null).map(r => Math.log10(1 + (r.googleVolume ?? 0)));
-  const p10 = quantile(known, 0.1), p90 = quantile(known, 0.9);
-  const dg = (v: number) => (p90 > p10 ? clamp((Math.log10(1 + v) - p10) / (p90 - p10)) : 0.5);
-  const medianDg = quantile(known.map(g => (p90 > p10 ? clamp((g - p10) / (p90 - p10)) : 0.5)), 0.5);
+  // Topic-relative demand: percentile of log(Google volume) among this topic's measured phrases (no saturation, no cross-niche effect).
+  const knownLogs = rows.filter(r => r.googleChecked && r.googleVolume != null && r.googleVolume > 0).map(r => Math.log10(1 + (r.googleVolume ?? 0))).sort((a, b) => a - b);
+  const pct = (g: number) => (knownLogs.length <= 1 ? 0.5 : knownLogs.filter(x => x < g).length / (knownLogs.length - 1));
   return rows.map(r => {
-    // Relevance: prior from topic words / source, replaced by observed on-topic rate as evidence grows.
+    // 1. Relevance (gate). Prior from coverage of the topic's own words; observed on-topic rate replaces it as searches add evidence.
     const P = words(r.phrase);
-    const shared = [...L].filter(w => P.has(w)).length;
-    let prior = L.size === 0 ? 0.6 : shared === L.size ? 1 : shared > 0 ? 0.7 : 0.4;
-    if (r.source === "viral_hashtag") prior = Math.max(prior, 0.7);
-    const w = Math.min(1, r.found / 10);
-    const observedRel = (r.passed + 1) / (r.found + 2);
-    const R = (1 - w) * prior + w * observedRel;
-    // Demand within the topic, bounded: Google volume mapped between the topic's p10 and p90 (log scale);
-    // unknown sits near the topic median (autocomplete rank nudges it), never above it by much.
-    const A = r.demand / 100;
+    const coverage = L.size === 0 ? 0.5 : [...L].filter(w => P.has(w)).length / L.size;
+    let prior = 0.3 + 0.7 * coverage;
+    if (coverage > 0 && (r.source === "viral_hashtag" || r.tiktokSuggested)) prior = Math.min(1, prior + 0.1);
+    const w = r.found / (r.found + 5);
+    const R = (1 - w) * prior + w * ((r.passed + 1) / (r.found + 2));
+    // 2. Demand evidence (bounded 0-1, within the topic).
     let D: number;
     let demandKind: string;
-    if (r.googleChecked && r.googleVolume != null) { D = dg(r.googleVolume); demandKind = r.googleVolume === 0 ? "zero" : "known"; }
-    else { D = medianDg * (0.75 + 0.5 * (A - 0.5)); demandKind = r.googleChecked ? "unknown(no data)" : "unknown(not checked)"; }
-    if (r.tiktokSuggested) D = Math.min(1, D + 0.25); // social-search evidence
-    // Observed performance: viral videos per search, relative to the platform median.
-    const u = (r.viral + 0.5) / (r.runs + 2);
-    const Perf = u / (u + platformUsefulMedian);
-    const e = Math.min(1, r.runs / 4);
-    const eligible = R >= 0.35 && !r.retired;
-    const score = eligible ? (1 - e) * (0.55 * R + 0.45 * D) + e * (0.6 * Perf + 0.3 * R + 0.1 * D) : 0;
+    if (r.googleChecked && r.googleVolume != null) {
+      D = r.googleVolume > 0 ? pct(Math.log10(1 + r.googleVolume)) : 0;
+      demandKind = r.googleVolume === 0 ? "zero" : "known";
+    } else {
+      D = 0.5 + 0.2 * (r.demand / 100 - 0.5); // unknown: around the topic median, autocomplete rank nudges +/-0.1
+      demandKind = r.googleChecked ? "unknown(no data)" : "unknown(not checked)";
+    }
+    if (r.tiktokSuggested) D = Math.min(1, D + 0.15); // social-search evidence (TikTok's own suggestions)
+    // 3. Observed performance: viral videos per search vs the platform median.
+    const u = r.runs > 0 ? r.viral / r.runs : 0;
+    const Perf = r.runs > 0 ? u / (u + platformUsefulMedian) : 0;
+    const e = r.runs / (r.runs + 1); // 1 search -> 0.5, 3 -> 0.75
+    const eligible = R >= 0.45 && !r.retired;
+    const score = eligible ? (1 - e) * (0.6 * R + 0.4 * D) + e * (0.55 * Perf + 0.3 * R + 0.15 * D) : 0;
     return { r, R, D, Perf, e, eligible, score, demandKind };
   });
 }
@@ -77,9 +78,9 @@ const [topics] = (await conn.query(`
 console.log(`TOPICS_WITH_DATA ${topics.length}`);
 const picks = topics.length >= 3 ? [topics[0], topics[Math.floor(topics.length / 2)], topics[topics.length - 1]] : topics;
 
-const [perf] = (await conn.query(`SELECT (SUM(viral) + 0.5) / (SUM(runs) + 2) AS u FROM viral_keywords WHERE platform = 'tiktok' AND runs > 0`)) as unknown as [Array<{ u: number }>];
-const platformMedian = Number(perf[0]?.u ?? 0.5);
-console.log(`TIKTOK_VIRAL_PER_SEARCH ${platformMedian.toFixed(3)}`);
+const [perfRows] = (await conn.query(`SELECT viral / runs AS u FROM viral_keywords WHERE platform = 'tiktok' AND runs > 0 ORDER BY u`)) as unknown as [Array<{ u: number }>];
+const platformMedian = Math.max(0.25, Number(perfRows[Math.floor(perfRows.length / 2)]?.u ?? 1));
+console.log(`TIKTOK_MEDIAN_VIRAL_PER_SEARCH ${platformMedian.toFixed(3)}`);
 
 const fmt = (x: { r: Row; R: number; D: number; Perf: number; score: number; demandKind: string }, rank: number, oldRank: number) =>
   `${String(rank).padStart(3)} (was ${String(oldRank).padStart(3)}) | ${x.r.phrase.slice(0, 42).padEnd(42)} | vol ${x.r.googleVolume == null ? "unknown" : x.r.googleVolume} | tt ${x.r.tiktokSuggested ? "y" : "n"} | runs ${x.r.runs} viral ${x.r.viral} pass ${x.r.passed}/${x.r.found} | R ${x.R.toFixed(2)} D ${x.D.toFixed(2)} P ${x.Perf.toFixed(2)} | old ${oldScore(x.r).toFixed(3)} new ${x.score.toFixed(3)}`;
