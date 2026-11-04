@@ -212,3 +212,17 @@ describe("guards", () => {
     expect(reportedCost(null)).toBeNull();
   });
 });
+
+describe("experiment pace", () => {
+  afterEach(() => {
+    delete process.env.KEYWORD_EXPERIMENT_SEARCHES_PER_TICK;
+  });
+  it("runs 3 searches per tick by default, bounded 1-10", async () => {
+    const { experimentSearchesPerTick } = await import("../keywordExperiment");
+    expect(experimentSearchesPerTick()).toBe(3);
+    process.env.KEYWORD_EXPERIMENT_SEARCHES_PER_TICK = "50";
+    expect(experimentSearchesPerTick()).toBe(10);
+    process.env.KEYWORD_EXPERIMENT_SEARCHES_PER_TICK = "0";
+    expect(experimentSearchesPerTick()).toBe(3);
+  });
+});
