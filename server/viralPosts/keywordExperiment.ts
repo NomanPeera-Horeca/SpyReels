@@ -15,9 +15,12 @@
  *   searches per arm (block randomization), interleaved in time.
  * - Budget: every search is a normal pool refresh with the same fixed call
  *   ceiling for both arms (KEYWORD_EXPERIMENT_CALLS_PER_SEARCH, default 10).
- *   A cell whose pool cannot afford the full ceiling today is skipped until
- *   the pool's daily budget resets, so no search runs on a smaller budget.
- *   Experiment calls in total are capped by maxUsd.
+ *   The experiment uses its own cap (maxUsd, checked before every search)
+ *   instead of each pool's daily budget, so it can finish in hours.
+ * - Pace: KEYWORD_EXPERIMENT_SEARCHES_PER_TICK searches per worker tick
+ *   (default 3, every 5 minutes).
+ * - Relevance labels for the experiment topics are prepared at start, so
+ *   the v2 arm uses the same labels from its first search.
  * - While running, production topic refresh skips the experiment topics, so
  *   their pools are searched only by the experiment.
  * - Ends when every cell has minSearchesPerArm per arm ('done'), or the cap
@@ -133,86 +136,101 @@ async function start(db: Db, exp: ExperimentRow): Promise<boolean> {
   return true;
 }
 
-/** One experiment search. Never throws. */
-export async function runKeywordExperimentTick(): Promise<{ ran: boolean; reason?: string }> {
-  if (process.env.KEYWORD_EXPERIMENT_RUNNER !== "on") return { ran: false, reason: "runner_off" };
+export function experimentSearchesPerTick(): number {
+  const n = Number(process.env.KEYWORD_EXPERIMENT_SEARCHES_PER_TICK);
+  return Number.isFinite(n) && n >= 1 ? Math.min(10, Math.floor(n)) : 3;
+}
+
+/** Up to KEYWORD_EXPERIMENT_SEARCHES_PER_TICK experiment searches. Never throws. */
+export async function runKeywordExperimentTick(): Promise<{ ran: number; reason?: string }> {
+  if (process.env.KEYWORD_EXPERIMENT_RUNNER !== "on") return { ran: 0, reason: "runner_off" };
   const db = await getDb();
-  if (!db || !(await isScoringV2Ready(db))) return { ran: false, reason: "not_ready" };
+  if (!db || !(await isScoringV2Ready(db))) return { ran: 0, reason: "not_ready" };
+  let ran = 0;
   try {
     let exp = await activeExperiment(db);
-    if (!exp) return { ran: false, reason: "no_experiment" };
+    if (!exp) return { ran, reason: "no_experiment" };
     if (exp.status === "ready") {
-      await start(db, exp);
+      if (await start(db, exp)) {
+        // Same relevance labels for the v2 arm from its first search.
+        const { prepareKeywordRelevance } = await import("./keywordRelevance");
+        await prepareKeywordRelevance({ topicSlugs: exp.topicSlugs, maxTopics: 10 });
+      }
       exp = await activeExperiment(db);
-      if (!exp || exp.status !== "running") return { ran: false, reason: "start_race" };
+      if (!exp || exp.status !== "running") return { ran, reason: "start_race" };
     }
-    const [spend] = (await db.execute(sql`
-      SELECT COALESCE(SUM(calls), 0) AS calls FROM viral_keyword_searches WHERE experimentId = ${exp.id}
-    `)) as unknown as [Array<{ calls: number }>];
-    const usd = Number(spend?.[0]?.calls ?? 0) * (Number(process.env.SCRAPECREATORS_USD_PER_CREDIT) || 0.002);
-    if (usd >= exp.maxUsd) {
-      await db.execute(sql`UPDATE viral_keyword_experiments SET status = 'stopped', endedAt = NOW() WHERE id = ${exp.id}`);
-      console.warn("[viralLibrary] keyword_experiment_stopped_budget", { id: exp.id, usd });
-      return { ran: false, reason: "budget" };
-    }
-    const [counts] = (await db.execute(sql`
-      SELECT topicSlug, platform, scoring, COUNT(DISTINCT searchId) AS n
-      FROM viral_keyword_searches WHERE experimentId = ${exp.id} GROUP BY topicSlug, platform, scoring
-    `)) as unknown as [Array<{ topicSlug: string; platform: string; scoring: string; n: number }>];
-    const cells: CellCounts[] = exp.topicSlugs.flatMap(t => exp!.platforms.map(p => ({ topicSlug: t, platform: p, v1: 0, v2: 0 })));
-    for (const c of counts ?? []) {
-      const cell = cells.find(x => x.topicSlug === c.topicSlug && x.platform === c.platform);
-      if (cell && (c.scoring === "v1" || c.scoring === "v2")) cell[c.scoring] = Number(c.n);
-    }
-    if (!nextAssignment(cells, exp.minSearchesPerArm, exp.seed)) {
-      await db.execute(sql`UPDATE viral_keyword_experiments SET status = 'done', endedAt = NOW() WHERE id = ${exp.id}`);
-      console.info("[viralLibrary] keyword_experiment_done", { id: exp.id });
-      return { ran: false, reason: "done" };
-    }
-    // Only cells whose pool can afford the full fixed ceiling today.
-    const ceiling = experimentCallsPerSearch();
+    // Cells that have a pool (a cell without one cannot be searched and does not hold the experiment open).
     const { fillNicheForCategory } = await import("./topicFill");
-    const poolRepo = await import("./poolRepository");
     const poolByCell = new Map<string, number>();
-    for (const c of cells) {
-      const [topic] = (await db.execute(sql`SELECT label, category FROM viral_topics WHERE slug = ${c.topicSlug} LIMIT 1`)) as unknown as [Array<{ label: string; category: string }>];
+    for (const topicSlug of exp.topicSlugs) {
+      const [topic] = (await db.execute(sql`SELECT label, category FROM viral_topics WHERE slug = ${topicSlug} LIMIT 1`)) as unknown as [Array<{ label: string; category: string }>];
       const t = topic?.[0];
       if (!t) continue;
-      const poolKey = buildPoolKey({ platform: c.platform, niche: fillNicheForCategory(t.category), pillar: t.label });
-      const [pool] = (await db.execute(sql`SELECT id, dailyCallBudget FROM viral_post_pools WHERE poolKey = ${poolKey} LIMIT 1`)) as unknown as [Array<{ id: number; dailyCallBudget: number }>];
-      const p = pool?.[0];
-      if (!p) continue;
-      const used = await poolRepo.getBudgetUsed(Number(p.id));
-      if (Number(p.dailyCallBudget) - used >= ceiling) poolByCell.set(`${c.topicSlug}|${c.platform}`, Number(p.id));
+      for (const platform of exp.platforms) {
+        const poolKey = buildPoolKey({ platform, niche: fillNicheForCategory(t.category), pillar: t.label });
+        const [pool] = (await db.execute(sql`SELECT id FROM viral_post_pools WHERE poolKey = ${poolKey} LIMIT 1`)) as unknown as [Array<{ id: number }>];
+        if (pool?.[0]?.id) poolByCell.set(`${topicSlug}|${platform}`, Number(pool[0].id));
+      }
     }
-    const next = nextAssignment(cells.filter(c => poolByCell.has(`${c.topicSlug}|${c.platform}`)), exp.minSearchesPerArm, exp.seed);
-    if (!next) return { ran: false, reason: "waiting_for_pool_budget" };
-    const poolId = poolByCell.get(`${next.topicSlug}|${next.platform}`)!;
-    const searchId = randomUUID();
+    const ceiling = experimentCallsPerSearch();
     const { refreshPoolById } = await import("./poolRefresh");
-    const r = await runWithKeywordArm({ scoring: next.arm, experimentId: exp.id, searchId }, () =>
-      refreshPoolById(poolId, { force: true, maxScCalls: ceiling })
-    );
-    if (r.status !== "refreshed") {
-      // Skipped (lock, budget): not a search. Drop anything logged so both arms stay comparable.
-      await db.execute(sql`DELETE FROM viral_keyword_searches WHERE searchId = ${searchId}`);
-      return { ran: false, reason: r.status };
+    for (let i = 0; i < experimentSearchesPerTick(); i += 1) {
+      const [spend] = (await db.execute(sql`
+        SELECT COALESCE(SUM(calls), 0) AS calls FROM viral_keyword_searches WHERE experimentId = ${exp.id}
+      `)) as unknown as [Array<{ calls: number }>];
+      const usd = Number(spend?.[0]?.calls ?? 0) * (Number(process.env.SCRAPECREATORS_USD_PER_CREDIT) || 0.002);
+      // Stop before a search that could cross the cap.
+      if (usd + ceiling * (Number(process.env.SCRAPECREATORS_USD_PER_CREDIT) || 0.002) > exp.maxUsd) {
+        await db.execute(sql`UPDATE viral_keyword_experiments SET status = 'stopped', endedAt = NOW() WHERE id = ${exp.id}`);
+        console.warn("[viralLibrary] keyword_experiment_stopped_budget", { id: exp.id, usd });
+        return { ran, reason: "budget" };
+      }
+      const [counts] = (await db.execute(sql`
+        SELECT topicSlug, platform, scoring, COUNT(DISTINCT searchId) AS n
+        FROM viral_keyword_searches WHERE experimentId = ${exp.id} GROUP BY topicSlug, platform, scoring
+      `)) as unknown as [Array<{ topicSlug: string; platform: string; scoring: string; n: number }>];
+      const cells: CellCounts[] = [...poolByCell.keys()].map(k => {
+        const [topicSlug, platform] = k.split("|");
+        return { topicSlug, platform, v1: 0, v2: 0 };
+      });
+      for (const c of counts ?? []) {
+        const cell = cells.find(x => x.topicSlug === c.topicSlug && x.platform === c.platform);
+        if (cell && (c.scoring === "v1" || c.scoring === "v2")) cell[c.scoring] = Number(c.n);
+      }
+      const next = nextAssignment(cells, exp.minSearchesPerArm, exp.seed);
+      if (!next) {
+        await db.execute(sql`UPDATE viral_keyword_experiments SET status = 'done', endedAt = NOW() WHERE id = ${exp.id}`);
+        console.info("[viralLibrary] keyword_experiment_done", { id: exp.id, cells: cells.length });
+        return { ran, reason: "done" };
+      }
+      const poolId = poolByCell.get(`${next.topicSlug}|${next.platform}`)!;
+      const searchId = randomUUID();
+      const r = await runWithKeywordArm({ scoring: next.arm, experimentId: exp.id, searchId }, () =>
+        refreshPoolById(poolId, { force: true, maxScCalls: ceiling, ignoreDailyBudget: true })
+      );
+      if (r.status !== "refreshed") {
+        // Skipped (lock, provider problem): not a search. Drop anything logged so both arms stay comparable.
+        await db.execute(sql`DELETE FROM viral_keyword_searches WHERE searchId = ${searchId}`);
+        console.warn("[viralLibrary] keyword_experiment_search_skipped", { id: exp.id, ...next, status: r.status });
+        return { ran, reason: r.status };
+      }
+      // Spread the pool's provider calls over the phrases it logged; record the search even when no bank phrase was used.
+      const [logged] = (await db.execute(sql`SELECT COUNT(*) AS n FROM viral_keyword_searches WHERE searchId = ${searchId}`)) as unknown as [Array<{ n: number }>];
+      const n = Number(logged?.[0]?.n ?? 0);
+      if (n > 0) {
+        await db.execute(sql`UPDATE viral_keyword_searches SET calls = ${r.scCalls / n} WHERE searchId = ${searchId}`);
+      } else {
+        await db.execute(sql`
+          INSERT INTO viral_keyword_searches (searchId, keywordId, topicSlug, platform, phrase, scoring, lane, experimentId, calls, found, passed, passedIds)
+          VALUES (${searchId}, 0, ${next.topicSlug}, ${next.platform}, '(no bank phrase)', ${next.arm}, 'none', ${exp.id}, ${r.scCalls}, 0, 0, '[]')
+        `);
+      }
+      ran += 1;
+      console.info("[viralLibrary] keyword_experiment_search", { id: exp.id, ...next, calls: r.scCalls });
     }
-    // Spread the pool's provider calls over the phrases it logged; record the search even when no bank phrase was used.
-    const [logged] = (await db.execute(sql`SELECT COUNT(*) AS n FROM viral_keyword_searches WHERE searchId = ${searchId}`)) as unknown as [Array<{ n: number }>];
-    const n = Number(logged?.[0]?.n ?? 0);
-    if (n > 0) {
-      await db.execute(sql`UPDATE viral_keyword_searches SET calls = ${r.scCalls / n} WHERE searchId = ${searchId}`);
-    } else {
-      await db.execute(sql`
-        INSERT INTO viral_keyword_searches (searchId, keywordId, topicSlug, platform, phrase, scoring, lane, experimentId, calls, found, passed, passedIds)
-        VALUES (${searchId}, 0, ${next.topicSlug}, ${next.platform}, '(no bank phrase)', ${next.arm}, 'none', ${exp.id}, ${r.scCalls}, 0, 0, '[]')
-      `);
-    }
-    console.info("[viralLibrary] keyword_experiment_search", { id: exp.id, ...next, calls: r.scCalls, status: r.status });
-    return { ran: true };
+    return { ran };
   } catch (err) {
     console.warn("[viralLibrary] keyword_experiment_failed", { error: err instanceof Error ? err.message : String(err) });
-    return { ran: false, reason: "error" };
+    return { ran, reason: "error" };
   }
 }
