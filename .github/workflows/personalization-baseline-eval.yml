@@ -403,6 +403,12 @@ jobs:
         if: ${{ contains(github.event.head_commit.message, '[topic-list]') }}
         run: pnpm exec tsx scripts/topic-list.mts
 
+      - name: Relevance comparison
+        if: ${{ contains(github.event.head_commit.message, '[relevance-compare]') }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: pnpm exec tsx scripts/relevance-compare.mts
+
       - name: Discovery audit
         if: ${{ contains(github.event.head_commit.message, '[audit]') }}
         run: pnpm exec tsx scripts/discovery-audit.mts
@@ -416,7 +422,7 @@ jobs:
         run: pnpm exec tsx scripts/keyword-experiment-report.mts
 
       - name: Library counts
-        if: ${{ !contains(github.event.head_commit.message, '[scoring-sample]') && !contains(github.event.head_commit.message, '[experiment-report]') && !contains(github.event.head_commit.message, '[library-progress]') && !contains(github.event.head_commit.message, '[topic-list]') && !contains(github.event.head_commit.message, '[db-size]') && !contains(github.event.head_commit.message, '[audit]') }}
+        if: ${{ !contains(github.event.head_commit.message, '[scoring-sample]') && !contains(github.event.head_commit.message, '[experiment-report]') && !contains(github.event.head_commit.message, '[library-progress]') && !contains(github.event.head_commit.message, '[topic-list]') && !contains(github.event.head_commit.message, '[db-size]') && !contains(github.event.head_commit.message, '[audit]') && !contains(github.event.head_commit.message, '[relevance-compare]') }}
         run: pnpm exec tsx scripts/library-stats.mts
 
       - name: Keyword scoring sample
