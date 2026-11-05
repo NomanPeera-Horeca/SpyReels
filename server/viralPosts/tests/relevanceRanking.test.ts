@@ -65,6 +65,7 @@ describe("signals", () => {
   it("finds places, including market words like FHA (US) and RERA (UAE)", () => {
     expect(placesIn("Renting in Dubai? Know your RERA rights")).toEqual(["uae"]);
     expect(placesIn("FHA loan for your first home")).toEqual(["us"]);
+    expect(placesIn("Landlords are dumping houses as U.S. housing demand collapses")).toEqual(["us"]);
     expect(placesIn("10 meal prep ideas")).toEqual([]);
   });
   it("detects caption language by script and common words, or says unsure", () => {
@@ -159,6 +160,12 @@ describe("ranking", () => {
     const r = rankForProfile(resto, [relevantAd, unrelatedAd], { limit: 5, now });
     expect(r.picked.find(p => p.video.id === relevantAd.id)?.flags).toContain("advert_kept_relevant");
     expect(r.rejected.find(x => x.video.id === unrelatedAd.id)?.rejected).toMatch(/advert_not_relevant|below_relevance_gate/);
+  });
+
+  it("never rejects the language the creator writes in, even when other languages are declared", () => {
+    const p = profile({ languages: ["ar"] });
+    const r = rankForProfile(p, [video({ caption: "This is the quick home workout for busy moms that you can do with your kids" })], { limit: 5, now });
+    expect(r.picked).toHaveLength(1);
   });
 
   it("shows one video per creator", () => {
