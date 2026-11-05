@@ -9,6 +9,7 @@
  * Paid calls: one OpenAI embedding per profile text (~$0.0001 total) and one
  * Haiku judge call per profile (~$0.003 each).
  */
+import { createHash } from "node:crypto";
 import mysql from "mysql2/promise";
 import { rankForProfile, relevanceProfileText, type RelevanceProfile, type RelevanceVideo } from "../server/viralPosts/relevanceRanking";
 
@@ -122,10 +123,11 @@ entries.push({
     topicSlugs: new Set(["small-business-tips", "side-hustles", "business-growth-stories", "starting-a-business"]), embedding: null,
   },
 });
-const sample = await q(`
+const seeded = (id: string) => createHash("sha256").update(`${id}|seed-1105`).digest("hex");
+const sample = (await q(`
   SELECT DISTINCT pi.socialProfileId AS id FROM personalization_items pi
   JOIN viral_profile_topics pt ON pt.socialProfileId = pi.socialProfileId
-  WHERE pi.kind = 'niche' AND pi.status = 'confirmed' ORDER BY MD5(CONCAT(pi.socialProfileId, 'seed-1105')) LIMIT 40`);
+  WHERE pi.kind = 'niche' AND pi.status = 'confirmed'`)).sort((a, b) => seeded(String(a.id)).localeCompare(seeded(String(b.id)))).slice(0, 40);
 for (const s of sample) {
   if (entries.filter(e => e.kind === "sampled user").length >= 20) break;
   if (s.id === restaurantId || s.id === dubaiId) continue;
