@@ -1,0 +1,20 @@
+-- Discovery repair pilot (off by default).
+--
+-- Additive and idempotent: four new tables, CREATE TABLE IF NOT EXISTS only,
+-- nothing altered or dropped, safe to re-run. Nothing runs until a pilot row
+-- is set to 'ready' AND DISCOVERY_PILOT_RUNNER=on on the Queue Worker. The
+-- pilot writes only to these tables: never to the library, pools or keyword bank.
+-- Rollback: DROP TABLE IF EXISTS `viral_discovery_pilot_creators`, `viral_discovery_pilot_items`,
+--   `viral_discovery_pilot_calls`, `viral_discovery_pilots`;
+
+-- One pilot: total cap and the protected share per platform (all paid activity counts).
+CREATE TABLE IF NOT EXISTS `viral_discovery_pilots` (`id` int NOT NULL AUTO_INCREMENT, `name` varchar(80) NOT NULL, `status` varchar(24) NOT NULL DEFAULT 'draft', `capUsd` decimal(8,4) NOT NULL, `instagramCapUsd` decimal(8,4) NOT NULL DEFAULT 0, `youtubeCapUsd` decimal(8,4) NOT NULL DEFAULT 0, `tiktokCapUsd` decimal(8,4) NOT NULL DEFAULT 0, `instagramUsd` decimal(8,4) NOT NULL DEFAULT 0, `youtubeUsd` decimal(8,4) NOT NULL DEFAULT 0, `tiktokUsd` decimal(8,4) NOT NULL DEFAULT 0, `cellsDone` json NULL, `lockedUntil` timestamp NULL, `startedAt` timestamp NULL, `discoveryDoneAt` timestamp NULL, `endedAt` timestamp NULL, `note` varchar(255) NULL, `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (`id`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Every paid step: provider requests (incl. retries) or one AI check, with its cost.
+CREATE TABLE IF NOT EXISTS `viral_discovery_pilot_calls` (`id` bigint NOT NULL AUTO_INCREMENT, `pilotId` int NOT NULL, `platform` varchar(16) NOT NULL, `topicSlug` varchar(80) NOT NULL, `route` varchar(32) NOT NULL, `kind` varchar(8) NOT NULL, `requests` int NOT NULL DEFAULT 0, `blocked` int NOT NULL DEFAULT 0, `usd` decimal(8,4) NOT NULL DEFAULT 0, `detail` varchar(255) NULL, `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (`id`), KEY `idx_vdpc_pilot` (`pilotId`, `platform`, `route`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- One row per video per topic and platform (deduplicated); routes = every route that found it.
+CREATE TABLE IF NOT EXISTS `viral_discovery_pilot_items` (`pilotId` int NOT NULL, `topicSlug` varchar(80) NOT NULL, `platform` varchar(16) NOT NULL, `sourceId` varchar(64) NOT NULL, `url` varchar(512) NOT NULL, `caption` varchar(600) NULL, `creatorHandle` varchar(128) NULL, `channelId` varchar(64) NULL, `routes` json NOT NULL, `query` varchar(160) NULL, `publishedAt` timestamp NULL, `recency` varchar(10) NOT NULL, `followers` bigint NULL, `views1` bigint NULL, `views1At` timestamp NULL, `views2` bigint NULL, `views2At` timestamp NULL, `usualViews` bigint NULL, `baselineSource` varchar(24) NULL, `multiple` decimal(12,2) NULL, `verdict` varchar(24) NOT NULL DEFAULT 'pending_topic', `topicVerdict` varchar(12) NOT NULL DEFAULT 'pending', `topicReason` varchar(255) NULL, `inLibraryBefore` tinyint NOT NULL DEFAULT 0, `retries` int NOT NULL DEFAULT 0, `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP, `updatedAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, PRIMARY KEY (`pilotId`, `topicSlug`, `platform`, `sourceId`), KEY `idx_vdpi_verdict` (`pilotId`, `verdict`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+-- Creators seen per topic and platform: known before the pilot or new, and whether they match the topic.
+CREATE TABLE IF NOT EXISTS `viral_discovery_pilot_creators` (`pilotId` int NOT NULL, `topicSlug` varchar(80) NOT NULL, `platform` varchar(16) NOT NULL, `handle` varchar(128) NOT NULL, `channelId` varchar(64) NULL, `knownBefore` tinyint NOT NULL DEFAULT 0, `foundBy` varchar(32) NOT NULL, `topicMatch` tinyint NOT NULL DEFAULT 0, `scanned` tinyint NOT NULL DEFAULT 0, `usualViews` bigint NULL, `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (`pilotId`, `topicSlug`, `platform`, `handle`)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
