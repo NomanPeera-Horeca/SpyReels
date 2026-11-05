@@ -22,9 +22,10 @@
  *   R must reach RELEVANCE.gate to be shown.
  *
  * Checks that reject or demote (each with a reason, never silent)
- *   language   the caption's language is one the creator does not use: rejected
+ *   language   the caption's language is neither a declared language nor the
+ *              language the creator writes their strategy in: rejected
  *   place      the creator is place-specific (Dubai rentals) and the video is
- *              about another place: rejected; no place stated: small penalty
+ *              about another place: rejected; no place stated: x0.7
  *   re-upload  TV / film clips and episode re-uploads: rejected (not remakeable)
  *   advert     promotional videos are kept only when clearly relevant
  *              (R >= RELEVANCE.advertKeep), with a penalty; otherwise rejected
@@ -93,7 +94,7 @@ export const RELEVANCE = {
   gate: 0.45,
   advertKeep: 0.65,
   advertPenalty: 0.15,
-  placeUnknownFactor: 0.85,
+  placeUnknownFactor: 0.7,
   final: { relevance: 0.7, performance: 0.3 },
   retrieveBySimilarity: 400,
 } as const;
@@ -157,7 +158,7 @@ export function audienceTerms(audiences: readonly RelevanceAudience[]): string[]
 const PLACES: Record<string, string[]> = {
   uae: ["dubai", "abu dhabi", "sharjah", "uae", "emirates", "rera", "ejari", "dld", "jbr", "jvc", "deira"],
   saudi: ["saudi", "riyadh", "jeddah", "ksa"],
-  us: ["usa", "united states", "america", "american", "fha", "va loan", "freddie mac", "fannie mae", "401k", "irs", "zillow", "texas", "florida", "california", "new york", "nyc", "atlanta", "chicago", "las vegas", "arizona", "georgia", "ohio", "idaho", "fort worth", "dallas", "houston", "miami"],
+  us: ["usa", "u s", "u s a", "united states", "america", "american", "fha", "va loan", "freddie mac", "fannie mae", "401k", "irs", "zillow", "texas", "florida", "california", "new york", "nyc", "atlanta", "chicago", "las vegas", "arizona", "georgia", "ohio", "idaho", "fort worth", "dallas", "houston", "miami"],
   uk: ["uk", "united kingdom", "britain", "british", "england", "london", "manchester", "hmrc", "stamp duty", "help to buy"],
   canada: ["canada", "canadian", "toronto", "vancouver", "ontario"],
   australia: ["australia", "australian", "sydney", "melbourne"],
@@ -295,7 +296,9 @@ export function profileSignals(p: RelevanceProfile): ProfileSignals {
   const all = [core, ...p.subtopics, ...p.audiences.map(a => `${a.who} ${a.outcome ?? ""}`), ...p.goals].join(" . ");
   const strictPlaces = placesIn(core);
   const places = [...new Set([...strictPlaces, ...placesIn(all)])];
-  const languages = p.languages.length > 0 ? p.languages.map(l => l.toLowerCase().slice(0, 2)) : [detectLanguage(all) ?? "en"];
+  // Declared languages plus the language the creator writes their own strategy in.
+  const declared = p.languages.map(l => l.toLowerCase().slice(0, 2));
+  const languages = [...new Set([...declared, detectLanguage(all) ?? "en"])];
   return { audience: audienceTerms(p.audiences), places, placeStrict: strictPlaces.length > 0, languages };
 }
 
