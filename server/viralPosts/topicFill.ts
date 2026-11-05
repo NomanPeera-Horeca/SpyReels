@@ -230,6 +230,64 @@ export function pickDueRefreshes<T extends { creators: number; lastRefreshedAt: 
     );
 }
 
+/** First searches for topics no fill ever reached (VIRAL_TOPIC_FIRST_SEARCH=on). Off by default. */
+export function firstSearchEnabled(): boolean {
+  return process.env.VIRAL_TOPIC_FIRST_SEARCH === "on";
+}
+
+export type RefreshJob<P> =
+  | { kind: "first"; spec: { platform: string; niche: string; pillar: string }; creators: number; key: string }
+  | { kind: "refresh"; pool: P; creators: number };
+
+/**
+ * Work order for one refresh tick. Topics nobody searched yet (no pool, or a
+ * pool never refreshed) get their first search: those with creators before
+ * anything else, then due refreshes, then first searches of topics without
+ * creators. One job per pool key, never twice in a tick, at most `max` jobs.
+ * Pure; exported for tests.
+ */
+export function planRefreshJobs<P extends { poolKey: string; lastRefreshedAt: Date | null }>(args: {
+  plan: Array<{ platform: string; niche: string; pillar: string }>;
+  keyOf: (spec: { platform: string; niche: string; pillar: string }) => string;
+  existing: P[];
+  due: Array<{ pool: P; creators: number }>;
+  creatorsByKey: ReadonlyMap<string, number>;
+  held: ReadonlySet<string>;
+  firstSearch: boolean;
+  max: number;
+}): Array<RefreshJob<P>> {
+  const byKey = new Map(args.existing.map(p => [p.poolKey, p]));
+  const firsts: Array<Extract<RefreshJob<P>, { kind: "first" }>> = [];
+  if (args.firstSearch) {
+    const seen = new Set<string>();
+    for (const spec of args.plan) {
+      const key = args.keyOf(spec);
+      if (seen.has(key) || args.held.has(spec.pillar.trim().toLowerCase())) continue;
+      seen.add(key);
+      const pool = byKey.get(key);
+      if (pool && pool.lastRefreshedAt) continue;
+      firsts.push({ kind: "first", spec, creators: args.creatorsByKey.get(key) ?? 0, key });
+    }
+    // Most creators first; the plan order (category, label, platform alternating) breaks ties.
+    firsts.sort((a, b) => b.creators - a.creators);
+  }
+  const ordered: Array<RefreshJob<P>> = [
+    ...firsts.filter(f => f.creators > 0),
+    ...args.due.map(d => ({ kind: "refresh" as const, pool: d.pool, creators: d.creators })),
+    ...firsts.filter(f => f.creators === 0),
+  ];
+  const out: Array<RefreshJob<P>> = [];
+  const taken = new Set<string>();
+  for (const job of ordered) {
+    const key = job.kind === "first" ? job.key : job.pool.poolKey;
+    if (taken.has(key)) continue;
+    taken.add(key);
+    out.push(job);
+    if (out.length >= Math.max(1, args.max)) break;
+  }
+  return out;
+}
+
 /**
  * Keep the library fresh: search topics again on a schedule (topics our
  * creators have every 3 days, the rest every 14), new viral videos flow into
@@ -242,9 +300,10 @@ export async function runTopicRefresh(args: { maxPools?: number } = {}): Promise
   costUsd: number;
   spentWeekUsd: number;
   due: number;
+  firstSearches?: number;
   skipped?: "db_unavailable" | "migration_missing" | "no_platforms" | "budget_reached" | "out_of_credits" | "none_due";
 }> {
-  const out = { searched: 0, candidates: 0, costUsd: 0, spentWeekUsd: 0, due: 0 };
+  const out = { searched: 0, candidates: 0, costUsd: 0, spentWeekUsd: 0, due: 0, firstSearches: 0 };
   const db = await getDb();
   if (!db) return { ...out, skipped: "db_unavailable" };
   if (!(await isTopicsReady(db))) return { ...out, skipped: "migration_missing" };
@@ -288,14 +347,38 @@ export async function runTopicRefresh(args: { maxPools?: number } = {}): Promise
       .map(p => ({ pool: p, creators: demandByKey.get(p.poolKey) ?? 0, lastRefreshedAt: p.lastRefreshedAt }))
   );
   out.due = due.length;
-  if (due.length === 0) return { ...out, skipped: "none_due" };
+  const jobs = planRefreshJobs({
+    plan,
+    keyOf: buildPoolKey,
+    existing,
+    due,
+    creatorsByKey: demandByKey,
+    held,
+    firstSearch: firstSearchEnabled(),
+    max: Math.max(1, Math.min(10, args.maxPools ?? 3)),
+  });
+  if (jobs.length === 0) return { ...out, skipped: "none_due" };
 
-  for (const { pool } of due.slice(0, Math.max(1, Math.min(10, args.maxPools ?? 3)))) {
+  for (const job of jobs) {
     if (spent >= budget) return { ...out, skipped: "budget_reached" };
+    let pool = job.kind === "refresh" ? job.pool : null;
     try {
+      if (job.kind === "first") {
+        // Idempotent: an existing pool with the same key is returned, never duplicated.
+        [pool] = await poolRepo.ensurePools([{ ...job.spec, priority: FILL_POOL_PRIORITY }]);
+        if (!pool) continue;
+        // Another worker searched it meanwhile: nothing to do.
+        if (pool.lastRefreshedAt) continue;
+        out.firstSearches = (out.firstSearches ?? 0) + 1;
+        console.info("[viralLibrary] topic_first_search", { poolKey: pool.poolKey, creators: job.creators });
+      }
+      if (!pool) continue;
       const started = Date.now();
+      // The pool lease inside refreshPoolById stops two workers searching the same pool.
       const r = await refreshPoolById(pool.id, { force: true });
       if (scrapeCreatorsOutOfCreditsSince(started)) {
+        // Empty result while out of credits is not real: a first search stays unsearched.
+        if (job.kind === "first") await db.update(viralPostPools).set({ lastRefreshedAt: null }).where(eq(viralPostPools.id, pool.id));
         console.warn("[viralLibrary] topic_refresh_paused_out_of_credits", { poolKey: pool.poolKey });
         return { ...out, spentWeekUsd: spent, skipped: "out_of_credits" };
       }
@@ -310,7 +393,7 @@ export async function runTopicRefresh(args: { maxPools?: number } = {}): Promise
         .onDuplicateKeyUpdate({ set: { usd: sql`usd + ${cost.toFixed(4)}`, videos: sql`videos + 1` } });
     } catch (err) {
       console.warn("[viralLibrary] topic_refresh_failed", {
-        poolKey: pool.poolKey,
+        poolKey: pool?.poolKey ?? (job.kind === "first" ? job.key : ""),
         error: err instanceof Error ? err.message : String(err),
       });
     }
