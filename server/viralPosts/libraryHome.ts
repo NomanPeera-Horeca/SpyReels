@@ -28,6 +28,16 @@ import { getDb } from "../db";
 import { candidateToAdapted, toViralPost, type IndexedHomeCreator } from "./browseService";
 import * as repo from "./repository";
 import { isTopicsReady } from "./topics";
+import { relevanceRankForProfile, relevanceRankingEnabled } from "./relevanceHome";
+import type { ScoredVideo } from "./relevanceRanking";
+
+/** Card label for a relevance-ranked video. Pure; exported for tests. */
+export function relevanceLabel(s: Pick<ScoredVideo, "flags" | "parts">): string {
+  if (s.flags.includes("same_place")) return "Matches your niche and location";
+  if (s.flags.includes("names_audience")) return "Made for your audience";
+  if (s.parts.topic > 0) return "Viral in your topics";
+  return "Close to your niche";
+}
 
 const LIBRARY_RECENT_DAYS = 365;
 const TIER_FETCH_LIMIT = 300;
@@ -43,6 +53,8 @@ export type LibraryRow = {
   /** How many of the profile's topics this video carries (tier 1 only). */
   overlap: number;
   categoryLabel: string | null;
+  /** Card label set by the relevance ranking (Phase 1); overrides the tier label. */
+  label?: string;
 };
 
 /** Higher is better: viral multiple (log), freshness, topic overlap. Pure; exported for tests. */
@@ -85,7 +97,8 @@ export function pickLibraryRows(rows: LibraryRow[], limit: number, now = new Dat
   return out;
 }
 
-export function tierLabel(row: Pick<LibraryRow, "tier" | "categoryLabel">): string {
+export function tierLabel(row: Pick<LibraryRow, "tier" | "categoryLabel" | "label">): string {
+  if (row.label) return row.label;
   if (row.tier === 1) return "Viral in your topics";
   if (row.tier === 2) return row.categoryLabel ? `Viral in ${row.categoryLabel}` : "Viral in your category";
   return "Viral format you can adapt";
@@ -208,6 +221,52 @@ export async function libraryHomeForProfile(args: {
       repo.getRecentlyDismissedCandidateIds(args.userId),
       repo.getSavedCandidateIds(args.userId),
     ]);
+    if (relevanceRankingEnabled()) {
+      const ranked = await relevanceRankForProfile({ socialProfileId: args.socialProfileId, limit: Math.max(args.limit, args.creatorLimit) * 2, exclude: dismissed });
+      if (ranked) {
+        const ids = ranked.picked.map(p => p.video.id);
+        const full = ids.length
+          ? await db
+              .select({ candidate: viralPostCandidates, status: viralLibraryStatus.status, basis: viralLibraryStatus.basis, multiple: viralLibraryStatus.multiple })
+              .from(viralPostCandidates)
+              .innerJoin(viralLibraryStatus, eq(viralLibraryStatus.candidateId, viralPostCandidates.id))
+              .where(inArray(viralPostCandidates.id, ids))
+          : [];
+        const byId = new Map(full.map(f => [f.candidate.id, f]));
+        // Ranked order kept; hidden creators left out. Weak coverage stays weak: no unrelated filler.
+        const rows: LibraryRow[] = ranked.picked.flatMap(p => {
+          const f = byId.get(p.video.id);
+          if (!f) return [];
+          const handle = (f.candidate.creatorId || f.candidate.creatorHandle || "").toLowerCase().replace(/^@/, "");
+          if (handle && hidden.has(handle)) return [];
+          return [{ candidate: f.candidate, status: f.status, basis: f.basis, multiple: f.multiple != null ? Number(f.multiple) : null, tier: 1 as const, overlap: 0, categoryLabel: null, label: relevanceLabel(p) }];
+        });
+        const toPostR = (r: LibraryRow): ViralPost => {
+          const adapted = candidateToAdapted(r.candidate, "", "", null);
+          return {
+            ...toViralPost(r.candidate, { ...adapted, relevanceLabel: tierLabel(r) }, saved.has(r.candidate.id)),
+            viralMultiple: r.multiple,
+            viralBasis: r.basis === "usual_views" || r.basis === "followers" ? r.basis : null,
+          };
+        };
+        const creators: IndexedHomeCreator[] = rows.slice(0, args.creatorLimit).map(r => {
+          const c = r.candidate;
+          const platform = c.platform === "tiktok" || c.platform === "youtube" ? c.platform : "instagram";
+          return {
+            id: c.id,
+            handle: (c.creatorHandle || c.creatorId || "").trim().replace(/^@/, ""),
+            displayName: c.creatorName?.trim() || null,
+            profilePicUrl: c.creatorAvatarUrl || null,
+            followerCount: c.creatorFollowers ?? 0,
+            platform,
+            badge: libraryBadge(r.multiple, r.basis) ?? { tier: "Healthy" as const, multiple: 0, label: tierLabel(r) },
+            bestPost: toPostR(r),
+          };
+        });
+        console.info("[viralLibrary] relevance_home", { coverage: ranked.coverage, eligible: ranked.eligible, shown: rows.length });
+        return { items: rows.slice(0, args.limit).map(toPostR), creators };
+      }
+    }
     const tier1 = await loadRows({ topicSlugs: [...profileTopics], statuses: ["viral", "rising"], tier: 1, profileTopics, categoryOf });
     const tier2 = await loadRows({ topicSlugs: siblingTopics, statuses: ["viral", "rising"], tier: 2, profileTopics, categoryOf });
     const tier3 = await loadRows({ topicSlugs: null, statuses: ["viral"], tier: 3, profileTopics, categoryOf });
