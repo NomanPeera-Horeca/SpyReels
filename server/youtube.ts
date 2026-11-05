@@ -799,3 +799,39 @@ export async function fetchYouTubeVideoDetails(
 
   return null;
 }
+
+/**
+ * Shorts search through the metered request helper (one provider call, no
+ * retries). Returns the raw provider body or null when the call fails. Used
+ * by the discovery pilot so every search counts against its budget.
+ */
+export async function searchYouTubeShortsRaw(
+  query: string,
+  filters: Record<string, string>
+): Promise<unknown | null> {
+  const { status, data } = await scGet("/v1/youtube/search", { query, ...filters, includeExtras: "true" });
+  if (status !== 200 || !data || typeof data !== "object" || (data as any).success === false) return null;
+  return data;
+}
+
+/**
+ * A channel's newest Shorts by stable channel ID (preferred) or handle: one
+ * provider call, no retries. Null when the call fails.
+ */
+export async function fetchChannelShortsByIdOrHandle(args: {
+  channelId?: string | null;
+  handle?: string | null;
+}): Promise<YouTubeVideoData[] | null> {
+  const channelId = args.channelId?.trim();
+  const handle = args.handle ? cleanYouTubeHandle(args.handle) : "";
+  if (!channelId && !handle) return null;
+  const query: Record<string, string> = { sort: "newest" };
+  if (channelId) query.channelId = channelId;
+  else query.handle = handle;
+  const { status, data } = await scGet("/v1/youtube/channel/shorts", query);
+  const items = status === 200 && data && Array.isArray((data as any).shorts) ? ((data as any).shorts as unknown[]) : null;
+  if (!items) return null;
+  return items
+    .map(item => parseYouTubeShort(item, handle || channelId || "youtube"))
+    .filter((v): v is YouTubeVideoData => v !== null);
+}

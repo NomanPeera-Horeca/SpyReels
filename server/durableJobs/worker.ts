@@ -129,6 +129,11 @@ function startViralLibraryUnderstanding(): void {
         const experiment = await import("../viralPosts/keywordExperiment");
         await experiment.runKeywordExperimentTick();
       });
+      await step("discovery pilot", async () => {
+        // Off unless DISCOVERY_PILOT_RUNNER=on and a pilot row is 'ready', 'running' or 'second_view'.
+        const pilot = await import("../viralPosts/discoveryPilot");
+        await pilot.runDiscoveryPilotTick();
+      });
       await step("rising recheck", async () => {
         const rising = await import("../viralPosts/risingRecheck");
         await rising.runRisingRecheck({ max: 30 });
