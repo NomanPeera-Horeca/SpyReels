@@ -20,7 +20,7 @@ const ANTHROPIC = process.env.ANTHROPIC_API_KEY?.trim();
 const conn = await mysql.createConnection({ uri: url });
 const q = async (s: string, p: unknown[] = []) => ((await conn.query(s, p)) as unknown as [Array<Record<string, any>>])[0];
 const parse = (v: unknown) => (typeof v === "string" ? (() => { try { return JSON.parse(v); } catch { return null; } })() : v);
-const clip = (v: unknown, n: number) => String(v ?? "").replace(/\s+/g, " ").slice(0, n);
+const clip = (v: unknown, n: number) => String(v ?? "").replace(/\s+/g, " ").slice(0, n).replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "");
 const now = new Date();
 let aiUsd = 0;
 
