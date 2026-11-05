@@ -146,7 +146,15 @@ if (OPENAI) {
   body.data?.forEach((d, i) => (entries[i]!.profile.embedding = d.embedding));
   console.log(`EMBEDDINGS ${body.data?.length ?? 0} profiles, ${body.usage?.total_tokens ?? "?"} tokens (~$${(((body.usage?.total_tokens ?? 0) * 0.02) / 1e6).toFixed(5)})`);
 } else {
-  console.log("EMBEDDINGS none: OPENAI_API_KEY secret missing; new ranking runs on topics, audience and place only");
+  // Interim fallback: the stored profile embedding (niche, pillars, sub-topics; WITHOUT audience and goals).
+  let used = 0;
+  for (const e of entries) {
+    if (e.kind === "HYPOTHETICAL (not a real user)") continue;
+    const r = await q(`SELECT embedding FROM viral_profile_topic_runs WHERE socialProfileId = ? AND embedding IS NOT NULL LIMIT 1`, [e.profile.id]);
+    const v = parse(r[0]?.embedding);
+    if (Array.isArray(v)) { e.profile.embedding = v; used++; }
+  }
+  console.log(`EMBEDDINGS fallback: OPENAI_API_KEY secret missing; ${used} real profiles use their stored embedding (no audience/goals in it); hypothetical profiles have none`);
 }
 
 /* ---------- AI judge ---------- */
@@ -162,6 +170,7 @@ async function judge(e: Entry, videos: RelevanceVideo[]): Promise<Map<number, { 
     body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 2500, temperature: 0, messages: [{ role: "user", content: prompt }] }),
   });
   const body = (await res.json()) as any;
+  if (!res.ok) console.log(`JUDGE_HTTP ${res.status} ${clip(JSON.stringify(body), 200)}`);
   aiUsd += ((body.usage?.input_tokens ?? 0) * 1 + (body.usage?.output_tokens ?? 0) * 5) / 1e6;
   const text = String(body.content?.find((b: any) => b.type === "text")?.text ?? "").replace(/^```(?:json)?\s*|\s*```$/g, "");
   try {
