@@ -403,6 +403,10 @@ jobs:
         if: ${{ contains(github.event.head_commit.message, '[topic-list]') }}
         run: pnpm exec tsx scripts/topic-list.mts
 
+      - name: Pilot report
+        if: ${{ contains(github.event.head_commit.message, '[pilot-report]') }}
+        run: pnpm exec tsx scripts/discovery-pilot-report.mts
+
       - name: Understanding cost
         if: ${{ contains(github.event.head_commit.message, '[understand-cost]') }}
         run: pnpm exec tsx scripts/understand-cost.mts
@@ -444,7 +448,7 @@ jobs:
         run: pnpm exec tsx scripts/keyword-experiment-report.mts
 
       - name: Library counts
-        if: ${{ !contains(github.event.head_commit.message, '[scoring-sample]') && !contains(github.event.head_commit.message, '[experiment-report]') && !contains(github.event.head_commit.message, '[library-progress]') && !contains(github.event.head_commit.message, '[topic-list]') && !contains(github.event.head_commit.message, '[db-size]') && !contains(github.event.head_commit.message, '[audit]') && !contains(github.event.head_commit.message, '[relevance-compare]') && !contains(github.event.head_commit.message, '[first-page]') && !contains(github.event.head_commit.message, '[trial-candidates]') && !contains(github.event.head_commit.message, '[discovery-gaps]') && !contains(github.event.head_commit.message, '[understand-cost]') }}
+        if: ${{ !contains(github.event.head_commit.message, '[scoring-sample]') && !contains(github.event.head_commit.message, '[experiment-report]') && !contains(github.event.head_commit.message, '[library-progress]') && !contains(github.event.head_commit.message, '[topic-list]') && !contains(github.event.head_commit.message, '[db-size]') && !contains(github.event.head_commit.message, '[audit]') && !contains(github.event.head_commit.message, '[relevance-compare]') && !contains(github.event.head_commit.message, '[first-page]') && !contains(github.event.head_commit.message, '[trial-candidates]') && !contains(github.event.head_commit.message, '[discovery-gaps]') && !contains(github.event.head_commit.message, '[understand-cost]') && !contains(github.event.head_commit.message, '[pilot-report]') }}
         run: pnpm exec tsx scripts/library-stats.mts
 
       - name: Keyword scoring sample
