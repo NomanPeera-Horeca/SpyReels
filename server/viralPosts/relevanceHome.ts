@@ -20,6 +20,35 @@ export function relevanceRankingEnabled(): boolean {
   return process.env.RELEVANCE_RANKING === "on";
 }
 
+/** Fixed salt: assignment must not change when the ranking version changes mid-trial. */
+export const RELEVANCE_TRIAL_SALT = "relevance-trial-1";
+
+/**
+ * Which Home ranking a user gets. Pure given the env; exported for tests.
+ *   RELEVANCE_RANKING unset/off -> everyone "old" (default)
+ *   RELEVANCE_RANKING=on        -> everyone "new"
+ *   RELEVANCE_RANKING=trial     -> users in RELEVANCE_TRIAL_USERS (comma-separated user ids) get "new"
+ *                                  (safety stage); others get "new" when a stable hash of their id falls
+ *                                  under RELEVANCE_TRIAL_PERCENT (0-100, default 0), else "old".
+ * Assignment is random but persistent per user, and recomputable for the trial report.
+ */
+export function relevanceArmFor(userId: number | string, env: NodeJS.ProcessEnv = process.env): "old" | "new" {
+  const mode = (env.RELEVANCE_RANKING ?? "").trim().toLowerCase();
+  if (mode === "on") return "new";
+  if (mode !== "trial") return "old";
+  const id = String(userId);
+  const allow = (env.RELEVANCE_TRIAL_USERS ?? "").split(",").map(x => x.trim()).filter(Boolean);
+  if (allow.includes(id)) return "new";
+  const pct = Math.max(0, Math.min(100, Number(env.RELEVANCE_TRIAL_PERCENT ?? 0) || 0));
+  if (pct <= 0) return "old";
+  return trialBucket(id) < pct ? "new" : "old";
+}
+
+/** Stable 0-99 bucket for a user id. Pure; exported for tests and the report. */
+export function trialBucket(userId: number | string): number {
+  return parseInt(createHash("sha256").update(`${RELEVANCE_TRIAL_SALT}|${userId}`).digest("hex").slice(0, 8), 16) % 100;
+}
+
 function parseJson(value: unknown): any {
   if (typeof value === "string") {
     try {
@@ -130,7 +159,7 @@ export async function loadRelevanceLibrary(db: Db): Promise<RelevanceVideo[]> {
 }
 
 /** Ranked library videos for one creator profile, or null (keep the current Home). */
-export async function relevanceRankForProfile(args: { socialProfileId: string; limit: number; exclude?: ReadonlySet<number> }): Promise<RankResult | null> {
+export async function relevanceRankForProfile(args: { socialProfileId: string; limit: number; exclude?: ReadonlySet<number> }): Promise<(RankResult & { niche: string }) | null> {
   const db = await getDb();
   if (!db) return null;
   try {
@@ -138,7 +167,7 @@ export async function relevanceRankForProfile(args: { socialProfileId: string; l
     if (!profile) return null;
     profile.embedding = await profileRelevanceEmbedding(db, profile);
     const library = await loadRelevanceLibrary(db);
-    return rankForProfile(profile, library, { limit: args.limit, exclude: args.exclude });
+    return { ...rankForProfile(profile, library, { limit: args.limit, exclude: args.exclude }), niche: profile.niche };
   } catch (err) {
     console.warn("[viralLibrary] relevance_rank_failed", { error: err instanceof Error ? err.message : String(err) });
     return null;
