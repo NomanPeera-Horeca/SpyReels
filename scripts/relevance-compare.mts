@@ -93,7 +93,7 @@ async function realProfile(id: string): Promise<RelevanceProfile | null> {
 }
 const findOne = async (where: string) => (await q(`SELECT socialProfileId AS id FROM (SELECT socialProfileId, LOWER(CAST(payload AS CHAR)) AS t FROM personalization_items WHERE status = 'confirmed' AND kind IN ('niche','pillar')) x WHERE ${where} GROUP BY socialProfileId LIMIT 1`))[0]?.id as string | undefined;
 
-type Entry = { label: string; kind: "real example" | "HYPOTHETICAL (not a real user)" | "sampled user" | "HELD-OUT hypothetical" | "HELD-OUT sampled user"; profile: RelevanceProfile };
+type Entry = { label: string; kind: "real example" | "HYPOTHETICAL (not a real user)" | "sampled user" | "HELD-OUT hypothetical" | "HELD-OUT sampled user" | "FRESH hypothetical" | "FRESH sampled user"; profile: RelevanceProfile };
 const entries: Entry[] = [];
 const restaurantId = await findOne(`t LIKE '%restaurant%' AND (t LIKE '%profit%' OR t LIKE '%margin%' OR t LIKE '%finance%')`);
 const dubaiId = await findOne(`t LIKE '%dubai%' AND (t LIKE '%rent%' OR t LIKE '%tenant%')`);
@@ -171,6 +171,39 @@ entries.push({
   }
 }
 
+/* ---------- fresh set: never seen in any earlier run ---------- */
+{
+  const seenIds = new Set(entries.map(e => e.profile.id));
+  entries.push({
+    label: "Toronto realtor", kind: "FRESH hypothetical",
+    profile: {
+      id: "hypo-toronto", niche: "Toronto real estate for first-time buyers", category: "Real Estate",
+      pillars: ["Toronto condo vs house: what first-time buyers can afford", "Ontario first-time buyer programs and land transfer tax rebates", "Toronto neighbourhood guides"],
+      subtopics: ["Toronto condo prices", "land transfer tax rebate", "pre-construction condos Toronto"],
+      audiences: [{ who: "First-time home buyers in Toronto", outcome: "buy their first home without overpaying" }],
+      goals: ["Get buyer clients"], languages: ["en"], topicSlugs: new Set<string>(), embedding: null,
+    },
+  });
+  entries.push({
+    label: "dad-life budgeting", kind: "FRESH hypothetical",
+    profile: {
+      id: "hypo-dad-budget", niche: "Personal finance for young dads", category: "Finance",
+      pillars: ["Budgeting on one income with a new baby", "Saving for kids' education", "Paying off debt as a young family"],
+      subtopics: ["family budget", "529 plan", "debt snowball"],
+      audiences: [{ who: "Young dads with a new baby", outcome: "get their money under control" }],
+      goals: ["Grow a newsletter"], languages: ["en"], topicSlugs: new Set<string>(), embedding: null,
+    },
+  });
+  const seeded3 = (id: string) => createHash("sha256").update(`${id}|fresh-1106b`).digest("hex");
+  let n = 0;
+  for (const s of [...sample0].sort((a, b) => seeded3(String(a.id)).localeCompare(seeded3(String(b.id))))) {
+    if (n >= 20) break;
+    if (seenIds.has(String(s.id))) continue;
+    const p = await realProfile(String(s.id));
+    if (p && p.topicSlugs.size > 0) { entries.push({ label: `user ${String(s.id).slice(0, 8)}`, kind: "FRESH sampled user", profile: p }); n++; }
+  }
+}
+
 /* ---------- embeddings (one call for all profiles) ---------- */
 if (OPENAI) {
   const texts = entries.map(e => relevanceProfileText(e.profile));
@@ -225,9 +258,10 @@ async function judge(e: Entry, videos: RelevanceVideo[]): Promise<Map<number, Ve
 }
 
 /* ---------- run ---------- */
+const BAL = { relevance: 0.5, performance: 0.5 };
 type Tally = { n: number; rel: number; unsure: number; top3: number; top3n: number; offSubject: number; audienceYes: number };
 const blank = (): Tally => ({ n: 0, rel: 0, unsure: 0, top3: 0, top3n: 0, offSubject: 0, audienceYes: 0 });
-const byKind: Record<string, { old: Tally; neu: Tally }> = {};
+const byKind: Record<string, { old: Tally; neu: Tally; bal: Tally }> = {};
 const add = (t: Tally, vids: RelevanceVideo[], v: Map<number, Verdict>) => {
   vids.forEach((x, i) => {
     const j = v.get(x.id); const r = relevantOf(j);
@@ -236,30 +270,33 @@ const add = (t: Tally, vids: RelevanceVideo[], v: Map<number, Verdict>) => {
   });
 };
 const fmt = (t: Tally) => `relevant ${t.rel}/${t.n} (${((100 * t.rel) / Math.max(1, t.n)).toFixed(0)}%), top-3 ${t.top3}/${t.top3n}, off-subject ${t.offSubject}, unsure ${t.unsure}, audience-fit ${t.audienceYes}`;
-const sheetPicks = new Set(["real example", "HYPOTHETICAL (not a real user)", "HELD-OUT hypothetical"]);
+const sheetPicks = new Set(["real example", "HYPOTHETICAL (not a real user)", "FRESH hypothetical"]);
 let sheetUsers = 0;
 for (const e of entries) {
   const old = oldRank(e.profile.topicSlugs);
   const neu = rankForProfile(e.profile, library, { limit: 10, now });
-  const verdicts = await judge(e, [...new Map([...old.map(o => o.v), ...neu.picked.map(p => p.video), ...neu.adjacent.slice(0, 3).map(p => p.video)].map(v => [v.id, v])).values()]);
-  const k = (byKind[e.kind] ??= { old: blank(), neu: blank() });
-  const to = blank(), tn = blank();
-  add(to, old.map(o => o.v), verdicts); add(tn, neu.picked.map(p => p.video), verdicts);
-  add(k.old, old.map(o => o.v), verdicts); add(k.neu, neu.picked.map(p => p.video), verdicts);
+  const bal = rankForProfile(e.profile, library, { limit: 10, now, final: BAL });
+  const verdicts = await judge(e, [...new Map([...old.map(o => o.v), ...neu.picked.map(p => p.video), ...bal.picked.map(p => p.video), ...neu.adjacent.slice(0, 3).map(p => p.video)].map(v => [v.id, v])).values()]);
+  const k = (byKind[e.kind] ??= { old: blank(), neu: blank(), bal: blank() });
+  const to = blank(), tn = blank(), tb = blank();
+  add(to, old.map(o => o.v), verdicts); add(tn, neu.picked.map(p => p.video), verdicts); add(tb, bal.picked.map(p => p.video), verdicts);
+  add(k.old, old.map(o => o.v), verdicts); add(k.neu, neu.picked.map(p => p.video), verdicts); add(k.bal, bal.picked.map(p => p.video), verdicts);
   const line = (j?: Verdict) => (j ? `${relevantOf(j)} [subj ${j.subject}, aud ${j.audience}, remake ${j.remake}]` : "?");
   console.log(`\n### ${e.label} | ${e.kind}`);
   console.log(`PROFILE ${clip(profileDescription(e.profile), 400)}`);
   console.log(`TOPICS ${[...e.profile.topicSlugs].join(", ") || "(none)"}`);
   console.log(`OLD ${fmt(to)}`);
   console.log(`NEW ${fmt(tn)} | coverage ${neu.coverage} (eligible ${neu.eligible}, adjacent ${neu.adjacent.length})`);
+  console.log(`BAL ${fmt(tb)}`);
   old.forEach((o, i) => { const j = verdicts.get(o.v.id); console.log(`OLD ${i + 1}. ${line(j)} x${o.v.multiple ?? "?"} | ${o.v.url} | ${clip(o.v.caption || o.v.summary, 90)}${j ? ` | judge: ${j.why}` : ""}`); });
   neu.picked.forEach((p, i) => { const j = verdicts.get(p.video.id); console.log(`NEW ${i + 1}. ${line(j)} R ${p.R.toFixed(2)} subj ${p.parts.semantic.toFixed(2)} cos ${p.parts.cosine?.toFixed(3) ?? "-"} P ${p.P.toFixed(2)} ${p.flags.join(",") || "-"} x${p.video.multiple ?? "?"} | ${p.video.url} | ${clip(p.video.caption || p.video.summary, 90)}${j ? ` | judge: ${j.why}` : ""}`); });
+  bal.picked.forEach((p, i) => { const j = verdicts.get(p.video.id); console.log(`BAL ${i + 1}. ${line(j)} R ${p.R.toFixed(2)} P ${p.P.toFixed(2)} x${p.video.multiple ?? "?"} | ${p.video.url} | ${clip(p.video.caption || p.video.summary, 90)}`); });
   neu.adjacent.slice(0, 3).forEach((p, i) => { const j = verdicts.get(p.video.id); console.log(`ADJACENT ${i + 1}. ${line(j)} subj ${p.parts.semantic.toFixed(2)} cos ${p.parts.cosine?.toFixed(3) ?? "-"} | ${p.video.url} | ${clip(p.video.caption || p.video.summary, 90)}`); });
   const oldIds = new Set(old.map(o => o.v.id));
   neu.rejected.filter(r => oldIds.has(r.video.id)).slice(0, 5).forEach(r => console.log(`REJECTED (was in old top 10) ${r.rejected} R ${r.R.toFixed(2)} subj ${r.parts.semantic.toFixed(2)} | ${r.video.url} | ${clip(r.video.caption || r.video.summary, 80)}`));
   neu.rejected.filter(r => !oldIds.has(r.video.id)).slice(0, 3).forEach(r => console.log(`REJECTED (closest) ${r.rejected} R ${r.R.toFixed(2)} subj ${r.parts.semantic.toFixed(2)} | ${r.video.url} | ${clip(r.video.caption || r.video.summary, 80)}`));
   // Blind human sheet: top 3 old + top 3 new, merged and shuffled, no method shown.
-  const forSheet = sheetPicks.has(e.kind) || (e.kind === "HELD-OUT sampled user" && sheetUsers++ < 6);
+  const forSheet = sheetPicks.has(e.kind) || (e.kind === "FRESH sampled user" && sheetUsers++ < 6);
   if (forSheet) {
     const items = [...new Map([...old.slice(0, 3).map(o => [o.v.id, { v: o.v, src: "old" }] as const), ...neu.picked.slice(0, 3).map(p => [p.video.id, { v: p.video, src: "new" }] as const)]).values()];
     const both = new Set(old.slice(0, 3).map(o => o.v.id).filter(id => neu.picked.slice(0, 3).some(p => p.video.id === id)));
@@ -272,6 +309,6 @@ for (const e of entries) {
   }
 }
 console.log("");
-for (const [kind, v] of Object.entries(byKind)) console.log(`SUMMARY ${kind}: OLD ${fmt(v.old)} || NEW ${fmt(v.neu)}`);
+for (const [kind, v] of Object.entries(byKind)) console.log(`SUMMARY ${kind}: OLD ${fmt(v.old)} || NEW70 ${fmt(v.neu)} || NEW50 ${fmt(v.bal)}`);
 console.log(`COST AI judge ~$${aiUsd.toFixed(4)} (+ embeddings above)`);
 await conn.end();
