@@ -28,11 +28,13 @@ import { getDb } from "../db";
 import { candidateToAdapted, toViralPost, type IndexedHomeCreator } from "./browseService";
 import * as repo from "./repository";
 import { isTopicsReady } from "./topics";
-import { relevanceRankForProfile, relevanceRankingEnabled } from "./relevanceHome";
-import type { ScoredVideo } from "./relevanceRanking";
+import { relevanceArmFor, relevanceRankForProfile } from "./relevanceHome";
+import { RELEVANCE_VERSION, type ScoredVideo } from "./relevanceRanking";
 
 /** Card label for a relevance-ranked video. Pure; exported for tests. */
-export function relevanceLabel(s: Pick<ScoredVideo, "flags" | "parts">): string {
+export function relevanceLabel(s: Pick<ScoredVideo, "flags" | "parts">, opts: { related?: boolean; niche?: string } = {}): string {
+  if (opts.related) return "Related inspiration · limited matches for your niche so far";
+  if (s.flags.includes("sparse_profile")) return opts.niche ? `Popular in ${opts.niche}` : "Popular in your niche";
   if (s.flags.includes("same_place")) return "Matches your niche and location";
   if (s.flags.includes("names_audience")) return "Made for your audience";
   if (s.parts.topic > 0) return "Viral in your topics";
@@ -221,10 +223,16 @@ export async function libraryHomeForProfile(args: {
       repo.getRecentlyDismissedCandidateIds(args.userId),
       repo.getSavedCandidateIds(args.userId),
     ]);
-    if (relevanceRankingEnabled()) {
+    const arm = relevanceArmFor(args.userId);
+    if (arm === "new") {
       const ranked = await relevanceRankForProfile({ socialProfileId: args.socialProfileId, limit: Math.max(args.limit, args.creatorLimit) * 2, exclude: dismissed });
       if (ranked) {
-        const ids = ranked.picked.map(p => p.video.id);
+        // Genuine matches only. Labelled related inspiration is held back unless
+        // RELEVANCE_RELATED=on: the first-page review found meaning scores alone do
+        // not reliably tell useful related videos from unrelated ones.
+        const showRelated = process.env.RELEVANCE_RELATED === "on";
+        const shown = [...ranked.picked.map(p => ({ p, related: false })), ...(showRelated ? ranked.adjacent : []).map(p => ({ p, related: true }))];
+        const ids = shown.map(x => x.p.video.id);
         const full = ids.length
           ? await db
               .select({ candidate: viralPostCandidates, status: viralLibraryStatus.status, basis: viralLibraryStatus.basis, multiple: viralLibraryStatus.multiple })
@@ -234,12 +242,12 @@ export async function libraryHomeForProfile(args: {
           : [];
         const byId = new Map(full.map(f => [f.candidate.id, f]));
         // Ranked order kept; hidden creators left out. Weak coverage stays weak: no unrelated filler.
-        const rows: LibraryRow[] = ranked.picked.flatMap(p => {
+        const rows: LibraryRow[] = shown.flatMap(({ p, related }) => {
           const f = byId.get(p.video.id);
           if (!f) return [];
           const handle = (f.candidate.creatorId || f.candidate.creatorHandle || "").toLowerCase().replace(/^@/, "");
           if (handle && hidden.has(handle)) return [];
-          return [{ candidate: f.candidate, status: f.status, basis: f.basis, multiple: f.multiple != null ? Number(f.multiple) : null, tier: 1 as const, overlap: 0, categoryLabel: null, label: relevanceLabel(p) }];
+          return [{ candidate: f.candidate, status: f.status, basis: f.basis, multiple: f.multiple != null ? Number(f.multiple) : null, tier: 1 as const, overlap: 0, categoryLabel: null, label: relevanceLabel(p, { related, niche: ranked.niche }) }];
         });
         const toPostR = (r: LibraryRow): ViralPost => {
           const adapted = candidateToAdapted(r.candidate, "", "", null);
@@ -263,7 +271,18 @@ export async function libraryHomeForProfile(args: {
             bestPost: toPostR(r),
           };
         });
-        console.info("[viralLibrary] relevance_home", { coverage: ranked.coverage, eligible: ranked.eligible, shown: rows.length });
+        console.info("[viralLibrary] relevance_home", {
+          version: RELEVANCE_VERSION,
+          arm,
+          userId: args.userId,
+          coverage: ranked.coverage,
+          coverageReason: ranked.coverageReason,
+          sparseProfile: ranked.sparseProfile,
+          matches: ranked.picked.length,
+          related: showRelated ? ranked.adjacent.length : 0,
+          relatedHeldBack: showRelated ? 0 : ranked.adjacent.length,
+          shown: rows.length,
+        });
         return { items: rows.slice(0, args.limit).map(toPostR), creators };
       }
     }

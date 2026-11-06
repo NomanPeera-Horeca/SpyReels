@@ -10,9 +10,14 @@
  *
  * Retrieval
  *   videos tagged with the profile's topics, plus the closest videos by
- *   meaning (cosine of the profile's relevance embedding, made from niche,
- *   pillars, sub-topics, AUDIENCE and GOALS, against each video's summary
- *   embedding).
+ *   meaning (cosine of the profile's SUBJECT embedding, made from category,
+ *   niche, pillars and sub-topics, against each video's summary embedding).
+ *
+ * Order of checks: subject first (RELEVANCE.subjectGate on the meaning score;
+ * audience words cannot rescue an off-subject video), then audience and
+ * place, then performance. When fewer than the requested number are strongly
+ * on the subject (RELEVANCE.subjectStrong), only those are picked and the
+ * looser ones are returned apart as `adjacent`.
  *
  * Relevance R (0..1)
  *   semantic  0.55  meaning similarity, mapped from cosine to 0..1
@@ -69,6 +74,7 @@ export type RelevanceVideo = {
 };
 
 export type RejectReason =
+  | "off_subject"
   | "below_relevance_gate"
   | "language_mismatch"
   | "different_place"
@@ -86,13 +92,24 @@ export type ScoredVideo = {
   rejected: RejectReason | null;
 };
 
+/** Frozen for the trial: change it whenever the ranking changes materially, so each version is evaluated separately. */
+export const RELEVANCE_VERSION = "rel-2026-11-06c";
+
 export const RELEVANCE = {
   weights: { semantic: 0.55, topic: 0.25, audience: 0.1, place: 0.1 },
   /** Cosine at or below this counts as unrelated (0), at or above simHigh as a full match (1). */
-  simLow: 0.2,
-  simHigh: 0.5,
-  gate: 0.45,
-  advertKeep: 0.65,
+  simLow: 0.25,
+  simHigh: 0.55,
+  gate: 0.55,
+  /** Subject first: the video must be about the creator's subject (meaning score, 0..1) before audience or performance count. */
+  subjectGate: 0.5,
+  /** Strong evidence of the specific subject. When fewer than `limit` videos have it, only those are shown (thin coverage). */
+  subjectStrong: 0.9,
+  /** "Related inspiration" is a maximum, not a target. */
+  relatedMax: 7,
+  /** Related inspiration must still be plausibly useful: a higher bar than the main gate. */
+  relatedMin: 0.6,
+  advertKeep: 0.7,
   advertPenalty: 0.15,
   placeUnknownFactor: 0.7,
   final: { relevance: 0.7, performance: 0.3 },
@@ -122,6 +139,11 @@ function stem(w: string): string {
   return w;
 }
 
+/** Too broad to say a video is made for this audience ("business owners" are everyone in Business). */
+const GENERIC_AUDIENCE = new Set(
+  "business businesse owner small new aspiring local online creator content brand entrepreneur startup company team professional beginner people individual anyone looking build building grow growing start starting want".split(" ")
+);
+
 const AUDIENCE_ALIASES: Record<string, string[]> = {
   mom: ["mom", "moms", "mother", "mothers", "mum", "mums", "mama", "mommy", "momlife", "postpartum"],
   dad: ["dad", "dads", "father", "fathers", "dadlife"],
@@ -143,7 +165,7 @@ export function audienceTerms(audiences: readonly RelevanceAudience[]): string[]
   for (const a of audiences) {
     for (const w of words(`${a.who}`)) {
       const s = stem(w);
-      if (STOP.has(w) || s.length < 3 || /^\d+$/.test(s)) continue;
+      if (STOP.has(w) || GENERIC_AUDIENCE.has(s) || GENERIC_AUDIENCE.has(w) || s.length < 3 || /^\d+$/.test(s)) continue;
       const alias = Object.entries(AUDIENCE_ALIASES).find(([, list]) => list.includes(w));
       if (alias) alias[1].forEach(x => out.add(stem(x)));
       else out.add(s);
@@ -273,8 +295,46 @@ export function performanceScore(v: Pick<RelevanceVideo, "multiple" | "published
   return clamp01(0.6 * viral + 0.3 * fresh + (v.status === "rising" ? 0.1 : 0));
 }
 
-/** Text the profile's relevance embedding is made from. Pure; exported for tests. */
-export function relevanceProfileText(p: Pick<RelevanceProfile, "niche" | "category" | "pillars" | "subtopics" | "audiences" | "goals">): string {
+/** Words for kinds of people. Stripped from the subject text unless the subject IS about them (parenting, family). */
+const DEMOGRAPHIC_WORDS = new Set(
+  "mom moms mother mothers mum mums mama mommy momlife dad dads father fathers parent parents kid kids child children toddler toddlers woman women female ladies girls man men male guys busy working".split(" ")
+);
+/** Subjects that are ABOUT those people (parenting, family life, motherhood): their people words stay. */
+const PEOPLE_SUBJECT = /parent|famil|motherhood|fatherhood|pregnan|momlife|mom life|dad life/i;
+
+function stripDemographics(text: string): string {
+  return text
+    .split(/(\s+)/)
+    .filter(tok => !DEMOGRAPHIC_WORDS.has(tok.toLowerCase().replace(/[^\p{L}]/gu, "")))
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Text the profile's relevance embedding is made from: the SUBJECT only
+ * (category, niche, pillars, sub-topics). Audience and goals are left out on
+ * purpose, so "moms" in the audience cannot make a mom lifestyle vlog look
+ * like a match for a moms' fitness coach. Audience is checked separately,
+ * after the subject passes. Pure; exported for tests.
+ */
+export function relevanceProfileText(p: Pick<RelevanceProfile, "niche" | "category" | "pillars" | "subtopics">): string {
+  // "Fitness coaching for busy moms" -> "Fitness coaching for": who it is for is checked later, as audience.
+  // Kept when the subject is about those people (a parenting creator).
+  const aboutPeople = PEOPLE_SUBJECT.test(`${p.category ?? ""} ${p.niche}`) || !words(stripDemographics(p.niche)).some(w => !STOP.has(w));
+  const t = (x: string) => (aboutPeople ? x : stripDemographics(x));
+  return [
+    p.category && `Category: ${p.category}`,
+    p.niche && `Niche: ${t(p.niche)}`,
+    p.pillars.length > 0 && `Content pillars: ${p.pillars.map(t).join("; ")}`,
+    p.subtopics.length > 0 && `Sub-topics: ${p.subtopics.map(t).join("; ")}`,
+  ]
+    .filter(Boolean)
+    .join(". ");
+}
+
+/** Full description (subject, audience, goals) for people and reviewers. Pure; exported for tests. */
+export function profileDescription(p: Pick<RelevanceProfile, "niche" | "category" | "pillars" | "subtopics" | "audiences" | "goals">): string {
   return [
     p.category && `Category: ${p.category}`,
     p.niche && `Niche: ${p.niche}`,
@@ -302,7 +362,19 @@ export function profileSignals(p: RelevanceProfile): ProfileSignals {
   return { audience: audienceTerms(p.audiences), places, placeStrict: strictPlaces.length > 0, languages };
 }
 
-export function scoreVideo(p: RelevanceProfile, sig: ProfileSignals, v: RelevanceVideo, now: Date): ScoredVideo {
+/** Enough real words (not hashtags, mentions or links) to judge what a video is about. Pure; exported for tests. */
+export function hasSubstance(v: Pick<RelevanceVideo, "caption" | "summary">): boolean {
+  if ((v.summary ?? "").trim().split(/\s+/).filter(Boolean).length >= 6) return true;
+  const plain = (v.caption ?? "").replace(/[#@][\p{L}\p{N}_]+/gu, " ").replace(/https?:\/\/\S+/g, " ");
+  return words(plain).filter(w => w.length > 1).length >= 4;
+}
+
+/** A creator who gave only a broad niche label (no pillars or sub-topics). Pure; exported for tests. */
+export function isSparseProfile(p: Pick<RelevanceProfile, "pillars" | "subtopics">): boolean {
+  return p.pillars.filter(x => x.trim()).length === 0 && p.subtopics.filter(x => x.trim()).length === 0;
+}
+
+export function scoreVideo(p: RelevanceProfile, sig: ProfileSignals, v: RelevanceVideo, now: Date, final: { relevance: number; performance: number } = RELEVANCE.final): ScoredVideo {
   const text = `${v.caption ?? ""} ${v.summary ?? ""}`.trim();
   const flags: string[] = [];
   const cos = p.embedding && v.embedding ? cosine(p.embedding, v.embedding) : null;
@@ -339,16 +411,29 @@ export function scoreVideo(p: RelevanceProfile, sig: ProfileSignals, v: Relevanc
       flags.push("advert_kept_relevant");
     }
   }
-  if (!rejected && R < RELEVANCE.gate) rejected = "below_relevance_gate";
+  // Subject first. Without an embedding, a topic tag is the only subject evidence.
+  // A sparse profile ("Real-estate") has too little text for a reliable meaning
+  // score: its topic tags count as subject evidence, with a looser meaning check.
+  const sparse = isSparseProfile(p);
+  const subjectOk = cos == null ? topic > 0 : sparse ? topic > 0 || semantic >= RELEVANCE.subjectGate : semantic >= RELEVANCE.subjectGate;
+  if (!rejected && !subjectOk) rejected = "off_subject";
+  if (!rejected && R < RELEVANCE.gate && !(sparse && topic > 0 && subjectOk)) rejected = "below_relevance_gate";
+  if (sparse) flags.push("sparse_profile");
   if (audience) flags.push("names_audience");
   if (samePlace) flags.push("same_place");
   const P = performanceScore(v, now);
-  const score = rejected ? 0 : RELEVANCE.final.relevance * R + RELEVANCE.final.performance * P;
+  const score = rejected ? 0 : final.relevance * R + final.performance * P;
   return { video: v, R: clamp01(R), P, score, parts, flags, rejected };
 }
 
 export type RankResult = {
   picked: ScoredVideo[];
+  /** "Related inspiration": passed every check but only loosely on the subject; shown apart and labelled, never mixed into picked. */
+  adjacent: ScoredVideo[];
+  /** Only a broad niche label: matched by topic tags, labelled "Popular in <niche>", not precise personalization. */
+  sparseProfile: boolean;
+  /** Why fewer than requested: we need more about the creator, or we lack suitable videos. */
+  coverageReason: "sparse_profile" | "thin_library" | null;
   rejected: ScoredVideo[];
   eligible: number;
   coverage: "ok" | "thin" | "none";
@@ -358,7 +443,7 @@ export type RankResult = {
  * Retrieve, score, gate and pick. `limit` videos at most, one per creator;
  * fewer when coverage is thin. Pure; exported for tests.
  */
-export function rankForProfile(p: RelevanceProfile, library: readonly RelevanceVideo[], opts: { limit: number; now?: Date; exclude?: ReadonlySet<number> }): RankResult {
+export function rankForProfile(p: RelevanceProfile, library: readonly RelevanceVideo[], opts: { limit: number; now?: Date; exclude?: ReadonlySet<number>; final?: { relevance: number; performance: number } }): RankResult {
   const now = opts.now ?? new Date();
   const sig = profileSignals(p);
   const pool = library.filter(v => !opts.exclude?.has(v.id));
@@ -374,17 +459,37 @@ export function rankForProfile(p: RelevanceProfile, library: readonly RelevanceV
       .map(x => x.v);
   }
   const candidates = [...new Map([...byTopic, ...bySimilarity].map(v => [v.id, v])).values()];
-  const scored = candidates.map(v => scoreVideo(p, sig, v, now));
+  const scored = candidates.map(v => scoreVideo(p, sig, v, now, opts.final));
   const ok = scored.filter(s => !s.rejected).sort((a, b) => b.score - a.score);
-  const picked: ScoredVideo[] = [];
-  const creators = new Set<string>();
-  for (const s of ok) {
-    if (picked.length >= opts.limit) break;
-    if (s.video.creatorKey && creators.has(s.video.creatorKey)) continue;
-    creators.add(s.video.creatorKey);
-    picked.push(s);
-  }
+  const onePerCreator = (list: ScoredVideo[], max: number, seen = new Set<string>()) => {
+    const out: ScoredVideo[] = [];
+    for (const s of list) {
+      if (out.length >= max) break;
+      if (s.video.creatorKey && seen.has(s.video.creatorKey)) continue;
+      seen.add(s.video.creatorKey);
+      out.push(s);
+    }
+    return out;
+  };
+  // Thin niche: when too few videos are strongly about the subject, show only those.
+  // The looser ones go to `adjacent` (shown apart, labelled), never mixed in.
+  // Strong evidence: a strong meaning match, or for a sparse profile one of its own topic tags.
+  const sparse = isSparseProfile(p);
+  const isStrong = (s: ScoredVideo) => s.parts.cosine == null || s.parts.semantic >= RELEVANCE.subjectStrong || (sparse && s.parts.topic > 0);
+  const strong = onePerCreator(ok.filter(isStrong), opts.limit);
+  const seen = new Set<string>();
+  const picked = strong.length >= opts.limit ? onePerCreator(ok, opts.limit, seen) : onePerCreator(ok.filter(isStrong), opts.limit, seen);
+  const pickedIds = new Set(picked.map(s => s.video.id));
+  // Related inspiration: only when coverage is thin, at most relatedMax. For a
+  // place-specific creator only videos about the same place. Each must clear
+  // RELEVANCE.relatedMin and have real words to judge it by (not just hashtags): a generic or other
+  // country's explainer must not look like applicable local advice.
+  const relatedPool = ok.filter(
+    s => !pickedIds.has(s.video.id) && s.R >= RELEVANCE.relatedMin && hasSubstance(s.video) && (!sig.placeStrict || s.flags.includes("same_place"))
+  );
+  const adjacent = picked.length < opts.limit ? onePerCreator(relatedPool, Math.min(RELEVANCE.relatedMax, opts.limit - picked.length), seen) : [];
   const rejected = scored.filter(s => s.rejected).sort((a, b) => b.R - a.R);
   const coverage = picked.length === 0 ? "none" : picked.length < opts.limit ? "thin" : "ok";
-  return { picked, rejected, eligible: ok.length, coverage };
+  const coverageReason = coverage === "ok" ? null : sparse ? "sparse_profile" : "thin_library";
+  return { picked, adjacent, rejected, eligible: ok.length, coverage, sparseProfile: sparse, coverageReason };
 }
