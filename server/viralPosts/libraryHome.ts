@@ -227,8 +227,11 @@ export async function libraryHomeForProfile(args: {
     if (arm === "new") {
       const ranked = await relevanceRankForProfile({ socialProfileId: args.socialProfileId, limit: Math.max(args.limit, args.creatorLimit) * 2, exclude: dismissed });
       if (ranked) {
-        // Genuine matches first, then (only when coverage is thin) labelled related inspiration.
-        const shown = [...ranked.picked.map(p => ({ p, related: false })), ...ranked.adjacent.map(p => ({ p, related: true }))];
+        // Genuine matches only. Labelled related inspiration is held back unless
+        // RELEVANCE_RELATED=on: the first-page review found meaning scores alone do
+        // not reliably tell useful related videos from unrelated ones.
+        const showRelated = process.env.RELEVANCE_RELATED === "on";
+        const shown = [...ranked.picked.map(p => ({ p, related: false })), ...(showRelated ? ranked.adjacent : []).map(p => ({ p, related: true }))];
         const ids = shown.map(x => x.p.video.id);
         const full = ids.length
           ? await db
@@ -276,7 +279,8 @@ export async function libraryHomeForProfile(args: {
           coverageReason: ranked.coverageReason,
           sparseProfile: ranked.sparseProfile,
           matches: ranked.picked.length,
-          related: ranked.adjacent.length,
+          related: showRelated ? ranked.adjacent.length : 0,
+          relatedHeldBack: showRelated ? 0 : ranked.adjacent.length,
           shown: rows.length,
         });
         return { items: rows.slice(0, args.limit).map(toPostR), creators };
