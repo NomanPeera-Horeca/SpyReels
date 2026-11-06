@@ -213,6 +213,45 @@ if (FIRST_PAGE) {
   for (let i = entries.length - 1; i >= 0; i--) if (!wanted.has(entries[i]!.label)) entries.splice(i, 1);
 }
 
+/* ---------- new-user Home check: the most recent profiles, nothing else ---------- */
+const NEW_USER = process.env.NEW_USER === "1";
+if (NEW_USER) {
+  entries.splice(0, entries.length);
+  const recent = await q(`
+    SELECT pi.socialProfileId AS id, MAX(pi.createdAt) AS at, MAX(CASE WHEN pi.kind = 'niche' THEN CAST(pi.payload AS CHAR) END) AS niche
+    FROM personalization_items pi WHERE pi.status = 'confirmed'
+    GROUP BY pi.socialProfileId ORDER BY at DESC LIMIT 8`);
+  for (const r of recent) {
+    const p = await realProfile(String(r.id));
+    const label = clip(parse(r.niche)?.label, 60);
+    console.log(`RECENT ${String(r.id).slice(0, 8)} | confirmed ${r.at} | niche ${label} | topics ${p ? [...p.topicSlugs].join(", ") || "(none)" : "-"}`);
+    if (p && /ai video/i.test(label)) entries.push({ label: `NEW USER ${String(r.id).slice(0, 8)} (${label})`, kind: "real example", profile: p });
+  }
+  if (entries.length === 0) {
+    const r = recent[0];
+    const p = r ? await realProfile(String(r.id)) : null;
+    if (p) entries.push({ label: `NEWEST ${String(r.id).slice(0, 8)}`, kind: "real example", profile: p });
+  }
+  entries.splice(1);
+  // Why "Ideas for your next video" is empty: keyword-bank rows for this profile's topics.
+  for (const e of entries) {
+    const slugs = [...e.profile.topicSlugs];
+    console.log(`PROFILE ${clip(profileDescription(e.profile), 500)}`);
+    console.log(`TOPICS ${slugs.join(", ") || "(none matched)"}`);
+    if (slugs.length) {
+      const kw = await q(`SELECT topicSlug, COUNT(*) n, SUM(retired = 0) live, SUM(viral) viral, MAX(demand) maxDemand FROM viral_keywords WHERE topicSlug IN (?) GROUP BY topicSlug`, [slugs]).catch((err: unknown) => { console.log(`KEYWORDS_QUERY_FAILED ${String(err).slice(0, 120)}`); return []; });
+      for (const t of slugs) {
+        const k = kw.find(x => x.topicSlug === t);
+        const tp = await q(`SELECT label, source, createdAt FROM viral_topics WHERE slug = ?`, [t]);
+        const lib = await q(`SELECT COUNT(*) n FROM viral_video_topics WHERE topicSlug = ?`, [t]);
+        console.log(`TOPIC ${t} | label "${tp[0]?.label ?? "?"}" | source ${tp[0]?.source ?? "?"} | created ${tp[0]?.createdAt ?? "?"} | library videos ${lib[0]?.n ?? 0} | keyword phrases ${k ? `${k.live} live, ${k.viral} viral finds, max demand ${k.maxDemand}` : "NONE"}`);
+      }
+      const sample = await q(`SELECT topicSlug, phrase, source, demand, viral, retired FROM viral_keywords WHERE topicSlug IN (?) ORDER BY demand DESC LIMIT 15`, [slugs]).catch(() => []);
+      sample.forEach(r => console.log(`PHRASE ${r.topicSlug} | ${r.phrase} | ${r.source} | demand ${r.demand} | viral ${r.viral} | retired ${r.retired}`));
+    }
+  }
+}
+
 /* ---------- embeddings (one call for all profiles) ---------- */
 if (OPENAI) {
   const texts = entries.map(e => relevanceProfileText(e.profile));
@@ -267,6 +306,19 @@ async function judge(e: Entry, videos: RelevanceVideo[]): Promise<Map<number, Ve
 }
 
 /* ---------- first page only ---------- */
+if (NEW_USER) {
+  for (const e of entries) {
+    const old = oldRank(e.profile.topicSlugs, 10);
+    const r = rankForProfile(e.profile, library, { limit: 10, now });
+    console.log(`\n### ${e.label}`);
+    old.forEach((o, i) => console.log(`OLD ${i + 1}. tier ${o.tier} x${o.v.multiple ?? "?"} | @${o.v.creatorKey.split(":")[1]} | ${o.v.url.split("?")[0]} | ${clip(o.v.caption || o.v.summary, 140)}`));
+    console.log(`NEW coverage ${r.coverage} | reason ${r.coverageReason ?? "-"} | sparse ${r.sparseProfile} | matches ${r.picked.length}`);
+    r.picked.forEach((p, i) => console.log(`NEW ${i + 1}. R ${p.R.toFixed(2)} P ${p.P.toFixed(2)} x${p.video.multiple ?? "?"} | @${p.video.creatorKey.split(":")[1]} | ${p.video.url.split("?")[0]} | ${clip(p.video.caption || p.video.summary, 140)}`));
+    r.rejected.slice(0, 5).forEach(x => console.log(`REJECTED ${x.rejected} R ${x.R.toFixed(2)} | ${x.video.url.split("?")[0]} | ${clip(x.video.caption || x.video.summary, 100)}`));
+  }
+  await conn.end();
+  process.exit(0);
+}
 if (FIRST_PAGE) {
   for (const e of entries) {
     const r = rankForProfile(e.profile, library, { limit: 10, now });
