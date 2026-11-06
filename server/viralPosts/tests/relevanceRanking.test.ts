@@ -4,6 +4,7 @@ import {
   detectLanguage,
   placesIn,
   promoMarkers,
+  hasSubstance,
   isSparseProfile,
   rankForProfile,
   RELEVANCE,
@@ -120,7 +121,7 @@ describe("ranking", () => {
 
   it("thin niche: shows only the videos strongly on the subject and keeps looser ones apart", () => {
     const strong = video({ caption: "home workout for moms", embedding: E.momFit });
-    const loose = video({ caption: "quick home workout", embedding: [0.3, 0.6, 0, 0.6], topicSlugs: ["home-workouts", "womens-fitness"] });
+    const loose = video({ caption: "A quick home workout you can do in ten minutes", embedding: [0.3, 0.6, 0, 0.6], topicSlugs: ["home-workouts", "womens-fitness"] });
     const r = rankForProfile(profile(), [strong, loose], { limit: 10, now });
     expect(r.picked.map(p => p.video.id)).toEqual([strong.id]);
     expect(r.adjacent.map(p => p.video.id)).toEqual([loose.id]);
@@ -249,6 +250,14 @@ describe("sparse profiles and related inspiration", () => {
     const generic = video({ caption: "What tenants should check before signing a lease", embedding: [0, 0, 0.7, 0.3], topicSlugs: ["dubai-rental-laws"] });
     const r = rankForProfile(dubai, [generic], { limit: 10, now });
     expect(r.adjacent).toHaveLength(0);
+  });
+});
+
+describe("related inspiration quality", () => {
+  it("needs real words, not only hashtags", () => {
+    expect(hasSubstance({ caption: "#room #couple #fyp #foryou #dubai", summary: null })).toBe(false);
+    expect(hasSubstance({ caption: "Dubai luxury villa home tour with a pool", summary: null })).toBe(true);
+    expect(hasSubstance({ caption: "#fyp", summary: "A tenant explains the three rules every Dubai landlord must follow" })).toBe(true);
   });
 });
 

@@ -93,7 +93,7 @@ export type ScoredVideo = {
 };
 
 /** Frozen for the trial: change it whenever the ranking changes materially, so each version is evaluated separately. */
-export const RELEVANCE_VERSION = "rel-2026-11-06a";
+export const RELEVANCE_VERSION = "rel-2026-11-06b";
 
 export const RELEVANCE = {
   weights: { semantic: 0.55, topic: 0.25, audience: 0.1, place: 0.1 },
@@ -107,6 +107,8 @@ export const RELEVANCE = {
   subjectStrong: 0.9,
   /** "Related inspiration" is a maximum, not a target. */
   relatedMax: 7,
+  /** Related inspiration must still be plausibly useful: a higher bar than the main gate. */
+  relatedMin: 0.6,
   advertKeep: 0.7,
   advertPenalty: 0.15,
   placeUnknownFactor: 0.7,
@@ -360,6 +362,13 @@ export function profileSignals(p: RelevanceProfile): ProfileSignals {
   return { audience: audienceTerms(p.audiences), places, placeStrict: strictPlaces.length > 0, languages };
 }
 
+/** Enough real words (not hashtags, mentions or links) to judge what a video is about. Pure; exported for tests. */
+export function hasSubstance(v: Pick<RelevanceVideo, "caption" | "summary">): boolean {
+  if ((v.summary ?? "").trim().split(/\s+/).filter(Boolean).length >= 6) return true;
+  const plain = (v.caption ?? "").replace(/[#@][\p{L}\p{N}_]+/gu, " ").replace(/https?:\/\/\S+/g, " ");
+  return words(plain).filter(w => w.length > 1).length >= 4;
+}
+
 /** A creator who gave only a broad niche label (no pillars or sub-topics). Pure; exported for tests. */
 export function isSparseProfile(p: Pick<RelevanceProfile, "pillars" | "subtopics">): boolean {
   return p.pillars.filter(x => x.trim()).length === 0 && p.subtopics.filter(x => x.trim()).length === 0;
@@ -472,9 +481,12 @@ export function rankForProfile(p: RelevanceProfile, library: readonly RelevanceV
   const picked = strong.length >= opts.limit ? onePerCreator(ok, opts.limit, seen) : onePerCreator(ok.filter(isStrong), opts.limit, seen);
   const pickedIds = new Set(picked.map(s => s.video.id));
   // Related inspiration: only when coverage is thin, at most relatedMax. For a
-  // place-specific creator only videos about the same place: a generic or other
+  // place-specific creator only videos about the same place. Each must clear
+  // RELEVANCE.relatedMin and have real words to judge it by (not just hashtags): a generic or other
   // country's explainer must not look like applicable local advice.
-  const relatedPool = ok.filter(s => !pickedIds.has(s.video.id) && (!sig.placeStrict || s.flags.includes("same_place")));
+  const relatedPool = ok.filter(
+    s => !pickedIds.has(s.video.id) && s.R >= RELEVANCE.relatedMin && hasSubstance(s.video) && (!sig.placeStrict || s.flags.includes("same_place"))
+  );
   const adjacent = picked.length < opts.limit ? onePerCreator(relatedPool, Math.min(RELEVANCE.relatedMax, opts.limit - picked.length), seen) : [];
   const rejected = scored.filter(s => s.rejected).sort((a, b) => b.R - a.R);
   const coverage = picked.length === 0 ? "none" : picked.length < opts.limit ? "thin" : "ok";
