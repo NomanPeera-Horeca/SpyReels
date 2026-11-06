@@ -11,7 +11,7 @@
  */
 import { createHash } from "node:crypto";
 import mysql from "mysql2/promise";
-import { rankForProfile, relevanceProfileText, type RelevanceProfile, type RelevanceVideo } from "../server/viralPosts/relevanceRanking";
+import { profileDescription, rankForProfile, relevanceProfileText, type RelevanceProfile, type RelevanceVideo } from "../server/viralPosts/relevanceRanking";
 
 const url = process.env.EVAL_DB_READONLY_URL?.trim();
 if (!url) throw new Error("EVAL_DB_READONLY_URL is not configured.");
@@ -93,7 +93,7 @@ async function realProfile(id: string): Promise<RelevanceProfile | null> {
 }
 const findOne = async (where: string) => (await q(`SELECT socialProfileId AS id FROM (SELECT socialProfileId, LOWER(CAST(payload AS CHAR)) AS t FROM personalization_items WHERE status = 'confirmed' AND kind IN ('niche','pillar')) x WHERE ${where} GROUP BY socialProfileId LIMIT 1`))[0]?.id as string | undefined;
 
-type Entry = { label: string; kind: "real example" | "HYPOTHETICAL (not a real user)" | "sampled user"; profile: RelevanceProfile };
+type Entry = { label: string; kind: "real example" | "HYPOTHETICAL (not a real user)" | "sampled user" | "HELD-OUT hypothetical" | "HELD-OUT sampled user"; profile: RelevanceProfile };
 const entries: Entry[] = [];
 const restaurantId = await findOne(`t LIKE '%restaurant%' AND (t LIKE '%profit%' OR t LIKE '%margin%' OR t LIKE '%finance%')`);
 const dubaiId = await findOne(`t LIKE '%dubai%' AND (t LIKE '%rent%' OR t LIKE '%tenant%')`);
@@ -124,15 +124,51 @@ entries.push({
   },
 });
 const seeded = (id: string) => createHash("sha256").update(`${id}|seed-1105`).digest("hex");
-const sample = (await q(`
+const sample0 = await q(`
   SELECT DISTINCT pi.socialProfileId AS id FROM personalization_items pi
   JOIN viral_profile_topics pt ON pt.socialProfileId = pi.socialProfileId
-  WHERE pi.kind = 'niche' AND pi.status = 'confirmed'`)).sort((a, b) => seeded(String(a.id)).localeCompare(seeded(String(b.id)))).slice(0, 40);
+  WHERE pi.kind = 'niche' AND pi.status = 'confirmed'`);
+const sample = [...sample0].sort((a, b) => seeded(String(a.id)).localeCompare(seeded(String(b.id)))).slice(0, 40);
 for (const s of sample) {
   if (entries.filter(e => e.kind === "sampled user").length >= 20) break;
   if (s.id === restaurantId || s.id === dubaiId) continue;
   const p = await realProfile(String(s.id));
   if (p && p.topicSlugs.size > 0) entries.push({ label: `user ${String(s.id).slice(0, 8)}`, kind: "sampled user", profile: p });
+}
+
+/* ---------- held-out set: never used to tune the ranking ---------- */
+const tunedIds = new Set(entries.map(e => e.profile.id));
+entries.push({
+  label: "wedding photographer", kind: "HELD-OUT hypothetical",
+  profile: {
+    id: "hypo-wedding", niche: "Wedding photography business", category: "Photography",
+    pillars: ["Posing and lighting tips for wedding photos", "Booking more couples: pricing, packages and inquiries", "Behind the scenes of a wedding day shoot"],
+    subtopics: ["golden hour portraits", "wedding photography pricing", "first look shots"],
+    audiences: [{ who: "Newer wedding photographers", outcome: "book more weddings at higher prices" }],
+    goals: ["Sell a photography mentorship"], languages: ["en"],
+    topicSlugs: new Set<string>(), embedding: null,
+  },
+});
+entries.push({
+  label: "vegan home baker", kind: "HELD-OUT hypothetical",
+  profile: {
+    id: "hypo-vegan-bake", niche: "Vegan baking at home", category: "Food",
+    pillars: ["Egg-free and dairy-free swaps that work", "Easy vegan cakes, cookies and breads", "Fixing common vegan baking failures"],
+    subtopics: ["aquafaba meringue", "vegan chocolate cake", "flax egg"],
+    audiences: [{ who: "Home bakers who recently went vegan", outcome: "bake treats that taste like the originals" }],
+    goals: ["Grow a recipe blog"], languages: ["en"],
+    topicSlugs: new Set<string>(), embedding: null,
+  },
+});
+{
+  const seeded2 = (id: string) => createHash("sha256").update(`${id}|holdout-1106`).digest("hex");
+  let n = 0;
+  for (const s of [...sample0].sort((a, b) => seeded2(String(a.id)).localeCompare(seeded2(String(b.id))))) {
+    if (n >= 20) break;
+    if (tunedIds.has(String(s.id))) continue;
+    const p = await realProfile(String(s.id));
+    if (p && p.topicSlugs.size > 0) { entries.push({ label: `user ${String(s.id).slice(0, 8)}`, kind: "HELD-OUT sampled user", profile: p }); n++; }
+  }
 }
 
 /* ---------- embeddings (one call for all profiles) ---------- */
@@ -157,24 +193,31 @@ if (OPENAI) {
   console.log(`EMBEDDINGS fallback: OPENAI_API_KEY secret missing; ${used} real profiles use their stored embedding (no audience/goals in it); hypothetical profiles have none`);
 }
 
-/* ---------- AI judge ---------- */
-async function judge(e: Entry, videos: RelevanceVideo[]): Promise<Map<number, { ok: boolean; why: string }>> {
-  const out = new Map<number, { ok: boolean; why: string }>();
+/* ---------- AI judge (blinded: one shuffled list, no method, scores or old/new) ---------- */
+type Verdict = { subject: string; audience: string; remake: string; why: string };
+const relevantOf = (j?: Verdict) => (j ? (j.subject === "yes" && j.remake === "yes" ? "RELEVANT" : j.subject === "unsure" || j.remake === "unsure" ? "UNSURE" : "MISMATCH") : "?");
+const shuffleKey = (id: number, salt: string) => createHash("sha256").update(`${salt}|${id}`).digest("hex");
+async function judge(e: Entry, videos: RelevanceVideo[]): Promise<Map<number, Verdict>> {
+  const out = new Map<number, Verdict>();
   if (!ANTHROPIC || videos.length === 0) return out;
-  const p = e.profile;
-  const prompt = `Creator: ${relevanceProfileText(p)}\n\nFor each video, would it be a relevant video for THIS creator to study and remake for THEIR audience (right subject, audience, place and language; not an unrelated ad or a TV clip)? Be strict.\nReturn JSON only: {"items":[{"id":123,"relevant":true,"why":"under 12 words"}]}\n\n` +
-    videos.map(v => `- id: ${v.id}\n  caption: ${clip(v.caption, 260)}\n  summary: ${clip(v.summary, 200)}`).join("\n");
+  const list = [...videos].sort((a, b) => shuffleKey(a.id, e.label).localeCompare(shuffleKey(b.id, e.label)));
+  const prompt = `Creator profile: ${profileDescription(e.profile)}\n\nFor each video answer three questions separately, using only the caption and summary given:\n` +
+    `- subject: is the video about this creator's subject or problem (not just the same kind of person)?\n- audience: would this creator's audience care about it?\n- remake: could this creator usefully study and remake it for their audience (not an unrelated ad or a TV clip)?\n` +
+    `Answer each with "yes", "no" or "unsure" (unsure = not enough evidence in the text). Be strict.\n` +
+    `Return JSON only: {"items":[{"id":123,"subject":"yes","audience":"no","remake":"yes","why":"under 12 words"}]}\n\n` +
+    list.map(v => `- id: ${v.id}\n  caption: ${clip(v.caption, 300)}\n  summary: ${clip(v.summary, 300)}`).join("\n");
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "content-type": "application/json", "x-api-key": ANTHROPIC, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 2500, temperature: 0, messages: [{ role: "user", content: prompt }] }),
+    body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 4000, temperature: 0, messages: [{ role: "user", content: prompt }] }),
   });
   const body = (await res.json()) as any;
   if (!res.ok) console.log(`JUDGE_HTTP ${res.status} ${clip(JSON.stringify(body), 200)}`);
   aiUsd += ((body.usage?.input_tokens ?? 0) * 1 + (body.usage?.output_tokens ?? 0) * 5) / 1e6;
   const text = String(body.content?.find((b: any) => b.type === "text")?.text ?? "").replace(/^```(?:json)?\s*|\s*```$/g, "");
+  const norm = (x: unknown) => (["yes", "no", "unsure"].includes(String(x)) ? String(x) : "unsure");
   try {
-    for (const x of JSON.parse(text).items ?? []) out.set(Number(x.id), { ok: x.relevant === true, why: String(x.why ?? "") });
+    for (const x of JSON.parse(text).items ?? []) out.set(Number(x.id), { subject: norm(x.subject), audience: norm(x.audience), remake: norm(x.remake), why: String(x.why ?? "") });
   } catch {
     console.log(`JUDGE_PARSE_FAILED ${e.label}`);
   }
@@ -182,29 +225,53 @@ async function judge(e: Entry, videos: RelevanceVideo[]): Promise<Map<number, { 
 }
 
 /* ---------- run ---------- */
-const totals = { old: { ok: 0, n: 0 }, neu: { ok: 0, n: 0 } };
-const byKind: Record<string, { old: [number, number]; neu: [number, number] }> = {};
+type Tally = { n: number; rel: number; unsure: number; top3: number; top3n: number; offSubject: number; audienceYes: number };
+const blank = (): Tally => ({ n: 0, rel: 0, unsure: 0, top3: 0, top3n: 0, offSubject: 0, audienceYes: 0 });
+const byKind: Record<string, { old: Tally; neu: Tally }> = {};
+const add = (t: Tally, vids: RelevanceVideo[], v: Map<number, Verdict>) => {
+  vids.forEach((x, i) => {
+    const j = v.get(x.id); const r = relevantOf(j);
+    t.n++; if (r === "RELEVANT") t.rel++; if (r === "UNSURE") t.unsure++; if (j?.subject === "no") t.offSubject++; if (j?.audience === "yes") t.audienceYes++;
+    if (i < 3) { t.top3n++; if (r === "RELEVANT") t.top3++; }
+  });
+};
+const fmt = (t: Tally) => `relevant ${t.rel}/${t.n} (${((100 * t.rel) / Math.max(1, t.n)).toFixed(0)}%), top-3 ${t.top3}/${t.top3n}, off-subject ${t.offSubject}, unsure ${t.unsure}, audience-fit ${t.audienceYes}`;
+const sheetPicks = new Set(["real example", "HYPOTHETICAL (not a real user)", "HELD-OUT hypothetical"]);
+let sheetUsers = 0;
 for (const e of entries) {
   const old = oldRank(e.profile.topicSlugs);
   const neu = rankForProfile(e.profile, library, { limit: 10, now });
-  const verdicts = await judge(e, [...new Map([...old.map(o => o.v), ...neu.picked.map(p => p.video)].map(v => [v.id, v])).values()]);
-  const okOld = old.filter(o => verdicts.get(o.v.id)?.ok).length;
-  const okNew = neu.picked.filter(p => verdicts.get(p.video.id)?.ok).length;
-  totals.old.ok += okOld; totals.old.n += old.length; totals.neu.ok += okNew; totals.neu.n += neu.picked.length;
-  const k = (byKind[e.kind] ??= { old: [0, 0], neu: [0, 0] });
-  k.old[0] += okOld; k.old[1] += old.length; k.neu[0] += okNew; k.neu[1] += neu.picked.length;
+  const verdicts = await judge(e, [...new Map([...old.map(o => o.v), ...neu.picked.map(p => p.video), ...neu.adjacent.slice(0, 3).map(p => p.video)].map(v => [v.id, v])).values()]);
+  const k = (byKind[e.kind] ??= { old: blank(), neu: blank() });
+  const to = blank(), tn = blank();
+  add(to, old.map(o => o.v), verdicts); add(tn, neu.picked.map(p => p.video), verdicts);
+  add(k.old, old.map(o => o.v), verdicts); add(k.neu, neu.picked.map(p => p.video), verdicts);
+  const line = (j?: Verdict) => (j ? `${relevantOf(j)} [subj ${j.subject}, aud ${j.audience}, remake ${j.remake}]` : "?");
   console.log(`\n### ${e.label} | ${e.kind}`);
-  console.log(`PROFILE ${clip(relevanceProfileText(e.profile), 400)}`);
-  console.log(`TOPICS ${[...e.profile.topicSlugs].join(", ")}`);
-  console.log(`OLD relevant ${okOld}/${old.length} | NEW relevant ${okNew}/${neu.picked.length} | new coverage ${neu.coverage} (eligible ${neu.eligible})`);
-  old.forEach((o, i) => { const j = verdicts.get(o.v.id); console.log(`OLD ${i + 1}. [tier ${o.tier}] ${j ? (j.ok ? "RELEVANT" : "MISMATCH") : "?"} x${o.v.multiple ?? "?"} | ${o.v.url} | ${clip(o.v.caption || o.v.summary, 90)}${j && !j.ok ? ` | judge: ${j.why}` : ""}`); });
-  neu.picked.forEach((p, i) => { const j = verdicts.get(p.video.id); console.log(`NEW ${i + 1}. R ${p.R.toFixed(2)} P ${p.P.toFixed(2)} ${p.flags.join(",") || "-"} ${j ? (j.ok ? "RELEVANT" : "MISMATCH") : "?"} x${p.video.multiple ?? "?"} | ${p.video.url} | ${clip(p.video.caption || p.video.summary, 90)}${j && !j.ok ? ` | judge: ${j.why}` : ""}`); });
+  console.log(`PROFILE ${clip(profileDescription(e.profile), 400)}`);
+  console.log(`TOPICS ${[...e.profile.topicSlugs].join(", ") || "(none)"}`);
+  console.log(`OLD ${fmt(to)}`);
+  console.log(`NEW ${fmt(tn)} | coverage ${neu.coverage} (eligible ${neu.eligible}, adjacent ${neu.adjacent.length})`);
+  old.forEach((o, i) => { const j = verdicts.get(o.v.id); console.log(`OLD ${i + 1}. ${line(j)} x${o.v.multiple ?? "?"} | ${o.v.url} | ${clip(o.v.caption || o.v.summary, 90)}${j ? ` | judge: ${j.why}` : ""}`); });
+  neu.picked.forEach((p, i) => { const j = verdicts.get(p.video.id); console.log(`NEW ${i + 1}. ${line(j)} R ${p.R.toFixed(2)} subj ${p.parts.semantic.toFixed(2)} cos ${p.parts.cosine?.toFixed(3) ?? "-"} P ${p.P.toFixed(2)} ${p.flags.join(",") || "-"} x${p.video.multiple ?? "?"} | ${p.video.url} | ${clip(p.video.caption || p.video.summary, 90)}${j ? ` | judge: ${j.why}` : ""}`); });
+  neu.adjacent.slice(0, 3).forEach((p, i) => { const j = verdicts.get(p.video.id); console.log(`ADJACENT ${i + 1}. ${line(j)} subj ${p.parts.semantic.toFixed(2)} cos ${p.parts.cosine?.toFixed(3) ?? "-"} | ${p.video.url} | ${clip(p.video.caption || p.video.summary, 90)}`); });
   const oldIds = new Set(old.map(o => o.v.id));
-  const rejectedFromOld = neu.rejected.filter(r => oldIds.has(r.video.id)).slice(0, 5);
-  rejectedFromOld.forEach(r => console.log(`REJECTED (was in old top 10) ${r.rejected} R ${r.R.toFixed(2)} | ${r.video.url} | ${clip(r.video.caption || r.video.summary, 80)}`));
-  neu.rejected.filter(r => !oldIds.has(r.video.id)).slice(0, 3).forEach(r => console.log(`REJECTED (closest) ${r.rejected} R ${r.R.toFixed(2)} | ${r.video.url} | ${clip(r.video.caption || r.video.summary, 80)}`));
+  neu.rejected.filter(r => oldIds.has(r.video.id)).slice(0, 5).forEach(r => console.log(`REJECTED (was in old top 10) ${r.rejected} R ${r.R.toFixed(2)} subj ${r.parts.semantic.toFixed(2)} | ${r.video.url} | ${clip(r.video.caption || r.video.summary, 80)}`));
+  neu.rejected.filter(r => !oldIds.has(r.video.id)).slice(0, 3).forEach(r => console.log(`REJECTED (closest) ${r.rejected} R ${r.R.toFixed(2)} subj ${r.parts.semantic.toFixed(2)} | ${r.video.url} | ${clip(r.video.caption || r.video.summary, 80)}`));
+  // Blind human sheet: top 3 old + top 3 new, merged and shuffled, no method shown.
+  const forSheet = sheetPicks.has(e.kind) || (e.kind === "HELD-OUT sampled user" && sheetUsers++ < 6);
+  if (forSheet) {
+    const items = [...new Map([...old.slice(0, 3).map(o => [o.v.id, { v: o.v, src: "old" }] as const), ...neu.picked.slice(0, 3).map(p => [p.video.id, { v: p.video, src: "new" }] as const)]).values()];
+    const both = new Set(old.slice(0, 3).map(o => o.v.id).filter(id => neu.picked.slice(0, 3).some(p => p.video.id === id)));
+    items.sort((a, b) => shuffleKey(a.v.id, `sheet|${e.label}`).localeCompare(shuffleKey(b.v.id, `sheet|${e.label}`)));
+    console.log(`SHEET_PROFILE ${e.label} | ${e.kind} | ${clip(profileDescription(e.profile), 300)}`);
+    items.forEach((it, i) => {
+      console.log(`SHEET ${e.label} | ${i + 1} | ${it.v.url} | ${clip(it.v.caption || it.v.summary, 140)}`);
+      console.log(`KEY ${e.label} | ${i + 1} | ${both.has(it.v.id) ? "both" : it.src}`);
+    });
+  }
 }
-console.log(`\nSUMMARY judged relevant in top 10: OLD ${totals.old.ok}/${totals.old.n} (${((100 * totals.old.ok) / Math.max(1, totals.old.n)).toFixed(0)}%) | NEW ${totals.neu.ok}/${totals.neu.n} (${((100 * totals.neu.ok) / Math.max(1, totals.neu.n)).toFixed(0)}%)`);
-for (const [kind, v] of Object.entries(byKind)) console.log(`SUMMARY ${kind}: OLD ${v.old[0]}/${v.old[1]} | NEW ${v.neu[0]}/${v.neu[1]}`);
+console.log("");
+for (const [kind, v] of Object.entries(byKind)) console.log(`SUMMARY ${kind}: OLD ${fmt(v.old)} || NEW ${fmt(v.neu)}`);
 console.log(`COST AI judge ~$${aiUsd.toFixed(4)} (+ embeddings above)`);
 await conn.end();

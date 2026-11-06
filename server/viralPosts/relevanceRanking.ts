@@ -10,9 +10,14 @@
  *
  * Retrieval
  *   videos tagged with the profile's topics, plus the closest videos by
- *   meaning (cosine of the profile's relevance embedding, made from niche,
- *   pillars, sub-topics, AUDIENCE and GOALS, against each video's summary
- *   embedding).
+ *   meaning (cosine of the profile's SUBJECT embedding, made from category,
+ *   niche, pillars and sub-topics, against each video's summary embedding).
+ *
+ * Order of checks: subject first (RELEVANCE.subjectGate on the meaning score;
+ * audience words cannot rescue an off-subject video), then audience and
+ * place, then performance. When fewer than the requested number are strongly
+ * on the subject (RELEVANCE.subjectStrong), only those are picked and the
+ * looser ones are returned apart as `adjacent`.
  *
  * Relevance R (0..1)
  *   semantic  0.55  meaning similarity, mapped from cosine to 0..1
@@ -69,6 +74,7 @@ export type RelevanceVideo = {
 };
 
 export type RejectReason =
+  | "off_subject"
   | "below_relevance_gate"
   | "language_mismatch"
   | "different_place"
@@ -92,6 +98,10 @@ export const RELEVANCE = {
   simLow: 0.25,
   simHigh: 0.55,
   gate: 0.55,
+  /** Subject first: the video must be about the creator's subject (meaning score, 0..1) before audience or performance count. */
+  subjectGate: 0.5,
+  /** Strong evidence of the specific subject. When fewer than `limit` videos have it, only those are shown (thin coverage). */
+  subjectStrong: 0.75,
   advertKeep: 0.7,
   advertPenalty: 0.15,
   placeUnknownFactor: 0.7,
@@ -278,8 +288,26 @@ export function performanceScore(v: Pick<RelevanceVideo, "multiple" | "published
   return clamp01(0.6 * viral + 0.3 * fresh + (v.status === "rising" ? 0.1 : 0));
 }
 
-/** Text the profile's relevance embedding is made from. Pure; exported for tests. */
-export function relevanceProfileText(p: Pick<RelevanceProfile, "niche" | "category" | "pillars" | "subtopics" | "audiences" | "goals">): string {
+/**
+ * Text the profile's relevance embedding is made from: the SUBJECT only
+ * (category, niche, pillars, sub-topics). Audience and goals are left out on
+ * purpose, so "moms" in the audience cannot make a mom lifestyle vlog look
+ * like a match for a moms' fitness coach. Audience is checked separately,
+ * after the subject passes. Pure; exported for tests.
+ */
+export function relevanceProfileText(p: Pick<RelevanceProfile, "niche" | "category" | "pillars" | "subtopics">): string {
+  return [
+    p.category && `Category: ${p.category}`,
+    p.niche && `Niche: ${p.niche}`,
+    p.pillars.length > 0 && `Content pillars: ${p.pillars.join("; ")}`,
+    p.subtopics.length > 0 && `Sub-topics: ${p.subtopics.join("; ")}`,
+  ]
+    .filter(Boolean)
+    .join(". ");
+}
+
+/** Full description (subject, audience, goals) for people and reviewers. Pure; exported for tests. */
+export function profileDescription(p: Pick<RelevanceProfile, "niche" | "category" | "pillars" | "subtopics" | "audiences" | "goals">): string {
   return [
     p.category && `Category: ${p.category}`,
     p.niche && `Niche: ${p.niche}`,
@@ -344,6 +372,9 @@ export function scoreVideo(p: RelevanceProfile, sig: ProfileSignals, v: Relevanc
       flags.push("advert_kept_relevant");
     }
   }
+  // Subject first. Without an embedding, a topic tag is the only subject evidence.
+  const subjectOk = cos != null ? semantic >= RELEVANCE.subjectGate : topic > 0;
+  if (!rejected && !subjectOk) rejected = "off_subject";
   if (!rejected && R < RELEVANCE.gate) rejected = "below_relevance_gate";
   if (audience) flags.push("names_audience");
   if (samePlace) flags.push("same_place");
@@ -354,6 +385,8 @@ export function scoreVideo(p: RelevanceProfile, sig: ProfileSignals, v: Relevanc
 
 export type RankResult = {
   picked: ScoredVideo[];
+  /** Passed the checks but only loosely on the subject; shown separately and labelled, never mixed into picked. */
+  adjacent: ScoredVideo[];
   rejected: ScoredVideo[];
   eligible: number;
   coverage: "ok" | "thin" | "none";
@@ -381,15 +414,24 @@ export function rankForProfile(p: RelevanceProfile, library: readonly RelevanceV
   const candidates = [...new Map([...byTopic, ...bySimilarity].map(v => [v.id, v])).values()];
   const scored = candidates.map(v => scoreVideo(p, sig, v, now));
   const ok = scored.filter(s => !s.rejected).sort((a, b) => b.score - a.score);
-  const picked: ScoredVideo[] = [];
-  const creators = new Set<string>();
-  for (const s of ok) {
-    if (picked.length >= opts.limit) break;
-    if (s.video.creatorKey && creators.has(s.video.creatorKey)) continue;
-    creators.add(s.video.creatorKey);
-    picked.push(s);
-  }
+  const onePerCreator = (list: ScoredVideo[], max: number, seen = new Set<string>()) => {
+    const out: ScoredVideo[] = [];
+    for (const s of list) {
+      if (out.length >= max) break;
+      if (s.video.creatorKey && seen.has(s.video.creatorKey)) continue;
+      seen.add(s.video.creatorKey);
+      out.push(s);
+    }
+    return out;
+  };
+  // Thin niche: when too few videos are strongly about the subject, show only those.
+  // The looser ones go to `adjacent` (shown apart, labelled), never mixed in.
+  const strong = ok.filter(s => s.parts.cosine == null || s.parts.semantic >= RELEVANCE.subjectStrong);
+  const seen = new Set<string>();
+  const picked = strong.length >= opts.limit ? onePerCreator(ok, opts.limit, seen) : onePerCreator(strong, opts.limit, seen);
+  const pickedIds = new Set(picked.map(s => s.video.id));
+  const adjacent = picked.length < opts.limit ? onePerCreator(ok.filter(s => !pickedIds.has(s.video.id)), opts.limit - picked.length, seen) : [];
   const rejected = scored.filter(s => s.rejected).sort((a, b) => b.R - a.R);
   const coverage = picked.length === 0 ? "none" : picked.length < opts.limit ? "thin" : "ok";
-  return { picked, rejected, eligible: ok.length, coverage };
+  return { picked, adjacent, rejected, eligible: ok.length, coverage };
 }
