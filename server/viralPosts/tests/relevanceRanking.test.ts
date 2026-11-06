@@ -6,6 +6,7 @@ import {
   promoMarkers,
   rankForProfile,
   RELEVANCE,
+  profileDescription,
   relevanceProfileText,
   type RelevanceProfile,
   type RelevanceVideo,
@@ -84,10 +85,12 @@ describe("signals", () => {
     expect(promoMarkers("Factory direct supply, great quality! WhatsApp +86 138 0000 0000")).toBeGreaterThanOrEqual(2);
     expect(promoMarkers("3 menu mistakes that cost you money")).toBe(0);
   });
-  it("puts audience and goals into the profile text used for its embedding", () => {
+  it("embeds the subject only; audience and goals stay in the full description", () => {
     const t = relevanceProfileText(profile());
-    expect(t).toContain("Audience: Busy moms with young kids");
-    expect(t).toContain("Goals: Grow a coaching business");
+    expect(t).toContain("Niche: Fitness for busy moms");
+    expect(t).not.toContain("Audience:");
+    expect(t).not.toContain("Goals:");
+    expect(profileDescription(profile())).toContain("Audience: Busy moms with young kids");
   });
 });
 
@@ -98,6 +101,23 @@ describe("ranking", () => {
     const r = rankForProfile(profile(), [offNiche, relevant], { limit: 5, now });
     expect(r.picked.map(p => p.video.id)).toEqual([relevant.id]);
     expect(r.rejected.find(x => x.video.id === offNiche.id)?.rejected).toBe("below_relevance_gate");
+  });
+
+  it("subject first: naming the audience does not rescue an off-subject video", () => {
+    // A working-mom lifestyle vlog: tagged mom-life-ish, says "moms", but not about fitness.
+    const vlog = video({ caption: "A day in the life of a working mom with two kids", embedding: [0.1, 0.4, 0.4, 0], topicSlugs: ["home-workouts"] });
+    const r = rankForProfile(profile(), [vlog], { limit: 5, now });
+    expect(r.picked).toHaveLength(0);
+    expect(r.rejected[0]?.rejected).toBe("off_subject");
+  });
+
+  it("thin niche: shows only the videos strongly on the subject and keeps looser ones apart", () => {
+    const strong = video({ caption: "home workout for moms", embedding: E.momFit });
+    const loose = video({ caption: "quick home workout", embedding: [0.3, 0.6, 0, 0.6], topicSlugs: ["home-workouts", "womens-fitness"] });
+    const r = rankForProfile(profile(), [strong, loose], { limit: 10, now });
+    expect(r.picked.map(p => p.video.id)).toEqual([strong.id]);
+    expect(r.adjacent.map(p => p.video.id)).toEqual([loose.id]);
+    expect(r.coverage).toBe("thin");
   });
 
   it("among relevant videos, the stronger performer ranks higher", () => {
