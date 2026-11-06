@@ -403,6 +403,12 @@ jobs:
         if: ${{ contains(github.event.head_commit.message, '[topic-list]') }}
         run: pnpm exec tsx scripts/topic-list.mts
 
+      - name: Discovery gaps
+        if: ${{ contains(github.event.head_commit.message, '[discovery-gaps]') }}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: pnpm exec tsx scripts/discovery-gaps.mts
+
       - name: Trial candidates
         if: ${{ contains(github.event.head_commit.message, '[trial-candidates]') }}
         run: pnpm exec tsx scripts/trial-candidates.mts
@@ -434,7 +440,7 @@ jobs:
         run: pnpm exec tsx scripts/keyword-experiment-report.mts
 
       - name: Library counts
-        if: ${{ !contains(github.event.head_commit.message, '[scoring-sample]') && !contains(github.event.head_commit.message, '[experiment-report]') && !contains(github.event.head_commit.message, '[library-progress]') && !contains(github.event.head_commit.message, '[topic-list]') && !contains(github.event.head_commit.message, '[db-size]') && !contains(github.event.head_commit.message, '[audit]') && !contains(github.event.head_commit.message, '[relevance-compare]') && !contains(github.event.head_commit.message, '[first-page]') && !contains(github.event.head_commit.message, '[trial-candidates]') }}
+        if: ${{ !contains(github.event.head_commit.message, '[scoring-sample]') && !contains(github.event.head_commit.message, '[experiment-report]') && !contains(github.event.head_commit.message, '[library-progress]') && !contains(github.event.head_commit.message, '[topic-list]') && !contains(github.event.head_commit.message, '[db-size]') && !contains(github.event.head_commit.message, '[audit]') && !contains(github.event.head_commit.message, '[relevance-compare]') && !contains(github.event.head_commit.message, '[first-page]') && !contains(github.event.head_commit.message, '[trial-candidates]') && !contains(github.event.head_commit.message, '[discovery-gaps]') }}
         run: pnpm exec tsx scripts/library-stats.mts
 
       - name: Keyword scoring sample
