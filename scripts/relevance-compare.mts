@@ -204,6 +204,15 @@ entries.push({
   }
 }
 
+/* ---------- first-page review mode: 12 profiles, no AI judge ---------- */
+const FIRST_PAGE = process.env.FIRST_PAGE === "1";
+if (FIRST_PAGE) {
+  const keep = ["restaurant-profit consultant", "Dubai rental-law creator", "busy-mom fitness coach", "laundromat owner", "wedding photographer", "vegan home baker", "Toronto realtor", "dad-life budgeting", "user d1cab850", "user 1574ee0d"];
+  const extra = entries.filter(e => e.kind === "FRESH sampled user").slice(0, 2).map(e => e.label);
+  const wanted = new Set([...keep, ...extra]);
+  for (let i = entries.length - 1; i >= 0; i--) if (!wanted.has(entries[i]!.label)) entries.splice(i, 1);
+}
+
 /* ---------- embeddings (one call for all profiles) ---------- */
 if (OPENAI) {
   const texts = entries.map(e => relevanceProfileText(e.profile));
@@ -255,6 +264,20 @@ async function judge(e: Entry, videos: RelevanceVideo[]): Promise<Map<number, Ve
     console.log(`JUDGE_PARSE_FAILED ${e.label}`);
   }
   return out;
+}
+
+/* ---------- first page only ---------- */
+if (FIRST_PAGE) {
+  for (const e of entries) {
+    const r = rankForProfile(e.profile, library, { limit: 10, now });
+    console.log(`\n### ${e.label} | ${e.kind}`);
+    console.log(`PROFILE ${clip(profileDescription(e.profile), 400)}`);
+    console.log(`COVERAGE ${r.coverage} | reason ${r.coverageReason ?? "-"} | sparse profile ${r.sparseProfile} | matches ${r.picked.length} | related ${r.adjacent.length}`);
+    r.picked.forEach((p, i) => console.log(`MATCH ${i + 1}. ${p.flags.includes("sparse_profile") ? "[Popular in niche]" : "[Match]"} R ${p.R.toFixed(2)} P ${p.P.toFixed(2)} x${p.video.multiple ?? "?"} | ${p.video.url} | ${clip(p.video.caption || p.video.summary, 160)}`));
+    r.adjacent.forEach((p, i) => console.log(`RELATED ${i + 1}. [Related inspiration] R ${p.R.toFixed(2)} x${p.video.multiple ?? "?"} | ${p.video.url} | ${clip(p.video.caption || p.video.summary, 160)}`));
+  }
+  await conn.end();
+  process.exit(0);
 }
 
 /* ---------- run ---------- */

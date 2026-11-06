@@ -92,6 +92,9 @@ export type ScoredVideo = {
   rejected: RejectReason | null;
 };
 
+/** Frozen for the trial: change it whenever the ranking changes materially, so each version is evaluated separately. */
+export const RELEVANCE_VERSION = "rel-2026-11-06a";
+
 export const RELEVANCE = {
   weights: { semantic: 0.55, topic: 0.25, audience: 0.1, place: 0.1 },
   /** Cosine at or below this counts as unrelated (0), at or above simHigh as a full match (1). */
@@ -102,6 +105,8 @@ export const RELEVANCE = {
   subjectGate: 0.5,
   /** Strong evidence of the specific subject. When fewer than `limit` videos have it, only those are shown (thin coverage). */
   subjectStrong: 0.9,
+  /** "Related inspiration" is a maximum, not a target. */
+  relatedMax: 7,
   advertKeep: 0.7,
   advertPenalty: 0.15,
   placeUnknownFactor: 0.7,
@@ -355,6 +360,11 @@ export function profileSignals(p: RelevanceProfile): ProfileSignals {
   return { audience: audienceTerms(p.audiences), places, placeStrict: strictPlaces.length > 0, languages };
 }
 
+/** A creator who gave only a broad niche label (no pillars or sub-topics). Pure; exported for tests. */
+export function isSparseProfile(p: Pick<RelevanceProfile, "pillars" | "subtopics">): boolean {
+  return p.pillars.filter(x => x.trim()).length === 0 && p.subtopics.filter(x => x.trim()).length === 0;
+}
+
 export function scoreVideo(p: RelevanceProfile, sig: ProfileSignals, v: RelevanceVideo, now: Date, final: { relevance: number; performance: number } = RELEVANCE.final): ScoredVideo {
   const text = `${v.caption ?? ""} ${v.summary ?? ""}`.trim();
   const flags: string[] = [];
@@ -393,9 +403,13 @@ export function scoreVideo(p: RelevanceProfile, sig: ProfileSignals, v: Relevanc
     }
   }
   // Subject first. Without an embedding, a topic tag is the only subject evidence.
-  const subjectOk = cos != null ? semantic >= RELEVANCE.subjectGate : topic > 0;
+  // A sparse profile ("Real-estate") has too little text for a reliable meaning
+  // score: its topic tags count as subject evidence, with a looser meaning check.
+  const sparse = isSparseProfile(p);
+  const subjectOk = cos == null ? topic > 0 : sparse ? topic > 0 || semantic >= RELEVANCE.subjectGate : semantic >= RELEVANCE.subjectGate;
   if (!rejected && !subjectOk) rejected = "off_subject";
-  if (!rejected && R < RELEVANCE.gate) rejected = "below_relevance_gate";
+  if (!rejected && R < RELEVANCE.gate && !(sparse && topic > 0 && subjectOk)) rejected = "below_relevance_gate";
+  if (sparse) flags.push("sparse_profile");
   if (audience) flags.push("names_audience");
   if (samePlace) flags.push("same_place");
   const P = performanceScore(v, now);
@@ -405,8 +419,12 @@ export function scoreVideo(p: RelevanceProfile, sig: ProfileSignals, v: Relevanc
 
 export type RankResult = {
   picked: ScoredVideo[];
-  /** Passed the checks but only loosely on the subject; shown separately and labelled, never mixed into picked. */
+  /** "Related inspiration": passed every check but only loosely on the subject; shown apart and labelled, never mixed into picked. */
   adjacent: ScoredVideo[];
+  /** Only a broad niche label: matched by topic tags, labelled "Popular in <niche>", not precise personalization. */
+  sparseProfile: boolean;
+  /** Why fewer than requested: we need more about the creator, or we lack suitable videos. */
+  coverageReason: "sparse_profile" | "thin_library" | null;
   rejected: ScoredVideo[];
   eligible: number;
   coverage: "ok" | "thin" | "none";
@@ -446,12 +464,20 @@ export function rankForProfile(p: RelevanceProfile, library: readonly RelevanceV
   };
   // Thin niche: when too few videos are strongly about the subject, show only those.
   // The looser ones go to `adjacent` (shown apart, labelled), never mixed in.
-  const strong = onePerCreator(ok.filter(s => s.parts.cosine == null || s.parts.semantic >= RELEVANCE.subjectStrong), opts.limit);
+  // Strong evidence: a strong meaning match, or for a sparse profile one of its own topic tags.
+  const sparse = isSparseProfile(p);
+  const isStrong = (s: ScoredVideo) => s.parts.cosine == null || s.parts.semantic >= RELEVANCE.subjectStrong || (sparse && s.parts.topic > 0);
+  const strong = onePerCreator(ok.filter(isStrong), opts.limit);
   const seen = new Set<string>();
-  const picked = strong.length >= opts.limit ? onePerCreator(ok, opts.limit, seen) : onePerCreator(strong, opts.limit, seen);
+  const picked = strong.length >= opts.limit ? onePerCreator(ok, opts.limit, seen) : onePerCreator(ok.filter(isStrong), opts.limit, seen);
   const pickedIds = new Set(picked.map(s => s.video.id));
-  const adjacent = picked.length < opts.limit ? onePerCreator(ok.filter(s => !pickedIds.has(s.video.id)), opts.limit - picked.length, seen) : [];
+  // Related inspiration: only when coverage is thin, at most relatedMax. For a
+  // place-specific creator only videos about the same place: a generic or other
+  // country's explainer must not look like applicable local advice.
+  const relatedPool = ok.filter(s => !pickedIds.has(s.video.id) && (!sig.placeStrict || s.flags.includes("same_place")));
+  const adjacent = picked.length < opts.limit ? onePerCreator(relatedPool, Math.min(RELEVANCE.relatedMax, opts.limit - picked.length), seen) : [];
   const rejected = scored.filter(s => s.rejected).sort((a, b) => b.R - a.R);
   const coverage = picked.length === 0 ? "none" : picked.length < opts.limit ? "thin" : "ok";
-  return { picked, adjacent, rejected, eligible: ok.length, coverage };
+  const coverageReason = coverage === "ok" ? null : sparse ? "sparse_profile" : "thin_library";
+  return { picked, adjacent, rejected, eligible: ok.length, coverage, sparseProfile: sparse, coverageReason };
 }
