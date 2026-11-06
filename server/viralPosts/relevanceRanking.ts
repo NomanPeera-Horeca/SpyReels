@@ -101,7 +101,7 @@ export const RELEVANCE = {
   /** Subject first: the video must be about the creator's subject (meaning score, 0..1) before audience or performance count. */
   subjectGate: 0.5,
   /** Strong evidence of the specific subject. When fewer than `limit` videos have it, only those are shown (thin coverage). */
-  subjectStrong: 0.75,
+  subjectStrong: 0.9,
   advertKeep: 0.7,
   advertPenalty: 0.15,
   placeUnknownFactor: 0.7,
@@ -288,6 +288,22 @@ export function performanceScore(v: Pick<RelevanceVideo, "multiple" | "published
   return clamp01(0.6 * viral + 0.3 * fresh + (v.status === "rising" ? 0.1 : 0));
 }
 
+/** Words for kinds of people. Stripped from the subject text unless the subject IS about them (parenting, family). */
+const DEMOGRAPHIC_WORDS = new Set(
+  "mom moms mother mothers mum mums mama mommy momlife dad dads father fathers parent parents kid kids child children toddler toddlers woman women female ladies girls man men male guys busy working".split(" ")
+);
+/** Subjects that are ABOUT those people (parenting, family life, motherhood): their people words stay. */
+const PEOPLE_SUBJECT = /parent|famil|motherhood|fatherhood|pregnan|momlife|mom life|dad life/i;
+
+function stripDemographics(text: string): string {
+  return text
+    .split(/(\s+)/)
+    .filter(tok => !DEMOGRAPHIC_WORDS.has(tok.toLowerCase().replace(/[^\p{L}]/gu, "")))
+    .join("")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 /**
  * Text the profile's relevance embedding is made from: the SUBJECT only
  * (category, niche, pillars, sub-topics). Audience and goals are left out on
@@ -296,11 +312,15 @@ export function performanceScore(v: Pick<RelevanceVideo, "multiple" | "published
  * after the subject passes. Pure; exported for tests.
  */
 export function relevanceProfileText(p: Pick<RelevanceProfile, "niche" | "category" | "pillars" | "subtopics">): string {
+  // "Fitness coaching for busy moms" -> "Fitness coaching for": who it is for is checked later, as audience.
+  // Kept when the subject is about those people (a parenting creator).
+  const aboutPeople = PEOPLE_SUBJECT.test(`${p.category ?? ""} ${p.niche}`) || !words(stripDemographics(p.niche)).some(w => !STOP.has(w));
+  const t = (x: string) => (aboutPeople ? x : stripDemographics(x));
   return [
     p.category && `Category: ${p.category}`,
-    p.niche && `Niche: ${p.niche}`,
-    p.pillars.length > 0 && `Content pillars: ${p.pillars.join("; ")}`,
-    p.subtopics.length > 0 && `Sub-topics: ${p.subtopics.join("; ")}`,
+    p.niche && `Niche: ${t(p.niche)}`,
+    p.pillars.length > 0 && `Content pillars: ${p.pillars.map(t).join("; ")}`,
+    p.subtopics.length > 0 && `Sub-topics: ${p.subtopics.map(t).join("; ")}`,
   ]
     .filter(Boolean)
     .join(". ");
@@ -335,7 +355,7 @@ export function profileSignals(p: RelevanceProfile): ProfileSignals {
   return { audience: audienceTerms(p.audiences), places, placeStrict: strictPlaces.length > 0, languages };
 }
 
-export function scoreVideo(p: RelevanceProfile, sig: ProfileSignals, v: RelevanceVideo, now: Date): ScoredVideo {
+export function scoreVideo(p: RelevanceProfile, sig: ProfileSignals, v: RelevanceVideo, now: Date, final: { relevance: number; performance: number } = RELEVANCE.final): ScoredVideo {
   const text = `${v.caption ?? ""} ${v.summary ?? ""}`.trim();
   const flags: string[] = [];
   const cos = p.embedding && v.embedding ? cosine(p.embedding, v.embedding) : null;
@@ -379,7 +399,7 @@ export function scoreVideo(p: RelevanceProfile, sig: ProfileSignals, v: Relevanc
   if (audience) flags.push("names_audience");
   if (samePlace) flags.push("same_place");
   const P = performanceScore(v, now);
-  const score = rejected ? 0 : RELEVANCE.final.relevance * R + RELEVANCE.final.performance * P;
+  const score = rejected ? 0 : final.relevance * R + final.performance * P;
   return { video: v, R: clamp01(R), P, score, parts, flags, rejected };
 }
 
@@ -396,7 +416,7 @@ export type RankResult = {
  * Retrieve, score, gate and pick. `limit` videos at most, one per creator;
  * fewer when coverage is thin. Pure; exported for tests.
  */
-export function rankForProfile(p: RelevanceProfile, library: readonly RelevanceVideo[], opts: { limit: number; now?: Date; exclude?: ReadonlySet<number> }): RankResult {
+export function rankForProfile(p: RelevanceProfile, library: readonly RelevanceVideo[], opts: { limit: number; now?: Date; exclude?: ReadonlySet<number>; final?: { relevance: number; performance: number } }): RankResult {
   const now = opts.now ?? new Date();
   const sig = profileSignals(p);
   const pool = library.filter(v => !opts.exclude?.has(v.id));
@@ -412,7 +432,7 @@ export function rankForProfile(p: RelevanceProfile, library: readonly RelevanceV
       .map(x => x.v);
   }
   const candidates = [...new Map([...byTopic, ...bySimilarity].map(v => [v.id, v])).values()];
-  const scored = candidates.map(v => scoreVideo(p, sig, v, now));
+  const scored = candidates.map(v => scoreVideo(p, sig, v, now, opts.final));
   const ok = scored.filter(s => !s.rejected).sort((a, b) => b.score - a.score);
   const onePerCreator = (list: ScoredVideo[], max: number, seen = new Set<string>()) => {
     const out: ScoredVideo[] = [];
@@ -426,7 +446,7 @@ export function rankForProfile(p: RelevanceProfile, library: readonly RelevanceV
   };
   // Thin niche: when too few videos are strongly about the subject, show only those.
   // The looser ones go to `adjacent` (shown apart, labelled), never mixed in.
-  const strong = ok.filter(s => s.parts.cosine == null || s.parts.semantic >= RELEVANCE.subjectStrong);
+  const strong = onePerCreator(ok.filter(s => s.parts.cosine == null || s.parts.semantic >= RELEVANCE.subjectStrong), opts.limit);
   const seen = new Set<string>();
   const picked = strong.length >= opts.limit ? onePerCreator(ok, opts.limit, seen) : onePerCreator(strong, opts.limit, seen);
   const pickedIds = new Set(picked.map(s => s.video.id));

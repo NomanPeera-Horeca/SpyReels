@@ -87,10 +87,16 @@ describe("signals", () => {
   });
   it("embeds the subject only; audience and goals stay in the full description", () => {
     const t = relevanceProfileText(profile());
-    expect(t).toContain("Niche: Fitness for busy moms");
+    expect(t).toContain("Niche: Fitness");
     expect(t).not.toContain("Audience:");
     expect(t).not.toContain("Goals:");
     expect(profileDescription(profile())).toContain("Audience: Busy moms with young kids");
+  });
+  it("leaves who-it-is-for words out of the subject, unless the subject is about those people", () => {
+    expect(relevanceProfileText(profile())).toContain("Niche: Fitness for");
+    expect(relevanceProfileText(profile())).not.toMatch(/moms/i);
+    const parenting = relevanceProfileText(profile({ niche: "Parenting tips for new moms", category: "Parenting", pillars: [] }));
+    expect(parenting).toContain("Parenting tips for new moms");
   });
 });
 
