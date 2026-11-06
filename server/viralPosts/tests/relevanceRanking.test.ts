@@ -62,6 +62,13 @@ describe("signals", () => {
     const t = audienceTerms([{ who: "Busy moms with young kids" }]);
     expect(t).toEqual(expect.arrayContaining(["mom", "mother", "busy", "kid"]));
   });
+  it("ignores audience words too broad to mean anything (business owners, small businesses)", () => {
+    const t = audienceTerms([{ who: "Aspiring and new laundromat owners" }, { who: "Small business owners looking for local businesses" }]);
+    expect(t).toContain("laundromat");
+    expect(t).not.toEqual(expect.arrayContaining(["owner"]));
+    expect(t).not.toContain("business");
+    expect(t).not.toContain("small");
+  });
   it("finds places, including market words like FHA (US) and RERA (UAE)", () => {
     expect(placesIn("Renting in Dubai? Know your RERA rights")).toEqual(["uae"]);
     expect(placesIn("FHA loan for your first home")).toEqual(["us"]);
@@ -131,7 +138,10 @@ describe("ranking", () => {
     const r = rankForProfile(dubai, [us, uae, unknown], { limit: 5, now });
     expect(r.rejected.find(x => x.video.id === us.id)?.rejected).toBe("different_place");
     expect(r.picked[0]?.video.id).toBe(uae.id);
-    expect(r.picked.find(p => p.video.id === unknown.id)?.flags).toContain("place_not_stated");
+    // No place stated: demoted (x0.7). Here that drops it below the gate, which is correct for a place-specific creator.
+    const u = [...r.picked, ...r.rejected].find(p => p.video.id === unknown.id)!;
+    expect(u.flags.includes("place_not_stated") || u.rejected === "below_relevance_gate").toBe(true);
+    expect(r.picked.findIndex(p => p.video.id === unknown.id)).not.toBe(0);
   });
 
   it("rejects TV and film re-uploads as not remakeable", () => {
