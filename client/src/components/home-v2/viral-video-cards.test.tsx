@@ -66,4 +66,21 @@ describe("Home viral video card", () => {
     expect(html).not.toContain("null views");
     expect(html).toContain("Menu prices that make sense");
   });
+
+  it("offers 'Not relevant to my niche' in the card menu when the page provides it", () => {
+    const html = renderToStaticMarkup(
+      <HomeVideoCard
+        post={sample}
+        busy={false}
+        compact={false}
+        onRemake={() => {}}
+        onToggleSave={() => {}}
+        onPlay={() => {}}
+        onSeen={() => {}}
+        onNotRelevant={() => {}}
+      />
+    );
+    expect(HOME_COPY.videos.notRelevant).toBe("Not relevant to my niche");
+    expect(html).toContain('data-testid="home-result-card"');
+  });
 });

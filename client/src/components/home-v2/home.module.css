@@ -423,6 +423,13 @@
   gap: var(--sr-space-4);
 }
 
+/* Wrapper used only to know when a card is on screen; the card fills it. */
+.videoCell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 /* This section alone uses the portrait grid; ideas keep their approved two-up layout. */
 
 /* Badge (Figma Badge: neutral, success, brand, info, warning). */

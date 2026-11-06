@@ -249,6 +249,23 @@ export default function HomeV2Page() {
 
   const addByUrl = trpc.collected.addByUrl.useMutation();
   const save = trpc.viralPosts.save.useMutation();
+  // Measurement for the ranking trial: the same signals for every ranking.
+  // Fire-and-forget; never blocks or errors the page. Library posts only (numeric ids).
+  const signal = trpc.viralPosts.feedback.useMutation();
+  const sendSignal = (
+    post: ViralPost,
+    feedbackType: "post_impression" | "remake_started" | "not_my_niche"
+  ) => {
+    if (!/^\d+$/.test(post.id)) return;
+    signal.mutate({ postId: post.id, feedbackType }, { onError: () => {} });
+  };
+  const [hiddenPosts, setHiddenPosts] = useState<Record<string, true>>({});
+  const markNotRelevant = (post: ViralPost) => {
+    sendSignal(post, "not_my_niche");
+    track("video_not_relevant", { platform: post.platform });
+    setHiddenPosts(h => ({ ...h, [post.id]: true }));
+    toast.success(C.videos.notRelevantThanks);
+  };
   const unsave = trpc.viralPosts.unsave.useMutation();
   const { startRemake, RemakeDialogs } = useLibraryRemakeChain();
 
@@ -261,6 +278,7 @@ export default function HomeV2Page() {
     }
     setRemakeBusyId(post.id);
     track("video_create_script", { platform: post.platform });
+    sendSignal(post, "remake_started");
     const toastId = toast.loading(
       "Adding to Collected Reels, then starting remake…"
     );
@@ -545,7 +563,7 @@ export default function HomeV2Page() {
               />
             ) : videos && videos.items.length > 0 ? (
               <div className={styles.videoGrid}>
-                {videos.items.map(post => {
+                {videos.items.filter(post => !hiddenPosts[post.id]).map(post => {
                   const p = {
                     ...post,
                     saved: savedOverride[post.id] ?? post.saved,
@@ -559,6 +577,8 @@ export default function HomeV2Page() {
                       onPlay={() => setPlayingPost(post)}
                       onRemake={() => void createFromVideo(post)}
                       onToggleSave={() => void toggleSave(p)}
+                      onSeen={() => sendSignal(post, "post_impression")}
+                      onNotRelevant={() => markNotRelevant(post)}
                     />
                   );
                 })}
