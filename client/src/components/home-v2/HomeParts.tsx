@@ -384,6 +384,42 @@ export function IdeasSkeleton() {
  * Viral score and performance multiplier stay hidden: Home cannot prove the
  * creator-usual-views baseline required by the approved Figma signal policy.
  */
+/** Calls onSeen once, after the card has been at least half on screen for 1.2s. */
+function useSeenOnce(onSeen?: () => void) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const sent = useRef(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !onSeen || typeof IntersectionObserver === "undefined") return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting && entry.intersectionRatio >= 0.5) {
+          if (!timer && !sent.current) {
+            timer = setTimeout(() => {
+              sent.current = true;
+              onSeen();
+              observer.disconnect();
+            }, 1200);
+          }
+        } else if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+      },
+      { threshold: [0.5] }
+    );
+    observer.observe(el);
+    return () => {
+      if (timer) clearTimeout(timer);
+      observer.disconnect();
+    };
+    // onSeen identity may change per render; the first one is enough.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return ref;
+}
+
 export function HomeVideoCard({
   post,
   busy,
@@ -391,6 +427,8 @@ export function HomeVideoCard({
   onRemake,
   onToggleSave,
   onPlay,
+  onSeen,
+  onNotRelevant,
 }: {
   post: ViralPost;
   busy: boolean;
@@ -400,7 +438,12 @@ export function HomeVideoCard({
   onToggleSave: () => void;
   /** Opens the existing in-app preview. Expand uses the same player on desktop. */
   onPlay: () => void;
+  /** Recorded once when the card has really been on screen (measurement only). */
+  onSeen?: () => void;
+  /** "Not relevant to my niche" in the card menu (same for every ranking). */
+  onNotRelevant?: () => void;
 }) {
+  const seenRef = useSeenOnce(onSeen);
   const title = post.hook?.trim() || post.caption?.trim() || C.videos.untitled;
   const views = formatCompactCount(post.views);
   const engagement = formatEngagementPct(post.engagementRate);
@@ -413,6 +456,7 @@ export function HomeVideoCard({
   const handle = (post.creatorHandle || "").replace(/^@/, "");
   const originalUrl = safeHttpUrl(post.sourceUrl);
   return (
+    <div ref={seenRef} className={styles.videoCell}>
     <ResultCard
       testId="home-result-card"
       mediaFormat="portrait"
@@ -444,8 +488,10 @@ export function HomeVideoCard({
               label: C.videos.openOriginal,
               onSelect: () => toast.error("Original link unavailable"),
             },
+        ...(onNotRelevant ? [{ label: C.videos.notRelevant, onSelect: onNotRelevant }] : []),
       ]}
     />
+    </div>
   );
 }
 

@@ -51,6 +51,8 @@ export const HOME_COPY = {
     errorTitle: "Couldn't load videos",
     errorBody: "Check your connection and try again.",
     untitled: "Viral post in your niche",
+    notRelevant: "Not relevant to my niche",
+    notRelevantThanks: "Thanks — we'll show fewer like this",
   },
   creators: {
     title: "Creators going viral",
