@@ -93,7 +93,7 @@ export type ScoredVideo = {
 };
 
 /** Frozen for the trial: change it whenever the ranking changes materially, so each version is evaluated separately. */
-export const RELEVANCE_VERSION = "rel-2026-11-06b";
+export const RELEVANCE_VERSION = "rel-2026-11-06c";
 
 export const RELEVANCE = {
   weights: { semantic: 0.55, topic: 0.25, audience: 0.1, place: 0.1 },
