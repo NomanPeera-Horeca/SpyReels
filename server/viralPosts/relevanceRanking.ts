@@ -89,10 +89,10 @@ export type ScoredVideo = {
 export const RELEVANCE = {
   weights: { semantic: 0.55, topic: 0.25, audience: 0.1, place: 0.1 },
   /** Cosine at or below this counts as unrelated (0), at or above simHigh as a full match (1). */
-  simLow: 0.2,
-  simHigh: 0.5,
-  gate: 0.45,
-  advertKeep: 0.65,
+  simLow: 0.25,
+  simHigh: 0.55,
+  gate: 0.55,
+  advertKeep: 0.7,
   advertPenalty: 0.15,
   placeUnknownFactor: 0.7,
   final: { relevance: 0.7, performance: 0.3 },
@@ -122,6 +122,11 @@ function stem(w: string): string {
   return w;
 }
 
+/** Too broad to say a video is made for this audience ("business owners" are everyone in Business). */
+const GENERIC_AUDIENCE = new Set(
+  "business businesse owner small new aspiring local online creator content brand entrepreneur startup company team professional beginner people individual anyone looking build building grow growing start starting want".split(" ")
+);
+
 const AUDIENCE_ALIASES: Record<string, string[]> = {
   mom: ["mom", "moms", "mother", "mothers", "mum", "mums", "mama", "mommy", "momlife", "postpartum"],
   dad: ["dad", "dads", "father", "fathers", "dadlife"],
@@ -143,7 +148,7 @@ export function audienceTerms(audiences: readonly RelevanceAudience[]): string[]
   for (const a of audiences) {
     for (const w of words(`${a.who}`)) {
       const s = stem(w);
-      if (STOP.has(w) || s.length < 3 || /^\d+$/.test(s)) continue;
+      if (STOP.has(w) || GENERIC_AUDIENCE.has(s) || GENERIC_AUDIENCE.has(w) || s.length < 3 || /^\d+$/.test(s)) continue;
       const alias = Object.entries(AUDIENCE_ALIASES).find(([, list]) => list.includes(w));
       if (alias) alias[1].forEach(x => out.add(stem(x)));
       else out.add(s);
