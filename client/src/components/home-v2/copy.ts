@@ -69,8 +69,10 @@ export const HOME_COPY = {
     errorBody: "Check your connection and try again.",
   },
   profiles: {
-    inviteTitle: "Add another social profile",
-    inviteBody: "Use SpyReels with more than one channel.",
+    inviteTitle: "Add your other channels",
+    inviteBody: "More channels give better research and ideas.",
+    addPlatform: (label: string) => `Add your ${label} profile`,
+    switchProfile: "Switch profile",
     manage: "Manage profiles",
     modalTitle: "Your profiles",
     modalBody: "Public profiles you added to SpyReels.",

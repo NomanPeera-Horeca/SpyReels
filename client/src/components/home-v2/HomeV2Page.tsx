@@ -48,6 +48,7 @@ import {
   IdeaCard,
   IdeasSkeleton,
   ManageProfilesModal,
+  PLATFORMS,
   ProfilesInvite,
   QuickActions,
   ResultSkeleton,
@@ -348,9 +349,13 @@ export default function HomeV2Page() {
 
   /* ---------- profiles ---------- */
 
+  // Loaded with Home: the add-platform chips need to know what is already added.
   const profilesQ = trpc.homeV2.profiles.useQuery(undefined, {
-    enabled: profilesOpen,
+    enabled: profilesOpen || Boolean(ctx?.hasProfile),
   });
+  const missingPlatforms = PLATFORMS.filter(
+    p => !(profilesQ.data ?? []).some(x => x.platform === p.id && x.handle)
+  );
   const switchProfile = trpc.homeV2.switchProfile.useMutation();
 
   const switchTo = async (profileId: string) => {
@@ -713,10 +718,20 @@ export default function HomeV2Page() {
               />
             )}
           </section>
-          {ctx?.hasProfile ? (
+          {ctx?.hasProfile && profilesQ.data && missingPlatforms.length > 0 ? (
             <div className={styles.slotInvite}>
-              <ProfilesInvite compact={compact} onManage={() => setProfilesOpen(true)} />
+              <ProfilesInvite compact={compact} missing={missingPlatforms} onAdd={addProfile} />
             </div>
+          ) : null}
+          {/* Switching stays possible once there is more than one profile (no card). */}
+          {(profilesQ.data ?? []).filter(x => x.handle).length > 1 ? (
+            <button
+              type="button"
+              className={[styles.ghost, styles.switchProfileLink].join(" ")}
+              onClick={() => setProfilesOpen(true)}
+            >
+              {C.profiles.switchProfile}
+            </button>
           ) : null}
         </aside>
 
