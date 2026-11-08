@@ -119,6 +119,12 @@ export function parseFirstJsonObject(text: string): unknown {
   throw new Error("Unfinished JSON object in model answer");
 }
 
+/** The answer after a "{" prefill, made whole again. Pure; exported for tests. */
+export function withPrefilledBrace(text: string): string {
+  const t = text.trimStart();
+  return t.startsWith("{") ? t : `{${t}`;
+}
+
 export function oneLine(text: string | null | undefined, max: number): string {
   return (text ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 }
@@ -244,7 +250,8 @@ async function matchOneProfileV2(client: Anthropic, topics: Topic[], p: ProfileS
   const known = new Set(topics.map(t => t.slug));
   const response = await client.messages.create({
     model: SEMANTIC_POOL_MODEL,
-    max_tokens: 700,
+    // Room for the answer even when the model lists many topics.
+    max_tokens: 1200,
     temperature: 0,
     system: [
       "You match a content creator to topics, so we can find viral short videos THEY could remake for THEIR audience.",
@@ -254,7 +261,7 @@ async function matchOneProfileV2(client: Anthropic, topics: Topic[], p: ProfileS
       `Step 3: for every pillar with NO close-fit topic, create a new SPECIFIC topic (max ${V2_MAX_NEW}): a 2-6 word label naming the real subject and, if it matters, who it is for or where (e.g. 'AI avatars for business personal brands', 'Dubai tenant rights'). Specific beats general.`,
       `Each new topic needs one category from: ${VIRAL_TOPIC_CATEGORIES.join(", ")}.`,
       "Use the audience and goals to judge fit, but topics describe SUBJECTS, not audiences.",
-      'Return JSON only: {"core":["slug"],"broad":["slug"],"newTopics":[{"label":"...","category":"...","forPillar":"..."}]}',
+      'Do the steps silently. Return JSON only, with no words before or after it: {"core":["slug"],"broad":["slug"],"newTopics":[{"label":"...","category":"...","forPillar":"..."}]}',
       "",
       "Topics by category:",
       topicListForPrompt(topics),
@@ -271,12 +278,15 @@ async function matchOneProfileV2(client: Anthropic, topics: Topic[], p: ProfileS
           `Sub-topics: ${p.subtopics.map(x => oneLine(x, 80)).join("; ") || "(none)"}`,
         ].join("\n"),
       },
+      // Start the answer with "{" so the model writes the JSON, not its reasoning
+      // (the reasoning used up the tokens: "No JSON object in model answer").
+      { role: "assistant", content: "{" },
     ],
   });
   reportDirectAnthropicUsage(response, "viral_profile_topics");
   const text = response.content.find(b => b.type === "text");
   if (!text || text.type !== "text") throw new Error("No text in profile topic response");
-  const m = cleanProfileMatchV2(parseFirstJsonObject(text.text), known);
+  const m = cleanProfileMatchV2(parseFirstJsonObject(withPrefilledBrace(text.text)), known);
   return { topics: m.topics, newTopics: m.newTopics, core: m.core.length, broad: m.broad.length };
 }
 

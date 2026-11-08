@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { STARTER_VIRAL_TOPICS, topicSlug, VIRAL_TOPIC_CATEGORIES, VIRAL_TOPIC_CATEGORY_LABELS } from "../../../shared/viralTopics";
 import { CONTENT_TAXONOMY } from "../../../shared/personalization/contentTaxonomy";
-import { cleanProfileMatch, cleanProfileMatchV2, cleanVideoTopics, profileEmbeddingText, strategyHash, topicMatchV2Enabled } from "../topics";
+import { cleanProfileMatch, cleanProfileMatchV2, cleanVideoTopics, profileEmbeddingText, strategyHash, topicMatchV2Enabled, withPrefilledBrace, parseFirstJsonObject } from "../topics";
 
 describe("starter topic list", () => {
   it("has the 17 approved categories, 12 topics each, unique slugs", () => {
@@ -156,5 +156,15 @@ describe("topic matching v2", () => {
     expect(strategyHash(p, false)).not.toBe(strategyHash(p, true));
     expect(strategyHash(p, false)).toBe(strategyHash({ ...p, audiences: ["Someone else"] }, false));
     expect(strategyHash(p, true)).not.toBe(strategyHash({ ...p, audiences: ["Someone else"] }, true));
+  });
+});
+
+describe("withPrefilledBrace", () => {
+  it("rebuilds the JSON after a '{' prefill", () => {
+    const answer = '"core":["sales"],"broad":[],"newTopics":[]}';
+    expect(parseFirstJsonObject(withPrefilledBrace(answer))).toEqual({ core: ["sales"], broad: [], newTopics: [] });
+  });
+  it("leaves a full object alone", () => {
+    expect(withPrefilledBrace(' {"core":[]}')).toBe('{"core":[]}');
   });
 });
