@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isIdeaPhrase, rankSearchIdeas, searchIdeaScore } from "../searchIdeas";
+import { isIdeaPhrase, pickPillarIdeas, rankSearchIdeas, searchIdeaScore } from "../searchIdeas";
 
 const row = (phrase: string, topicSlug: string, demand: number, viral = 0, retired = 0) => ({
   phrase,
@@ -72,5 +72,27 @@ describe("search phrases for scripts and remakes", () => {
     const block = formatSearchPhrasesBlock([idea("meal prep for beginners", 90, 3)]);
     expect(block).toContain('"meal prep for beginners" (already found viral videos)');
     expect(block).toContain("if none fits, ignore this list");
+  });
+});
+
+
+describe("pickPillarIdeas", () => {
+  it("takes ideas round-robin across pillars, drops blanks and repeats, and caps", () => {
+    const rows = [
+      { label: "Decoy item strategy", pillarTitle: "Counterintuitive Pricing" },
+      { label: "Premium anchor pricing", pillarTitle: "Counterintuitive Pricing" },
+      { label: "Free perk clubs", pillarTitle: "Membership Model Tactics" },
+      { label: "decoy item strategy", pillarTitle: "Membership Model Tactics" },
+      { label: " ", pillarTitle: "Membership Model Tactics" },
+      { label: "Loyalty without discounts", pillarTitle: "Keeping Customers" },
+    ];
+    expect(pickPillarIdeas(rows, 3).map(r => r.label)).toEqual(["Decoy item strategy", "Free perk clubs", "Loyalty without discounts"]);
+    expect(pickPillarIdeas(rows, 10).map(r => r.label)).toEqual([
+      "Decoy item strategy",
+      "Free perk clubs",
+      "Loyalty without discounts",
+      "Premium anchor pricing",
+    ]);
+    expect(pickPillarIdeas([], 4)).toEqual([]);
   });
 });

@@ -379,7 +379,21 @@ export async function matchProfileTopics(args: { maxProfiles?: number } = {}): P
 
   for (const p of due) {
     try {
-      const match = topicMatchV2Enabled() ? await matchOneProfileV2(client, topics, p) : await matchOneProfile(client, topics, p);
+      let match: { topics: string[]; newTopics: Topic[] };
+      if (topicMatchV2Enabled()) {
+        try {
+          match = await matchOneProfileV2(client, topics, p);
+        } catch (err) {
+          // An unreadable v2 answer must not retry forever: fall back to the v1 matcher once.
+          console.warn("[viralLibrary] profile_match_v2_fallback", {
+            socialProfileId: p.socialProfileId,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          match = await matchOneProfile(client, topics, p);
+        }
+      } else {
+        match = await matchOneProfile(client, topics, p);
+      }
       const now = new Date();
       if (match.newTopics.length > 0) {
         await db

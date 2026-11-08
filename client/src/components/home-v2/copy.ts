@@ -33,6 +33,7 @@ export const HOME_COPY = {
     searched: "Searched a lot on Google and YouTube",
     searchedVolume: (v: string) => `~${v} Google searches a month`,
     searchedProven: (n: number) => `Searched a lot · found ${n} viral video${n === 1 ? "" : "s"}`,
+    fromPillar: (pillar: string) => (pillar ? `From your pillar: ${pillar}` : "From your content pillars"),
   },
   videos: {
     title: "Viral Videos for you",

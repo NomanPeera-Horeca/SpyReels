@@ -120,6 +120,11 @@ export default function HomeV2Page() {
   });
   const searchIdeasQ = trpc.homeV2.searchIdeas.useQuery(undefined, {
     refetchOnWindowFocus: false,
+    // Right after onboarding a new niche has no search ideas yet: check again until they arrive.
+    refetchInterval: q => {
+      const d = q.state.data;
+      return d && d.ideas.length === 0 ? 30_000 : false;
+    },
   });
   const creatorsQ = trpc.homeV2.creators.useQuery(undefined, {
     staleTime: 0,
@@ -204,11 +209,32 @@ export default function HomeV2Page() {
             ? C.ideas.searchedProven(i.viralFound)
             : C.ideas.searched,
     }));
-    return [...planIdeas, ...searched].slice(0, 2);
+    // Until search ideas exist, the creator's own pillar sub-topics are the ideas.
+    const fromPillars: HomeIdea[] = (searchIdeasQ.data?.pillarIdeas ?? []).map(i => ({
+      id: `pillar:${i.label}|pillar|${i.pillarTitle}`,
+      title: i.label,
+      hook: null,
+      badge: C.ideas.fromPillar(i.pillarTitle),
+    }));
+    return [...planIdeas, ...searched, ...fromPillars].slice(0, 2);
   }, [planQ.data, searchIdeasQ.data]);
   const hasPlan = (planQ.data?.calendarCards.length ?? 0) > 0;
 
   const writeIdea = (id: number | string) => {
+    if (typeof id === "string" && id.startsWith("pillar:")) {
+      const [label, pillar] = id.slice("pillar:".length).split("|pillar|");
+      track("idea_write_pillar");
+      try {
+        sessionStorage.setItem(
+          STUDIO_PREFILL_KEY,
+          `Write a short-form video script about "${label}"${pillar ? `, for my content pillar "${pillar}"` : ""}.`
+        );
+      } catch {
+        // Storage blocked: the Agent opens empty; the user can still type.
+      }
+      navigate("/studio");
+      return;
+    }
     if (typeof id === "string") {
       const phrase = id.replace(/^search:/, "");
       track("idea_write_searched", { words: phrase.split(/\s+/).length });

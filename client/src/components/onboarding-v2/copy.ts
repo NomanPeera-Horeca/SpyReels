@@ -136,6 +136,7 @@ export const COPY = {
     notSet: "Not set",
     subtopicsLabel: "Suggested subtopics",
     thinking: "Writing suggestions from your profile",
+    thinkingMore: "Writing more suggestions from your profile…",
     failed: "We couldn't write a suggestion. Add your own.",
     retry: "Try again",
   },

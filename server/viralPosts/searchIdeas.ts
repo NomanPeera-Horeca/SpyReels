@@ -209,3 +209,67 @@ export async function searchPhrasesBlockForWorkspace(args: { workspaceId: string
     return "";
   }
 }
+
+/* ---------- ideas from the creator's own pillars ---------- */
+
+export type PillarIdea = { label: string; pillarTitle: string };
+
+/**
+ * Round-robin across pillars so one pillar does not fill Home. Pure; exported for tests.
+ * Keeps the first occurrence of a label (case-insensitive).
+ */
+export function pickPillarIdeas(rows: PillarIdea[], limit: number): PillarIdea[] {
+  const byPillar = new Map<string, PillarIdea[]>();
+  for (const r of rows) {
+    if (!r.label.trim()) continue;
+    byPillar.set(r.pillarTitle, [...(byPillar.get(r.pillarTitle) ?? []), r]);
+  }
+  const lists = [...byPillar.values()];
+  const out: PillarIdea[] = [];
+  const seen = new Set<string>();
+  for (let i = 0; out.length < limit && lists.some(l => l.length > i); i++) {
+    for (const l of lists) {
+      const r = l[i];
+      if (!r || out.length >= limit) continue;
+      const key = r.label.trim().toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(r);
+    }
+  }
+  return out;
+}
+
+/**
+ * Sub-topics of the creator's own pillars ("Decoy item strategy" under
+ * "Counterintuitive Pricing"). Available right after onboarding, before any
+ * search phrases exist for a new niche. Read only; never throws.
+ */
+export async function pillarIdeasForProfile(args: { socialProfileId: string | null; limit: number }): Promise<PillarIdea[]> {
+  if (!args.socialProfileId || args.limit <= 0) return [];
+  try {
+    const db = await getDb();
+    if (!db) return [];
+    const [rows] = (await db.execute(sql`
+      SELECT s.label AS label, CAST(p.payload AS CHAR) AS payload
+      FROM pillar_subtopics s
+      JOIN personalization_items p ON p.id = s.pillarItemId
+      WHERE s.socialProfileId = ${args.socialProfileId} AND s.status <> 'dismissed' AND p.status <> 'dismissed'
+      ORDER BY s.createdAt
+      LIMIT 60
+    `)) as unknown as [Array<{ label: string; payload: string | null }>];
+    const ideas = (rows ?? []).map(r => {
+      let title = "";
+      try {
+        title = String((JSON.parse(r.payload ?? "{}") as { title?: unknown }).title ?? "");
+      } catch {
+        title = "";
+      }
+      return { label: String(r.label ?? ""), pillarTitle: title };
+    });
+    return pickPillarIdeas(ideas, args.limit);
+  } catch (err) {
+    console.warn("[home] pillar_ideas_failed", { error: err instanceof Error ? err.message : String(err) });
+    return [];
+  }
+}
