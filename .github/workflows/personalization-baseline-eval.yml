@@ -403,6 +403,10 @@ jobs:
         if: ${{ contains(github.event.head_commit.message, '[topic-list]') }}
         run: pnpm exec tsx scripts/topic-list.mts
 
+      - name: Own winners coverage
+        if: ${{ contains(github.event.head_commit.message, '[own-winners]') }}
+        run: pnpm exec tsx scripts/own-winners-coverage.mts
+
       - name: Active creators
         if: ${{ contains(github.event.head_commit.message, '[active-creators]') }}
         run: pnpm exec tsx scripts/active-creators.mts
@@ -465,7 +469,7 @@ jobs:
         run: pnpm exec tsx scripts/keyword-experiment-report.mts
 
       - name: Library counts
-        if: ${{ !contains(github.event.head_commit.message, '[scoring-sample]') && !contains(github.event.head_commit.message, '[experiment-report]') && !contains(github.event.head_commit.message, '[library-progress]') && !contains(github.event.head_commit.message, '[topic-list]') && !contains(github.event.head_commit.message, '[db-size]') && !contains(github.event.head_commit.message, '[audit]') && !contains(github.event.head_commit.message, '[relevance-compare]') && !contains(github.event.head_commit.message, '[first-page]') && !contains(github.event.head_commit.message, '[trial-candidates]') && !contains(github.event.head_commit.message, '[discovery-gaps]') && !contains(github.event.head_commit.message, '[understand-cost]') && !contains(github.event.head_commit.message, '[pilot-report]') && !contains(github.event.head_commit.message, '[new-user-home]') && !contains(github.event.head_commit.message, '[topic-dryrun]') && !contains(github.event.head_commit.message, '[active-creators]') }}
+        if: ${{ !contains(github.event.head_commit.message, '[scoring-sample]') && !contains(github.event.head_commit.message, '[experiment-report]') && !contains(github.event.head_commit.message, '[library-progress]') && !contains(github.event.head_commit.message, '[topic-list]') && !contains(github.event.head_commit.message, '[db-size]') && !contains(github.event.head_commit.message, '[audit]') && !contains(github.event.head_commit.message, '[relevance-compare]') && !contains(github.event.head_commit.message, '[first-page]') && !contains(github.event.head_commit.message, '[trial-candidates]') && !contains(github.event.head_commit.message, '[discovery-gaps]') && !contains(github.event.head_commit.message, '[understand-cost]') && !contains(github.event.head_commit.message, '[pilot-report]') && !contains(github.event.head_commit.message, '[new-user-home]') && !contains(github.event.head_commit.message, '[topic-dryrun]') && !contains(github.event.head_commit.message, '[active-creators]') && !contains(github.event.head_commit.message, '[own-winners]') }}
         run: pnpm exec tsx scripts/library-stats.mts
 
       - name: Keyword scoring sample
