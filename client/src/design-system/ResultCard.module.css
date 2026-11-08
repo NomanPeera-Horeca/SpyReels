@@ -35,6 +35,13 @@
   object-fit: cover;
 }
 
+/* Inline player fills the media box (Viral Posts card behaviour). */
+.inlineMedia {
+  position: absolute;
+  inset: 0;
+  background: #000;
+}
+
 .platformBadge {
   position: absolute;
   top: var(--sr-space-3);
