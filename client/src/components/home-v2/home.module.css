@@ -787,3 +787,20 @@
     min-height: 0;
   }
 }
+
+/* "+ TikTok  + YouTube" add-platform chips. */
+.platformChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sr-space-2);
+}
+
+.platformChip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sr-space-2);
+}
+
+.switchProfileLink {
+  align-self: flex-start;
+}

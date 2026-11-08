@@ -618,32 +618,45 @@ export function CreatorsSkeleton() {
 
 /* ---------- profiles ---------- */
 
+/**
+ * "+ TikTok  + YouTube" chips for the platforms the creator has not added yet
+ * (connector-style, like Perplexity's "+ Figma"). Hidden once all are added.
+ */
 export function ProfilesInvite({
-  onManage,
+  missing,
+  onAdd,
   compact = false,
 }: {
-  onManage: () => void;
-  /** Mobile (1498:2268): subtle panel, approved mobile copy, text link. */
+  missing: Array<{ id: SocialPlatform; label: string }>;
+  onAdd: (platform: SocialPlatform) => void;
+  /** Mobile: subtle panel. */
   compact?: boolean;
 }) {
+  if (missing.length === 0) return null;
   return (
-    <div className={cx(styles.card, styles.invite, compact && styles.inviteCompact)}>
+    <div className={cx(styles.card, styles.invite, compact && styles.inviteCompact)} data-testid="home-add-platforms">
       <span
         className={cx("sr-text-product-label", styles.h2)}
         style={{ fontWeight: compact ? 600 : 500 }}
       >
-        {compact ? C.mobile.inviteTitle : C.profiles.inviteTitle}
+        {C.profiles.inviteTitle}
       </span>
-      <span className={cx("sr-text-product-body-small", styles.muted)}>
-        {compact ? C.mobile.inviteBody : C.profiles.inviteBody}
-      </span>
-      <button
-        type="button"
-        className={compact ? cx(styles.ghost, styles.ghostBrand, styles.inviteAction) : cx(styles.outline, styles.inviteAction)}
-        onClick={onManage}
-      >
-        {compact ? C.mobile.manage : C.profiles.manage}
-      </button>
+      <span className={cx("sr-text-product-body-small", styles.muted)}>{C.profiles.inviteBody}</span>
+      <div className={styles.platformChips}>
+        {missing.map(p => (
+          <button
+            key={p.id}
+            type="button"
+            className={cx(styles.outline, styles.platformChip)}
+            onClick={() => onAdd(p.id)}
+            aria-label={C.profiles.addPlatform(p.label)}
+          >
+            <span aria-hidden>+</span>
+            <PlatformFullColorMark platform={p.id} size={16} />
+            {p.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -655,7 +668,7 @@ export type ProfileView = {
   active: boolean;
 };
 
-const PLATFORMS: Array<{ id: SocialPlatform; label: string }> = [
+export const PLATFORMS: Array<{ id: SocialPlatform; label: string }> = [
   { id: "instagram", label: "Instagram" },
   { id: "tiktok", label: "TikTok" },
   { id: "youtube", label: "YouTube" },
