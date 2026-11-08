@@ -30,7 +30,7 @@ import { contentInventoryPlan } from "../personalization/home/inventoryMatch";
 import { browseIndexedViralPosts } from "../viralPosts/browseService";
 import { libraryHomeForProfile, mergeHomeLists } from "../viralPosts/libraryHome";
 import { requestPrefetch, requestPrefetchForPosts } from "../research/prefetch";
-import { searchIdeasForProfile } from "../viralPosts/searchIdeas";
+import { pillarIdeasForProfile, searchIdeasForProfile } from "../viralPosts/searchIdeas";
 
 export const HOME_VIDEO_LIMIT = 4;
 
@@ -123,7 +123,10 @@ export const homeV2Router = router({
   /** Video ideas from phrases people really search in the profile's topics (keyword bank). */
   searchIdeas: homeProcedure.query(async ({ ctx }) => {
     const c = await context(ctx);
-    return { ideas: await searchIdeasForProfile({ socialProfileId: c.socialProfileId, limit: 4 }) };
+    const ideas = await searchIdeasForProfile({ socialProfileId: c.socialProfileId, limit: 4 });
+    // A new or very specific niche has no search phrases yet: offer the creator's own pillar sub-topics meanwhile.
+    const pillarIdeas = ideas.length < 4 ? await pillarIdeasForProfile({ socialProfileId: c.socialProfileId, limit: 4 - ideas.length }) : [];
+    return { ideas, pillarIdeas };
   }),
 
   profiles: homeProcedure.query(async ({ ctx }) => listWorkspaceProfiles(await requireDb(), octx(ctx))),

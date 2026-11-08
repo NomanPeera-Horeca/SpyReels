@@ -600,3 +600,45 @@
   margin-top: var(--sr-space-3);
   flex-wrap: wrap;
 }
+
+
+/* "More suggestions are coming" placeholder lines. */
+.moreComing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-space-2);
+}
+
+.skeletonCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-space-2);
+  padding: var(--sr-space-4);
+  border: var(--sr-shape-border-default-width) solid var(--sr-color-border-default);
+  border-radius: var(--sr-shape-card-radius);
+  background: var(--sr-color-surface-default);
+}
+
+.skeletonLine {
+  display: block;
+  height: 0.75rem;
+  border-radius: 999px;
+  background: var(--sr-color-surface-hover);
+  animation: skeletonPulse 1.4s ease-in-out infinite;
+}
+
+@keyframes skeletonPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeletonLine {
+    animation: none;
+  }
+}

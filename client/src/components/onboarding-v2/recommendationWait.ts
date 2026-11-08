@@ -56,7 +56,8 @@ export function recommendationWaitState(input: {
     return { state: "idle" };
   }
   if (status.state === "running") {
-    if (input.hasSavedSuggestions) return { state: "idle" };
+    // Some suggestions are on screen and more are being written: say so, until the wait runs out.
+    if (input.hasSavedSuggestions) return input.waitExpired ? { state: "idle" } : { state: "more" };
     if (input.waitExpired) return { state: "failed" };
     return { state: "running" };
   }
