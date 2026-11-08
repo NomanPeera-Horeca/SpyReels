@@ -29,7 +29,10 @@ import {
 import { buildPoolKey } from "./constants";
 import { refreshPoolById } from "./poolRefresh";
 import * as poolRepo from "./poolRepository";
-import { isTopicsReady } from "./topics";
+import { isTopicsReady, topicMatchV2Enabled } from "./topics";
+
+/** A creator counts as active when their account was used in the last 14 days. */
+export const ACTIVE_CREATOR_DAYS = 14;
 
 const FILL_SPEND_KEY = "fill-total";
 let warnedNoPlatforms = false;
@@ -337,6 +340,33 @@ export async function runTopicRefresh(args: { maxPools?: number } = {}): Promise
       ] as const)
     )
   );
+  // With topic matching v2, first searches go to topics of ACTIVE creators first
+  // (new sign-ups and people who came back): they are the ones who will see the
+  // results. Topics of inactive creators still get searched, after due refreshes.
+  let firstSearchDemandByKey: ReadonlyMap<string, number> = demandByKey;
+  if (topicMatchV2Enabled()) {
+    try {
+      const [rows] = (await db.execute(sql`
+        SELECT pt.topicSlug AS slug, COUNT(DISTINCT pt.socialProfileId) AS n
+        FROM viral_profile_topics pt
+        JOIN workspace_member_active_profiles a ON a.socialProfileId = pt.socialProfileId
+        JOIN users u ON u.id = a.userId
+        WHERE u.lastActiveAt >= NOW() - INTERVAL ${ACTIVE_CREATOR_DAYS} DAY
+        GROUP BY pt.topicSlug
+      `)) as unknown as [Array<{ slug: string; n: number | string }>];
+      const active = new Map((rows ?? []).map(r => [r.slug, Number(r.n)]));
+      firstSearchDemandByKey = new Map(
+        topics.flatMap(t =>
+          platforms.map(platform => [
+            buildPoolKey({ platform, niche: fillNicheForCategory(t.category), pillar: t.label }),
+            active.get(t.slug) ?? 0,
+          ] as const)
+        )
+      );
+    } catch (err) {
+      console.warn("[viralLibrary] active_creator_demand_failed", { error: err instanceof Error ? err.message : String(err) });
+    }
+  }
   const existing = await poolRepo.findExistingPools(plan);
   // Topics in a running scoring experiment are searched only by the experiment.
   const { experimentTopicLabels } = await import("./keywordExperiment");
@@ -352,7 +382,7 @@ export async function runTopicRefresh(args: { maxPools?: number } = {}): Promise
     keyOf: buildPoolKey,
     existing,
     due,
-    creatorsByKey: demandByKey,
+    creatorsByKey: firstSearchDemandByKey,
     held,
     firstSearch: firstSearchEnabled(),
     max: Math.max(1, Math.min(10, args.maxPools ?? 3)),

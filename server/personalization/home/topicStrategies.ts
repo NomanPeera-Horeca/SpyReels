@@ -4,7 +4,8 @@
  * niche, pillars and live sub-topics, newest strategy first.
  *
  * Never writes, never reads suggested or dismissed items, and returns only
- * the strategy text needed to match topics (no bio, posts, goal or audience).
+ * the strategy text needed to match topics: niche, pillars, sub-topics, and the
+ * confirmed audience ("who" and "outcome") and goals (no bio or posts).
  * A missing table returns an empty list.
  */
 import { and, desc, eq, inArray, ne } from "drizzle-orm";
@@ -19,6 +20,10 @@ export type ConfirmedTopicStrategy = {
   niche: string;
   pillars: string[];
   subtopics: string[];
+  /** Confirmed audiences, e.g. "Busy business owners, wants to build a personal brand". */
+  audiences?: string[];
+  /** Confirmed goals. */
+  goals?: string[];
 };
 
 function field(payload: unknown, key: string): string {
@@ -48,13 +53,14 @@ export async function listConfirmedTopicStrategies(limit: number): Promise<Confi
         .select({
           socialProfileId: personalizationItems.socialProfileId,
           workspaceId: personalizationItems.workspaceId,
+          kind: personalizationItems.kind,
           payload: personalizationItems.payload,
         })
         .from(personalizationItems)
         .where(
           and(
             inArray(personalizationItems.socialProfileId, ids),
-            eq(personalizationItems.kind, "pillar"),
+            inArray(personalizationItems.kind, ["pillar", "audience", "goal"]),
             eq(personalizationItems.status, "confirmed")
           )
         ),
@@ -80,8 +86,13 @@ export async function listConfirmedTopicStrategies(limit: number): Promise<Confi
         workspaceId: n.workspaceId,
         category: resolveContentCategory(categoryLabel)?.label ?? categoryLabel,
         niche: field(n.payload, "label"),
-        pillars: pillars.filter(sameProfile).map(p => field(p.payload, "title")).filter(Boolean),
+        pillars: pillars.filter(p => p.kind === "pillar" && sameProfile(p)).map(p => field(p.payload, "title")).filter(Boolean),
         subtopics: subs.filter(sameProfile).map(s => s.label),
+        audiences: pillars
+          .filter(p => p.kind === "audience" && sameProfile(p))
+          .map(p => [field(p.payload, "who"), field(p.payload, "outcome") && `wants to ${field(p.payload, "outcome")}`].filter(Boolean).join(", "))
+          .filter(Boolean),
+        goals: pillars.filter(p => p.kind === "goal" && sameProfile(p)).map(p => field(p.payload, "text")).filter(Boolean),
       });
     }
     return out;

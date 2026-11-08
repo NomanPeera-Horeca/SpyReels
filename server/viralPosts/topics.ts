@@ -50,6 +50,15 @@ const TOPIC_TABLES = [
 const MAX_TOPICS_PER_VIDEO = 3;
 const MAX_TOPICS_PER_PROFILE = 8;
 const MAX_NEW_TOPICS_PER_PROFILE = 2;
+/** Topic matching v2 (TOPIC_MATCH_V2=on): close-fit core, loose broad backup, specific new topics. */
+const V2_MAX_CORE = 5;
+const V2_MAX_BROAD = 3;
+const V2_MAX_NEW = 3;
+
+/** Off unless TOPIC_MATCH_V2=on. */
+export function topicMatchV2Enabled(): boolean {
+  return process.env.TOPIC_MATCH_V2 === "on";
+}
 const READY_RECHECK_MS = 10 * 60 * 1000;
 
 let readyCache: { ready: boolean; at: number } | null = null;
@@ -161,14 +170,18 @@ export function cleanVideoTopics(raw: unknown, known: ReadonlySet<string>): stri
 export type ProfileStrategy = ConfirmedTopicStrategy;
 
 /** Changes whenever the creator's category, niche, pillars or sub-topics change. */
-export function strategyHash(p: ProfileStrategy): string {
+export function strategyHash(p: ProfileStrategy, v2 = topicMatchV2Enabled()): string {
   const norm = (s: string) => s.trim().toLowerCase();
-  const payload = JSON.stringify({
+  const base = {
     c: norm(p.category),
     n: norm(p.niche),
     p: p.pillars.map(norm).sort(),
     s: p.subtopics.map(norm).sort(),
-  });
+  };
+  // v2 also reads audience and goals, and its marker re-matches every profile once (the backfill).
+  const payload = JSON.stringify(
+    v2 ? { ...base, a: (p.audiences ?? []).map(norm).sort(), g: (p.goals ?? []).map(norm).sort(), v: "match-v2" } : base
+  );
   return createHash("sha256").update(payload).digest("hex");
 }
 
@@ -197,6 +210,74 @@ export function cleanProfileMatch(
   }
   const room = MAX_TOPICS_PER_PROFILE - newTopics.length;
   return { topics: topics.slice(0, Math.max(0, room)), newTopics };
+}
+
+/**
+ * Validates a v2 answer: close-fit core (max 5), loose broad backup (max 3),
+ * and up to 3 specific new topics with a known category. Known slugs only;
+ * a slug is never both core and broad. Pure; exported for tests.
+ */
+export function cleanProfileMatchV2(
+  raw: unknown,
+  known: ReadonlySet<string>
+): { core: string[]; broad: string[]; newTopics: Topic[]; topics: string[] } {
+  const obj = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const slugs = (v: unknown) =>
+    Array.isArray(v) ? [...new Set(v.map(t => (typeof t === "string" ? t.trim().toLowerCase() : "")).filter(t => known.has(t)))] : [];
+  const core = slugs(obj.core).slice(0, V2_MAX_CORE);
+  const broad = slugs(obj.broad).filter(s => !core.includes(s)).slice(0, V2_MAX_BROAD);
+  const newTopics: Topic[] = [];
+  for (const value of Array.isArray(obj.newTopics) ? obj.newTopics : []) {
+    if (newTopics.length >= V2_MAX_NEW) break;
+    const v = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+    const label = typeof v.label === "string" ? oneLine(v.label, 60) : "";
+    const category = typeof v.category === "string" ? v.category.trim().toLowerCase() : "";
+    const slug = topicSlug(label);
+    if (label.length < 3 || !slug || !VIRAL_TOPIC_CATEGORIES.includes(category)) continue;
+    if (known.has(slug) || core.includes(slug) || broad.includes(slug) || newTopics.some(t => t.slug === slug)) continue;
+    newTopics.push({ slug, label, category });
+  }
+  return { core, broad, newTopics, topics: [...core, ...broad] };
+}
+
+async function matchOneProfileV2(client: Anthropic, topics: Topic[], p: ProfileStrategy) {
+  const known = new Set(topics.map(t => t.slug));
+  const response = await client.messages.create({
+    model: SEMANTIC_POOL_MODEL,
+    max_tokens: 700,
+    temperature: 0,
+    system: [
+      "You match a content creator to topics, so we can find viral short videos THEY could remake for THEIR audience.",
+      "Step 1: for each content pillar, decide whether a listed topic is a CLOSE fit: a video tagged with it would usually be useful to this creator as-is.",
+      "A loose neighbour is NOT close (e.g. 'faceless side hustles' is not close to 'AI clones for business owners'; 'small business tips' is not close to 'laundromat ownership').",
+      `Step 2: put close-fit topics in core (max ${V2_MAX_CORE}). Put loosely related topics that might still give occasional ideas in broad (max ${V2_MAX_BROAD}).`,
+      `Step 3: for every pillar with NO close-fit topic, create a new SPECIFIC topic (max ${V2_MAX_NEW}): a 2-6 word label naming the real subject and, if it matters, who it is for or where (e.g. 'AI avatars for business personal brands', 'Dubai tenant rights'). Specific beats general.`,
+      `Each new topic needs one category from: ${VIRAL_TOPIC_CATEGORIES.join(", ")}.`,
+      "Use the audience and goals to judge fit, but topics describe SUBJECTS, not audiences.",
+      'Return JSON only: {"core":["slug"],"broad":["slug"],"newTopics":[{"label":"...","category":"...","forPillar":"..."}]}',
+      "",
+      "Topics by category:",
+      topicListForPrompt(topics),
+    ].join("\n"),
+    messages: [
+      {
+        role: "user",
+        content: [
+          `Category: ${oneLine(p.category, 60) || "(none)"}`,
+          `Niche: ${oneLine(p.niche, 120) || "(none)"}`,
+          `Audience: ${(p.audiences ?? []).map(x => oneLine(x, 120)).join("; ") || "(none)"}`,
+          `Goals: ${(p.goals ?? []).map(x => oneLine(x, 120)).join("; ") || "(none)"}`,
+          `Pillars: ${p.pillars.map(x => oneLine(x, 80)).join("; ") || "(none)"}`,
+          `Sub-topics: ${p.subtopics.map(x => oneLine(x, 80)).join("; ") || "(none)"}`,
+        ].join("\n"),
+      },
+    ],
+  });
+  reportDirectAnthropicUsage(response, "viral_profile_topics");
+  const text = response.content.find(b => b.type === "text");
+  if (!text || text.type !== "text") throw new Error("No text in profile topic response");
+  const m = cleanProfileMatchV2(parseFirstJsonObject(text.text), known);
+  return { topics: m.topics, newTopics: m.newTopics, core: m.core.length, broad: m.broad.length };
 }
 
 async function matchOneProfile(client: Anthropic, topics: Topic[], p: ProfileStrategy) {
@@ -269,11 +350,36 @@ export async function matchProfileTopics(args: { maxProfiles?: number } = {}): P
   );
   const runs = await db.select().from(viralProfileTopicRuns);
   const lastHash = new Map(runs.map(r => [r.socialProfileId, r.strategyHash]));
-  const due = strategies.filter(p => lastHash.get(p.socialProfileId) !== strategyHash(p)).slice(0, maxProfiles);
+  // v2 re-matches existing profiles only while their creator is active (used the app in the
+  // last 14 days); new and never-matched profiles are always matched. This keeps the topic
+  // list (which every video-understanding call reads) from growing for people who are gone.
+  let activeProfiles: Set<string> | null = null;
+  if (topicMatchV2Enabled()) {
+    try {
+      const [rows] = (await db.execute(sql`
+        SELECT DISTINCT a.socialProfileId AS id FROM workspace_member_active_profiles a
+        JOIN users u ON u.id = a.userId
+        WHERE u.lastActiveAt >= NOW() - INTERVAL 14 DAY
+      `)) as unknown as [Array<{ id: string }>];
+      activeProfiles = new Set((rows ?? []).map(r => String(r.id)));
+    } catch (err) {
+      console.warn("[viralLibrary] active_profiles_failed", { error: err instanceof Error ? err.message : String(err) });
+      activeProfiles = new Set();
+    }
+  }
+  const due = strategies
+    .filter(p => {
+      const prev = lastHash.get(p.socialProfileId);
+      if (prev === strategyHash(p)) return false;
+      // Unchanged under the old rules but not active: keep the current match until they come back.
+      if (activeProfiles && prev && prev === strategyHash(p, false) && !activeProfiles.has(p.socialProfileId)) return false;
+      return true;
+    })
+    .slice(0, maxProfiles);
 
   for (const p of due) {
     try {
-      const match = await matchOneProfile(client, topics, p);
+      const match = topicMatchV2Enabled() ? await matchOneProfileV2(client, topics, p) : await matchOneProfile(client, topics, p);
       const now = new Date();
       if (match.newTopics.length > 0) {
         await db
