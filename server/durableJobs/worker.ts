@@ -227,6 +227,32 @@ function startResearchPrefetch(): void {
 
 startResearchPrefetch();
 
+/**
+ * "Your winners" (OWN_WINNERS=on): queue recently active creators' OWN accounts
+ * for the background research above, hourly. Already-fresh accounts are skipped.
+ */
+function startOwnAccountResearch(): void {
+  if (process.env.OWN_WINNERS !== "on") return;
+  let running = false;
+  const tick = () => {
+    if (running || draining) return;
+    running = true;
+    void import("../viralPosts/ownWinners")
+      .then(async m => {
+        const n = await m.queueOwnAccountResearch();
+        if (n > 0) console.info("[viralLibrary] own_research_queued", { accounts: n });
+      })
+      .catch(error => console.error("[viralLibrary] own research tick failed", error))
+      .finally(() => {
+        running = false;
+      });
+  };
+  setInterval(tick, 60 * 60_000);
+  setTimeout(tick, 3 * 60_000);
+}
+
+startOwnAccountResearch();
+
 process.on("SIGTERM", () => startDrain("SIGTERM"));
 process.on("SIGINT", () => startDrain("SIGINT"));
 

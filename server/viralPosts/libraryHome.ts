@@ -29,6 +29,7 @@ import { candidateToAdapted, toViralPost, type IndexedHomeCreator } from "./brow
 import * as repo from "./repository";
 import { isTopicsReady } from "./topics";
 import { combineProfilesEnabled, siblingProfileIds } from "./combinedProfile";
+import { loadOwnWinners, ownWinnersEnabled, profileHandles } from "./ownWinners";
 import { relevanceArmFor, relevanceRankForProfile } from "./relevanceHome";
 import { RELEVANCE_VERSION, type ScoredVideo } from "./relevanceRanking";
 
@@ -210,16 +211,19 @@ export async function libraryHomeForProfile(args: {
       .from(viralProfileTopics)
       .where(eq(viralProfileTopics.socialProfileId, args.socialProfileId));
     const profileTopics = new Set(mine.map(m => m.slug));
-    if (combineProfilesEnabled()) {
+    const others = combineProfilesEnabled() ? await siblingProfileIds(db, args.socialProfileId) : [];
+    if (others.length) {
       // One picture of the creator: topics matched on their other profiles count too.
-      const others = await siblingProfileIds(db, args.socialProfileId);
-      if (others.length) {
-        const theirs = await db
-          .select({ slug: viralProfileTopics.topicSlug })
-          .from(viralProfileTopics)
-          .where(inArray(viralProfileTopics.socialProfileId, others));
-        for (const t of theirs) profileTopics.add(t.slug);
-      }
+      const theirs = await db
+        .select({ slug: viralProfileTopics.topicSlug })
+        .from(viralProfileTopics)
+        .where(inArray(viralProfileTopics.socialProfileId, others));
+      for (const t of theirs) profileTopics.add(t.slug);
+    }
+    if (ownWinnersEnabled()) {
+      // Your winners: topics of the creator's own best videos count too.
+      const winners = await loadOwnWinners(db, await profileHandles(db, [args.socialProfileId, ...others]));
+      for (const w of winners) for (const t of w.topicSlugs) profileTopics.add(t);
     }
     if (profileTopics.size === 0) return null;
 

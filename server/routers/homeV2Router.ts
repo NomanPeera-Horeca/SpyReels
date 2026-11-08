@@ -31,6 +31,8 @@ import { browseIndexedViralPosts } from "../viralPosts/browseService";
 import { libraryHomeForProfile, mergeHomeLists } from "../viralPosts/libraryHome";
 import { requestPrefetch, requestPrefetchForPosts } from "../research/prefetch";
 import { withResearchAvatars } from "../research/creatorAvatars";
+import { loadOwnWinners, ownWinnersEnabled, profileHandles } from "../viralPosts/ownWinners";
+import { combineProfilesEnabled, siblingProfileIds } from "../viralPosts/combinedProfile";
 import { pillarIdeasForProfile, searchIdeasForProfile } from "../viralPosts/searchIdeas";
 
 export const HOME_VIDEO_LIMIT = 4;
@@ -129,7 +131,25 @@ export const homeV2Router = router({
     const ideas = await searchIdeasForProfile({ socialProfileId: c.socialProfileId, limit: 4 });
     // A new or very specific niche has no search phrases yet: offer the creator's own pillar sub-topics meanwhile.
     const pillarIdeas = ideas.length < 4 ? await pillarIdeasForProfile({ socialProfileId: c.socialProfileId, limit: 4 - ideas.length }) : [];
-    return { ideas, pillarIdeas };
+    // Your winners: "make a follow-up" to the creator's own best videos, first.
+    let winnerIdeas: Array<{ text: string; multiple: number; platform: string }> = [];
+    if (ownWinnersEnabled() && c.socialProfileId) {
+      try {
+        const db = await getDb();
+        if (db) {
+          const others = combineProfilesEnabled() ? await siblingProfileIds(db, c.socialProfileId) : [];
+          const winners = await loadOwnWinners(db, await profileHandles(db, [c.socialProfileId, ...others]), 4);
+          winnerIdeas = winners
+            .filter(w => w.text)
+            .slice(0, 2)
+            .map(w => ({ text: w.text, multiple: Math.round(w.multiple * 10) / 10, platform: w.platform }));
+        }
+      } catch (err) {
+        // Ideas still show without winners.
+        console.warn("[home] winner_ideas_failed", { error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+    return { ideas, pillarIdeas, winnerIdeas };
   }),
 
   profiles: homeProcedure.query(async ({ ctx }) => listWorkspaceProfiles(await requireDb(), octx(ctx))),

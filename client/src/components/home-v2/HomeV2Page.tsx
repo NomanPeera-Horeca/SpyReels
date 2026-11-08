@@ -218,11 +218,32 @@ export default function HomeV2Page() {
       hook: null,
       badge: C.ideas.fromPillar(i.pillarTitle),
     }));
-    return [...planIdeas, ...searched, ...fromPillars].slice(0, 2);
+    // Your winners: a follow-up to the creator's own best video comes first.
+    const fromWinners: HomeIdea[] = (searchIdeasQ.data?.winnerIdeas ?? []).map(w => ({
+      id: `winner:${w.multiple}|winner|${w.platform}|winner|${w.text}`,
+      title: C.ideas.followUp(w.text),
+      hook: null,
+      badge: C.ideas.fromWinner(w.multiple, w.platform),
+    }));
+    return [...fromWinners, ...planIdeas, ...searched, ...fromPillars].slice(0, 2);
   }, [planQ.data, searchIdeasQ.data]);
   const hasPlan = (planQ.data?.calendarCards.length ?? 0) > 0;
 
   const writeIdea = (id: number | string) => {
+    if (typeof id === "string" && id.startsWith("winner:")) {
+      const [multiple, platform, text] = id.slice("winner:".length).split("|winner|");
+      track("idea_write_winner", { platform });
+      try {
+        sessionStorage.setItem(
+          STUDIO_PREFILL_KEY,
+          `Write a follow-up short-form video script to my ${platform} video that got ${multiple}x my usual views: "${text}".\n\nKeep what made it work (topic, angle and hook style) and take it one step further, so it feels like the next part, not a copy.`
+        );
+      } catch {
+        // Storage blocked: the Agent opens empty; the user can still type.
+      }
+      navigate("/studio");
+      return;
+    }
     if (typeof id === "string" && id.startsWith("pillar:")) {
       const [label, pillar] = id.slice("pillar:".length).split("|pillar|");
       track("idea_write_pillar");

@@ -286,6 +286,10 @@ export const onboardingV2Router = router({
           });
         }
       }
+      if (process.env.OWN_WINNERS === "on") {
+        // Your winners: research this account now, so its best videos count soon.
+        void import("../research/prefetch").then(m => m.requestPrefetch([{ platform: preview.platform, handle: preview.handle }]));
+      }
       console.info("[personalization] linked_profile_added", { platform: input.platform, copied, analysis: analysis.status });
       return { ok: true as const, profileId };
     }),
