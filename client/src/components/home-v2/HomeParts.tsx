@@ -647,13 +647,15 @@ export function ProfilesInvite({
           <button
             key={p.id}
             type="button"
-            className={cx(styles.outline, styles.platformChip)}
+            className={styles.platformChip}
             onClick={() => onAdd(p.id)}
             aria-label={C.profiles.addPlatform(p.label)}
           >
-            <span aria-hidden>+</span>
             <PlatformFullColorMark platform={p.id} size={16} />
             {p.label}
+            <span className={styles.platformChipPlus} aria-hidden>
+              +
+            </span>
           </button>
         ))}
       </div>
