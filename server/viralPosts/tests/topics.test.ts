@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { STARTER_VIRAL_TOPICS, topicSlug, VIRAL_TOPIC_CATEGORIES, VIRAL_TOPIC_CATEGORY_LABELS } from "../../../shared/viralTopics";
 import { CONTENT_TAXONOMY } from "../../../shared/personalization/contentTaxonomy";
-import { cleanProfileMatch, cleanVideoTopics, profileEmbeddingText, strategyHash } from "../topics";
+import { cleanProfileMatch, cleanProfileMatchV2, cleanVideoTopics, profileEmbeddingText, strategyHash, topicMatchV2Enabled } from "../topics";
 
 describe("starter topic list", () => {
   it("has the 17 approved categories, 12 topics each, unique slugs", () => {
@@ -114,5 +114,47 @@ describe("parseFirstJsonObject", () => {
     expect(parseFirstJsonObject('{"topics":["ai-tools"]}\n\nThese fit because...')).toEqual({ topics: ["ai-tools"] });
     expect(parseFirstJsonObject('Here you go:\n```json\n{"a":"x } y","b":{"c":1}}\n```')).toEqual({ a: "x } y", b: { c: 1 } });
     expect(() => parseFirstJsonObject("no json here")).toThrow();
+  });
+});
+
+describe("topic matching v2", () => {
+  const known = new Set(["ai-tools", "ai-video-generation-and-synthesis", "personal-branding", "faceless-video-creation", "video-editing-tips", "content-strategy-and-planning"]);
+  it("keeps close-fit core and loose broad apart, known slugs only, and adds specific new topics", () => {
+    const out = cleanProfileMatchV2(
+      {
+        core: ["ai-video-generation-and-synthesis", "personal-branding", "made-up"],
+        broad: ["faceless-video-creation", "personal-branding", "ai-tools"],
+        newTopics: [
+          { label: "AI clone setup for business owners", category: "tech", forPillar: "AI Clone Creation" },
+          { label: "AI tools", category: "tech" },
+          { label: "Bad category topic", category: "not-a-category" },
+        ],
+      },
+      known
+    );
+    expect(out.core).toEqual(["ai-video-generation-and-synthesis", "personal-branding"]);
+    expect(out.broad).toEqual(["faceless-video-creation", "ai-tools"]);
+    expect(out.newTopics.map(t => t.slug)).toEqual(["ai-clone-setup-for-business-owners"]);
+    expect(out.topics).toEqual([...out.core, ...out.broad]);
+  });
+
+  it("caps core at 5, broad at 3, new topics at 3, and survives junk", () => {
+    const many = [...known];
+    const out = cleanProfileMatchV2(
+      { core: many, broad: many, newTopics: ["a", "b", "c", "d"].map(x => ({ label: `specific topic ${x}`, category: "tech" })) },
+      known
+    );
+    expect(out.core.length).toBeLessThanOrEqual(5);
+    expect(out.broad.length).toBeLessThanOrEqual(3);
+    expect(out.newTopics).toHaveLength(3);
+    expect(cleanProfileMatchV2(null, known)).toEqual({ core: [], broad: [], newTopics: [], topics: [] });
+  });
+
+  it("is off by default; with it on the strategy hash changes once (re-match backfill) and follows audience and goals", () => {
+    expect(topicMatchV2Enabled()).toBe(process.env.TOPIC_MATCH_V2 === "on");
+    const p = { socialProfileId: "p", workspaceId: "w", category: "Marketing", niche: "AI video for business owners", pillars: ["AI Clone Creation"], subtopics: [], audiences: ["Busy business owners"], goals: ["Grow a personal brand"] };
+    expect(strategyHash(p, false)).not.toBe(strategyHash(p, true));
+    expect(strategyHash(p, false)).toBe(strategyHash({ ...p, audiences: ["Someone else"] }, false));
+    expect(strategyHash(p, true)).not.toBe(strategyHash({ ...p, audiences: ["Someone else"] }, true));
   });
 });
