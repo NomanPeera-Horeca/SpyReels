@@ -30,7 +30,9 @@ import {
   formatEngagementPct,
   formatShortPostDate,
 } from "@/lib/viralPosts/format";
-import { safeHttpUrl } from "@/lib/viralPostPlayback";
+import { resolveViralPostPlayback, safeHttpUrl } from "@/lib/viralPostPlayback";
+import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
+import { YouTubeInlineEmbed } from "@/components/YouTubeInlineEmbed";
 import { HOME_COPY as C } from "./copy";
 import styles from "./home.module.css";
 
@@ -436,7 +438,7 @@ export function HomeVideoCard({
   compact: boolean;
   onRemake: () => void;
   onToggleSave: () => void;
-  /** Opens the existing in-app preview. Expand uses the same player on desktop. */
+  /** Only for videos that cannot play inside the card (shows the honest fallback). */
   onPlay: () => void;
   /** Recorded once when the card has really been on screen (measurement only). */
   onSeen?: () => void;
@@ -444,6 +446,33 @@ export function HomeVideoCard({
   onNotRelevant?: () => void;
 }) {
   const seenRef = useSeenOnce(onSeen);
+  const [playingInline, setPlayingInline] = useState(false);
+  const playback = resolveViralPostPlayback(post);
+  const stopInline = () => setPlayingInline(false);
+  // Play plays inside the card, like Viral Posts (its player has its own expand and close).
+  const inlineMedia = !playingInline ? null : playback.kind === "file" ? (
+    <DashboardReelGridMedia
+      className="h-full w-full"
+      thumbnailUrl={playback.thumbnailUrl}
+      videoUrl={playback.videoUrl}
+      shortcode={playback.shortcode}
+      reelId={playback.reelId}
+      platform={playback.platform}
+      videoPageUrl={playback.videoPageUrl}
+      externalWatch={playback.external}
+      size="compact"
+      autoStart
+      onPlayingChange={playing => {
+        if (!playing) stopInline();
+      }}
+    />
+  ) : playback.kind === "youtube" ? (
+    <YouTubeInlineEmbed className="h-full w-full" videoId={playback.videoId} onStop={stopInline} />
+  ) : null;
+  const playInCard = () => {
+    if (playback.kind === "unavailable") onPlay();
+    else setPlayingInline(true);
+  };
   const title = post.hook?.trim() || post.caption?.trim() || C.videos.untitled;
   const views = formatCompactCount(post.views);
   const engagement = formatEngagementPct(post.engagementRate);
@@ -475,8 +504,8 @@ export function HomeVideoCard({
         saved: C.videos.saved,
         more: C.videos.more,
       }}
-      onPlay={onPlay}
-      onExpand={compact ? undefined : onPlay}
+      onPlay={playInCard}
+      inlineMedia={inlineMedia}
       onRemake={onRemake}
       remakeBusy={busy}
       saved={post.saved}

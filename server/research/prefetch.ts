@@ -49,6 +49,22 @@ export function prefetchDailyMax(): number {
   return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 150;
 }
 
+/**
+ * Share of the daily cap that background filler (watchlist re-checks, similar
+ * creators, library seeding) may use. The rest is kept for creators users are
+ * actually shown, so filler can never use up the day before they are researched.
+ * RESEARCH_PREFETCH_FILLER_SHARE (0..1), default 0.3.
+ */
+export function prefetchFillerShare(): number {
+  const n = Number(process.env.RESEARCH_PREFETCH_FILLER_SHARE);
+  return Number.isFinite(n) && n >= 0 && n <= 1 ? n : 0.3;
+}
+
+/** How many filler creators may still start today. Pure; exported for tests. */
+export function fillerBudgetLeft(dailyMax: number, usedToday: number, share: number): number {
+  return Math.max(0, Math.floor(dailyMax * share) - usedToday);
+}
+
 function prefetchEnabled(): boolean {
   return process.env.RESEARCH_PREFETCH !== "false";
 }
@@ -361,6 +377,8 @@ export async function runResearchPrefetch(args: { max?: number } = {}): Promise<
       .where(and(gte(researchPrefetch.startedAt, dayStart), sql`${researchPrefetch.jobId} IS NOT NULL`));
     let budget = prefetchDailyMax() - Number(n);
     if (budget <= 0) return { ...out, skipped: "daily_cap" };
+    // Filler stops early so the rest of the day stays free for shown creators.
+    let fillerBudget = fillerBudgetLeft(prefetchDailyMax(), Number(n), prefetchFillerShare());
 
     const take = Math.max(1, Math.min(10, args.max ?? 2));
     // Creators shown to users first ("pending"), then the weekly watchlist
@@ -369,11 +387,11 @@ export async function runResearchPrefetch(args: { max?: number } = {}): Promise<
       db
         .select({ platform: researchPrefetch.platform, handle: researchPrefetch.handle, status: researchPrefetch.status })
         .from(researchPrefetch)
-        .where(inArray(researchPrefetch.status, ["pending", "watch", "similar"]))
+        .where(inArray(researchPrefetch.status, fillerBudget > 0 ? ["pending", "watch", "similar"] : ["pending"]))
         .orderBy(sql`FIELD(${researchPrefetch.status}, 'pending', 'watch', 'similar')`, asc(researchPrefetch.requestedAt))
         .limit(take);
     let due = await pending();
-    if (due.length === 0) {
+    if (due.length === 0 && fillerBudget > 0) {
       // Nothing shown to users is waiting: re-check the top creators we
       // already know (watchlist), then search thin niches for new creators
       // (similarCreators.ts), then library creators nobody has looked at yet.
@@ -386,7 +404,7 @@ export async function runResearchPrefetch(args: { max?: number } = {}): Promise<
         due = await pending();
       }
     }
-    if (due.length === 0) return { ...out, skipped: "empty" };
+    if (due.length === 0) return { ...out, skipped: fillerBudget > 0 ? "empty" : "daily_cap" };
 
     for (const row of due) {
       const platform = row.platform as ResearchPlatform;
@@ -421,11 +439,13 @@ export async function runResearchPrefetch(args: { max?: number } = {}): Promise<
           out.alreadyFresh += 1;
           continue;
         }
-        if (budget <= 0) {
+        const filler = row.status !== "pending";
+        if (budget <= 0 || (filler && fillerBudget <= 0)) {
           await db.update(researchPrefetch).set({ status: row.status }).where(key);
           break;
         }
         budget -= 1;
+        if (filler) fillerBudget -= 1;
         const started = Date.now();
         const jobId = await runners[platform]({ db, ownerUserId, handle: row.handle });
         if (scrapeCreatorsOutOfCreditsSince(started)) {
