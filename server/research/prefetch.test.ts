@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { prefetchDailyMax, prefetchHandle, prefetchTargets } from "./prefetch";
+import { fillerBudgetLeft, prefetchDailyMax, prefetchHandle, prefetchTargets } from "./prefetch";
 
 describe("prefetchTargets", () => {
   it("keeps one entry per platform and handle, in the research routers' handle form", () => {
@@ -33,5 +33,14 @@ describe("prefetchDailyMax", () => {
     expect(prefetchDailyMax()).toBe(150);
     if (before === undefined) delete process.env.RESEARCH_PREFETCH_DAILY_MAX;
     else process.env.RESEARCH_PREFETCH_DAILY_MAX = before;
+  });
+});
+
+describe("fillerBudgetLeft", () => {
+  it("keeps most of the day for creators users are shown", () => {
+    expect(fillerBudgetLeft(150, 0, 0.3)).toBe(45);
+    expect(fillerBudgetLeft(150, 40, 0.3)).toBe(5);
+    expect(fillerBudgetLeft(150, 45, 0.3)).toBe(0);
+    expect(fillerBudgetLeft(150, 120, 0.3)).toBe(0);
   });
 });

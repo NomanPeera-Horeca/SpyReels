@@ -30,6 +30,7 @@ import { contentInventoryPlan } from "../personalization/home/inventoryMatch";
 import { browseIndexedViralPosts } from "../viralPosts/browseService";
 import { libraryHomeForProfile, mergeHomeLists } from "../viralPosts/libraryHome";
 import { requestPrefetch, requestPrefetchForPosts } from "../research/prefetch";
+import { withResearchAvatars } from "../research/creatorAvatars";
 import { pillarIdeasForProfile, searchIdeasForProfile } from "../viralPosts/searchIdeas";
 
 export const HOME_VIDEO_LIMIT = 4;
@@ -98,12 +99,14 @@ export const homeV2Router = router({
       libraryHomeForProfile(libraryInput(ctx.user.id, c)),
     ]);
     // Today's results first; the shared library fills the rest so Home is never blank.
-    const creators = mergeHomeLists(
+    const merged = mergeHomeLists(
       res.creators,
       library?.creators ?? [],
       HOME_CREATOR_LIMIT,
       x => `${x.platform}:${x.handle.toLowerCase()}`
     );
+    // Lasting creator photos from research (library photos are often missing or expired).
+    const creators = await withResearchAvatars(merged);
     // Research these in the background so a click opens instantly. Never awaited.
     void requestPrefetch(creators);
     return { personalized: c.nicheLabel !== null, nicheLabel: c.nicheLabel, creators };
