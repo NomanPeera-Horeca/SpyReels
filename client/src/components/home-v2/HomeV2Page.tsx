@@ -37,6 +37,7 @@ import { useLibraryRemakeChain } from "@/hooks/useLibraryRemakeChain";
 import { ingestUrlAndStartLibraryRemake } from "@/lib/ingestUrlAndStartLibraryRemake";
 import { buildRemakeIntentMedia } from "@/lib/remakeIntent";
 import { ViralPostPlayer } from "@/components/ViralPostPlayer";
+import { AddPlatformDialog } from "./AddPlatformDialog";
 import { researchReturnTo } from "@shared/researchIntent";
 import { HOME_COPY as C } from "./copy";
 import {
@@ -372,9 +373,12 @@ export default function HomeV2Page() {
     }
   };
 
+  // "+ TikTok" opens a small popup (no onboarding page): handle, "Is this you?", done.
+  const [addingPlatform, setAddingPlatform] = useState<SocialPlatform | null>(null);
   const addProfile = (platform: SocialPlatform) => {
     track("profile_add", { platform });
-    navigate(`/onboarding?add=${platform}`);
+    setProfilesOpen(false);
+    setAddingPlatform(platform);
   };
 
   /* ---------- render ---------- */
@@ -745,6 +749,18 @@ export default function HomeV2Page() {
             onAdd={addProfile}
             onUse={id => void switchTo(id)}
             onClose={() => setProfilesOpen(false)}
+          />
+        ) : null}
+        {addingPlatform ? (
+          <AddPlatformDialog
+            platform={addingPlatform}
+            label={PLATFORMS.find(p => p.id === addingPlatform)?.label ?? addingPlatform}
+            onClose={() => setAddingPlatform(null)}
+            onAdded={() => {
+              track("profile_added_inline", { platform: addingPlatform });
+              setAddingPlatform(null);
+              void utils.homeV2.invalidate();
+            }}
           />
         ) : null}
         {RemakeDialogs}
