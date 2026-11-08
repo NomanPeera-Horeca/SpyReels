@@ -12,6 +12,7 @@ import { createHash } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { EMBEDDING_MODEL, embedTexts } from "./embeddings";
+import { combineProfilesEnabled, mergeRelevanceProfiles, siblingProfileIds } from "./combinedProfile";
 import { rankForProfile, relevanceProfileText, type RankResult, type RelevanceProfile, type RelevanceVideo } from "./relevanceRanking";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
@@ -163,8 +164,15 @@ export async function relevanceRankForProfile(args: { socialProfileId: string; l
   const db = await getDb();
   if (!db) return null;
   try {
-    const profile = await loadRelevanceProfile(db, args.socialProfileId);
+    let profile = await loadRelevanceProfile(db, args.socialProfileId);
     if (!profile) return null;
+    if (combineProfilesEnabled()) {
+      // One picture of the creator: add what they confirmed on their other profiles.
+      const others = (
+        await Promise.all((await siblingProfileIds(db, args.socialProfileId)).map(id => loadRelevanceProfile(db, id)))
+      ).filter((p): p is RelevanceProfile => p !== null);
+      profile = mergeRelevanceProfiles(profile, others);
+    }
     profile.embedding = await profileRelevanceEmbedding(db, profile);
     const library = await loadRelevanceLibrary(db);
     return { ...rankForProfile(profile, library, { limit: args.limit, exclude: args.exclude }), niche: profile.niche };
