@@ -38,6 +38,7 @@ import { ingestUrlAndStartLibraryRemake } from "@/lib/ingestUrlAndStartLibraryRe
 import { buildRemakeIntentMedia } from "@/lib/remakeIntent";
 import { ViralPostPlayer } from "@/components/ViralPostPlayer";
 import { AddPlatformDialog } from "./AddPlatformDialog";
+import { PrismRemakeDialog, prismBrief } from "./PrismRemakeDialog";
 import { researchReturnTo } from "@shared/researchIntent";
 import { HOME_COPY as C } from "./copy";
 import {
@@ -149,6 +150,9 @@ export default function HomeV2Page() {
     {}
   );
   const [playingPost, setPlayingPost] = useState<ViralPost | null>(null);
+  // "Your viral videos": the creator's own winners, remade through the Content Prism.
+  const ownWinnersQ = trpc.homeV2.ownWinners.useQuery(undefined, { staleTime: 5 * 60_000 });
+  const [prismPost, setPrismPost] = useState<ViralPost | null>(null);
   const closePlayer = useCallback(() => setPlayingPost(null), []);
 
   const ctx = contextQ.data;
@@ -218,32 +222,23 @@ export default function HomeV2Page() {
       hook: null,
       badge: C.ideas.fromPillar(i.pillarTitle),
     }));
-    // Your winners: a follow-up to the creator's own best video comes first.
-    const fromWinners: HomeIdea[] = (searchIdeasQ.data?.winnerIdeas ?? []).map(w => ({
-      id: `winner:${w.multiple}|winner|${w.platform}|winner|${w.text}`,
-      title: C.ideas.followUp(w.text),
-      hook: null,
-      badge: C.ideas.fromWinner(w.multiple, w.platform),
-    }));
-    return [...fromWinners, ...planIdeas, ...searched, ...fromPillars].slice(0, 2);
+    return [...planIdeas, ...searched, ...fromPillars].slice(0, 2);
   }, [planQ.data, searchIdeasQ.data]);
   const hasPlan = (planQ.data?.calendarCards.length ?? 0) > 0;
 
-  const writeIdea = (id: number | string) => {
-    if (typeof id === "string" && id.startsWith("winner:")) {
-      const [multiple, platform, text] = id.slice("winner:".length).split("|winner|");
-      track("idea_write_winner", { platform });
-      try {
-        sessionStorage.setItem(
-          STUDIO_PREFILL_KEY,
-          `Write a follow-up short-form video script to my ${platform} video that got ${multiple}x my usual views: "${text}".\n\nKeep what made it work (topic, angle and hook style) and take it one step further, so it feels like the next part, not a copy.`
-        );
-      } catch {
-        // Storage blocked: the Agent opens empty; the user can still type.
-      }
-      navigate("/studio");
-      return;
+  const remakeWithPrism = (post: ViralPost, formatId: string) => {
+    track("own_winner_prism", { platform: post.platform, format: formatId });
+    sendSignal(post, "remake_started");
+    try {
+      sessionStorage.setItem(STUDIO_PREFILL_KEY, prismBrief(post, formatId));
+    } catch {
+      // Storage blocked: the Agent opens empty; the user can still type.
     }
+    setPrismPost(null);
+    navigate("/studio");
+  };
+
+  const writeIdea = (id: number | string) => {
     if (typeof id === "string" && id.startsWith("pillar:")) {
       const [label, pillar] = id.slice("pillar:".length).split("|pillar|");
       track("idea_write_pillar");
@@ -568,6 +563,30 @@ export default function HomeV2Page() {
             className={[styles.section, styles.slotVideos].join(" ")}
             aria-labelledby="home-v2-videos"
           >
+            {(ownWinnersQ.data?.items.length ?? 0) > 0 ? (
+              <div className={styles.ownWinners} data-testid="home-own-winners">
+                <div className={styles.sectionTitles}>
+                  <h2 className={["sr-text-product-heading-4", styles.h2].join(" ")}>{C.ownWinners.title}</h2>
+                  <p className={["sr-text-product-body-small", styles.muted].join(" ")}>{C.ownWinners.subtitle}</p>
+                </div>
+                <div className={styles.videoGrid}>
+                  {ownWinnersQ.data!.items.map(post => (
+                    <HomeVideoCard
+                      key={`own-${post.id}`}
+                      post={post}
+                      compact={compact}
+                      busy={false}
+                      onPlay={() => setPlayingPost(post)}
+                      onRemake={() => {
+                        track("own_winner_remake_open", { platform: post.platform });
+                        setPrismPost(post);
+                      }}
+                      onToggleSave={() => void toggleSave(post)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <div
               className={[styles.sectionHeader, styles.sectionHeaderEnd].join(
                 " "
@@ -770,6 +789,13 @@ export default function HomeV2Page() {
             onAdd={addProfile}
             onUse={id => void switchTo(id)}
             onClose={() => setProfilesOpen(false)}
+          />
+        ) : null}
+        {prismPost ? (
+          <PrismRemakeDialog
+            post={prismPost}
+            onPick={formatId => remakeWithPrism(prismPost, formatId)}
+            onClose={() => setPrismPost(null)}
           />
         ) : null}
         {addingPlatform ? (

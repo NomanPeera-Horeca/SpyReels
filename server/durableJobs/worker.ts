@@ -228,8 +228,9 @@ function startResearchPrefetch(): void {
 startResearchPrefetch();
 
 /**
- * "Your winners" (OWN_WINNERS=on): queue recently active creators' OWN accounts
- * for the background research above, hourly. Already-fresh accounts are skipped.
+ * "Your viral videos" (OWN_WINNERS=on): every 6 hours, a database check that
+ * queues creators' OWN accounts that are due: weekly if they posted in the
+ * last 30 days, monthly if quiet. New accounts are queued when added.
  */
 function startOwnAccountResearch(): void {
   if (process.env.OWN_WINNERS !== "on") return;
@@ -247,7 +248,7 @@ function startOwnAccountResearch(): void {
         running = false;
       });
   };
-  setInterval(tick, 60 * 60_000);
+  setInterval(tick, 6 * 60 * 60_000);
   setTimeout(tick, 3 * 60_000);
 }
 

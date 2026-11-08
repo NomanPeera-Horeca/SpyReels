@@ -1,23 +1,23 @@
 /**
- * "Your winners": what already worked for the creator, on each of their own
- * accounts (OWN_WINNERS=on; off by default).
+ * "Your viral videos": the creator's own videos that already worked, shown as
+ * an extra Home section to remake through the Content Prism (OWN_WINNERS=on;
+ * off by default). It ADDS options; it never changes how the rest of Home is
+ * ranked.
  *
- * 1. Research: the creator's own handles (every profile they added) are queued
- *    for the normal background research (prefetch). Finished research is copied
- *    into the shared library, where each video gets a verdict against the
- *    creator's OWN usual views, and viral/rising ones get topics and a summary
- *    from video understanding (about 1 cent each). No new provider calls here.
- * 2. Winners: the creator's own videos that did clearly better than their
- *    usual (multiple >= WINNER_MIN_MULTIPLE), best first.
- * 3. Use: their topics join the profile's topics and their summaries join the
- *    profile text, so Home leans to what already works for this creator; the
- *    top ones become "make a follow-up" ideas.
+ * 1. Research: a creator's own accounts go through the normal background
+ *    research (prefetch, status "own"). A new account is read right away; after
+ *    that an account that posted in the last 30 days is refreshed weekly, a
+ *    quiet one monthly. Finished research is copied into the shared library,
+ *    where each video gets a verdict against the creator's OWN usual views.
+ * 2. Winners: own videos at >= WINNER_MIN_MULTIPLE x their usual views, best first.
  */
-import { sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
+import { viralPostCandidates } from "../../drizzle/schema";
+import type { ViralPost } from "../../shared/viralPosts";
 import { getDb } from "../db";
-import { requestPrefetch } from "../research/prefetch";
+import { prefetchHandle, requestOwnResearch } from "../research/prefetch";
+import { candidateToAdapted, toViralPost } from "./browseService";
 import { libraryHandle } from "./library";
-import type { RelevanceProfile } from "./relevanceRanking";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
@@ -27,18 +27,26 @@ export function ownWinnersEnabled(): boolean {
 
 /** "Clearly better than their usual": the same bar as "rising" in shared/viralRule. */
 export const WINNER_MIN_MULTIPLE = 1.5;
-/** Creators who used SpyReels in this many days get their own accounts researched. */
+/** Creators who used SpyReels in this many days get their own accounts refreshed. */
 const ACTIVE_DAYS = 14;
+const DAY_MS = 86_400_000;
+/** Posted within this many days = an active account (weekly refresh). */
+export const OWN_ACTIVE_POSTING_DAYS = 30;
+export const OWN_REFRESH_ACTIVE_DAYS = 7;
+export const OWN_REFRESH_QUIET_DAYS = 30;
 
-export type OwnWinner = {
-  candidateId: number;
-  platform: string;
-  text: string;
-  summary: string | null;
-  multiple: number;
-  views: number | null;
-  topicSlugs: string[];
-};
+/**
+ * When to read a creator's own account again. Never read: now. Posted in the
+ * last 30 days: weekly (a post from today shows whether it went viral within
+ * a week). Quiet: monthly. Pure; exported for tests.
+ */
+export function ownRefreshDue(args: { lastResearchAt: Date | null; newestPostAt: Date | null; now: Date }): boolean {
+  if (!args.lastResearchAt) return true;
+  const age = args.now.getTime() - args.lastResearchAt.getTime();
+  const postedRecently =
+    args.newestPostAt != null && args.now.getTime() - args.newestPostAt.getTime() <= OWN_ACTIVE_POSTING_DAYS * DAY_MS;
+  return age >= (postedRecently ? OWN_REFRESH_ACTIVE_DAYS : OWN_REFRESH_QUIET_DAYS) * DAY_MS;
+}
 
 /** Platform + handle of these profiles. */
 export async function profileHandles(
@@ -54,57 +62,80 @@ export async function profileHandles(
   return (rows ?? []).map(r => ({ platform: String(r.platform), handle: String(r.handle) }));
 }
 
-/** First line of a caption or hook, for display and ideas. Pure; exported for tests. */
-export function winnerText(hook: string | null, caption: string | null): string {
-  const raw = (hook?.trim() || caption?.trim() || "").replace(/\s+/g, " ");
-  const firstSentence = raw.split(/(?<=[.!?])\s/)[0] ?? raw;
-  return firstSentence.slice(0, 120).trim();
-}
-
-/** The creator's own best videos across these accounts, best first. */
-export async function loadOwnWinners(
-  db: Db,
-  accounts: Array<{ platform: string; handle: string }>,
-  limit = 8
-): Promise<OwnWinner[]> {
+function accountMatch(accounts: Array<{ platform: string; handle: string }>) {
   const keys = accounts
     .map(a => ({ platform: a.platform, handle: libraryHandle(a.handle) }))
     .filter((a): a is { platform: string; handle: string } => !!a.handle);
-  if (keys.length === 0) return [];
-  const match = sql.join(
+  if (keys.length === 0) return null;
+  return sql.join(
     keys.map(k => sql`(c.platform = ${k.platform} AND LOWER(TRIM(LEADING '@' FROM c.creatorHandle)) = ${k.handle})`),
     sql` OR `
   );
+}
+
+/** The creator's own best videos across these accounts, best first, as Home video cards. */
+export async function loadOwnWinnerPosts(
+  db: Db,
+  accounts: Array<{ platform: string; handle: string }>,
+  limit = 4
+): Promise<ViralPost[]> {
+  const match = accountMatch(accounts);
+  if (!match) return [];
   const [rows] = (await db.execute(sql`
-    SELECT c.id AS id, c.platform AS platform, c.caption AS caption, s.multiple AS multiple,
-           s.views AS views, i.summary AS summary,
-           (SELECT GROUP_CONCAT(t.topicSlug) FROM viral_video_topics t WHERE t.candidateId = c.id) AS topics
+    SELECT c.id AS id, s.multiple AS multiple, s.basis AS basis
     FROM viral_post_candidates c
     JOIN viral_library_status s ON s.candidateId = c.id
-    LEFT JOIN viral_video_insights i ON i.candidateId = c.id AND i.status = 'done'
     WHERE (${match}) AND s.multiple >= ${WINNER_MIN_MULTIPLE}
     ORDER BY s.multiple DESC
-    LIMIT ${Math.max(1, Math.min(20, limit))}
-  `)) as unknown as [
-    Array<{ id: number; platform: string; caption: string | null; multiple: unknown; views: unknown; summary: string | null; topics: string | null }>,
-  ];
-  return (rows ?? []).map(r => ({
-    candidateId: Number(r.id),
-    platform: String(r.platform),
-    text: winnerText(null, r.caption),
-    summary: r.summary ? String(r.summary) : null,
-    multiple: Number(r.multiple),
-    views: r.views == null ? null : Number(r.views),
-    topicSlugs: r.topics ? String(r.topics).split(",").filter(Boolean) : [],
-  }));
+    LIMIT ${Math.max(1, Math.min(12, limit))}
+  `)) as unknown as [Array<{ id: number; multiple: unknown; basis: string | null }>];
+  const picked = rows ?? [];
+  if (picked.length === 0) return [];
+  const candidates = await db
+    .select()
+    .from(viralPostCandidates)
+    .where(inArray(viralPostCandidates.id, picked.map(r => Number(r.id))));
+  const byId = new Map(candidates.map(c => [c.id, c]));
+  return picked.flatMap(r => {
+    const c = byId.get(Number(r.id));
+    if (!c) return [];
+    const multiple = Number(r.multiple);
+    return [
+      {
+        ...toViralPost(c, { ...candidateToAdapted(c, "", "", null), relevanceLabel: "Your video" }, false),
+        viralMultiple: Number.isFinite(multiple) ? multiple : null,
+        viralBasis: r.basis === "usual_views" || r.basis === "followers" ? r.basis : null,
+      },
+    ];
+  });
+}
+
+async function lastResearchAt(db: Db, platform: string, handle: string): Promise<Date | null> {
+  const table = platform === "instagram" ? "scrape_jobs" : platform === "tiktok" ? "tiktok_scrape_jobs" : "youtube_scrape_jobs";
+  const [rows] = (await db.execute(
+    sql`SELECT MAX(updatedAt) AS at FROM ${sql.raw(table)} WHERE handle = ${prefetchHandle(platform, handle)} AND status = 'completed'`
+  )) as unknown as [Array<{ at: Date | string | null }>];
+  const at = rows?.[0]?.at;
+  return at ? new Date(at) : null;
+}
+
+async function newestPostAt(db: Db, platform: string, handle: string): Promise<Date | null> {
+  const key = libraryHandle(handle);
+  if (!key) return null;
+  const [rows] = (await db.execute(sql`
+    SELECT MAX(c.publishedAt) AS at FROM viral_post_candidates c
+    WHERE c.platform = ${platform} AND LOWER(TRIM(LEADING '@' FROM c.creatorHandle)) = ${key}
+  `)) as unknown as [Array<{ at: Date | string | null }>];
+  const at = rows?.[0]?.at;
+  return at ? new Date(at) : null;
 }
 
 /**
- * Worker step: queue the own accounts of recently active creators for
- * background research. Accounts researched in the last 14 days are skipped by
- * the prefetch queue itself, so this is cheap to call often.
+ * Worker step (a few times a day; only a database check): queue the own
+ * accounts of recently active creators that are due (see ownRefreshDue).
+ * Returns how many were queued.
  */
-export async function queueOwnAccountResearch(): Promise<number> {
+export async function queueOwnAccountResearch(now = new Date()): Promise<number> {
   if (!ownWinnersEnabled()) return 0;
   const db = await getDb();
   if (!db) return 0;
@@ -118,34 +149,17 @@ export async function queueOwnAccountResearch(): Promise<number> {
         AND sp.deletedAt IS NULL AND sp.platform IS NOT NULL AND sp.normalizedHandle IS NOT NULL
       LIMIT 500
     `)) as unknown as [Array<{ platform: string; handle: string }>];
-    const targets = (rows ?? []).map(r => ({ platform: String(r.platform), handle: String(r.handle) }));
-    await requestPrefetch(targets);
-    return targets.length;
+    const due: Array<{ platform: string; handle: string }> = [];
+    for (const r of rows ?? []) {
+      const platform = String(r.platform);
+      const handle = String(r.handle);
+      const [last, newest] = await Promise.all([lastResearchAt(db, platform, handle), newestPostAt(db, platform, handle)]);
+      if (ownRefreshDue({ lastResearchAt: last, newestPostAt: newest, now })) due.push({ platform, handle });
+    }
+    if (due.length) await requestOwnResearch(due);
+    return due.length;
   } catch (err) {
     console.warn("[viralLibrary] own_research_queue_failed", { error: err instanceof Error ? err.message : String(err) });
     return 0;
   }
-}
-
-/** Winner summaries added to the profile text (keeps the active strategy first). */
-const MAX_WINNER_LINES = 5;
-
-/**
- * The profile plus the creator's winners: their topics count as the creator's
- * topics, and what they were about joins the profile text that the ranking
- * embeds. Niche, pillars and audience stay as confirmed. Pure; exported for tests.
- */
-export function withOwnWinners(profile: RelevanceProfile, winners: OwnWinner[]): RelevanceProfile {
-  if (winners.length === 0) return profile;
-  const lines = winners
-    .map(w => w.summary || w.text)
-    .filter(Boolean)
-    .slice(0, MAX_WINNER_LINES)
-    .map(t => `Worked for me: ${t}`);
-  return {
-    ...profile,
-    subtopics: [...profile.subtopics, ...lines],
-    topicSlugs: new Set([...profile.topicSlugs, ...winners.flatMap(w => w.topicSlugs)]),
-    embedding: null,
-  };
 }

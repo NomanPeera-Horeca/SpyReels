@@ -153,6 +153,39 @@ export async function requestPrefetch(creators: Array<{ platform: string; handle
   }
 }
 
+/** A creator's own account counts as fresh for this long (the weekly refresh decides when). */
+export const OWN_REFRESH_FRESH_DAYS = 5;
+
+/**
+ * Queue a creator's OWN accounts ("Your winners") with their own status, so
+ * they are never filler and are not skipped by the 14-day freshness rule.
+ * Rows already waiting or running are left alone. Never throws.
+ */
+export async function requestOwnResearch(accounts: Array<{ platform: string; handle: string }>): Promise<void> {
+  if (!prefetchEnabled()) return;
+  const targets = prefetchTargets(accounts);
+  if (targets.length === 0) return;
+  try {
+    const db = await getDb();
+    if (!db || (await systemOwner(db)) == null) return;
+    const now = new Date();
+    const idle = sql`status IN ('done', 'failed', 'watch', 'similar')`;
+    await db
+      .insert(researchPrefetch)
+      .values(targets.map(t => ({ ...t, status: "own", requestedAt: now })))
+      .onDuplicateKeyUpdate({
+        // requestedAt first: MySQL applies these left to right.
+        set: {
+          requestedAt: sql`IF(${idle}, NOW(), requestedAt)`,
+          attempts: sql`IF(${idle}, 0, attempts)`,
+          status: sql`IF(${idle}, 'own', status)`,
+        },
+      });
+  } catch (err) {
+    console.warn("[research] own_request_failed", { error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
 /** Queue the creators of videos a user is being shown (Home, Viral Posts). Never throws. */
 export async function requestPrefetchForPosts(
   posts: Array<{ platform: string; creatorHandle?: string | null }>
@@ -387,8 +420,10 @@ export async function runResearchPrefetch(args: { max?: number } = {}): Promise<
       db
         .select({ platform: researchPrefetch.platform, handle: researchPrefetch.handle, status: researchPrefetch.status })
         .from(researchPrefetch)
-        .where(inArray(researchPrefetch.status, fillerBudget > 0 ? ["pending", "watch", "similar"] : ["pending"]))
-        .orderBy(sql`FIELD(${researchPrefetch.status}, 'pending', 'watch', 'similar')`, asc(researchPrefetch.requestedAt))
+        .where(
+          inArray(researchPrefetch.status, fillerBudget > 0 ? ["pending", "own", "watch", "similar"] : ["pending", "own"])
+        )
+        .orderBy(sql`FIELD(${researchPrefetch.status}, 'pending', 'own', 'watch', 'similar')`, asc(researchPrefetch.requestedAt))
         .limit(take);
     let due = await pending();
     if (due.length === 0 && fillerBudget > 0) {
@@ -430,7 +465,7 @@ export async function runResearchPrefetch(args: { max?: number } = {}): Promise<
           platform,
           row.handle,
           -1,
-          row.status === "watch" ? WATCHLIST_REFRESH_DAYS : RECENT_RESEARCH_MAX_AGE_DAYS
+          row.status === "watch" ? WATCHLIST_REFRESH_DAYS : row.status === "own" ? OWN_REFRESH_FRESH_DAYS : RECENT_RESEARCH_MAX_AGE_DAYS
         );
         if (fresh != null) {
           // Someone researched it recently: nothing to pay for. jobId stays
@@ -439,7 +474,8 @@ export async function runResearchPrefetch(args: { max?: number } = {}): Promise<
           out.alreadyFresh += 1;
           continue;
         }
-        const filler = row.status !== "pending";
+        // Creators shown on Home and creators' own accounts are never filler.
+        const filler = row.status !== "pending" && row.status !== "own";
         if (budget <= 0 || (filler && fillerBudget <= 0)) {
           await db.update(researchPrefetch).set({ status: row.status }).where(key);
           break;

@@ -33,9 +33,6 @@ export const HOME_COPY = {
     searched: "Searched a lot on Google and YouTube",
     searchedVolume: (v: string) => `~${v} Google searches a month`,
     searchedProven: (n: number) => `Searched a lot · found ${n} viral video${n === 1 ? "" : "s"}`,
-    followUp: (text: string) => `Follow-up: ${text}`,
-    fromWinner: (multiple: number, platform: string) =>
-      `Your ${platform === "tiktok" ? "TikTok" : platform === "youtube" ? "YouTube" : "Instagram"} video did ${multiple}× your usual views`,
     fromPillar: (pillar: string) => (pillar ? `From your pillar: ${pillar}` : "From your content pillars"),
   },
   videos: {
@@ -85,6 +82,13 @@ export const HOME_COPY = {
     active: "In use",
     use: "Use this profile",
     close: "Close",
+  },
+  /** The creator's own viral videos, remade through the Content Prism. */
+  ownWinners: {
+    title: "Your viral videos",
+    subtitle: "Your own videos that beat your usual views. Remake one in a new format.",
+    prismTitle: "Remake your winner",
+    prismBody: "Same topic, same hook formula, new format. Pick one:",
   },
   /** "+ TikTok" popup: add your own account on another platform. */
   addPlatform: {

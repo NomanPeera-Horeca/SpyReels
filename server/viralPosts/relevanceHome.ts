@@ -13,7 +13,6 @@ import { sql } from "drizzle-orm";
 import { getDb } from "../db";
 import { EMBEDDING_MODEL, embedTexts } from "./embeddings";
 import { combineProfilesEnabled, mergeRelevanceProfiles, siblingProfileIds } from "./combinedProfile";
-import { loadOwnWinners, ownWinnersEnabled, profileHandles, withOwnWinners } from "./ownWinners";
 import { rankForProfile, relevanceProfileText, type RankResult, type RelevanceProfile, type RelevanceVideo } from "./relevanceRanking";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
@@ -174,11 +173,6 @@ export async function relevanceRankForProfile(args: { socialProfileId: string; l
         (p): p is RelevanceProfile => p !== null
       );
       profile = mergeRelevanceProfiles(profile, others);
-    }
-    if (ownWinnersEnabled()) {
-      // Your winners: lean to what already worked for this creator on their own accounts.
-      const winners = await loadOwnWinners(db, await profileHandles(db, [args.socialProfileId, ...siblings]));
-      profile = withOwnWinners(profile, winners);
     }
     profile.embedding = await profileRelevanceEmbedding(db, profile);
     const library = await loadRelevanceLibrary(db);
