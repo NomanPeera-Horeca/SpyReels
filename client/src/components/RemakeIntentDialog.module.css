@@ -337,3 +337,42 @@
 [data-slot="dialog-content"].dialog:focus {
   outline: none;
 }
+
+/* ── Own winners: "Format: X [Change format]" (Figma 1752:2759, 1757:1239) ── */
+.formatControl {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sr-space-2);
+}
+
+.formatName {
+  color: var(--sr-color-text-primary);
+}
+
+.changeFormat {
+  margin-left: var(--sr-space-1);
+}
+
+[data-slot="popover-content"].formatMenu {
+  display: flex;
+  width: min(372px, calc(100vw - 32px));
+  flex-direction: column;
+  gap: var(--sr-space-3);
+  padding: var(--sr-space-3);
+  border: var(--sr-shape-border-default-width) solid var(--sr-color-border-default);
+  border-radius: var(--sr-radius-12);
+  background: var(--sr-color-surface-default);
+  color: var(--sr-color-text-primary);
+  box-shadow: 0 16px 40px rgba(16, 16, 20, 0.16);
+}
+
+.formatMenuTitle {
+  color: var(--sr-color-text-primary);
+}
+
+.formatList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sr-space-2);
+}

@@ -7,6 +7,8 @@
  */
 import { sql } from "drizzle-orm";
 import { getDb } from "../db";
+import { prismFormat } from "../../shared/remakeFormats";
+import type { RemakeTreatment } from "../recreate/remakeTreatment";
 
 type Db = NonNullable<Awaited<ReturnType<typeof getDb>>>;
 
@@ -31,30 +33,54 @@ export function isOwnWinnerChoice(choice: RemakeChoice): boolean {
 export const DUPLICATE_WINDOW_MS = 10 * 60_000;
 
 export type ResolvedRemakeRequest =
-  | { ok: true; topic: string; choice: RemakeChoice | null; idea: string | null }
+  | {
+      ok: true;
+      topic: string;
+      choice: RemakeChoice | null;
+      idea: string | null;
+      prismFormat: string | null;
+      treatment: RemakeTreatment | null;
+    }
   | { ok: false; message: string };
 
 /**
- * The prompt topic for a request. A typed `choice` wins over the older free
- * `topic` field, which keeps working for older clients. Pure; exported for tests.
+ * The prompt topic (and own-winner treatment) for a request. A typed `choice`
+ * wins over the older free `topic` field, which keeps working for older
+ * clients. Own-winner choices need `ownWinnerAllowed` (the creator's own
+ * video, OWN_WINNERS on). Pure; exported for tests.
  */
-export function resolveRemakeRequest(input: {
-  topic?: string | null;
-  choice?: RemakeChoice | null;
-  idea?: string | null;
-}): ResolvedRemakeRequest {
+export function resolveRemakeRequest(
+  input: {
+    topic?: string | null;
+    choice?: RemakeChoice | null;
+    idea?: string | null;
+    prismFormat?: string | null;
+  },
+  opts: { ownWinnerAllowed?: boolean } = {}
+): ResolvedRemakeRequest {
+  const base = { prismFormat: null, treatment: null };
   const choice = input.choice ?? null;
-  if (!choice) return { ok: true, topic: (input.topic ?? "").trim(), choice: null, idea: null };
-  if (isOwnWinnerChoice(choice)) {
-    return { ok: false, message: "This option isn't available yet." };
-  }
+  if (!choice) return { ok: true, topic: (input.topic ?? "").trim(), choice: null, idea: null, ...base };
   const idea = (input.idea ?? "").trim();
+  if (isOwnWinnerChoice(choice)) {
+    if (!opts.ownWinnerAllowed) return { ok: false, message: "This option is only for your own videos." };
+    if (choice === "prism_format") {
+      const id = (input.prismFormat ?? "").trim();
+      if (!prismFormat(id)) return { ok: false, message: "Pick a format first." };
+      return { ok: true, topic: "SAME_TOPIC", choice, idea: null, prismFormat: id, treatment: { kind: "prism", formatId: id } };
+    }
+    if (choice === "refresh_original") {
+      return { ok: true, topic: "SAME_TOPIC", choice, idea: null, prismFormat: null, treatment: { kind: "refresh" } };
+    }
+    if (!idea) return { ok: false, message: "Type your idea first." };
+    return { ok: true, topic: idea, choice, idea, prismFormat: null, treatment: { kind: "own_idea" } };
+  }
   if (choice === "use_my_idea") {
     if (!idea) return { ok: false, message: "Type your idea first." };
-    return { ok: true, topic: idea, choice, idea };
+    return { ok: true, topic: idea, choice, idea, ...base };
   }
-  if (choice === "keep_topic") return { ok: true, topic: "SAME_TOPIC", choice, idea: null };
-  return { ok: true, topic: "", choice, idea: null };
+  if (choice === "keep_topic") return { ok: true, topic: "SAME_TOPIC", choice, idea: null, ...base };
+  return { ok: true, topic: "", choice, idea: null, ...base };
 }
 
 /** A recent row with the same clientRequestId can be returned instead of a new run. Pure. */

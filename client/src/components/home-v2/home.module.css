@@ -910,46 +910,42 @@
   align-self: flex-start;
 }
 
-/* ---------- "Your viral videos" + Content Prism ---------- */
-.ownWinners {
-  display: flex;
-  flex-direction: column;
-  gap: var(--sr-space-4);
-  margin-bottom: var(--sr-space-6);
-}
-
-.prismSource {
-  margin-top: var(--sr-space-3);
-  font-style: italic;
-}
-
-.prismGrid {
+/* Ideas box: 3 idea cards side by side (Figma 1743:3), one column on phones. */
+.threeUp {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--sr-space-2);
-  margin-top: var(--sr-space-4);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sr-space-4);
 }
 
-@media (max-width: 520px) {
-  .prismGrid {
+@container (max-width: 640px) {
+  .threeUp {
     grid-template-columns: 1fr;
   }
 }
 
-.prismOption {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  padding: var(--sr-space-3);
-  border: var(--sr-shape-border-default-width) solid var(--home-border);
-  border-radius: var(--sr-radius-8);
-  background: var(--home-surface);
-  text-align: left;
-  font: inherit;
-  cursor: pointer;
+/* "Your proven ideas": 3 compact Result Cards in a row (Figma 1743:3). */
+.provenGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sr-space-4);
 }
 
-.prismOption:hover {
-  background: var(--home-surface-hover);
+@container (max-width: 640px) {
+  .provenGrid {
+    grid-template-columns: 1fr;
+  }
+  .slotProven {
+    order: 5;
+  }
+}
+
+.slotProven {
+  min-width: 0;
+  scroll-margin-top: var(--sr-space-6);
+}
+
+.chipBrandIcon {
+  width: 20px;
+  height: 20px;
+  color: var(--sr-color-brand-primary);
 }

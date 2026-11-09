@@ -9,6 +9,7 @@
  * hidden when data is missing.
  */
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { MarketingIconProcessRemake } from "../../../../public-web/components/MarketingIcons";
 import { toast } from "sonner";
 import type { SocialPlatform } from "@shared/personalization/model";
 import type { FollowerViralBadge } from "@shared/viralTier";
@@ -22,7 +23,7 @@ import {
   IconToolScript,
 } from "@/design-system/icons";
 import { ResultCard } from "@/design-system/ResultCard";
-import { libraryPerformanceSignal } from "./libraryPerformance";
+import { libraryPerformanceSignal, ownWinnerPerformanceSignal } from "./libraryPerformance";
 import { PlatformFullColorMark } from "@/design-system/platformMarks";
 import { InstagramMark } from "@shared/ui/PlatformMarks";
 import {
@@ -220,11 +221,14 @@ export function QuickActions({
   onWrite,
   onImprove,
   onHooks,
+  onRemix,
   compact = false,
 }: {
   onWrite: () => void;
   onImprove: () => void;
   onHooks: () => void;
+  /** "Remix my winners": only when the creator has proven ideas (OWN_WINNERS). */
+  onRemix?: () => void;
   /** Mobile (1498:2199): 44px chips that wrap; only "Write a script" keeps its icon. */
   compact?: boolean;
 }) {
@@ -242,6 +246,12 @@ export function QuickActions({
         {compact ? null : <IconToolHook />}
         {C.quick.hooks}
       </button>
+      {onRemix ? (
+        <button type="button" className={styles.chip} onClick={onRemix} data-testid="home-remix-winners">
+          {compact ? null : <MarketingIconProcessRemake className={styles.chipBrandIcon} />}
+          {C.quick.remix}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -431,13 +441,23 @@ export function HomeVideoCard({
   onPlay,
   onSeen,
   onNotRelevant,
+  subline,
+  metricsOverride,
+  ownWinner = false,
 }: {
   post: ViralPost;
   busy: boolean;
+  /** Replaces the creator line (proven ideas: "Try it as: Mistake breakdown"). */
+  subline?: string | null;
+  /** Replaces the metrics line (proven ideas: "48K views · Instagram"). */
+  metricsOverride?: string[];
+  /** The creator's own video: "↗ 3.2×" from 2x (proven ideas). */
+  ownWinner?: boolean;
   /** Mobile: Expand hidden (Figma note on 288:666). */
   compact: boolean;
   onRemake: () => void;
-  onToggleSave: () => void;
+  /** Absent: no save button (Result Card / Compact). */
+  onToggleSave?: () => void;
   /** Only for videos that cannot play inside the card (shows the honest fallback). */
   onPlay: () => void;
   /** Recorded once when the card has really been on screen (measurement only). */
@@ -493,9 +513,9 @@ export function HomeVideoCard({
       platformLabel={PLATFORM_BADGE[post.platform] ?? post.platform}
       thumbnailUrl={post.thumbnailUrl ?? null}
       title={title}
-      creator={handle ? `@${handle}` : null}
-      metrics={metrics}
-      signal={libraryPerformanceSignal(post)}
+      creator={subline !== undefined ? subline : handle ? `@${handle}` : null}
+      metrics={metricsOverride ?? metrics}
+      signal={ownWinner ? ownWinnerPerformanceSignal(post) : libraryPerformanceSignal(post)}
       labels={{
         play: C.videos.play,
         expand: C.videos.expand,

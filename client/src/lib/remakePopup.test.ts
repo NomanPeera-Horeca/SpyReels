@@ -69,8 +69,8 @@ describe("Remake popup draft (kept per video)", () => {
     });
     saveRemakeDraft("library:1", { mode: "custom", angle: "restaurant menus" });
     saveRemakeDraft("library:2", { mode: "same_topic", angle: "other" });
-    expect(loadRemakeDraft("library:1")).toEqual({ mode: "custom", angle: "restaurant menus" });
-    expect(loadRemakeDraft("library:2")).toEqual({ mode: "same_topic", angle: "other" });
+    expect(loadRemakeDraft("library:1")).toMatchObject({ mode: "custom", angle: "restaurant menus" });
+    expect(loadRemakeDraft("library:2")).toMatchObject({ mode: "same_topic", angle: "other" });
     expect(loadRemakeDraft("library:3")).toEqual(DEFAULT_REMAKE_DRAFT);
   });
 
@@ -120,5 +120,38 @@ describe("Remake popup flow (generating and error stay in the popup)", () => {
     expect(dialog).toContain("IconClose");
     expect(dialog).not.toMatch(/kept if you switch/i);
     expect(dialog).not.toContain("Suggested:");
+  });
+});
+
+describe("own-winner popup choices", () => {
+  it("opens on the recommended format, or Refresh when every format was used", async () => {
+    const { ownWinnerDefaultDraft } = await import("./remakeIntent");
+    const base = { multiple: 3.2, caption: "x", formats: [{ id: "mistake", pitch: "p" }], usedFormats: [] };
+    expect(ownWinnerDefaultDraft({ ...base, recommendedFormatId: "mistake" })).toMatchObject({ mode: "prism", formatId: "mistake" });
+    expect(ownWinnerDefaultDraft({ ...base, recommendedFormatId: null })).toMatchObject({ mode: "refresh" });
+  });
+
+  it("maps to the typed request", async () => {
+    const { draftToIntent, remakeIntentToRequest, remakeIntentToTopic } = await import("./remakeIntent");
+    const prism = draftToIntent({ mode: "prism", angle: "", formatId: "myth" })!;
+    expect(remakeIntentToRequest(prism)).toEqual({ choice: "prism_format", prismFormat: "myth" });
+    expect(remakeIntentToTopic(prism)).toBe("SAME_TOPIC");
+    expect(remakeIntentToRequest(draftToIntent({ mode: "refresh", angle: "" })!)).toEqual({ choice: "refresh_original" });
+    expect(draftToIntent({ mode: "own_idea", angle: " " })).toBeNull();
+    expect(remakeIntentToRequest(draftToIntent({ mode: "own_idea", angle: "cafes" })!)).toEqual({ choice: "own_idea", idea: "cafes" });
+  });
+
+  it("the popup shows the own-winner copy and Change format from Figma", () => {
+    const dialog = read("../components/RemakeIntentDialog.tsx");
+    for (const text of [
+      "How do you want to remake your winner?",
+      "Refresh the original",
+      "Keep the format. Update the hook, examples, and wording.",
+      "Formats that suit this video",
+      "Already used on this idea",
+      "Change format",
+    ]) {
+      expect(dialog).toContain(text);
+    }
   });
 });

@@ -1,5 +1,8 @@
 import { searchPhrasesBlockForWorkspace } from "../viralPosts/searchIdeas";
-import { REMAKE_CHOICES, findReusableRequest, resolveRemakeRequest, saveRemakeRequestFields } from "../remake/remakeRecords";
+import { type RemakeTreatment, treatmentKeepsSourceTopic } from "../recreate/remakeTreatment";
+import { checkKeepsSourceTopic } from "../recreate/sameTopicCheck";
+import { isOwnWinnerVideo, ownWinnersEnabled } from "../viralPosts/ownWinners";
+import { REMAKE_CHOICES, findReusableRequest, isOwnWinnerChoice, resolveRemakeRequest, saveRemakeRequestFields } from "../remake/remakeRecords";
 import { findLibraryCandidateIdByUrl, getLibraryTranscript, libraryTablesReady, librarySourceEnabled, linkLibraryRemake, loadLibraryCandidate } from "../remake/libraryTranscripts";
 import { loadActiveCreatorBasics } from "../personalization/activeNiche";
 import { z } from "zod";
@@ -81,7 +84,8 @@ export async function runScriptGeneration(
   topic: string,
   gradeLevel: string,
   addCues: boolean,
-  platformLabel: "Instagram Reel" | "TikTok video" | "YouTube Short" = "Instagram Reel"
+  platformLabel: "Instagram Reel" | "TikTok video" | "YouTube Short" = "Instagram Reel",
+  treatment: RemakeTreatment | null = null
 ): Promise<void> {
   try {
     const profile = await getCreatorCoachProfile(userId).catch(() => null);
@@ -110,7 +114,7 @@ export async function runScriptGeneration(
 
     const researchGroundingBlock = formatResearchGroundingForPrompt(researchItems);
     const searchPhrasesBlock = await remakeSearchPhrasesBlock(scriptId, researchIdea);
-    const generated = await generateRemakeContent({
+    const generateOnce = () => generateRemakeContent({
       originalTranscript,
       caption,
       reel,
@@ -130,7 +134,20 @@ export async function runScriptGeneration(
       ]),
       platformLabel,
       viralStructureOverride: structureResult.structure,
+      treatment,
     });
+    let generated = await generateOnce();
+    if (treatmentKeepsSourceTopic(treatment)) {
+      // Prism format / Refresh must stay on the original video's topic: check
+      // once, rewrite once if it drifted, then fail clearly.
+      const source = `${caption}\n${originalTranscript.slice(0, 1500)}`;
+      if (!(await checkKeepsSourceTopic(source, generated.generatedScript))) {
+        generated = await generateOnce();
+        if (!(await checkKeepsSourceTopic(source, generated.generatedScript))) {
+          throw new Error("The remake drifted away from your video's topic. Try again.");
+        }
+      }
+    }
 
     await updateRecreatedScript(scriptId, {
       viralStructure: generated.viralStructure as any,
@@ -405,7 +422,17 @@ export const recreateRouter = router({
           )
       )
       .mutation(async ({ ctx, input }) => {
-        const request = resolveRemakeRequest(input);
+        // Own-winner choices: only on the creator's OWN library video, with OWN_WINNERS on.
+        let ownWinnerAllowed = false;
+        if (input.choice && isOwnWinnerChoice(input.choice)) {
+          const ownDb = await getDb();
+          ownWinnerAllowed =
+            ownWinnersEnabled() &&
+            input.libraryCandidateId != null &&
+            ownDb != null &&
+            (await isOwnWinnerVideo(ownDb, ctx.workspaceId, input.libraryCandidateId).catch(() => false));
+        }
+        const request = resolveRemakeRequest(input, { ownWinnerAllowed });
         if (!request.ok) throw new TRPCError({ code: "BAD_REQUEST", message: request.message });
         if (input.clientRequestId) {
           // A repeated request (double click, network retry) gets the same remake
@@ -616,7 +643,7 @@ export const recreateRouter = router({
               sourceKind: source,
               libraryCandidateId: source === "library" ? input.libraryCandidateId! : null,
               choice: request.choice,
-              prismFormat: null,
+              prismFormat: request.prismFormat,
               idea: request.idea,
               clientRequestId: input.clientRequestId ?? null,
             });
@@ -649,6 +676,7 @@ export const recreateRouter = router({
             gradeLevel: input.gradeLevel,
             addCues: effectiveAddCues,
             platformLabel,
+            treatment: request.treatment,
           },
           runInline: () =>
             runScriptGeneration(
@@ -661,7 +689,8 @@ export const recreateRouter = router({
               promptAngle,
               input.gradeLevel,
               effectiveAddCues,
-              platformLabel
+              platformLabel,
+              request.treatment
             ),
           onInlineError: (error) =>
             console.error(`Script generation ${scriptId} failed:`, error),

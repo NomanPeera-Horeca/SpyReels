@@ -20,6 +20,8 @@ describe("resolveRemakeRequest: each choice builds the expected topic", () => {
       topic: "restaurant menus",
       choice: "use_my_idea",
       idea: "restaurant menus",
+      prismFormat: null,
+      treatment: null,
     });
     expect(resolveRemakeRequest({ choice: "use_my_idea", idea: "  " }).ok).toBe(false);
   });
@@ -29,7 +31,7 @@ describe("resolveRemakeRequest: each choice builds the expected topic", () => {
   it("Adapt to my niche lets the server pick the niche angle", () => {
     expect(resolveRemakeRequest({ choice: "adapt_niche", idea: "ignored" })).toMatchObject({ ok: true, topic: "", idea: null });
   });
-  it("own-winner choices are refused until PR 4", () => {
+  it("own-winner choices are refused on videos that are not the creator's own", () => {
     for (const choice of ["prism_format", "refresh_original", "own_idea"] as const) {
       expect(isOwnWinnerChoice(choice)).toBe(true);
       expect(resolveRemakeRequest({ choice, idea: "x" }).ok).toBe(false);
@@ -37,7 +39,14 @@ describe("resolveRemakeRequest: each choice builds the expected topic", () => {
     expect(REMAKE_CHOICES).toHaveLength(6);
   });
   it("old requests with only `topic` still work unchanged", () => {
-    expect(resolveRemakeRequest({ topic: " my angle " })).toEqual({ ok: true, topic: "my angle", choice: null, idea: null });
+    expect(resolveRemakeRequest({ topic: " my angle " })).toEqual({
+      ok: true,
+      topic: "my angle",
+      choice: null,
+      idea: null,
+      prismFormat: null,
+      treatment: null,
+    });
     expect(resolveRemakeRequest({ topic: "SAME_TOPIC" })).toMatchObject({ topic: "SAME_TOPIC" });
     expect(resolveRemakeRequest({})).toMatchObject({ ok: true, topic: "" });
   });

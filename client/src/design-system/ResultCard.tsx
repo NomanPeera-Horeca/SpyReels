@@ -55,7 +55,8 @@ export type ResultCardProps = {
   onRemake: () => void;
   remakeBusy?: boolean;
   saved: boolean;
-  onToggleSave: () => void;
+  /** Absent: no save button (Result Card / Compact, e.g. the creator's own videos). */
+  onToggleSave?: () => void;
   menu: ResultCardMenuItem[];
   testId?: string;
   /**
@@ -165,15 +166,17 @@ export function ResultCard({
           >
             {labels.remake}
           </button>
-          <button
-            type="button"
-            className={styles.iconButton}
-            onClick={onToggleSave}
-            aria-pressed={saved}
-            aria-label={saved ? labels.saved : labels.save}
-          >
-            <IconStar filled={saved} />
-          </button>
+          {onToggleSave ? (
+            <button
+              type="button"
+              className={styles.iconButton}
+              onClick={onToggleSave}
+              aria-pressed={saved}
+              aria-label={saved ? labels.saved : labels.save}
+            >
+              <IconStar filled={saved} />
+            </button>
+          ) : null}
           <button
             type="button"
             className={styles.iconButton}

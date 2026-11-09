@@ -1,4 +1,5 @@
 import { eq } from "drizzle-orm";
+import type { RemakeTreatment } from "../recreate/remakeTreatment";
 import {
   carouselRemakes,
   creatorDiscoveryJobs,
@@ -23,6 +24,8 @@ type RemakePayload = {
   gradeLevel: string;
   addCues: boolean;
   platformLabel: "Instagram Reel" | "TikTok video" | "YouTube Short";
+  /** Own-winner treatment (OWN_WINNERS); absent on other remakes and older jobs. */
+  treatment?: RemakeTreatment | null;
 };
 
 type CarouselPayload = {
@@ -85,7 +88,8 @@ registerDurableJobHandler("remake_generation", async (job: ClaimedJob) => {
     payload.topic,
     payload.gradeLevel,
     payload.addCues,
-    payload.platformLabel
+    payload.platformLabel,
+    payload.treatment ?? null
   );
   await requireTerminalStatus({
     table: recreatedScripts,
