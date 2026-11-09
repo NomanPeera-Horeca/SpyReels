@@ -51,10 +51,17 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function hasVoiceProfile(state: {
+/**
+ * True when the creator already told us what they make: the old onboarding
+ * (both fields) or the new onboarding (confirmed niche, via hasCreatorProfile).
+ * Only creators with neither are asked "What do you create content about?".
+ */
+export function hasVoiceProfile(state: {
+  hasCreatorProfile?: boolean;
   businessDescription?: string | null;
   targetAudience?: string | null;
 } | null | undefined): boolean {
+  if (state?.hasCreatorProfile) return true;
   return Boolean(
     state?.businessDescription?.trim() && state?.targetAudience?.trim()
   );

@@ -1,4 +1,5 @@
 import { searchPhrasesBlockForWorkspace } from "../viralPosts/searchIdeas";
+import { loadActiveCreatorBasics } from "../personalization/activeNiche";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
@@ -484,7 +485,10 @@ export const recreateRouter = router({
 
         const typed = input.topic.trim();
         const biz = (ctx.user.businessDescription ?? "").trim();
-        const aud = (ctx.user.targetAudience ?? "").trim();
+        // New-onboarding creators have no old businessDescription/targetAudience:
+        // read their confirmed niche and audience so "Adapt to my niche" really adapts.
+        const basics = await loadActiveCreatorBasics(ctx.user.id);
+        const aud = (ctx.user.targetAudience ?? "").trim() || basics.audience || "";
 
         const hasExplicitUserAngle = typed.length > 0;
 
@@ -495,18 +499,24 @@ export const recreateRouter = router({
             targetAudience: aud || null,
             businessDescription: biz || null,
           });
-        } else if (aud || biz) {
-          const profile = await getCreatorCoachProfile(ctx.user.id);
-          const { signals } = await getOrFetchAudienceSignals({
-            workspaceId: ctx.workspaceId,
-            nicheSlug: profile.nicheSlug,
-            nicheLabel: profile.niche,
-            targetAudience: profile.targetAudience,
-          });
+        } else if (aud || biz || basics.nicheLabel) {
+          const profile = await getCreatorCoachProfile(ctx.user.id).catch(() => null);
+          const niche = basics.nicheLabel || profile?.niche || "";
+          const targetAudience = aud || profile?.targetAudience || "General audience";
+          const signals = profile
+            ? (
+                await getOrFetchAudienceSignals({
+                  workspaceId: ctx.workspaceId,
+                  nicheSlug: profile.nicheSlug,
+                  nicheLabel: niche,
+                  targetAudience,
+                })
+              ).signals
+            : [];
           promptAngle = buildRecreateDefaultTopicPrompt({
-            niche: profile.niche,
-            targetAudience: profile.targetAudience,
-            businessDescription: biz || profile.brandDescription,
+            niche,
+            targetAudience,
+            businessDescription: biz || profile?.brandDescription || null,
             audienceResearchBlock: formatAudienceSignalsForPrompt(signals.slice(0, 5)),
           });
         } else {

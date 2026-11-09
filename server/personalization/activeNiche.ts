@@ -38,3 +38,47 @@ export async function loadActiveNichePayload(userId: number): Promise<NichePaylo
     return undefined;
   }
 }
+
+export type ActiveCreatorBasics = { nicheLabel: string | null; audience: string | null };
+
+/** "who, wants to outcome" from a confirmed audience payload. Pure; exported for tests. */
+export function audienceLine(payload: unknown): string | null {
+  const p = (payload ?? {}) as { who?: unknown; outcome?: unknown };
+  const who = typeof p.who === "string" ? p.who.trim() : "";
+  if (!who) return null;
+  const outcome = typeof p.outcome === "string" ? p.outcome.trim() : "";
+  return outcome ? `${who}, wants to ${outcome}` : who;
+}
+
+/**
+ * Niche and audience the creator confirmed in the NEW onboarding (active
+ * profile). Used where older code only read the old onboarding fields
+ * (businessDescription / targetAudience), so new-onboarding creators are not
+ * asked for their niche again and remakes can adapt to it. Never throws.
+ */
+export async function loadActiveCreatorBasics(userId: number): Promise<ActiveCreatorBasics> {
+  try {
+    const db = await getDb();
+    if (!db) return { nicheLabel: null, audience: null };
+    const rows = await db
+      .select({ kind: personalizationItems.kind, payload: personalizationItems.payload })
+      .from(workspaceMemberActiveProfiles)
+      .innerJoin(
+        personalizationItems,
+        and(
+          eq(personalizationItems.socialProfileId, workspaceMemberActiveProfiles.socialProfileId),
+          eq(personalizationItems.workspaceId, workspaceMemberActiveProfiles.workspaceId),
+          inArray(personalizationItems.kind, ["niche", "audience"]),
+          eq(personalizationItems.status, "confirmed")
+        )
+      )
+      .where(eq(workspaceMemberActiveProfiles.userId, userId))
+      .limit(12);
+    const niche = rows.find(r => r.kind === "niche")?.payload as { label?: unknown } | undefined;
+    const nicheLabel = typeof niche?.label === "string" && niche.label.trim() ? niche.label.trim() : null;
+    const audience = rows.filter(r => r.kind === "audience").map(r => audienceLine(r.payload)).find(Boolean) ?? null;
+    return { nicheLabel, audience };
+  } catch {
+    return { nicheLabel: null, audience: null };
+  }
+}

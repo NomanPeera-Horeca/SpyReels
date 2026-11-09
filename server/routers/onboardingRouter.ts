@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { loadActiveCreatorBasics } from "../personalization/activeNiche";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { featuredAccounts, users } from "../../drizzle/schema";
@@ -94,7 +95,13 @@ export const onboardingRouter = router({
           message: "User not found",
         });
       }
+      // A creator profile from the old onboarding (both fields) or the new
+      // onboarding (a confirmed niche). Remake uses this so new-onboarding
+      // creators are not asked "What do you create content about?" again.
+      const oldProfile = Boolean(state.businessDescription?.trim() && state.targetAudience?.trim());
+      const hasCreatorProfile = oldProfile || Boolean((await loadActiveCreatorBasics(ctx.user.id)).nicheLabel);
       return {
+        hasCreatorProfile,
         hasSeenWelcome: state.hasSeenWelcome,
         hasDismissedHintCard: state.hasDismissedHintCard,
         hasCompletedFirstSpy: state.hasCompletedFirstSpy,
