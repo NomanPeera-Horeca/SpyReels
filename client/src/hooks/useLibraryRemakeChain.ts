@@ -32,6 +32,8 @@ import type { OpenRemakeWorkspaceArgs } from "@/lib/oneClickRemakeAction";
 import {
   isValidRemakeIntent,
   loadRemakeDraft,
+  newRemakeRequestId,
+  remakeIntentToRequest,
   remakeIntentToTopic,
   saveRemakeDraft,
   type RemakeDraft,
@@ -130,6 +132,8 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
   const workspaceKeyRef = useRef<string | null>(null);
   const stateByKeyRef = useRef(stateByKey);
   const intentByKeyRef = useRef<Map<string, RemakeIntent>>(new Map());
+  /** Request id per video for the current "Create remake" press (duplicate guard). */
+  const requestIdByKeyRef = useRef<Map<string, string>>(new Map());
   const mediaByKeyRef = useRef<Map<string, RemakeIntentMedia>>(new Map());
   stateByKeyRef.current = stateByKey;
 
@@ -560,34 +564,45 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
         });
 
         const topic = remakeIntentToTopic(intent);
+        let clientRequestId = requestIdByKeyRef.current.get(key);
+        if (!clientRequestId) {
+          clientRequestId = newRemakeRequestId();
+          requestIdByKeyRef.current.set(key, clientRequestId);
+        }
+        const request = { ...remakeIntentToRequest(intent), clientRequestId };
         const generateInput =
           source.source === "featured"
             ? {
                 featuredReelId: source.featuredReelId,
                 topic,
+                ...request,
                 gradeLevel: "auto" as const,
               }
             : source.source === "tiktok"
               ? {
                   tiktokVideoId: source.tiktokVideoId,
                   topic,
+                  ...request,
                   gradeLevel: "auto" as const,
                 }
               : source.source === "youtube"
                 ? {
                     youtubeVideoId: source.youtubeVideoId,
                     topic,
+                    ...request,
                     gradeLevel: "auto" as const,
                   }
                 : source.source === "library"
                   ? {
                       libraryCandidateId: source.libraryCandidateId,
                       topic,
+                      ...request,
                       gradeLevel: "auto" as const,
                     }
                   : {
                     reelId: reelId!,
                     topic,
+                    ...request,
                     gradeLevel: "auto" as const,
                   };
 
@@ -715,6 +730,7 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
       const prompt = intentPrompt;
       if (!prompt || !isValidRemakeIntent(intent)) return;
       intentByKeyRef.current.set(prompt.key, intent);
+      requestIdByKeyRef.current.set(prompt.key, newRemakeRequestId());
       setIntentPrompt({ ...prompt, phase: "generating", errorMessage: null });
       // "Try again" after an error: the chain has stopped, start it again
       // with the same (or newly edited) choice and idea.

@@ -119,3 +119,25 @@ export function saveRemakeDraft(key: string, draft: RemakeDraft): void {
     // Kept in memory for this page only.
   }
 }
+
+/** Typed request choice sent to recreate.generate (server: REMAKE_CHOICES). */
+export type RemakeRequestChoice = "use_my_idea" | "keep_topic" | "adapt_niche";
+
+export function remakeIntentToRequest(intent: RemakeIntent): {
+  choice: RemakeRequestChoice;
+  idea?: string;
+} {
+  if (intent.mode === "niche") return { choice: "adapt_niche" };
+  if (intent.mode === "same_topic") return { choice: "keep_topic" };
+  return { choice: "use_my_idea", idea: intent.angle.trim() };
+}
+
+/** One id per "Create remake" press; a repeat of the same press is not a new remake. */
+export function newRemakeRequestId(): string {
+  try {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  } catch {
+    // fall through
+  }
+  return `r-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+}
