@@ -1,4 +1,5 @@
 import { searchPhrasesBlockForWorkspace } from "../viralPosts/searchIdeas";
+import { REMAKE_CHOICES, findReusableRequest, resolveRemakeRequest, saveRemakeRequestFields } from "../remake/remakeRecords";
 import { findLibraryCandidateIdByUrl, getLibraryTranscript, libraryTablesReady, librarySourceEnabled, linkLibraryRemake, loadLibraryCandidate } from "../remake/libraryTranscripts";
 import { loadActiveCreatorBasics } from "../personalization/activeNiche";
 import { z } from "zod";
@@ -376,6 +377,14 @@ export const recreateRouter = router({
             /** Shared library video (viral_post_candidates.id); REMAKE_LIBRARY_SOURCE=on only. */
             libraryCandidateId: z.number().int().positive().optional(),
             topic: z.string().max(2000).optional().default(""),
+            /** Typed popup choice; wins over `topic` (kept for older clients). */
+            choice: z.enum(REMAKE_CHOICES).optional(),
+            /** The typed idea for "Use my idea". */
+            idea: z.string().max(2000).optional(),
+            /** Prism format id (own winners, PR 4). */
+            prismFormat: z.string().max(48).optional(),
+            /** Same id within 10 minutes returns the existing remake (duplicate guard). */
+            clientRequestId: z.string().min(8).max(64).optional(),
             gradeLevel: z.enum(["auto", "2", "3", "4", "5", "6", "7", "8"]),
             /** When true and plan allows AI cues, first-generation matches Rewrite behavior. */
             addCues: z.boolean().optional().default(true),
@@ -396,6 +405,21 @@ export const recreateRouter = router({
           )
       )
       .mutation(async ({ ctx, input }) => {
+        const request = resolveRemakeRequest(input);
+        if (!request.ok) throw new TRPCError({ code: "BAD_REQUEST", message: request.message });
+        if (input.clientRequestId) {
+          // A repeated request (double click, network retry) gets the same remake
+          // instead of a second run and a second usage charge.
+          const recordsDb = await getDb();
+          const existing = recordsDb
+            ? await findReusableRequest(recordsDb, {
+                userId: ctx.user.id,
+                workspaceId: ctx.workspaceId,
+                clientRequestId: input.clientRequestId,
+              })
+            : null;
+          if (existing != null) return { scriptId: existing, status: "processing" as const };
+        }
         let libraryPlatform: "instagram" | "tiktok" | "youtube" | null = null;
         const source: "user" | "featured" | "tiktok" | "youtube" | "library" =
           input.libraryCandidateId != null
@@ -521,7 +545,7 @@ export const recreateRouter = router({
           }
         }
 
-        const typed = input.topic.trim();
+        const typed = request.topic;
         const biz = (ctx.user.businessDescription ?? "").trim();
         // New-onboarding creators have no old businessDescription/targetAudience:
         // read their confirmed niche and audience so "Adapt to my niche" really adapts.
@@ -584,6 +608,19 @@ export const recreateRouter = router({
         if (source === "library") {
           const db = await getDb();
           if (db) await linkLibraryRemake(db, scriptId, input.libraryCandidateId!);
+        }
+        {
+          const recordsDb = await getDb();
+          if (recordsDb) {
+            await saveRemakeRequestFields(recordsDb, scriptId, {
+              sourceKind: source,
+              libraryCandidateId: source === "library" ? input.libraryCandidateId! : null,
+              choice: request.choice,
+              prismFormat: null,
+              idea: request.idea,
+              clientRequestId: input.clientRequestId ?? null,
+            });
+          }
         }
 
         const subGen = await getUserSubscription(ctx.user.id);
