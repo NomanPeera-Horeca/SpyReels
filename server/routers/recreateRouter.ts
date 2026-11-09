@@ -1,4 +1,5 @@
 import { searchPhrasesBlockForWorkspace } from "../viralPosts/searchIdeas";
+import { findLibraryCandidateIdByUrl, getLibraryTranscript, libraryTablesReady, librarySourceEnabled, linkLibraryRemake, loadLibraryCandidate } from "../remake/libraryTranscripts";
 import { loadActiveCreatorBasics } from "../personalization/activeNiche";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -349,6 +350,21 @@ Return ONLY valid JSON.`;
 
 export const recreateRouter = router({
     /** Start script re-creation: analyze viral structure + generate new script */
+    /**
+     * Whether Remake on a library video goes straight from the library
+     * (REMAKE_LIBRARY_SOURCE=on), and, for a pasted link, which library video it is.
+     */
+    libraryRoute: protectedProcedure
+      .input(z.object({ url: z.string().max(2000).optional() }).optional())
+      .query(async ({ input }) => {
+        if (!librarySourceEnabled()) return { enabled: false, candidateId: null as number | null };
+        const db = await getDb();
+        if (!db || !(await libraryTablesReady(db))) return { enabled: false, candidateId: null as number | null };
+        const url = input?.url?.trim();
+        const candidateId = url ? await findLibraryCandidateIdByUrl(db, url).catch(() => null) : null;
+        return { enabled: true, candidateId };
+      }),
+
     generate: protectedProcedure
       .input(
         z
@@ -357,6 +373,8 @@ export const recreateRouter = router({
             featuredReelId: z.number().optional(),
             tiktokVideoId: z.number().optional(),
             youtubeVideoId: z.number().optional(),
+            /** Shared library video (viral_post_candidates.id); REMAKE_LIBRARY_SOURCE=on only. */
+            libraryCandidateId: z.number().int().positive().optional(),
             topic: z.string().max(2000).optional().default(""),
             gradeLevel: z.enum(["auto", "2", "3", "4", "5", "6", "7", "8"]),
             /** When true and plan allows AI cues, first-generation matches Rewrite behavior. */
@@ -369,16 +387,20 @@ export const recreateRouter = router({
                 d.featuredReelId,
                 d.tiktokVideoId,
                 d.youtubeVideoId,
+                d.libraryCandidateId,
               ].filter((id) => id != null).length === 1,
             {
               message:
-                "Provide exactly one of reelId, featuredReelId, tiktokVideoId, or youtubeVideoId",
+                "Provide exactly one of reelId, featuredReelId, tiktokVideoId, youtubeVideoId, or libraryCandidateId",
             }
           )
       )
       .mutation(async ({ ctx, input }) => {
-        const source: "user" | "featured" | "tiktok" | "youtube" =
-          input.featuredReelId != null
+        let libraryPlatform: "instagram" | "tiktok" | "youtube" | null = null;
+        const source: "user" | "featured" | "tiktok" | "youtube" | "library" =
+          input.libraryCandidateId != null
+            ? "library"
+            : input.featuredReelId != null
             ? "featured"
             : input.tiktokVideoId != null
               ? "tiktok"
@@ -389,7 +411,23 @@ export const recreateRouter = router({
         let transcription: Awaited<ReturnType<typeof getTranscriptionByReelId>>;
         let reelForGeneration: any;
 
-        if (source === "featured") {
+        if (source === "library") {
+          // Public library video: its shared transcript, no Collected Reels copy.
+          if (!librarySourceEnabled()) throw new TRPCError({ code: "BAD_REQUEST", message: "Library remake is not enabled." });
+          const db = await getDb();
+          if (!db || !(await libraryTablesReady(db))) {
+            throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Library remake is not ready yet." });
+          }
+          const candidate = await loadLibraryCandidate(db, input.libraryCandidateId!);
+          if (!candidate) throw new TRPCError({ code: "NOT_FOUND", message: "Video not found" });
+          libraryPlatform = candidate.platform;
+          caption = candidate.caption;
+          reelForGeneration = { shortcode: candidate.sourceId, caption: candidate.caption, ownerUsername: candidate.creatorHandle };
+          const t = await getLibraryTranscript(db, candidate.id);
+          transcription = (t && t.status === "completed"
+            ? { status: "completed", transcript: t.transcript, segments: t.segments }
+            : null) as unknown as typeof transcription;
+        } else if (source === "featured") {
           const fr = await getFeaturedReelById(input.featuredReelId!);
           if (!fr) {
             throw new TRPCError({ code: "NOT_FOUND", message: "Featured reel not found" });
@@ -487,7 +525,7 @@ export const recreateRouter = router({
         const biz = (ctx.user.businessDescription ?? "").trim();
         // New-onboarding creators have no old businessDescription/targetAudience:
         // read their confirmed niche and audience so "Adapt to my niche" really adapts.
-        const basics = await loadActiveCreatorBasics(ctx.user.id);
+        const basics = await loadActiveCreatorBasics(ctx.user.id, ctx.workspaceId);
         const aud = (ctx.user.targetAudience ?? "").trim() || basics.audience || "";
 
         const hasExplicitUserAngle = typed.length > 0;
@@ -543,16 +581,21 @@ export const recreateRouter = router({
           gradeLevel: input.gradeLevel,
           status: "processing",
         });
+        if (source === "library") {
+          const db = await getDb();
+          if (db) await linkLibraryRemake(db, scriptId, input.libraryCandidateId!);
+        }
 
         const subGen = await getUserSubscription(ctx.user.id);
         const limitsGen = getPlanLimits(subGen.plan as PlanId);
         const effectiveAddCues = Boolean(input.addCues && limitsGen.hasAiCues);
 
         const originalTranscript = transcription.transcript!;
+        const platformSource = source === "library" ? libraryPlatform : source;
         const platformLabel =
-          source === "tiktok"
+          platformSource === "tiktok"
             ? "TikTok video" as const
-            : source === "youtube"
+            : platformSource === "youtube"
               ? "YouTube Short" as const
               : "Instagram Reel" as const;
         await dispatchPilotJob({

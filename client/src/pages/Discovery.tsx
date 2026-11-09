@@ -711,7 +711,8 @@ export default function Discovery() {
   const [remakeWorkspaceShortcode, setRemakeWorkspaceShortcode] = useState<
     string | null
   >(null);
-  const shortcodeToCollectedIdRef = useRef<Record<string, number>>({});
+  /** The remake source started for each reel (library video or Collected copy). */
+  const shortcodeToSourceRef = useRef<Record<string, LibraryRemakeSource>>({});
   const [ingestingByShortcode, setIngestingByShortcode] = useState<
     Record<string, boolean>
   >({});
@@ -740,16 +741,11 @@ export default function Discovery() {
       if (ingestingByShortcode[shortcode]) {
         return { stage: "ingesting", progressPercent: 15 };
       }
-      const collectedId = shortcodeToCollectedIdRef.current[shortcode];
-      if (collectedId == null) {
+      const source = shortcodeToSourceRef.current[shortcode];
+      if (source == null) {
         return { stage: "idle", progressPercent: 0 };
       }
-      const lib = getLibraryRemakeState(
-        libraryRemakeKey({
-          source: "collected",
-          collectedReelId: collectedId,
-        })
-      );
+      const lib = getLibraryRemakeState(libraryRemakeKey(source));
       return {
         stage: lib.stage,
         progressPercent: lib.progressPercent,
@@ -762,11 +758,8 @@ export default function Discovery() {
   );
 
   const collectedSourceFor = useCallback(
-    (shortcode: string): LibraryRemakeSource | null => {
-      const collectedId = shortcodeToCollectedIdRef.current[shortcode];
-      if (collectedId == null) return null;
-      return { source: "collected", collectedReelId: collectedId };
-    },
+    (shortcode: string): LibraryRemakeSource | null =>
+      shortcodeToSourceRef.current[shortcode] ?? null,
     []
   );
 
@@ -1044,9 +1037,11 @@ export default function Discovery() {
       setRemakeWorkspaceShortcode(reel.shortcode);
       setIngestingByShortcode((prev) => ({ ...prev, [reel.shortcode]: true }));
       try {
-        const { collectedReelId } = await ingestUrlAndStartLibraryRemake(
+        const { source } = await ingestUrlAndStartLibraryRemake(
           reel.reelUrl,
           {
+            resolveLibraryCandidateId: async () =>
+              (await trpcUtils.recreate.libraryRoute.fetch({ url: reel.reelUrl })).candidateId,
             addByUrl: (url) => addByUrlMutation.mutateAsync({ url }),
             fetchCollectedList: () => trpcUtils.collected.list.fetch(),
             startRemake,
@@ -1059,7 +1054,7 @@ export default function Discovery() {
             }),
           }
         );
-        shortcodeToCollectedIdRef.current[reel.shortcode] = collectedReelId;
+        shortcodeToSourceRef.current[reel.shortcode] = source;
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Remake failed. Try again.");
       } finally {
@@ -1070,7 +1065,7 @@ export default function Discovery() {
         });
       }
     },
-    [addByUrlMutation, startRemake, trpcUtils.collected.list]
+    [addByUrlMutation, startRemake, trpcUtils.collected.list, trpcUtils.recreate.libraryRoute]
   );
 
   const handleRemakeRetry = useCallback(

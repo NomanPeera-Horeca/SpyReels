@@ -99,7 +99,7 @@ export const onboardingRouter = router({
       // onboarding (a confirmed niche). Remake uses this so new-onboarding
       // creators are not asked "What do you create content about?" again.
       const oldProfile = Boolean(state.businessDescription?.trim() && state.targetAudience?.trim());
-      const hasCreatorProfile = oldProfile || Boolean((await loadActiveCreatorBasics(ctx.user.id)).nicheLabel);
+      const hasCreatorProfile = oldProfile || Boolean((await loadActiveCreatorBasics(ctx.user.id, ctx.workspaceId)).nicheLabel);
       return {
         hasCreatorProfile,
         hasSeenWelcome: state.hasSeenWelcome,

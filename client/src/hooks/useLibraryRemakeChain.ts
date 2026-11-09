@@ -1,3 +1,5 @@
+import { hasVoiceProfile } from "@/lib/libraryRemakeChainCore";
+export { hasVoiceProfile };
 import { useCallback, useEffect, useRef, useState, createElement, Fragment } from "react";
 import { toast } from "sonner";
 import type { ReelClassificationLike } from "@/lib/remakeability";
@@ -51,21 +53,6 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/**
- * True when the creator already told us what they make: the old onboarding
- * (both fields) or the new onboarding (confirmed niche, via hasCreatorProfile).
- * Only creators with neither are asked "What do you create content about?".
- */
-export function hasVoiceProfile(state: {
-  hasCreatorProfile?: boolean;
-  businessDescription?: string | null;
-  targetAudience?: string | null;
-} | null | undefined): boolean {
-  if (state?.hasCreatorProfile) return true;
-  return Boolean(
-    state?.businessDescription?.trim() && state?.targetAudience?.trim()
-  );
-}
 
 function resolveOpenReelId(
   source: LibraryRemakeSource,
@@ -280,6 +267,7 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
         | { featuredReelId: number }
         | { tiktokVideoId: number }
         | { youtubeVideoId: number }
+        | { libraryCandidateId: number }
     ) => trpcUtils.transcribe.status.fetch(input),
     [trpcUtils]
   );
@@ -429,6 +417,31 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
               }
             );
           }
+        } else if (source.source === "library") {
+          // Shared library video: transcribed once from its link and reused.
+          const result = await transcribeStartMutation.mutateAsync({
+            libraryCandidateId: source.libraryCandidateId,
+          });
+          if (cancelledRef.current.has(key)) return;
+          if (result.status !== "completed") {
+            await waitForLibraryTranscriptionReady(
+              fetchTranscribeStatus,
+              { libraryCandidateId: source.libraryCandidateId },
+              {
+                isCancelled: () => cancelledRef.current.has(key),
+                onAttempt: (attempt) =>
+                  patchState(source, {
+                    stage: "transcribing",
+                    progressPercent: libraryEasedPercent(
+                      "transcribing",
+                      attempt,
+                      LIBRARY_TRANSCRIBE_MAX
+                    ),
+                    libraryCandidateId: source.libraryCandidateId,
+                  }),
+              }
+            );
+          }
         } else if (source.source === "youtube") {
           const result = await transcribeStartMutation.mutateAsync({
             youtubeVideoId: source.youtubeVideoId,
@@ -556,7 +569,13 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
                     topic,
                     gradeLevel: "auto" as const,
                   }
-                : {
+                : source.source === "library"
+                  ? {
+                      libraryCandidateId: source.libraryCandidateId,
+                      topic,
+                      gradeLevel: "auto" as const,
+                    }
+                  : {
                     reelId: reelId!,
                     topic,
                     gradeLevel: "auto" as const,
@@ -842,6 +861,8 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
               youtubeVideoId: source.youtubeVideoId,
             });
           }
+        } else if (source.source === "library") {
+          throw new Error("Save this video from Viral Posts.");
         } else {
           if (reelId == null && source.transcriptionReelId != null) {
             reelId = source.transcriptionReelId;

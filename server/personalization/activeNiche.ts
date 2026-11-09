@@ -54,9 +54,10 @@ export function audienceLine(payload: unknown): string | null {
  * Niche and audience the creator confirmed in the NEW onboarding (active
  * profile). Used where older code only read the old onboarding fields
  * (businessDescription / targetAudience), so new-onboarding creators are not
- * asked for their niche again and remakes can adapt to it. Never throws.
+ * asked for their niche again and remakes can adapt to it. Read-only, confirmed
+ * rows only, scoped to the signed-in member and the selected workspace. Never throws.
  */
-export async function loadActiveCreatorBasics(userId: number): Promise<ActiveCreatorBasics> {
+export async function loadActiveCreatorBasics(userId: number, workspaceId: string): Promise<ActiveCreatorBasics> {
   try {
     const db = await getDb();
     if (!db) return { nicheLabel: null, audience: null };
@@ -72,7 +73,12 @@ export async function loadActiveCreatorBasics(userId: number): Promise<ActiveCre
           eq(personalizationItems.status, "confirmed")
         )
       )
-      .where(eq(workspaceMemberActiveProfiles.userId, userId))
+      .where(
+        and(
+          eq(workspaceMemberActiveProfiles.userId, userId),
+          eq(workspaceMemberActiveProfiles.workspaceId, workspaceId)
+        )
+      )
       .limit(12);
     const niche = rows.find(r => r.kind === "niche")?.payload as { label?: unknown } | undefined;
     const nicheLabel = typeof niche?.label === "string" && niche.label.trim() ? niche.label.trim() : null;
