@@ -8,9 +8,10 @@
  * the remake chain (draft / onDraftChange), through switching options,
  * generating, errors and after the draft is created.
  */
-import { useId, type ReactElement } from "react";
+import { useId, useState, type ReactElement } from "react";
 import { FileText } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
 import { ReelGridThumbnail } from "@/components/ReelGridThumbnail";
 import { ReelSourcePlatformMark } from "@/components/ReelSourcePlatformMark";
@@ -20,9 +21,11 @@ import { FieldInput, PrimaryButton, SecondaryButton } from "@/design-system/core
 import { GoalOption } from "@/design-system/GoalOption";
 import { IconAiSparkle, IconClose, IconToolScript } from "@/design-system/icons";
 import { MarketingIconProcessRemake } from "../../../public-web/components/MarketingIcons";
+import { prismFormat } from "@shared/remakeFormats";
 import {
   draftToIntent,
   REMAKE_IDEA_MAX,
+  type OwnWinnerContext,
   type RemakeDraft,
   type RemakeIntent,
   type RemakeIntentMedia,
@@ -66,7 +69,103 @@ export const REMAKE_POPUP_COPY = {
   tryAgain: "Try again",
 } as const;
 
+/** Own winning video (Figma 1750:738 / 1757:1239 / 1757:1554). */
+export const REMAKE_POPUP_OWN_COPY = {
+  badge: (m: string) => `Your video · ${m}× your usual views`,
+  sourceLabel: "Your video",
+  sourceTap: "Your video · tap to watch",
+  sourceHint: (caption: string, m: string) =>
+    `${caption ? `“${caption}” did` : "This video did"} ${m}× your usual views. Make the next one from the same idea.`,
+  heading: "How do you want to remake your winner?",
+  intro: "Same idea that already worked for you. Pick a new format, refresh the original, or use your own angle.",
+  refresh: { title: "Refresh the original", description: "Keep the format. Update the hook, examples, and wording." },
+  ownIdea: { title: "Use my idea", description: "Keep what made it work, but make it about your idea." },
+  ideaPlaceholder: "Example: a version of this for restaurant owners",
+  formatLabel: "Format:",
+  changeFormat: "Change format",
+  formatsTitle: "Formats that suit this video",
+  currentPick: "Current pick",
+  used: "Used",
+  usedNote: "Already used on this idea",
+  pitchFallback: (how: string) => `Same topic, new hook: ${how}.`,
+} as const;
+
 const C = REMAKE_POPUP_COPY;
+const O = REMAKE_POPUP_OWN_COPY;
+
+function multipleText(m: number | null): string {
+  if (m == null || !Number.isFinite(m)) return "2";
+  return String(Math.round(m * 10) / 10);
+}
+
+function shortCaption(caption: string): string {
+  const c = caption.replace(/\s+/g, " ").trim();
+  return c.length > 60 ? `${c.slice(0, 57).trimEnd()}…` : c;
+}
+
+/** "Format: X [Change format]" with the list of formats that suit this video. */
+function ChangeFormatControl({
+  ctx,
+  formatId,
+  disabled,
+  onPick,
+}: {
+  ctx: OwnWinnerContext;
+  formatId: string;
+  disabled: boolean;
+  onPick: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  // The list renders outside the dialog, so it takes the same Light/Dark scope.
+  const themeScope = useTheme().resolvedTheme === "dark" ? "sr-scope-dark" : "sr-scope-light";
+  const current = prismFormat(formatId);
+  const listed = [
+    ...ctx.formats.map(f => f.id),
+    ...ctx.usedFormats.filter(id => !ctx.formats.some(f => f.id === id)),
+  ].filter(id => prismFormat(id));
+  return (
+    <div className={styles.formatControl}>
+      <span className={cx("sr-text-product-caption", styles.tertiary)}>{O.formatLabel}</span>
+      <span className={cx("sr-text-product-body-small", styles.formatName)}>{current?.label ?? ""}</span>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <SecondaryButton type="button" disabled={disabled} className={styles.changeFormat}>
+            {O.changeFormat}
+          </SecondaryButton>
+        </PopoverTrigger>
+        <PopoverContent
+          align="start"
+          className={cx(themeScope, "sr-mode-product", styles.formatMenu)}
+          data-testid="remake-format-menu"
+        >
+          <p className={cx("sr-text-product-label", styles.formatMenuTitle)}>{O.formatsTitle}</p>
+          <div className={styles.formatList} role="radiogroup" aria-label={O.formatsTitle}>
+            {listed.map(id => {
+              const f = prismFormat(id)!;
+              const used = ctx.usedFormats.includes(id);
+              const isCurrent = id === formatId;
+              return (
+                <GoalOption
+                  key={id}
+                  title={f.label}
+                  description={isCurrent ? O.currentPick : used ? O.usedNote : f.short}
+                  badge={used ? O.used : undefined}
+                  selected={isCurrent}
+                  disabled={used && !isCurrent}
+                  onClick={() => {
+                    onPick(id);
+                    setOpen(false);
+                  }}
+                  data-testid={`remake-format-${id}`}
+                />
+              );
+            })}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
 const cx = (...p: Array<string | false | null | undefined>) => p.filter(Boolean).join(" ");
 
 function errorDetail(message: string | null | undefined): string {
@@ -84,8 +183,11 @@ export function RemakeIntentDialog({
   errorMessage,
   onSubmit,
   onCancel,
+  ownWinner = null,
 }: {
   open: boolean;
+  /** Set for the creator's OWN winning video: the own-winner options. */
+  ownWinner?: OwnWinnerContext | null;
   /** Kept for callers; transcription progress is not shown (by design). */
   progressPercent?: number;
   media: RemakeIntentMedia | null;
@@ -155,7 +257,7 @@ export function RemakeIntentDialog({
         label={C.ideaLabel}
         value={draft.angle}
         maxLength={REMAKE_IDEA_MAX}
-        placeholder={C.ideaPlaceholder}
+        placeholder={ownWinner ? O.ideaPlaceholder : C.ideaPlaceholder}
         disabled={generating}
         autoComplete="off"
         helper={`${draft.angle.length}/${REMAKE_IDEA_MAX}`}
@@ -169,11 +271,57 @@ export function RemakeIntentDialog({
     </div>
   );
 
-  const options: Array<{ mode: RemakeDraft["mode"]; icon: ReactElement }> = [
-    { mode: "custom", icon: <IconAiSparkle /> },
-    { mode: "same_topic", icon: <IconToolScript /> },
-    { mode: "niche", icon: <MarketingIconProcessRemake className={styles.brandIcon} /> },
-  ];
+  type OptionSpec = {
+    mode: RemakeDraft["mode"];
+    icon: ReactElement;
+    title: string;
+    description: string;
+    badge?: string;
+    content?: ReactElement;
+  };
+  const m = multipleText(ownWinner?.multiple ?? null);
+  let options: OptionSpec[];
+  if (ownWinner) {
+    const formatId =
+      draft.formatId || ownWinner.recommendedFormatId || ownWinner.formats[0]?.id || "mistake";
+    const fmt = prismFormat(formatId);
+    const pitch =
+      ownWinner.formats.find(f => f.id === formatId)?.pitch || (fmt ? O.pitchFallback(fmt.how) : "");
+    options = [
+      {
+        mode: "prism",
+        icon: <IconAiSparkle />,
+        title: fmt?.label ?? "",
+        description: pitch,
+        badge: formatId === ownWinner.recommendedFormatId ? C.recommended : undefined,
+        content: (
+          <ChangeFormatControl
+            ctx={ownWinner}
+            formatId={formatId}
+            disabled={generating}
+            onPick={id => onDraftChange({ ...draft, mode: "prism", formatId: id })}
+          />
+        ),
+      },
+      { mode: "refresh", icon: <MarketingIconProcessRemake className={styles.brandIcon} />, ...O.refresh },
+      { mode: "own_idea", icon: <IconToolScript />, ...O.ownIdea, content: ideaField },
+    ];
+  } else {
+    options = [
+      { mode: "custom", icon: <IconAiSparkle />, ...C.options.custom, badge: C.recommended, content: ideaField },
+      { mode: "same_topic", icon: <IconToolScript />, ...C.options.same_topic },
+      { mode: "niche", icon: <MarketingIconProcessRemake className={styles.brandIcon} />, ...C.options.niche },
+    ];
+  }
+
+  const pickMode = (mode: RemakeDraft["mode"]) => {
+    if (generating) return;
+    if (mode === "prism" && !draft.formatId && ownWinner) {
+      onDraftChange({ ...draft, mode, formatId: ownWinner.recommendedFormatId || ownWinner.formats[0]?.id || "mistake" });
+      return;
+    }
+    pick(mode);
+  };
 
   return (
     <Dialog open={open} onOpenChange={next => !next && onCancel()}>
@@ -201,7 +349,9 @@ export function RemakeIntentDialog({
           <div className={styles.headerTitles}>
             <div className={styles.titleRow}>
               <DialogTitle className={cx("sr-text-product-heading-4", styles.title)}>{C.title}</DialogTitle>
-              <span className={cx("sr-text-product-caption", styles.neutralBadge)}>{C.badge}</span>
+              <span className={cx("sr-text-product-caption", styles.neutralBadge)}>
+                {ownWinner ? O.badge(m) : C.badge}
+              </span>
             </div>
             <DialogDescription className={cx("sr-text-product-caption", styles.tertiary)}>
               {C.subtitle}
@@ -233,9 +383,13 @@ export function RemakeIntentDialog({
 
         <div className={styles.body}>
           <aside className={styles.aside}>
-            <p className={cx("sr-text-product-caption", styles.overline)}>{C.sourceLabel}</p>
+            <p className={cx("sr-text-product-caption", styles.overline)}>
+              {ownWinner ? O.sourceLabel : C.sourceLabel}
+            </p>
             {sourcePreview}
-            <p className={cx("sr-text-product-caption", styles.tertiary)}>{C.sourceHint}</p>
+            <p className={cx("sr-text-product-caption", styles.tertiary)}>
+              {ownWinner ? O.sourceHint(shortCaption(ownWinner.caption), m) : C.sourceHint}
+            </p>
           </aside>
 
           <main className={styles.main}>
@@ -244,31 +398,35 @@ export function RemakeIntentDialog({
               href={originalUrl || undefined}
               target="_blank"
               rel="noopener noreferrer"
-              aria-label={C.sourceTap}
+              aria-label={ownWinner ? O.sourceTap : C.sourceTap}
             >
               <span className={styles.sourceThumb}>{sourcePreview}</span>
-              <span className={cx("sr-text-product-caption", styles.tertiary)}>{C.sourceTap}</span>
+              <span className={cx("sr-text-product-caption", styles.tertiary)}>
+                {ownWinner ? O.sourceTap : C.sourceTap}
+              </span>
             </a>
 
             <div className={styles.intro}>
-              <h2 className={cx("sr-text-product-heading-2", styles.heading)}>{C.heading}</h2>
-              <p className={cx("sr-text-product-body-small", styles.secondary)}>{C.intro}</p>
+              <h2 className={cx("sr-text-product-heading-2", styles.heading)}>
+                {ownWinner ? O.heading : C.heading}
+              </h2>
+              <p className={cx("sr-text-product-body-small", styles.secondary)}>{ownWinner ? O.intro : C.intro}</p>
             </div>
 
             <div className={styles.options} role="radiogroup" aria-label={C.heading}>
-              {options.map(({ mode, icon }) => (
+              {options.map(o => (
                 <GoalOption
-                  key={mode}
-                  title={C.options[mode].title}
-                  description={C.options[mode].description}
-                  icon={icon}
+                  key={o.mode}
+                  title={o.title}
+                  description={o.description}
+                  icon={o.icon}
                   iconOnMobile
-                  selected={draft.mode === mode}
-                  badge={mode === "custom" ? C.recommended : undefined}
-                  content={mode === "custom" ? ideaField : undefined}
-                  disabled={generating && draft.mode !== mode}
-                  onClick={() => pick(mode)}
-                  data-testid={`remake-option-${mode}`}
+                  selected={draft.mode === o.mode}
+                  badge={o.badge}
+                  content={o.content}
+                  disabled={generating && draft.mode !== o.mode}
+                  onClick={() => pickMode(o.mode)}
+                  data-testid={`remake-option-${o.mode}`}
                 />
               ))}
             </div>

@@ -33,6 +33,8 @@ import {
   isValidRemakeIntent,
   loadRemakeDraft,
   newRemakeRequestId,
+  ownWinnerDefaultDraft,
+  type OwnWinnerContext,
   remakeIntentToRequest,
   remakeIntentToTopic,
   saveRemakeDraft,
@@ -52,6 +54,8 @@ export type StartRemakeOptions = {
   jobId?: number;
   /** Source preview for RemakeIntentDialog (owned by the remake chain, not a side channel). */
   media?: RemakeIntentMedia | null;
+  /** The creator's OWN winning video (OWN_WINNERS): own-winner options in the popup. */
+  ownWinner?: OwnWinnerContext | null;
 };
 
 function sleep(ms: number): Promise<void> {
@@ -135,6 +139,8 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
   /** Request id per video for the current "Create remake" press (duplicate guard). */
   const requestIdByKeyRef = useRef<Map<string, string>>(new Map());
   const mediaByKeyRef = useRef<Map<string, RemakeIntentMedia>>(new Map());
+  /** Own-winner context per video, kept with the video like its preview. */
+  const ownWinnerByKeyRef = useRef<Map<string, OwnWinnerContext>>(new Map());
   stateByKeyRef.current = stateByKey;
 
   const resolveIntentMedia = useCallback(
@@ -763,7 +769,10 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
   }, [intentPrompt, patchState]);
 
   const getDraft = useCallback(
-    (key: string): RemakeDraft => draftByKey[key] ?? loadRemakeDraft(key),
+    (key: string): RemakeDraft => {
+      const own = ownWinnerByKeyRef.current.get(key);
+      return draftByKey[key] ?? loadRemakeDraft(key, own ? ownWinnerDefaultDraft(own) : undefined);
+    },
     [draftByKey]
   );
 
@@ -777,6 +786,7 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
       const key = libraryRemakeKey(source);
       const current = stateByKey[key];
       const media = resolveIntentMedia(key, opts?.media);
+      if (opts?.ownWinner) ownWinnerByKeyRef.current.set(key, opts.ownWinner);
 
       if (current?.stage === "transcribing" || current?.stage === "generating") {
         // Already running: reopen the popup where it is.
@@ -864,6 +874,7 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
       progressPercent: intentPromptState?.progressPercent ?? 0,
       media: intentPrompt?.media ?? null,
       draft: intentPrompt ? getDraft(intentPrompt.key) : loadRemakeDraft(""),
+      ownWinner: intentPrompt ? ownWinnerByKeyRef.current.get(intentPrompt.key) ?? null : null,
       onDraftChange: (draft: RemakeDraft) => {
         if (intentPrompt) changeDraft(intentPrompt.key, draft);
       },

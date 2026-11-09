@@ -13,6 +13,7 @@ export const HOME_COPY = {
     write: "Write a script",
     improve: "Improve a script",
     hooks: "Try new hooks",
+    remix: "Remix my winners",
   },
   videoLink: { lead: "Have a video already?", action: "Paste a video link" },
   banner: {
@@ -83,13 +84,13 @@ export const HOME_COPY = {
     use: "Use this profile",
     close: "Close",
   },
-  /** The creator's own viral videos, remade through the Content Prism. */
-  ownWinners: {
-    title: "Your viral videos",
-    subtitle: "Your own videos that beat your usual views. Remake one in a new format.",
-    prismTitle: "Remake your winner",
-    prismBody: "Same topic, same hook formula, new format. Pick one:",
+  /** "Your proven ideas": the creator's own videos that did 2x their usual views. */
+  provenIdeas: {
+    title: "Your proven ideas",
+    subtitle: "Your own videos that did 2× your usual views. Remake one in a new format.",
+    tryAs: (format: string) => `Try it as: ${format}`,
   },
+
   /** "+ TikTok" popup: add your own account on another platform. */
   addPlatform: {
     title: (label: string) => `Add your ${label}`,

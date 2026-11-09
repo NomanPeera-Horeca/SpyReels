@@ -31,7 +31,7 @@ import { browseIndexedViralPosts } from "../viralPosts/browseService";
 import { libraryHomeForProfile, mergeHomeLists } from "../viralPosts/libraryHome";
 import { requestPrefetch, requestPrefetchForPosts } from "../research/prefetch";
 import { withResearchAvatars } from "../research/creatorAvatars";
-import { loadOwnWinnerPosts, ownWinnersEnabled, profileHandles } from "../viralPosts/ownWinners";
+import { loadProvenIdeas, ownWinnersEnabled, profileHandles } from "../viralPosts/ownWinners";
 import { combineProfilesEnabled, siblingProfileIds } from "../viralPosts/combinedProfile";
 import { pillarIdeasForProfile, searchIdeasForProfile } from "../viralPosts/searchIdeas";
 
@@ -126,11 +126,12 @@ export const homeV2Router = router({
   }),
 
   /**
-   * "Your viral videos": the creator's own videos that did >= 1.5x their usual
-   * views (all their profiles when COMBINE_PROFILES is on). An extra section;
-   * the rest of Home is unchanged. Empty when OWN_WINNERS is off.
+   * "Your proven ideas": 3 of the creator's own videos that did >= 2x their
+   * usual views (all their profiles when COMBINE_PROFILES is on), each with
+   * the Prism formats that suit it. An extra section; the rest of Home is
+   * unchanged. Empty when OWN_WINNERS is off.
    */
-  ownWinners: homeProcedure.query(async ({ ctx }) => {
+  provenIdeas: homeProcedure.query(async ({ ctx }) => {
     if (!ownWinnersEnabled()) return { items: [] };
     const c = await context(ctx);
     if (!c.socialProfileId) return { items: [] };
@@ -138,10 +139,14 @@ export const homeV2Router = router({
       const db = await getDb();
       if (!db) return { items: [] };
       const others = combineProfilesEnabled() ? await siblingProfileIds(db, c.socialProfileId) : [];
-      const items = await loadOwnWinnerPosts(db, await profileHandles(db, [c.socialProfileId, ...others]), 4);
+      const items = await loadProvenIdeas(db, {
+        userId: ctx.user.id,
+        workspaceId: ctx.workspaceId,
+        accounts: await profileHandles(db, [c.socialProfileId, ...others]),
+      });
       return { items };
     } catch (err) {
-      console.warn("[home] own_winners_failed", { error: err instanceof Error ? err.message : String(err) });
+      console.warn("[home] proven_ideas_failed", { error: err instanceof Error ? err.message : String(err) });
       return { items: [] };
     }
   }),

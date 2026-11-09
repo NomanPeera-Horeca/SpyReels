@@ -38,7 +38,10 @@ import { ingestUrlAndStartLibraryRemake } from "@/lib/ingestUrlAndStartLibraryRe
 import { buildRemakeIntentMedia } from "@/lib/remakeIntent";
 import { ViralPostPlayer } from "@/components/ViralPostPlayer";
 import { AddPlatformDialog } from "./AddPlatformDialog";
-import { PrismRemakeDialog, prismBrief } from "./PrismRemakeDialog";
+import { prismFormat } from "@shared/remakeFormats";
+
+/** Platform name on proven-idea cards ("48K views · Instagram"). */
+const PLATFORM_NAME: Record<string, string> = { instagram: "Instagram", tiktok: "TikTok", youtube: "YouTube" };
 import { researchReturnTo } from "@shared/researchIntent";
 import { HOME_COPY as C } from "./copy";
 import {
@@ -150,9 +153,10 @@ export default function HomeV2Page() {
     {}
   );
   const [playingPost, setPlayingPost] = useState<ViralPost | null>(null);
-  // "Your viral videos": the creator's own winners, remade through the Content Prism.
-  const ownWinnersQ = trpc.homeV2.ownWinners.useQuery(undefined, { staleTime: 5 * 60_000 });
-  const [prismPost, setPrismPost] = useState<ViralPost | null>(null);
+  // "Your proven ideas": the creator's own winners (OWN_WINNERS; empty when off).
+  const provenQ = trpc.homeV2.provenIdeas.useQuery(undefined, { staleTime: 5 * 60_000 });
+  const provenIdeas = provenQ.data?.items ?? [];
+  const provenRef = useRef<HTMLElement>(null);
   const closePlayer = useCallback(() => setPlayingPost(null), []);
 
   const ctx = contextQ.data;
@@ -201,7 +205,7 @@ export default function HomeV2Page() {
     const cards = planQ.data?.calendarCards ?? [];
     const planIdeas: HomeIdea[] = cards
       .filter(c => c.status !== "posted" && c.coachScriptId == null)
-      .slice(0, 2)
+      .slice(0, 3)
       .map(c => ({ id: c.id, title: c.title, hook: c.hook || null }));
     // Fill the rest with phrases people really search in this niche.
     const searched: HomeIdea[] = (searchIdeasQ.data?.ideas ?? []).map(i => ({
@@ -222,20 +226,42 @@ export default function HomeV2Page() {
       hook: null,
       badge: C.ideas.fromPillar(i.pillarTitle),
     }));
-    return [...planIdeas, ...searched, ...fromPillars].slice(0, 2);
+    return [...planIdeas, ...searched, ...fromPillars].slice(0, 3);
   }, [planQ.data, searchIdeasQ.data]);
   const hasPlan = (planQ.data?.calendarCards.length ?? 0) > 0;
 
-  const remakeWithPrism = (post: ViralPost, formatId: string) => {
-    track("own_winner_prism", { platform: post.platform, format: formatId });
-    sendSignal(post, "remake_started");
-    try {
-      sessionStorage.setItem(STUDIO_PREFILL_KEY, prismBrief(post, formatId));
-    } catch {
-      // Storage blocked: the Agent opens empty; the user can still type.
-    }
-    setPrismPost(null);
-    navigate("/studio");
+  /** Remake one of the creator's own winners: the same popup with the own-winner options. */
+  const remakeProvenIdea = (item: (typeof provenIdeas)[number]) => {
+    const post = item.post;
+    track("own_winner_remake_open", { platform: post.platform, format: item.recommended?.id ?? null });
+    startRemake(
+      { source: "library", libraryCandidateId: Number(post.id) },
+      {
+        media: buildRemakeIntentMedia({
+          thumbnailUrl: post.thumbnailUrl,
+          videoUrl: post.videoUrl,
+          reelId: post.reelId,
+          platform: post.platform,
+          sourceUrl: post.sourceUrl,
+        }),
+        ownWinner: {
+          multiple: post.viralMultiple ?? null,
+          caption: post.hook?.trim() || post.caption?.trim() || "",
+          formats: item.formats,
+          usedFormats: item.usedFormats,
+          recommendedFormatId: item.recommended?.id ?? null,
+        },
+      }
+    );
+  };
+
+  /** "Remix my winners": scroll to "Your proven ideas" (owner decision). */
+  const scrollToProven = () => {
+    track("quick_action", { capability: "remix_winners" });
+    const el = provenRef.current;
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    el.querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
   };
 
   const writeIdea = (id: number | string) => {
@@ -473,6 +499,7 @@ export default function HomeV2Page() {
               onWrite={() => quick("write_script")}
               onImprove={() => quick("refine_script")}
               onHooks={() => quick("hook_ideas")}
+              onRemix={provenIdeas.length > 0 ? scrollToProven : undefined}
             />
             <VideoLinkEntry
               onPaste={() => {
@@ -533,7 +560,7 @@ export default function HomeV2Page() {
                 }
               />
             ) : ideas.length > 0 ? (
-              <div className={styles.twoUp}>
+              <div className={styles.threeUp}>
                 {ideas.map(i => (
                   <IdeaCard
                     key={i.id}
@@ -562,34 +589,56 @@ export default function HomeV2Page() {
             )}
           </section>
 
+          {provenIdeas.length > 0 ? (
+            <section
+              ref={provenRef}
+              className={[styles.section, styles.slotProven].join(" ")}
+              aria-labelledby="home-v2-proven"
+              data-testid="home-proven-ideas"
+            >
+              <div className={styles.sectionHeader}>
+                <div className={styles.sectionTitles}>
+                  <h2
+                    id="home-v2-proven"
+                    tabIndex={-1}
+                    className={["sr-text-product-heading-4", styles.h2].join(" ")}
+                  >
+                    {C.provenIdeas.title}
+                  </h2>
+                  <p className={["sr-text-product-body-small", styles.muted].join(" ")}>
+                    {C.provenIdeas.subtitle}
+                  </p>
+                </div>
+              </div>
+              <div className={styles.provenGrid}>
+                {provenIdeas.map(item => {
+                  const format = prismFormat(item.recommended?.id);
+                  const views = item.post.views != null ? compactNumber(item.post.views) : null;
+                  return (
+                    <HomeVideoCard
+                      key={`proven-${item.post.id}`}
+                      post={item.post}
+                      compact={compact}
+                      busy={false}
+                      ownWinner
+                      subline={format ? C.provenIdeas.tryAs(format.label) : null}
+                      metricsOverride={[
+                        ...(views ? [`${views} views`] : []),
+                        PLATFORM_NAME[item.post.platform] ?? item.post.platform,
+                      ]}
+                      onPlay={() => setPlayingPost(item.post)}
+                      onRemake={() => remakeProvenIdea(item)}
+                    />
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
+
           <section
             className={[styles.section, styles.slotVideos].join(" ")}
             aria-labelledby="home-v2-videos"
           >
-            {(ownWinnersQ.data?.items.length ?? 0) > 0 ? (
-              <div className={styles.ownWinners} data-testid="home-own-winners">
-                <div className={styles.sectionTitles}>
-                  <h2 className={["sr-text-product-heading-4", styles.h2].join(" ")}>{C.ownWinners.title}</h2>
-                  <p className={["sr-text-product-body-small", styles.muted].join(" ")}>{C.ownWinners.subtitle}</p>
-                </div>
-                <div className={styles.videoGrid}>
-                  {ownWinnersQ.data!.items.map(post => (
-                    <HomeVideoCard
-                      key={`own-${post.id}`}
-                      post={post}
-                      compact={compact}
-                      busy={false}
-                      onPlay={() => setPlayingPost(post)}
-                      onRemake={() => {
-                        track("own_winner_remake_open", { platform: post.platform });
-                        setPrismPost(post);
-                      }}
-                      onToggleSave={() => void toggleSave(post)}
-                    />
-                  ))}
-                </div>
-              </div>
-            ) : null}
             <div
               className={[styles.sectionHeader, styles.sectionHeaderEnd].join(
                 " "
@@ -792,13 +841,6 @@ export default function HomeV2Page() {
             onAdd={addProfile}
             onUse={id => void switchTo(id)}
             onClose={() => setProfilesOpen(false)}
-          />
-        ) : null}
-        {prismPost ? (
-          <PrismRemakeDialog
-            post={prismPost}
-            onPick={formatId => remakeWithPrism(prismPost, formatId)}
-            onClose={() => setPrismPost(null)}
           />
         ) : null}
         {addingPlatform ? (
