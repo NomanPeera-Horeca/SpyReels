@@ -83,6 +83,13 @@ export const HOME_COPY = {
     use: "Use this profile",
     close: "Close",
   },
+  /** The creator's own viral videos, remade through the Content Prism. */
+  ownWinners: {
+    title: "Your viral videos",
+    subtitle: "Your own videos that beat your usual views. Remake one in a new format.",
+    prismTitle: "Remake your winner",
+    prismBody: "Same topic, same hook formula, new format. Pick one:",
+  },
   /** "+ TikTok" popup: add your own account on another platform. */
   addPlatform: {
     title: (label: string) => `Add your ${label}`,

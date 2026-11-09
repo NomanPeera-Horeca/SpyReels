@@ -166,11 +166,12 @@ export async function relevanceRankForProfile(args: { socialProfileId: string; l
   try {
     let profile = await loadRelevanceProfile(db, args.socialProfileId);
     if (!profile) return null;
-    if (combineProfilesEnabled()) {
+    const siblings = combineProfilesEnabled() ? await siblingProfileIds(db, args.socialProfileId) : [];
+    if (siblings.length) {
       // One picture of the creator: add what they confirmed on their other profiles.
-      const others = (
-        await Promise.all((await siblingProfileIds(db, args.socialProfileId)).map(id => loadRelevanceProfile(db, id)))
-      ).filter((p): p is RelevanceProfile => p !== null);
+      const others = (await Promise.all(siblings.map(id => loadRelevanceProfile(db, id)))).filter(
+        (p): p is RelevanceProfile => p !== null
+      );
       profile = mergeRelevanceProfiles(profile, others);
     }
     profile.embedding = await profileRelevanceEmbedding(db, profile);

@@ -210,16 +210,14 @@ export async function libraryHomeForProfile(args: {
       .from(viralProfileTopics)
       .where(eq(viralProfileTopics.socialProfileId, args.socialProfileId));
     const profileTopics = new Set(mine.map(m => m.slug));
-    if (combineProfilesEnabled()) {
+    const others = combineProfilesEnabled() ? await siblingProfileIds(db, args.socialProfileId) : [];
+    if (others.length) {
       // One picture of the creator: topics matched on their other profiles count too.
-      const others = await siblingProfileIds(db, args.socialProfileId);
-      if (others.length) {
-        const theirs = await db
-          .select({ slug: viralProfileTopics.topicSlug })
-          .from(viralProfileTopics)
-          .where(inArray(viralProfileTopics.socialProfileId, others));
-        for (const t of theirs) profileTopics.add(t.slug);
-      }
+      const theirs = await db
+        .select({ slug: viralProfileTopics.topicSlug })
+        .from(viralProfileTopics)
+        .where(inArray(viralProfileTopics.socialProfileId, others));
+      for (const t of theirs) profileTopics.add(t.slug);
     }
     if (profileTopics.size === 0) return null;
 

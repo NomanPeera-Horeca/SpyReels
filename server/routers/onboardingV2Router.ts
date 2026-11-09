@@ -190,6 +190,10 @@ export const onboardingV2Router = router({
         preview = again.profile;
       }
       const { profileId } = await confirmProfile(db, octx(ctx), preview);
+      if (process.env.OWN_WINNERS === "on") {
+        // Your viral videos: read the creator's own account right away.
+        void import("../research/prefetch").then(m => m.requestOwnResearch([{ platform: preview.platform, handle: preview.handle }]));
+      }
       const analysis = await startInitialAnalysis(db, ctx, profileId);
       if (analysis.status !== "rejected") {
         try {
@@ -285,6 +289,10 @@ export const onboardingV2Router = router({
             reason: err instanceof Error ? err.name : "error",
           });
         }
+      }
+      if (process.env.OWN_WINNERS === "on") {
+        // Your viral videos: read this new account right away.
+        void import("../research/prefetch").then(m => m.requestOwnResearch([{ platform: preview.platform, handle: preview.handle }]));
       }
       console.info("[personalization] linked_profile_added", { platform: input.platform, copied, analysis: analysis.status });
       return { ok: true as const, profileId };

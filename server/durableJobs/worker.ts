@@ -227,6 +227,33 @@ function startResearchPrefetch(): void {
 
 startResearchPrefetch();
 
+/**
+ * "Your viral videos" (OWN_WINNERS=on): every 6 hours, a database check that
+ * queues creators' OWN accounts that are due: weekly if they posted in the
+ * last 30 days, monthly if quiet. New accounts are queued when added.
+ */
+function startOwnAccountResearch(): void {
+  if (process.env.OWN_WINNERS !== "on") return;
+  let running = false;
+  const tick = () => {
+    if (running || draining) return;
+    running = true;
+    void import("../viralPosts/ownWinners")
+      .then(async m => {
+        const n = await m.queueOwnAccountResearch();
+        if (n > 0) console.info("[viralLibrary] own_research_queued", { accounts: n });
+      })
+      .catch(error => console.error("[viralLibrary] own research tick failed", error))
+      .finally(() => {
+        running = false;
+      });
+  };
+  setInterval(tick, 6 * 60 * 60_000);
+  setTimeout(tick, 3 * 60_000);
+}
+
+startOwnAccountResearch();
+
 process.on("SIGTERM", () => startDrain("SIGTERM"));
 process.on("SIGINT", () => startDrain("SIGINT"));
 
