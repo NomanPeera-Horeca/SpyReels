@@ -16,19 +16,42 @@ export type IngestCollectedRemakeDeps = {
   media?: RemakeIntentMedia | null;
   maxAttempts?: number;
   pollMs?: number;
+  /**
+   * The library video this link is, when Remake should go straight from the
+   * library (REMAKE_LIBRARY_SOURCE=on). Null keeps the Collected Reels path.
+   */
+  resolveLibraryCandidateId?: () => Promise<number | null>;
+};
+
+export type IngestRemakeResult = {
+  source: LibraryRemakeSource;
+  remakeKey: string;
+  /** Set only on the Collected Reels path. */
+  collectedReelId: number | null;
 };
 
 /**
- * Shared Remake entry for URL-based surfaces (Viral Posts, Creator Radar, landing).
- * Ingests into Collected Reels, waits until ready, then starts the Collected remake chain.
+ * Shared Remake entry for URL-based surfaces (Home, Viral Posts, Agent, Discovery).
+ * A library video (when the library route is on) starts straight from the
+ * library, with no copy in Collected Reels. Anything else is ingested into
+ * Collected Reels, waits until ready, then starts the Collected remake chain.
  */
 export async function ingestUrlAndStartLibraryRemake(
   url: string,
   deps: IngestCollectedRemakeDeps
-): Promise<{ collectedReelId: number; remakeKey: string }> {
+): Promise<IngestRemakeResult> {
   const pasteUrl = url.trim();
   if (!pasteUrl) {
     throw new Error("Missing video URL to remake.");
+  }
+
+  const libraryCandidateId = deps.resolveLibraryCandidateId
+    ? await deps.resolveLibraryCandidateId().catch(() => null)
+    : null;
+  if (libraryCandidateId != null) {
+    const source: LibraryRemakeSource = { source: "library", libraryCandidateId };
+    deps.startRemake(source, deps.media ? { media: deps.media } : undefined);
+    return { source, remakeKey: libraryRemakeKey(source), collectedReelId: null };
   }
 
   const added = await deps.addByUrl(pasteUrl);
@@ -64,5 +87,5 @@ export async function ingestUrlAndStartLibraryRemake(
   };
   const remakeKey = libraryRemakeKey(source);
   deps.startRemake(source, deps.media ? { media: deps.media } : undefined);
-  return { collectedReelId: added.id, remakeKey };
+  return { source, collectedReelId: added.id, remakeKey };
 }

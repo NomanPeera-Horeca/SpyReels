@@ -144,6 +144,8 @@ export function AiCoachCommandShell({
       setLinkBusy(true);
       try {
         await ingestUrlAndStartLibraryRemake(social.url, {
+          resolveLibraryCandidateId: async () =>
+            (await trpcUtils.recreate.libraryRoute.fetch({ url: social.url })).candidateId,
           addByUrl: async (url) => {
             const added = await addByUrlMutation.mutateAsync({ url });
             await trpcUtils.collected.list.invalidate();

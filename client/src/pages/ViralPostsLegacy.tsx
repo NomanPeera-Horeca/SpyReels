@@ -95,6 +95,7 @@ export default function ViralPosts() {
   const utils = trpc.useUtils();
   const addByUrlMutation = trpc.collected.addByUrl.useMutation();
   const { startRemake, RemakeDialogs } = useLibraryRemakeChain();
+  const libraryRoute = trpc.recreate.libraryRoute.useQuery(undefined, { staleTime: 5 * 60_000 });
   const [creatorOpenBusy, setCreatorOpenBusy] = useState(false);
 
   const startInstagramScrape = trpc.scrape.start.useMutation({
@@ -486,9 +487,14 @@ export default function ViralPosts() {
       }
       if (remakeBusy) return;
       setRemakeBusy(true);
-      const toastId = toast.loading("Adding to Collected Reels, then starting remake…");
+      // Library route: the remake popup opens at once, so no "adding" toast.
+      const libraryId =
+        libraryRoute.data?.enabled && /^\d+$/.test(post.id) ? Number(post.id) : null;
+      const toastId =
+        libraryId == null ? toast.loading("Adding to Collected Reels, then starting remake…") : undefined;
       try {
         await ingestUrlAndStartLibraryRemake(url, {
+          resolveLibraryCandidateId: async () => libraryId,
           addByUrl: (pasteUrl) => addByUrlMutation.mutateAsync({ url: pasteUrl }),
           fetchCollectedList: () => utils.collected.list.fetch(),
           startRemake,
@@ -500,16 +506,17 @@ export default function ViralPosts() {
             sourceUrl: post.sourceUrl,
           }),
         });
-        toast.success("Remake started", { id: toastId });
+        if (toastId != null) toast.dismiss(toastId);
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Remake failed. Try again.", {
-          id: toastId,
-        });
+        toast.error(
+          err instanceof Error ? err.message : "Remake failed. Try again.",
+          toastId != null ? { id: toastId } : undefined
+        );
       } finally {
         setRemakeBusy(false);
       }
     },
-    [addByUrlMutation, remakeBusy, startRemake, utils.collected.list]
+    [addByUrlMutation, libraryRoute.data?.enabled, remakeBusy, startRemake, utils.collected.list]
   );
 
   const openWhy = useCallback((post: ViralPost) => {

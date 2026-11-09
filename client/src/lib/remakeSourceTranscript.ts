@@ -9,7 +9,8 @@ export type RemakeSourceReferenceInput =
   | { reelId: number }
   | { featuredReelId: number }
   | { tiktokVideoId: number }
-  | { youtubeVideoId: number };
+  | { youtubeVideoId: number }
+  | { libraryCandidateId: number };
 
 export function remakeSourceReferenceInput(
   source: LibraryRemakeSource | null,
@@ -27,6 +28,9 @@ export function remakeSourceReferenceInput(
   }
   if (source.source === "user") {
     return { reelId: source.reelId };
+  }
+  if (source.source === "library") {
+    return { libraryCandidateId: source.libraryCandidateId };
   }
   const collectedReelId = reelId ?? source.transcriptionReelId ?? null;
   return collectedReelId != null ? { reelId: collectedReelId } : null;

@@ -312,6 +312,7 @@ export default function HomeV2Page() {
   };
   const unsave = trpc.viralPosts.unsave.useMutation();
   const { startRemake, RemakeDialogs } = useLibraryRemakeChain();
+  const libraryRoute = trpc.recreate.libraryRoute.useQuery(undefined, { staleTime: 5 * 60_000 });
 
   const createFromVideo = async (post: ViralPost) => {
     if (remakeBusyId) return;
@@ -323,11 +324,13 @@ export default function HomeV2Page() {
     setRemakeBusyId(post.id);
     track("video_create_script", { platform: post.platform });
     sendSignal(post, "remake_started");
-    const toastId = toast.loading(
-      "Adding to Collected Reels, then starting remake…"
-    );
+    // Library route: the remake popup opens at once, so no "adding" toast.
+    const libraryId = libraryRoute.data?.enabled && /^\d+$/.test(post.id) ? Number(post.id) : null;
+    const toastId =
+      libraryId == null ? toast.loading("Adding to Collected Reels, then starting remake…") : undefined;
     try {
       await ingestUrlAndStartLibraryRemake(url, {
+        resolveLibraryCandidateId: async () => libraryId,
         addByUrl: u => addByUrl.mutateAsync({ url: u }),
         fetchCollectedList: () => utils.collected.list.fetch(),
         startRemake,
@@ -339,11 +342,11 @@ export default function HomeV2Page() {
           sourceUrl: post.sourceUrl,
         }),
       });
-      toast.success("Remake started", { id: toastId });
+      if (toastId != null) toast.dismiss(toastId);
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Remake failed. Try again.",
-        { id: toastId }
+        toastId != null ? { id: toastId } : undefined
       );
     } finally {
       setRemakeBusyId(null);

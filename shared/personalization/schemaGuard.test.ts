@@ -232,12 +232,17 @@ describe("migration gate: drafts cannot reach a database by accident", () => {
     // previously authorized jobs. Viral Posts has an independently authenticated,
     // feature-gated router and reads confirmed workspace-scoped strategy data.
     // Coach reads only the signed-in user's stored niche for display.
+    // Onboarding (getState) and Remake (recreate.generate) read only the
+    // signed-in member's confirmed niche + audience in the selected workspace,
+    // so new-onboarding creators are not asked again and remakes can adapt.
     // Adding any other server consumer requires a deliberate security review.
     expect(hits.sort()).toEqual([
       "server/durableJobs/pilotHandlers.ts",
       "server/planCoachProfile.ts",
       "server/routers/homeV2Router.ts",
+      "server/routers/onboardingRouter.ts",
       "server/routers/onboardingV2Router.ts",
+      "server/routers/recreateRouter.ts",
       "server/viralPosts/browseService.ts",
       "server/viralPosts/router.ts",
       "server/viralPosts/service.ts",
@@ -254,6 +259,8 @@ describe("migration gate: drafts cannot reach a database by accident", () => {
       "server/viralPosts/browseService.ts": [
         "@shared/personalization/contentTaxonomy",
       ],
+      "server/routers/onboardingRouter.ts": ["../personalization/activeNiche"],
+      "server/routers/recreateRouter.ts": ["../personalization/activeNiche"],
       "server/viralPosts/router.ts": [
         "../personalization/home/inventoryMatch",
       ],

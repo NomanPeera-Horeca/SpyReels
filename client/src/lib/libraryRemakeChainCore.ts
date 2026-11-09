@@ -19,7 +19,9 @@ export type LibraryRemakeSource =
       transcriptionReelId?: number | null;
     }
   | { source: "tiktok"; tiktokVideoId: number }
-  | { source: "youtube"; youtubeVideoId: number };
+  | { source: "youtube"; youtubeVideoId: number }
+  /** Shared library video (viral_post_candidates.id): no Collected Reels copy. */
+  | { source: "library"; libraryCandidateId: number };
 
 export type LibraryRemakeState = {
   stage: LibraryRemakeStage;
@@ -31,6 +33,7 @@ export type LibraryRemakeState = {
   collectedReelId?: number;
   tiktokVideoId?: number;
   youtubeVideoId?: number;
+  libraryCandidateId?: number;
   scriptId?: number;
   classificationReason?: string | null;
 };
@@ -69,6 +72,8 @@ export function libraryRemakeKey(source: LibraryRemakeSource): string {
       return `tiktok:${source.tiktokVideoId}`;
     case "youtube":
       return `youtube:${source.youtubeVideoId}`;
+    case "library":
+      return `library:${source.libraryCandidateId}`;
   }
 }
 
@@ -98,6 +103,7 @@ export type TranscribeStatusFetch = (
     | { featuredReelId: number }
     | { tiktokVideoId: number }
     | { youtubeVideoId: number }
+    | { libraryCandidateId: number }
 ) => Promise<{
   status: string;
   transcript?: string | null;
@@ -121,7 +127,8 @@ export type TranscribeStatusInput =
   | { reelId: number }
   | { featuredReelId: number }
   | { tiktokVideoId: number }
-  | { youtubeVideoId: number };
+  | { youtubeVideoId: number }
+  | { libraryCandidateId: number };
 
 export function transcribeStatusInput(
   source: LibraryRemakeSource,
@@ -130,6 +137,7 @@ export function transcribeStatusInput(
 ): TranscribeStatusInput {
   if (source.source === "tiktok") return { tiktokVideoId: source.tiktokVideoId };
   if (source.source === "youtube") return { youtubeVideoId: source.youtubeVideoId };
+  if (source.source === "library") return { libraryCandidateId: source.libraryCandidateId };
   if (source.source === "featured") return { featuredReelId: source.featuredReelId };
   const rid =
     reelId ?? (source.source === "user" ? source.reelId : source.transcriptionReelId ?? undefined);
@@ -228,7 +236,7 @@ export function resolveLibraryIds(
   transcriptionReelId?: number
 ): Pick<
   LibraryRemakeState,
-  "reelId" | "featuredReelId" | "collectedReelId" | "tiktokVideoId" | "youtubeVideoId"
+  "reelId" | "featuredReelId" | "collectedReelId" | "tiktokVideoId" | "youtubeVideoId" | "libraryCandidateId"
 > {
   if (source.source === "featured") {
     return { featuredReelId: source.featuredReelId };
@@ -242,8 +250,27 @@ export function resolveLibraryIds(
   if (source.source === "youtube") {
     return { youtubeVideoId: source.youtubeVideoId };
   }
+  if (source.source === "library") {
+    return { libraryCandidateId: source.libraryCandidateId };
+  }
   return {
     collectedReelId: source.collectedReelId,
     reelId: transcriptionReelId ?? source.transcriptionReelId ?? undefined,
   };
+}
+
+/**
+ * True when the creator already told us what they make: the old onboarding
+ * (both fields) or the new onboarding (confirmed niche, via hasCreatorProfile).
+ * Only creators with neither are asked "What do you create content about?".
+ */
+export function hasVoiceProfile(state: {
+  hasCreatorProfile?: boolean;
+  businessDescription?: string | null;
+  targetAudience?: string | null;
+} | null | undefined): boolean {
+  if (state?.hasCreatorProfile) return true;
+  return Boolean(
+    state?.businessDescription?.trim() && state?.targetAudience?.trim()
+  );
 }
