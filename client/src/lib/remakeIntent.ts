@@ -73,3 +73,49 @@ export function isValidRemakeIntent(intent: RemakeIntent | null | undefined): bo
   if (intent.mode !== "custom") return true;
   return intent.angle.trim().length > 0;
 }
+
+/** What the creator picked and typed in the Remake popup, kept per video. */
+export type RemakeDraft = { mode: RemakeIntent["mode"]; angle: string };
+
+/** External videos open on "Use my idea" (unchanged default). */
+export const DEFAULT_REMAKE_DRAFT: RemakeDraft = { mode: "custom", angle: "" };
+
+export const REMAKE_IDEA_MAX = 2000;
+
+export function draftToIntent(draft: RemakeDraft): RemakeIntent | null {
+  if (draft.mode === "niche") return { mode: "niche" };
+  if (draft.mode === "same_topic") return { mode: "same_topic" };
+  const angle = draft.angle.trim();
+  return angle ? { mode: "custom", angle } : null;
+}
+
+const DRAFT_STORAGE_PREFIX = "spyreels:remake-draft:";
+
+function isDraft(v: unknown): v is RemakeDraft {
+  const d = v as RemakeDraft;
+  return (
+    !!d &&
+    (d.mode === "custom" || d.mode === "same_topic" || d.mode === "niche") &&
+    typeof d.angle === "string"
+  );
+}
+
+/** The saved draft for one video (this browser tab), or the default. */
+export function loadRemakeDraft(key: string): RemakeDraft {
+  try {
+    const raw = window.sessionStorage.getItem(DRAFT_STORAGE_PREFIX + key);
+    const parsed = raw ? JSON.parse(raw) : null;
+    if (isDraft(parsed)) return { mode: parsed.mode, angle: parsed.angle.slice(0, REMAKE_IDEA_MAX) };
+  } catch {
+    // Private mode or blocked storage: fall back to the default.
+  }
+  return DEFAULT_REMAKE_DRAFT;
+}
+
+export function saveRemakeDraft(key: string, draft: RemakeDraft): void {
+  try {
+    window.sessionStorage.setItem(DRAFT_STORAGE_PREFIX + key, JSON.stringify(draft));
+  } catch {
+    // Kept in memory for this page only.
+  }
+}
