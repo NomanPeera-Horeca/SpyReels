@@ -113,3 +113,18 @@ describe("every Remake entry point uses the one remake chain", () => {
     expect(hook).toContain("libraryCandidateId: source.libraryCandidateId");
   });
 });
+
+describe("expanded video panel (InlineWorkflow) uses the shared remake popup", () => {
+  const panel = read("../components/InlineWorkflow.tsx");
+  const main = panel.slice(panel.indexOf("export function InlineWorkflow("), panel.indexOf("function SearchInspirationPanel"));
+  it("Make My Version starts the shared remake chain, not its own generate call", () => {
+    expect(main).toContain("useLibraryRemakeChain");
+    expect(main).toContain("remakeChain.startRemake(remakeSource");
+    expect(main).toContain("remakeChain.RemakeDialogs");
+    expect(main).not.toMatch(/generateMutation\.mutate\(/);
+  });
+  it("has no separate topic box", () => {
+    expect(panel).not.toContain("Same topic (click to change)");
+    expect(panel).not.toContain("Enter a different topic/angle");
+  });
+});

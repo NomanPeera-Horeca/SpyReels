@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo, type Ref } from "react";
 import { trpc } from "@/lib/trpc";
+import { useLibraryRemakeChain } from "@/hooks/useLibraryRemakeChain";
+import type { LibraryRemakeSource } from "@/lib/libraryRemakeChainCore";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -360,10 +362,28 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
           ? { featuredReelId: featuredReelId! }
           : { reelId: reelId! };
   const recreateIdInput = transcribeIdInput;
+  // "Make My Version" uses the same remake popup and chain as every other
+  // Remake button (choice of Same topic / Adapt to my niche / Use my idea).
+  const remakeSource: LibraryRemakeSource =
+    tiktokVideoId != null
+      ? { source: "tiktok", tiktokVideoId }
+      : youtubeVideoId != null
+        ? { source: "youtube", youtubeVideoId }
+        : reelSource === "featured"
+          ? { source: "featured", featuredReelId: featuredReelId! }
+          : { source: "user", reelId: reelId! };
+  const remakeChain = useLibraryRemakeChain({
+    onStageChange: (_source, stage) => {
+      if (stage === "ready" || stage === "error") {
+        void trpcUtils.recreate.list.invalidate();
+        void trpcUtils.recreate.checkBatch.invalidate();
+      }
+    },
+  });
+  const remakeStage = remakeChain.getRemakeState(remakeChain.libraryRemakeKey(remakeSource)).stage;
+  const remakeRunning = remakeStage === "transcribing" || remakeStage === "generating";
   const [activeScriptId, setActiveScriptId] = useState<number | null>(null);
   const [gradeLevel, setGradeLevel] = useState("auto");
-  const [customTopic, setCustomTopic] = useState("");
-  const [showCustomTopic, setShowCustomTopic] = useState(false);
   const [showTeleprompter, setShowTeleprompter] = useState(false);
   const [targetDuration, setTargetDuration] = useState("any");
   const [addCues, setAddCues] = useState(true);
@@ -686,11 +706,9 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
   }, [script?.topic, handle]);
 
   const handleGenerate = () => {
-    generateMutation.mutate({
-      ...recreateIdInput,
-      topic: showCustomTopic ? customTopic : "",
-      gradeLevel: gradeLevel as "auto" | "2" | "3" | "4" | "5" | "6",
-      addCues: cuesLock.locked ? false : addCues,
+    remakeChain.startRemake(remakeSource, {
+      alreadyTranscribed: hasTranscription && !effectiveIsNoSpeech,
+      classification: reelClassification,
     });
   };
 
@@ -998,14 +1016,8 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
             activeScriptId={activeScriptId}
             scriptStatus={script?.status}
             errorMessage={script?.errorMessage ?? undefined}
-            gradeLevel={gradeLevel}
-            setGradeLevel={setGradeLevel}
-            showCustomTopic={showCustomTopic}
-            setShowCustomTopic={setShowCustomTopic}
-            customTopic={customTopic}
-            setCustomTopic={setCustomTopic}
             onGenerate={handleGenerate}
-            isGenerating={generateMutation.isPending}
+            isGenerating={generateMutation.isPending || remakeRunning}
             onReset={() => setActiveScriptId(null)}
             previousScripts={previousScriptsQuery.data}
             onSelectScript={setActiveScriptId}
@@ -1017,6 +1029,7 @@ export function InlineWorkflow(props: InlineWorkflowProps) {
       {showTeleprompter && displayScript && (
         <TeleprompterMode script={displayScript} onClose={() => setShowTeleprompter(false)} />
       )}
+      {remakeChain.RemakeDialogs}
     </div>
   );
 }
@@ -1412,12 +1425,6 @@ export function SearchInlineWorkflow({
               activeScriptId={null}
               scriptStatus={isGenerating ? "processing" : undefined}
               errorMessage={undefined}
-              gradeLevel={gradeLevel}
-              setGradeLevel={setGradeLevel}
-              showCustomTopic={showCustomTopic}
-              setShowCustomTopic={setShowCustomTopic}
-              customTopic={customTopic}
-              setCustomTopic={setCustomTopic}
               onGenerate={handleGenerate}
               isGenerating={isGenerating}
               onReset={() => {}}
@@ -1641,12 +1648,6 @@ function RecreateSection({
   activeScriptId,
   scriptStatus,
   errorMessage,
-  gradeLevel,
-  setGradeLevel,
-  showCustomTopic,
-  setShowCustomTopic,
-  customTopic,
-  setCustomTopic,
   onGenerate,
   isGenerating,
   onReset,
@@ -1657,12 +1658,6 @@ function RecreateSection({
   activeScriptId: number | null;
   scriptStatus?: string;
   errorMessage?: string;
-  gradeLevel: string;
-  setGradeLevel: (v: string) => void;
-  showCustomTopic: boolean;
-  setShowCustomTopic: (v: boolean) => void;
-  customTopic: string;
-  setCustomTopic: (v: string) => void;
   onGenerate: () => void;
   isGenerating: boolean;
   onReset: () => void;
@@ -1698,49 +1693,9 @@ function RecreateSection({
         </div>
       )}
 
-      {/* Generation form */}
+      {/* Opens the shared remake popup (topic choice lives there). */}
       {(!activeScriptId || (!scriptStatus || scriptStatus === "failed")) && !isGenerating && (
         <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3">
-          <div className="shrink-0">
-            <label className="text-xs text-muted-foreground mb-1 block">Grade Level</label>
-            <Select value={gradeLevel} onValueChange={setGradeLevel}>
-              <SelectTrigger className="w-[130px] h-9 bg-card text-sm">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {GRADE_OPTIONS.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {showCustomTopic ? (
-            <div className="flex-1 min-w-0 w-full">
-              <label className="text-xs text-muted-foreground mb-1 block">
-                Custom Topic
-                <button className="ml-2 text-primary text-[10px] underline" onClick={() => { setShowCustomTopic(false); setCustomTopic(""); }}>
-                  use same topic
-                </button>
-              </label>
-              <Input
-                placeholder="Enter a different topic/angle..."
-                value={customTopic}
-                onChange={(e) => setCustomTopic(e.target.value)}
-                className="h-9 bg-card"
-              />
-            </div>
-          ) : (
-            <div className="shrink-0">
-              <label className="text-xs text-muted-foreground mb-1 block">Topic</label>
-              <Button variant="outline" size="sm" className="h-9 text-xs" onClick={() => setShowCustomTopic(true)}>
-                Same topic (click to change)
-              </Button>
-            </div>
-          )}
-
           <Button
             size="sm"
             className="h-9 shrink-0"
