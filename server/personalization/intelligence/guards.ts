@@ -41,9 +41,11 @@ export function copiesSourceText(text: string, source: string): boolean {
 
 /** Numbers in the output must already appear in the evidence (no invented stats). */
 export function unsupportedNumbers(text: string, corpus: string): string[] {
-  return (text.match(/\d[\d,.]*%?/g) ?? []).filter(
-    n => !corpus.includes(n.replace(/%$/, "").toLowerCase())
-  );
+  // A number ending a sentence or list ("A24.", "3,") keeps its punctuation in
+  // the match; strip it, or a number the evidence shows is rejected.
+  return (text.match(/\d[\d,.]*%?/g) ?? [])
+    .map(n => n.replace(/[.,]+$/, ""))
+    .filter(n => !corpus.includes(n.replace(/%$/, "").toLowerCase()));
 }
 
 const ALLOWED_CAPITALIZED = new Set([
