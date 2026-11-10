@@ -6,6 +6,7 @@
  * attributes unless the evidence or the user's own answers mention them.
  */
 import { z } from "zod";
+import { claimSupportEnabled, logClaimReview, reviewClaims, supportEvidenceText } from "./claimSupport";
 import type {
   AudiencePayload,
   SuggestionConfidence,
@@ -175,18 +176,21 @@ export function parseAudienceOutput(
    * answer that does not lead with them or has a single segment, so the model
    * gets one corrected try. Later attempts accept the best answer.
    */
-  strictOwnerLead = false
-): ParseResult<{
-  audiences: AudienceRecommendation[];
-  confidence: SuggestionConfidence;
-  uncitedDropped: number;
-}> {
+  strictOwnerLead = false,
+  /**
+   * ONBOARDING_CLAIM_SUPPORT: the exact-word name and demographics checks only
+   * FLAG an audience for the semantic evidence review instead of dropping it
+   * (they drop valid paraphrases such as "Houstonians" or "moms" for "mães").
+   */
+  softChecks = false
+): ParseResult<ParsedAudiences> {
   const shape = Shape.safeParse(raw);
   if (!shape.success)
     return { ok: false, reason: "output did not match the schema" };
   const corpus = `${e.corpus}\n${goal.toLowerCase()}`;
   const seen = new Set(keep.map(a => itemIdentity("audience", a)));
   const out: { item: AudienceRecommendation; sources: string[] }[] = [];
+  const flagged: string[] = [];
   let droppedFor: string | null = null;
   const monetizationAllowed = commercialIntentAllowed(goal, e.commercialSignals);
   for (const a of shape.data.audiences) {
@@ -213,9 +217,11 @@ export function parseAudienceOutput(
       continue;
     }
     const demo = unsupportedDemographics(text, corpus);
+    let flag = false;
     if (demo.length) {
       droppedFor = `audience assumes demographics not in the evidence (${demo.join(", ")})`;
-      continue;
+      if (!softChecks) continue;
+      flag = true;
     }
     const nums = unsupportedNumbers(text, corpus);
     if (nums.length) {
@@ -227,11 +233,13 @@ export function parseAudienceOutput(
       : [];
     if (names.length) {
       droppedFor = `audience names things not in the evidence (${names.join(", ")})`;
-      continue;
+      if (!softChecks) continue;
+      flag = true;
     }
     const key = itemIdentity("audience", { who, outcome });
     if (seen.has(key)) continue;
     seen.add(key);
+    if (flag) flagged.push(key);
     out.push({ item: { who, outcome, why }, sources: a.sources ?? [] });
   }
   if (out.length === 0 && keep.length === 0)
@@ -259,8 +267,63 @@ export function parseAudienceOutput(
       audiences: ordered.slice(0, MAX_AUDIENCES),
       confidence: shape.data.confidence,
       uncitedDropped: dropped,
+      flagged,
     },
   };
+}
+
+type ParsedAudiences = {
+  audiences: AudienceRecommendation[];
+  confidence: SuggestionConfidence;
+  uncitedDropped: number;
+  /** Identities the exact-word checks flagged (softChecks only); the review decides. */
+  flagged: string[];
+};
+
+/**
+ * ONBOARDING_CLAIM_SUPPORT: review every audience against the evidence the
+ * writer saw. Unsupported ones are dropped (none left: one corrected retry);
+ * uncertain ones are kept at low confidence; when the review cannot run, the
+ * flagged ones are dropped as before, so an outage never loosens the rules.
+ */
+export async function verifyAudiencesAgainstEvidence(
+  value: ParsedAudiences,
+  e: CreatorEvidence,
+  posts: PostContext,
+  keep: AudiencePayload[],
+  reviewInvoker?: LlmInvoker
+): Promise<ParseResult<ParsedAudiences>> {
+  if (value.audiences.length === 0) return { ok: true, value };
+  const batch = await reviewClaims({
+    evidenceText: supportEvidenceText(e, posts),
+    claims: value.audiences.map(a => `${a.who}: ${a.outcome}`),
+    invoker: reviewInvoker,
+  });
+  const kept: AudienceRecommendation[] = [];
+  const unsupported: string[] = [];
+  let anyUncertain = false;
+  value.audiences.forEach((a, i) => {
+    const r = batch.reviews[i] ?? { verdict: "unavailable" as const, unsupported: [] };
+    if (r.verdict === "unsupported") {
+      unsupported.push(...r.unsupported);
+      return;
+    }
+    if (r.verdict === "unavailable" && value.flagged.includes(itemIdentity("audience", a))) return;
+    if (r.verdict === "uncertain") anyUncertain = true;
+    kept.push(a);
+  });
+  const result: ParseResult<ParsedAudiences> =
+    kept.length === 0 && keep.length === 0
+      ? {
+          ok: false,
+          reason: `audiences make claims the evidence does not show (${unsupported.join(", ") || "flagged names"})`,
+        }
+      : {
+          ok: true,
+          value: { ...value, audiences: kept, confidence: anyUncertain ? "low" : value.confidence, flagged: [] },
+        };
+  logClaimReview("audience", batch, result.ok ? `kept_${kept.length}` : "rejected");
+  return result;
 }
 
 export async function recommendAudiences(input: {
@@ -272,8 +335,11 @@ export async function recommendAudiences(input: {
   invoker?: LlmInvoker;
   timeoutMs?: number;
   onRejected?: (reason: string) => void;
+  /** Evidence review model (ONBOARDING_CLAIM_SUPPORT). Defaults to the shared invoker. */
+  reviewInvoker?: LlmInvoker;
 }): Promise<AudienceResult> {
   const posts = input.posts ?? EMPTY_POST_CONTEXT;
+  const supportOn = claimSupportEnabled();
   const prompt = buildAudiencePrompt(
     input.evidence,
     input.confirmedGoal,
@@ -297,8 +363,13 @@ export async function recommendAudiences(input: {
         input.confirmedGoal,
         input.confirmedAudiences,
         citable,
-        ++parseCalls === 1
+        ++parseCalls === 1,
+        supportOn
       ),
+    verify: supportOn
+      ? value =>
+          verifyAudiencesAgainstEvidence(value, input.evidence, posts, input.confirmedAudiences, input.reviewInvoker)
+      : undefined,
     invoker: input.invoker,
     timeoutMs: input.timeoutMs,
     onRejected: input.onRejected,

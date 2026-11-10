@@ -212,3 +212,49 @@ describe("recommendationEvidenceToken", () => {
     expect(withSite).not.toBe(posts);
   });
 });
+
+describe("goal double failure: server status to what the Goal step shows", () => {
+  // Imported here so this test follows the same path the browser does.
+  const wait = async (status: ReturnType<typeof recommendationStateFromSources>) => {
+    const { recommendationWaitState } = await import("@/components/onboarding-v2/recommendationWait");
+    return recommendationWaitState({
+      requested: true,
+      status: status ? { ...status, at: status.at ?? 20 } : null,
+      seenAt: 10,
+      waitExpired: false,
+      requestFailed: false,
+      statusUnreadable: false,
+      hasSavedSuggestions: true,
+    });
+  };
+
+  it("a stored question reaches the step as a question", async () => {
+    const s = recommendationStateFromSources({
+      job: {
+        status: "succeeded",
+        payload: { outcome: { state: "clarify", question: "In one sentence, why do you create content?" } },
+        at: 20,
+      },
+      memory: null,
+      suggestionsSaved: false,
+      liveSuggestions: true,
+    });
+    expect(await wait(s)).toEqual({ state: "clarify", question: "In one sentence, why do you create content?" });
+  });
+
+  it("a failed job reaches the step as failed even with niche and language on screen", async () => {
+    const s = recommendationStateFromSources({
+      job: { status: "succeeded", payload: { outcome: { state: "failed" } }, at: 20 },
+      memory: null,
+      suggestionsSaved: false,
+      liveSuggestions: true,
+    });
+    expect((await wait(s)).state).toBe("failed");
+  });
+
+  it("when the lookup misses the job (evidence key changed), live niche/language read as done: the step is settled, so it asks", async () => {
+    const s = recommendationStateFromSources({ job: null, memory: null, suggestionsSaved: false, liveSuggestions: true });
+    expect(s).toEqual({ state: "done", at: 1 });
+    expect(await wait(s)).toEqual({ state: "idle", settled: true });
+  });
+});

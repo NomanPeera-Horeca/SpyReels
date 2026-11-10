@@ -85,6 +85,12 @@ export async function callStructured<T>(input: {
   onRejected?: (reason: string) => void;
   /** Labelled inline images (data URLs) sent after the text, e.g. post thumbnails. */
   images?: { label: string; dataUrl: string }[];
+  /**
+   * Optional second check after parse succeeds (e.g. the semantic evidence
+   * review). A rejection is handled like a parse rejection: the model gets
+   * one corrected attempt with the reason.
+   */
+  verify?: (value: T) => Promise<ParseResult<T>>;
 }): Promise<{ value: T; usage: LlmUsage; attempts: number }> {
   const invoker = input.invoker ?? defaultInvoker;
   const usage: LlmUsage = {
@@ -147,7 +153,8 @@ export async function callStructured<T>(input: {
       repairNote = `\n\nYour previous answer was rejected: ${lastReason}. Return only the JSON object.`;
       continue;
     }
-    const parsed = input.parse(raw);
+    let parsed = input.parse(raw);
+    if (parsed.ok && input.verify) parsed = await input.verify(parsed.value);
     if (parsed.ok) {
       usage.estimatedUsd =
         Math.round(usage.estimatedUsd * 1_000_000) / 1_000_000;

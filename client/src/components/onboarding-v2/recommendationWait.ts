@@ -53,11 +53,11 @@ export function recommendationWaitState(input: {
   if (input.statusUnreadable && !status && !input.hasSavedSuggestions) return { state: "failed" };
   if (!status) {
     if (input.waitExpired && !input.hasSavedSuggestions) return { state: "failed" };
-    return { state: "idle" };
+    return input.waitExpired ? { state: "idle", settled: true } : { state: "idle" };
   }
   if (status.state === "running") {
     // Some suggestions are on screen and more are being written: say so, until the wait runs out.
-    if (input.hasSavedSuggestions) return input.waitExpired ? { state: "idle" } : { state: "more" };
+    if (input.hasSavedSuggestions) return input.waitExpired ? { state: "idle", settled: true } : { state: "more" };
     if (input.waitExpired) return { state: "failed" };
     return { state: "running" };
   }
@@ -65,5 +65,5 @@ export function recommendationWaitState(input: {
   if (status.state === "clarify" && status.question) {
     return { state: "clarify", question: status.question };
   }
-  return { state: "idle" };
+  return { state: "idle", settled: true };
 }

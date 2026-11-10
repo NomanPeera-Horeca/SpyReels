@@ -128,7 +128,14 @@ export const ITEM_STATUSES = [
 ] as const;
 export type ItemStatus = (typeof ITEM_STATUSES)[number];
 
-export type GoalPayload = { text: string };
+export type GoalPayload = {
+  text: string;
+  /**
+   * AI starter direction for a thin profile, not an inferred purpose
+   * (ONBOARDING_CLAIM_SUPPORT). Dropped as soon as the creator edits the goal.
+   */
+  starter?: boolean;
+};
 /**
  * "You create content for {who} to help them {outcome}".
  * problem is the obstacle that segment has, when the evidence or the goal supports one.

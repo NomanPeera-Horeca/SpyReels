@@ -166,7 +166,7 @@ export type RecommendationResult =
   | {
       status: "needs_clarification";
       question: string;
-      reason: "insufficient_evidence" | "ambiguous";
+      reason: "insufficient_evidence" | "ambiguous" | "unverified";
       usage: LlmUsage | null;
     }
   | {
@@ -487,6 +487,8 @@ export async function generateRecommendations(
   deps: {
     store: RecommendationStore;
     invoker?: LlmInvoker;
+    /** Evidence review model (ONBOARDING_CLAIM_SUPPORT). Tests pass a fake. */
+    reviewInvoker?: LlmInvoker;
     timeoutMs?: number;
     onRejected?: (reason: string) => void;
     /** Read-only niche supply. Absent in tests. Never blocks the first write. */
@@ -631,6 +633,7 @@ export async function generateRecommendations(
         confirmedAudiences: audiences,
         posts,
         invoker: deps.invoker,
+        reviewInvoker: deps.reviewInvoker,
         timeoutMs: deps.timeoutMs,
         onRejected: deps.onRejected,
       });
@@ -821,6 +824,7 @@ async function runGoalStep(input: {
   deps: {
     store: RecommendationStore;
     invoker?: LlmInvoker;
+    reviewInvoker?: LlmInvoker;
     onRejected?: (reason: string) => void;
   };
   profileId: string;
@@ -881,6 +885,7 @@ async function runGoalStep(input: {
       evidence,
       posts,
       invoker: deps.invoker,
+      reviewInvoker: deps.reviewInvoker,
       timeoutMs: input.timeoutMs,
       onRejected: deps.onRejected,
     });
@@ -941,7 +946,7 @@ async function runGoalStep(input: {
       suggestions: [
         {
           kind: "goal",
-          payload: { text: goalResult.goal },
+          payload: goalResult.starter ? { text: goalResult.goal, starter: true } : { text: goalResult.goal },
           evidence: "profile_inferred",
           analysisRunId: null,
         },
