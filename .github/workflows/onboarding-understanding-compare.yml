@@ -1,0 +1,31 @@
+# Read-only investigation: current onboarding goal pipeline vs a simple prompt
+# on 8 synthetic profiles, plus a paraphrase/invention validator set.
+# Synthetic data only, no DB, no deploy. Spend cap $0.60.
+# Runs only when the commit message STARTS with "eval: [onboarding-understanding]".
+name: SpyReels Onboarding Understanding Compare
+
+on:
+  push:
+    branches:
+      - claude/personalization-baseline-eval
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    if: "${{ startsWith(github.event.head_commit.message, 'eval: [onboarding-understanding]') }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Compare (cap $0.60)
+        run: pnpm exec tsx scripts/onboarding-understanding-compare.ts --confirm-spend --cap=0.60
