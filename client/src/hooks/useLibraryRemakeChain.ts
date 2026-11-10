@@ -686,8 +686,20 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
         if (cancelledRef.current.has(key)) return;
         const message = formatIdeaScriptErrorForUser(err, "remake");
         if (!isNoCaptionsOrNoVoiceFailure(message) && intentPromptRef.current?.key === key) {
-          // Popup open: show the error state there; choice and idea are kept.
           runningRef.current.delete(key);
+          if (intentPromptRef.current.phase === "choose") {
+            // Still choosing: a background failure (e.g. the transcript) stays
+            // quiet. "Create remake" starts the chain again; only a failure
+            // after that shows the error state.
+            patchState(source, {
+              stage: "error",
+              progressPercent: 0,
+              errorMessage: message,
+              ...resolveLibraryIds(source, reelId),
+            });
+            return;
+          }
+          // After "Create remake": show the error state; choice and idea are kept.
           patchState(source, {
             stage: "error",
             progressPercent: 0,

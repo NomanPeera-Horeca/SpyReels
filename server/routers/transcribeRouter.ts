@@ -127,10 +127,14 @@ export const transcribeRouter = router({
               });
             }
           }
-          // Only the caller that claims the job runs it (and is charged for it).
+          // Only the caller that claims the job runs it. It is charged only when a
+          // transcript is actually made: a failed attempt (e.g. the speech-to-text
+          // service is down or out of credits) never uses up a transcription.
           if (await claimLibraryTranscription(db, candidate)) {
-            await incrementUsage(ctx.user.id, "transcribeCount");
-            void runLibraryTranscription(candidate);
+            const userId = ctx.user.id;
+            void runLibraryTranscription(candidate, {
+              onCompleted: () => incrementUsage(userId, "transcribeCount"),
+            });
           }
           return { transcriptionId: candidate.id, status: "processing" as const, queuePending: false };
         }

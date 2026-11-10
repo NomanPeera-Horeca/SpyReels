@@ -155,3 +155,14 @@ describe("own-winner popup choices", () => {
     }
   });
 });
+
+describe("errors before Create remake stay hidden", () => {
+  it("a background failure while choosing does not show the error state", () => {
+    const hook = read("../hooks/useLibraryRemakeChain.ts");
+    const i = hook.indexOf('if (intentPromptRef.current.phase === "choose") {');
+    expect(i).toBeGreaterThan(-1);
+    const branch = hook.slice(i, hook.indexOf("return;", i));
+    expect(branch).not.toContain('phase: "error"');
+    expect(branch).not.toContain("toast");
+  });
+});
