@@ -7,7 +7,7 @@
 export const CAROUSEL_GENERATION_PRICING_VERSION = "2026-08-30";
 
 export type LlmTokenPricing = {
-  provider: "anthropic";
+  provider: "anthropic" | "openai";
   model: string;
   inputPerMillionUsd: number;
   outputPerMillionUsd: number;
@@ -39,6 +39,15 @@ const LLM_PRICING: Record<string, LlmTokenPricing> = {
     model: "claude-haiku-4-5-20251001",
     inputPerMillionUsd: 1,
     outputPerMillionUsd: 5,
+    calculationMethod: "token_rate_per_million",
+    estimated: true,
+  },
+  // OpenAI backup used when Claude cannot answer (server/_core/claudeClient.ts).
+  "gpt-4.1-mini": {
+    provider: "openai",
+    model: "gpt-4.1-mini",
+    inputPerMillionUsd: 0.4,
+    outputPerMillionUsd: 1.6,
     calculationMethod: "token_rate_per_million",
     estimated: true,
   },

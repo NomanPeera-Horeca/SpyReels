@@ -4,6 +4,7 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { createClaudeClient } from "../_core/claudeClient";
 import { routeNiche } from "../ai/prompts/niche-routing";
 import { reportDirectAnthropicUsage } from "../_core/llmMeasured";
 import {
@@ -1096,7 +1097,7 @@ export async function runDiscoveryPipeline(
   const tracker = createDiscoveryScCallTracker(maxScCalls);
 
   return runWithDiscoveryScCallTracker(tracker, async () => {
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const anthropic = createClaudeClient({ apiKey: process.env.ANTHROPIC_API_KEY });
   const usdPerCredit =
     Number(process.env.SCRAPECREATORS_USD_PER_CREDIT) || DEFAULT_USD_PER_CREDIT;
   const relaxedScoring = options?.skipProfileDrilling === true;

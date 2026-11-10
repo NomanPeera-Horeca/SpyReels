@@ -4,6 +4,7 @@
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { createClaudeClient } from "../_core/claudeClient";
 import { routeNiche } from "../ai/prompts/niche-routing";
 import { reportDirectAnthropicUsage } from "../_core/llmMeasured";
 import {
@@ -452,7 +453,7 @@ export async function runCreatorDiscoveryPipeline(
   businessDescription: string,
   onProgress?: (update: CreatorDiscoveryProgressUpdate) => void | Promise<void>
 ): Promise<CreatorDiscoveryResult> {
-  const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const anthropic = createClaudeClient({ apiKey: process.env.ANTHROPIC_API_KEY });
 
   const routed = await routeNiche({ businessDescription });
   const routedNiche = routed.primary_niche;

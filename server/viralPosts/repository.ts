@@ -511,7 +511,7 @@ export async function getRecentlyDismissedCandidateIds(
     .where(
       and(
         eq(viralPostFeedback.userId, userId),
-        inArray(viralPostFeedback.feedbackType, ["not_relevant", "dismissed"]),
+        inArray(viralPostFeedback.feedbackType, ["not_relevant", "not_my_niche", "dismissed"]),
         sql`${viralPostFeedback.createdAt} >= ${since}`
       )
     );

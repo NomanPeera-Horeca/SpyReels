@@ -1,4 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createClaudeClient } from "../_core/claudeClient";
+import { keywordQueriesFor, recordVideoSearch } from "./keywords";
 import { reportDirectAnthropicUsage } from "../_core/llmMeasured";
 import {
   searchTikTokKeyword,
@@ -96,18 +98,18 @@ export async function generateTikTokSearchQueries(args: {
   }
 
   try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const client = createClaudeClient({ apiKey: process.env.ANTHROPIC_API_KEY });
     const response = await client.messages.create({
       model: SEMANTIC_POOL_MODEL,
       max_tokens: 400,
       temperature: 0.2,
       system:
-        "You write short TikTok search phrases for finding operator-useful short-form videos. Return JSON only. Do not use em dashes.",
+        "You write short TikTok search phrases that real people type to find popular videos in a niche. Return JSON only. Do not use em dashes.",
       messages: [
         {
           role: "user",
           content: `Generate exactly ${count} TikTok search phrases for pillar "${args.pillar}" in niche "${args.niche}".
-Each phrase should be 3 to 6 words, no hashtags, and aimed at business/operator lessons rather than recipes or entertainment.
+Each phrase should be 2 to 5 words, no hashtags, in the words viewers actually search, and stay inside this pillar and niche (do not steer it toward business, recipes or entertainment unless the pillar is about that).
 Return {"queries":["..."]}.`,
         },
       ],
@@ -163,6 +165,12 @@ export function scoreTikTokSearchVideo(video: TikTokVideoData) {
   });
 }
 
+/** Pillars the semantic check may assign for this pool. Pure; exported for tests. */
+export function tiktokSemanticActivePillars(pillar: string): string[] | undefined {
+  const clean = pillar.trim();
+  return RESTAURANT_PILLARS.has(clean) ? undefined : [clean];
+}
+
 export function shouldUseTikTokSearchDiscovery(pillar: string): boolean {
   return pillar.trim() !== VIRAL_SEED_POOL_PILLAR && pillar.trim().length > 0;
 }
@@ -214,11 +222,16 @@ export async function discoverTikTokPoolCandidates(args: {
   maxScCalls: number;
   region?: string;
 }): Promise<TikTokPoolDiscoveryResult> {
-  const generated = await generateTikTokSearchQueries({
-    niche: args.niche,
-    pillar: args.pillar,
-    count: 5,
-  });
+  // Real search phrases from the keyword bank first; AI-written ones only
+  // when the bank has none for this topic yet.
+  const bank = await keywordQueriesFor({ pillar: args.pillar, platform: "tiktok", count: 5 });
+  const generated = bank
+    ? { queries: bank.queries, haikuCalls: 0 }
+    : await generateTikTokSearchQueries({
+        niche: args.niche,
+        pillar: args.pillar,
+        count: 5,
+      });
   const allocated = allocateTikTokSearchQueries({
     queries: generated.queries,
     maxScCalls: args.maxScCalls,
@@ -326,6 +339,10 @@ export async function discoverTikTokPoolCandidates(args: {
     try {
       const classified = await classifySemanticPoolRelevance({
         niche: args.niche,
+        // Restaurant pillars keep the six-pillar family (videos may move
+        // between them). Any other pool is judged against its own topic only,
+        // so videos are never pushed into restaurant pools by default.
+        activePillars: tiktokSemanticActivePillars(args.pillar),
         candidates: adaptedBeforeAdmission,
       });
       semanticHaikuCalls = classified.haikuCalls;
@@ -350,6 +367,18 @@ export async function discoverTikTokPoolCandidates(args: {
         reason: "missing_verdict" as const,
       }));
     }
+  }
+
+  if (bank) {
+    // Per phrase: viral videos sent to the topic check, and those that passed.
+    const foundByQuery = new Map<string, number>();
+    for (const row of strictRows) foundByQuery.set(row.query, (foundByQuery.get(row.query) ?? 0) + 1);
+    const passedByQuery = new Map<string, string[]>();
+    for (const c of adapted) {
+      const q = queryById.get(c.sourceId);
+      if (q) passedByQuery.set(q, [...(passedByQuery.get(q) ?? []), c.sourceId]);
+    }
+    await recordVideoSearch({ pick: bank, platform: "tiktok", foundByQuery, passedByQuery });
   }
 
   const totalScCalls = keywordCalls + topCalls;

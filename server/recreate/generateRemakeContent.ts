@@ -1,4 +1,5 @@
 import { invokeLLM } from "../_core/llm";
+import { buildTreatmentBlock, type RemakeTreatment } from "./remakeTreatment";
 import { withAiFormattingRules } from "../utils/aiFormattingRules";
 import { AI_FACT_CLAIM_GUARDRAIL } from "@shared/aiFactClaimGuardrail";
 import {
@@ -323,12 +324,16 @@ export async function generateRemakeContent(input: {
   gradeLevel: string;
   addCues: boolean;
   researchGroundingBlock?: string;
+  /** Real searched phrases that fit the remake (keyword bank); "" or absent when none. */
+  searchPhrasesBlock?: string;
   trustedResearchTexts?: string[];
   platformLabel?: "Instagram Reel" | "TikTok video" | "YouTube Short";
   /** Spoken remake language. Defaults to English for the creator's camera script. */
   outputLanguage?: string;
   viralStructureOverride?: Record<string, unknown>;
   llmInvoker?: typeof invokeLLM;
+  /** Own-winner treatment (OWN_WINNERS). Absent for every other remake. */
+  treatment?: RemakeTreatment | null;
 }): Promise<GeneratedRemakeContent> {
   const platformLabel = input.platformLabel ?? "Instagram Reel";
   const outputLanguage =
@@ -364,7 +369,11 @@ export async function generateRemakeContent(input: {
 
   const researchGroundingBlock = input.researchGroundingBlock?.trim() ?? "";
   const factsBlock = groundingRules(researchGroundingBlock, isSameTopic);
-  const formatFidelityBlock = buildFormatFidelityRules(viralStructure);
+  // A new Prism format replaces the source format, so its fidelity rules are dropped.
+  const formatFidelityBlock =
+    input.treatment?.kind === "prism" ? "" : buildFormatFidelityRules(viralStructure);
+  const treatmentBlock = buildTreatmentBlock(input.treatment);
+  const searchPhrasesBlock = input.searchPhrasesBlock?.trim() ?? "";
 
   const scriptPrompt = isSameTopic
     ? `You are an expert ${platformLabel} scriptwriter. Rewrite the following viral ${platformLabel} script on the SAME TOPIC and core message, but make it fresh and original.
@@ -377,7 +386,7 @@ ${v13Context}
 ${input.originalTranscript}
 
 ${factsBlock}
-
+${searchPhrasesBlock ? `\n${searchPhrasesBlock}\n` : ""}
 ${formatFidelityBlock}
 
 ${languageRules}
@@ -393,7 +402,7 @@ ${cuesInstruction}
 4. Preserve pacing style ("${(viralStructure.body as any)?.pacing || "Problem-solution"}"), transition technique, and CTA style.
 5. Keep similar duration and spoken rhythm.
 6. Do not swap in a different invented real-world example.
-
+${treatmentBlock ? `\n${treatmentBlock}\n` : ""}
 ${scriptFormatClosing}`
     : `You are an expert ${platformLabel} scriptwriter. Use the proven viral STRUCTURE below to write a NEW script for the creator's requested direction.
 
@@ -410,7 +419,7 @@ ${input.topic}
 ${hasExplicitUserAngleInTopic(input.topic) ? RECREATE_EXPLICIT_ANGLE_RULES : RECREATE_DEFAULT_TOPIC_RULES}
 
 ${factsBlock}
-
+${searchPhrasesBlock ? `\n${searchPhrasesBlock}\n` : ""}
 ${formatFidelityBlock}
 
 ${languageRules}
@@ -426,12 +435,13 @@ ${cuesInstruction}
 4. Keep similar length and spoken rhythm.
 5. Research supports facts; the source Reel supports structure. Never reverse those roles.
 6. If research does not support a concrete story, use a generic or clearly hypothetical example rather than inventing one.
-
+${treatmentBlock ? `\n${treatmentBlock}\n` : ""}
 ${scriptFormatClosing}`;
 
   const trustedTexts = [
     input.topic,
     researchGroundingBlock,
+    searchPhrasesBlock,
     ...(input.trustedResearchTexts ?? []),
     ...(isSameTopic ? [input.originalTranscript, input.caption] : []),
   ];

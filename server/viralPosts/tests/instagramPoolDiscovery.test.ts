@@ -358,6 +358,26 @@ describe("Instagram semantic pool admission wiring", () => {
     expect(result.semanticRejected).toBe(1);
   });
 
+  it("judges a non-restaurant pool against its own topic only", async () => {
+    const reel = adapted({ sourceId: "gym", caption: "3 moves for bigger shoulders" });
+    mockClassifySemantic.mockResolvedValue({
+      verdicts: [verdict({ sourceId: "gym", primaryPillar: "gym workouts" })],
+      haikuCalls: 1,
+    });
+
+    const result = await applyInstagramPoolAdmission({
+      niche: "Fitness",
+      poolNiche: "Fitness",
+      pillar: "gym workouts",
+      candidates: [reel],
+    });
+
+    expect(mockClassifySemantic.mock.calls[0]?.[0]).toMatchObject({ activePillars: ["gym workouts"] });
+    expect(result.adapted).toHaveLength(1);
+    expect(result.adapted[0]?.contentPillar).toBe("gym workouts");
+    expect(result.semanticRerouted).toBe(0);
+  });
+
   it("fails closed when semantic classification throws and does not keyword-admit", async () => {
     const recipe = adapted({
       sourceId: "pico",

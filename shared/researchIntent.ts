@@ -1,31 +1,46 @@
 import {
   isValidInstagramHandleNormalized,
   isValidTikTokHandleNormalized,
+  isValidYouTubeHandleNormalized,
   normalizeInstagramHandle,
   normalizeTikTokHandle,
+  normalizeYouTubeHandle,
 } from "./socialHandles";
 
-function validResearchHandle(handle: string, platform: "instagram" | "tiktok"): boolean {
-  return platform === "tiktok"
-    ? isValidTikTokHandleNormalized(handle)
-    : isValidInstagramHandleNormalized(handle);
+export type ResearchIntentPlatform = "instagram" | "tiktok" | "youtube";
+
+function normalizeResearchHandle(handle: string, platform: ResearchIntentPlatform): string {
+  if (platform === "tiktok") return normalizeTikTokHandle(handle);
+  if (platform === "youtube") return normalizeYouTubeHandle(handle);
+  return normalizeInstagramHandle(handle);
 }
 
-/** Stable public-to-product handoff for a selected Instagram creator. */
-export function researchReturnTo(handle: string, platform: "instagram" | "tiktok" = "instagram"): string {
-  const normalized = platform === "tiktok" ? normalizeTikTokHandle(handle) : normalizeInstagramHandle(handle);
+function validResearchHandle(handle: string, platform: ResearchIntentPlatform): boolean {
+  if (platform === "tiktok") return isValidTikTokHandleNormalized(handle);
+  if (platform === "youtube") return isValidYouTubeHandleNormalized(handle);
+  return isValidInstagramHandleNormalized(handle);
+}
+
+/**
+ * Link that opens Research for one creator and starts it (which adds the
+ * creator to Creator Radar). Used by the public site and Home's creator list.
+ */
+export function researchReturnTo(handle: string, platform: ResearchIntentPlatform = "instagram"): string {
+  const normalized = normalizeResearchHandle(handle, platform);
   if (!validResearchHandle(normalized, platform)) {
     throw new Error("Invalid creator username");
   }
-  return `/research?${platform === "tiktok" ? "platform=tiktok&" : ""}creator=${encodeURIComponent(normalized)}&start=1`;
+  const platformParam = platform === "instagram" ? "" : `platform=${platform}&`;
+  return `/research?${platformParam}creator=${encodeURIComponent(normalized)}&start=1`;
 }
 
-export function parseResearchIntent(search: string): { handle: string; autostart: boolean; platform: "instagram" | "tiktok" } | null {
+export function parseResearchIntent(
+  search: string
+): { handle: string; autostart: boolean; platform: ResearchIntentPlatform } | null {
   const params = new URLSearchParams(search.startsWith("?") ? search.slice(1) : search);
-  const platform = params.get("platform") === "tiktok" ? "tiktok" : "instagram";
-  const handle = platform === "tiktok"
-    ? normalizeTikTokHandle(params.get("creator") ?? "")
-    : normalizeInstagramHandle(params.get("creator") ?? "");
+  const raw = params.get("platform");
+  const platform: ResearchIntentPlatform = raw === "tiktok" || raw === "youtube" ? raw : "instagram";
+  const handle = normalizeResearchHandle(params.get("creator") ?? "", platform);
   if (!validResearchHandle(handle, platform)) return null;
   return { handle, autostart: params.get("start") === "1", platform };
 }

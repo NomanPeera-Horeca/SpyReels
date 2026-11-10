@@ -25,13 +25,6 @@ if (!url) throw new Error("EVAL_DB_READONLY_URL is not configured.");
 const USD_PER_CALL = Number(process.env.SCRAPECREATORS_USD_PER_CREDIT) || 0.002;
 const conn = await mysql.createConnection({ uri: url });
 
-const [allExps] = (await conn.query(
-  `SELECT e.id, e.name, e.status, e.snapshotAt, e.startedAt, e.endedAt, e.createdAt,
-          (SELECT COUNT(DISTINCT searchId) FROM viral_keyword_searches s WHERE s.experimentId = e.id) AS searches
-   FROM viral_keyword_experiments e ORDER BY e.id`
-)) as unknown as [Array<Record<string, unknown>>];
-console.log("ALL EXPERIMENTS");
-console.table(allExps);
 const wanted = Number(process.argv[2]) || null;
 const [exps] = (await conn.query(
   wanted ? `SELECT * FROM viral_keyword_experiments WHERE id = ?` : `SELECT * FROM viral_keyword_experiments WHERE snapshotAt IS NOT NULL ORDER BY id DESC LIMIT 1`,
@@ -142,46 +135,6 @@ const topics = [...new Set(rows.map(r => r.topicSlug))];
 for (const arm of ["v1", "v2"]) {
   const covered = topics.filter(t => [...cells].some(([k, c]) => k.startsWith(`${arm}|${t}|`) && c.useful.size > 0)).length;
   console.log(`COVERAGE ${arm}: ${covered}/${topics.length} niches with at least one useful video`);
-}
-
-// Diagnosis: verdicts of NEW on-topic videos per platform, and why YouTube ones are not viral.
-{
-  const byPlat = new Map<string, Map<string, number>>();
-  const ytNew: string[] = [];
-  for (const [k, f] of facts) {
-    if (f.createdAt < snapshotAt) continue;
-    const plat = k.split(":")[0];
-    const m = byPlat.get(plat) ?? new Map<string, number>();
-    m.set(String(f.status), (m.get(String(f.status)) ?? 0) + 1);
-    byPlat.set(plat, m);
-    if (plat === "youtube") ytNew.push(k.slice(8));
-  }
-  console.log("\nNEW ON-TOPIC VIDEO VERDICTS BY PLATFORM");
-  for (const [p, m] of byPlat) console.log(`  ${p}: ${[...m].map(([s, n]) => `${s}=${n}`).join(", ")}`);
-  let notFound = 0;
-  for (const k of allKeys.keys()) if (!facts.has(k)) notFound += 1;
-  console.log(`  passed ids with no library row: ${notFound}`);
-  if (ytNew.length) {
-    const [yt] = (await conn.query(
-      `SELECT s.status, s.source, s.basis, s.multiple, c.views, c.publishedAt, c.creatorHandle
-       FROM viral_post_candidates c LEFT JOIN viral_library_status s ON s.candidateId = c.id
-       WHERE c.platform = 'youtube' AND c.sourceId IN (?) LIMIT 400`,
-      [ytNew]
-    )) as unknown as [Array<Record<string, unknown>>];
-    const bySrc = new Map<string, number>();
-    const views: number[] = [];
-    let old = 0;
-    for (const r of yt) {
-      const key = `${r.status}/${r.source}`;
-      bySrc.set(key, (bySrc.get(key) ?? 0) + 1);
-      if (r.views != null) views.push(Number(r.views));
-      if (r.publishedAt && Date.now() - new Date(String(r.publishedAt)).getTime() > 90 * 86_400_000) old += 1;
-    }
-    views.sort((a, b) => a - b);
-    console.log(`  youtube new: ${yt.length}; status/source: ${[...bySrc].map(([s, n]) => `${s}=${n}`).join(", ")}`);
-    console.log(`  youtube new views median ${views[Math.floor(views.length / 2)] ?? "-"}; older than 90 days: ${old}`);
-    for (const r of yt.slice(0, 12)) console.log(`   ${JSON.stringify(r)}`);
-  }
 }
 console.log("\nMANUAL REVIEW SAMPLE (10 random useful videos per arm per niche)");
 for (const arm of ["v1", "v2"]) {

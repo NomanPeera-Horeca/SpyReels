@@ -37,6 +37,9 @@ import { useLibraryRemakeChain } from "@/hooks/useLibraryRemakeChain";
 import { ingestUrlAndStartLibraryRemake } from "@/lib/ingestUrlAndStartLibraryRemake";
 import { buildRemakeIntentMedia } from "@/lib/remakeIntent";
 import { ViralPostPlayer } from "@/components/ViralPostPlayer";
+import { AddPlatformDialog } from "./AddPlatformDialog";
+
+import { researchReturnTo } from "@shared/researchIntent";
 import { HOME_COPY as C } from "./copy";
 import {
   AgentComposer,
@@ -47,6 +50,7 @@ import {
   IdeaCard,
   IdeasSkeleton,
   ManageProfilesModal,
+  PLATFORMS,
   ProfilesInvite,
   QuickActions,
   ResultSkeleton,
@@ -117,6 +121,14 @@ export default function HomeV2Page() {
   const planQ = trpc.plan.listCards.useQuery(undefined, {
     refetchOnWindowFocus: false,
   });
+  const searchIdeasQ = trpc.homeV2.searchIdeas.useQuery(undefined, {
+    refetchOnWindowFocus: false,
+    // Right after onboarding a new niche has no search ideas yet: check again until they arrive.
+    refetchInterval: q => {
+      const d = q.state.data;
+      return d && d.ideas.length === 0 ? 30_000 : false;
+    },
+  });
   const creatorsQ = trpc.homeV2.creators.useQuery(undefined, {
     staleTime: 0,
     refetchOnWindowFocus: true,
@@ -138,6 +150,10 @@ export default function HomeV2Page() {
     {}
   );
   const [playingPost, setPlayingPost] = useState<ViralPost | null>(null);
+  // "Your proven ideas": the creator's own winners (OWN_WINNERS; empty when off).
+  const provenQ = trpc.homeV2.provenIdeas.useQuery(undefined, { staleTime: 5 * 60_000 });
+  const provenIdeas = provenQ.data?.items ?? [];
+  const provenRef = useRef<HTMLElement>(null);
   const closePlayer = useCallback(() => setPlayingPost(null), []);
 
   const ctx = contextQ.data;
@@ -184,14 +200,96 @@ export default function HomeV2Page() {
 
   const ideas: HomeIdea[] = useMemo(() => {
     const cards = planQ.data?.calendarCards ?? [];
-    return cards
+    const planIdeas: HomeIdea[] = cards
       .filter(c => c.status !== "posted" && c.coachScriptId == null)
-      .slice(0, 2)
+      .slice(0, 3)
       .map(c => ({ id: c.id, title: c.title, hook: c.hook || null }));
-  }, [planQ.data]);
+    // Fill the rest with phrases people really search in this niche.
+    const searched: HomeIdea[] = (searchIdeasQ.data?.ideas ?? []).map(i => ({
+      id: `search:${i.phrase}`,
+      title: i.title,
+      hook: null,
+      badge:
+        i.searchVolume != null && i.searchVolume >= 10
+          ? C.ideas.searchedVolume(compactNumber(i.searchVolume))
+          : i.viralFound > 0
+            ? C.ideas.searchedProven(i.viralFound)
+            : C.ideas.searched,
+    }));
+    // Until search ideas exist, the creator's own pillar sub-topics are the ideas.
+    const fromPillars: HomeIdea[] = (searchIdeasQ.data?.pillarIdeas ?? []).map(i => ({
+      id: `pillar:${i.label}|pillar|${i.pillarTitle}`,
+      title: i.label,
+      hook: null,
+      badge: C.ideas.fromPillar(i.pillarTitle),
+    }));
+    return [...planIdeas, ...searched, ...fromPillars].slice(0, 3);
+  }, [planQ.data, searchIdeasQ.data]);
   const hasPlan = (planQ.data?.calendarCards.length ?? 0) > 0;
 
-  const writeIdea = (id: number) => {
+  /** Remake one of the creator's own winners: the same popup with the own-winner options. */
+  const remakeProvenIdea = (item: (typeof provenIdeas)[number]) => {
+    const post = item.post;
+    track("own_winner_remake_open", { platform: post.platform, format: item.recommended?.id ?? null });
+    startRemake(
+      { source: "library", libraryCandidateId: Number(post.id) },
+      {
+        media: buildRemakeIntentMedia({
+          thumbnailUrl: post.thumbnailUrl,
+          videoUrl: post.videoUrl,
+          reelId: post.reelId,
+          platform: post.platform,
+          sourceUrl: post.sourceUrl,
+        }),
+        ownWinner: {
+          multiple: post.viralMultiple ?? null,
+          caption: post.hook?.trim() || post.caption?.trim() || "",
+          formats: item.formats,
+          usedFormats: item.usedFormats,
+          recommendedFormatId: item.recommended?.id ?? null,
+        },
+      }
+    );
+  };
+
+  /** "Remix my winners": scroll to "Your proven ideas" (owner decision). */
+  const scrollToProven = () => {
+    track("quick_action", { capability: "remix_winners" });
+    const el = provenRef.current;
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+    el.querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
+  };
+
+  const writeIdea = (id: number | string) => {
+    if (typeof id === "string" && id.startsWith("pillar:")) {
+      const [label, pillar] = id.slice("pillar:".length).split("|pillar|");
+      track("idea_write_pillar");
+      try {
+        sessionStorage.setItem(
+          STUDIO_PREFILL_KEY,
+          `Write a short-form video script about "${label}"${pillar ? `, for my content pillar "${pillar}"` : ""}.`
+        );
+      } catch {
+        // Storage blocked: the Agent opens empty; the user can still type.
+      }
+      navigate("/studio");
+      return;
+    }
+    if (typeof id === "string") {
+      const phrase = id.replace(/^search:/, "");
+      track("idea_write_searched", { words: phrase.split(/\s+/).length });
+      try {
+        sessionStorage.setItem(
+          STUDIO_PREFILL_KEY,
+          `Write a short-form video script about "${phrase}".\n\nPeople search this exact phrase on Google and YouTube, so use it word for word in the hook, the on-screen text and the caption.`
+        );
+      } catch {
+        // Storage blocked: the Agent opens empty; the user can still type.
+      }
+      navigate("/studio");
+      return;
+    }
     const card = planQ.data?.calendarCards.find(c => c.id === id);
     if (!card) return;
     track("idea_write", { day: card.day });
@@ -218,8 +316,26 @@ export default function HomeV2Page() {
 
   const addByUrl = trpc.collected.addByUrl.useMutation();
   const save = trpc.viralPosts.save.useMutation();
+  // Measurement for the ranking trial: the same signals for every ranking.
+  // Fire-and-forget; never blocks or errors the page. Library posts only (numeric ids).
+  const signal = trpc.viralPosts.feedback.useMutation();
+  const sendSignal = (
+    post: ViralPost,
+    feedbackType: "post_impression" | "remake_started" | "not_my_niche"
+  ) => {
+    if (!/^\d+$/.test(post.id)) return;
+    signal.mutate({ postId: post.id, feedbackType }, { onError: () => {} });
+  };
+  const [hiddenPosts, setHiddenPosts] = useState<Record<string, true>>({});
+  const markNotRelevant = (post: ViralPost) => {
+    sendSignal(post, "not_my_niche");
+    track("video_not_relevant", { platform: post.platform });
+    setHiddenPosts(h => ({ ...h, [post.id]: true }));
+    toast.success(C.videos.notRelevantThanks);
+  };
   const unsave = trpc.viralPosts.unsave.useMutation();
   const { startRemake, RemakeDialogs } = useLibraryRemakeChain();
+  const libraryRoute = trpc.recreate.libraryRoute.useQuery(undefined, { staleTime: 5 * 60_000 });
 
   const createFromVideo = async (post: ViralPost) => {
     if (remakeBusyId) return;
@@ -230,11 +346,14 @@ export default function HomeV2Page() {
     }
     setRemakeBusyId(post.id);
     track("video_create_script", { platform: post.platform });
-    const toastId = toast.loading(
-      "Adding to Collected Reels, then starting remake…"
-    );
+    sendSignal(post, "remake_started");
+    // Library route: the remake popup opens at once, so no "adding" toast.
+    const libraryId = libraryRoute.data?.enabled && /^\d+$/.test(post.id) ? Number(post.id) : null;
+    const toastId =
+      libraryId == null ? toast.loading("Adding to Collected Reels, then starting remake…") : undefined;
     try {
       await ingestUrlAndStartLibraryRemake(url, {
+        resolveLibraryCandidateId: async () => libraryId,
         addByUrl: u => addByUrl.mutateAsync({ url: u }),
         fetchCollectedList: () => utils.collected.list.fetch(),
         startRemake,
@@ -246,11 +365,11 @@ export default function HomeV2Page() {
           sourceUrl: post.sourceUrl,
         }),
       });
-      toast.success("Remake started", { id: toastId });
+      if (toastId != null) toast.dismiss(toastId);
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : "Remake failed. Try again.",
-        { id: toastId }
+        toastId != null ? { id: toastId } : undefined
       );
     } finally {
       setRemakeBusyId(null);
@@ -273,9 +392,13 @@ export default function HomeV2Page() {
 
   /* ---------- profiles ---------- */
 
+  // Loaded with Home: the add-platform chips need to know what is already added.
   const profilesQ = trpc.homeV2.profiles.useQuery(undefined, {
-    enabled: profilesOpen,
+    enabled: profilesOpen || Boolean(ctx?.hasProfile),
   });
+  const missingPlatforms = PLATFORMS.filter(
+    p => !(profilesQ.data ?? []).some(x => x.platform === p.id && x.handle)
+  );
   const switchProfile = trpc.homeV2.switchProfile.useMutation();
 
   const switchTo = async (profileId: string) => {
@@ -292,9 +415,12 @@ export default function HomeV2Page() {
     }
   };
 
+  // "+ TikTok" opens a small popup (no onboarding page): handle, "Is this you?", done.
+  const [addingPlatform, setAddingPlatform] = useState<SocialPlatform | null>(null);
   const addProfile = (platform: SocialPlatform) => {
     track("profile_add", { platform });
-    navigate(`/onboarding?add=${platform}`);
+    setProfilesOpen(false);
+    setAddingPlatform(platform);
   };
 
   /* ---------- render ---------- */
@@ -370,6 +496,7 @@ export default function HomeV2Page() {
               onWrite={() => quick("write_script")}
               onImprove={() => quick("refine_script")}
               onHooks={() => quick("hook_ideas")}
+              onRemix={provenIdeas.length > 0 ? scrollToProven : undefined}
             />
             <VideoLinkEntry
               onPaste={() => {
@@ -398,11 +525,23 @@ export default function HomeV2Page() {
                 >
                   {compact ? C.mobile.viewPlan : C.ideas.viewPlan}
                 </button>
+              ) : ideas.length > 0 ? (
+                // Search ideas fill the section: keep the way to a full plan.
+                <button
+                  type="button"
+                  className={ghostLink}
+                  onClick={() => {
+                    track("create_plan");
+                    navigate("/plan");
+                  }}
+                >
+                  {C.ideas.emptyAction}
+                </button>
               ) : null}
             </div>
             {planQ.isLoading ? (
               <IdeasSkeleton />
-            ) : planQ.isError ? (
+            ) : planQ.isError && ideas.length === 0 ? (
               <StateCard
                 stack
                 title={C.ideas.errorTitle}
@@ -418,7 +557,7 @@ export default function HomeV2Page() {
                 }
               />
             ) : ideas.length > 0 ? (
-              <div className={styles.twoUp}>
+              <div className={styles.threeUp}>
                 {ideas.map(i => (
                   <IdeaCard
                     key={i.id}
@@ -446,6 +585,47 @@ export default function HomeV2Page() {
               />
             )}
           </section>
+
+          {provenIdeas.length > 0 ? (
+            <section
+              ref={provenRef}
+              className={[styles.section, styles.slotProven].join(" ")}
+              aria-labelledby="home-v2-proven"
+              data-testid="home-proven-ideas"
+            >
+              <div className={styles.sectionHeader}>
+                <div className={styles.sectionTitles}>
+                  <h2
+                    id="home-v2-proven"
+                    tabIndex={-1}
+                    className={["sr-text-product-heading-4", styles.h2].join(" ")}
+                  >
+                    {C.provenIdeas.title}
+                  </h2>
+                  <p className={["sr-text-product-body-small", styles.muted].join(" ")}>
+                    {C.provenIdeas.subtitle}
+                  </p>
+                </div>
+              </div>
+              {/* Exactly the same grid and card as "Viral Videos for you" (owner decision). */}
+              <div className={styles.videoGrid}>
+                {provenIdeas.map(item => {
+                  const p = { ...item.post, saved: savedOverride[item.post.id] ?? item.post.saved };
+                  return (
+                    <HomeVideoCard
+                      key={`proven-${item.post.id}`}
+                      post={p}
+                      compact={compact}
+                      busy={false}
+                      onPlay={() => setPlayingPost(item.post)}
+                      onRemake={() => remakeProvenIdea(item)}
+                      onToggleSave={() => void toggleSave(p)}
+                    />
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
 
           <section
             className={[styles.section, styles.slotVideos].join(" ")}
@@ -502,7 +682,7 @@ export default function HomeV2Page() {
               />
             ) : videos && videos.items.length > 0 ? (
               <div className={styles.videoGrid}>
-                {videos.items.map(post => {
+                {videos.items.filter(post => !hiddenPosts[post.id]).map(post => {
                   const p = {
                     ...post,
                     saved: savedOverride[post.id] ?? post.saved,
@@ -516,6 +696,8 @@ export default function HomeV2Page() {
                       onPlay={() => setPlayingPost(post)}
                       onRemake={() => void createFromVideo(post)}
                       onToggleSave={() => void toggleSave(p)}
+                      onSeen={() => sendSignal(post, "post_impression")}
+                      onNotRelevant={() => markNotRelevant(post)}
                     />
                   );
                 })}
@@ -578,9 +760,13 @@ export default function HomeV2Page() {
                     <CreatorRow
                       creator={c}
                       compact={compact}
-                      onSee={() => {
-                        track("creator_open");
-                        if (c.bestPost) setPlayingPost(c.bestPost);
+                      onOpen={() => {
+                        track("creator_open", { platform: c.platform });
+                        try {
+                          navigate(researchReturnTo(c.handle, c.platform));
+                        } catch {
+                          navigate("/research");
+                        }
                       }}
                     />
                     <div className={styles.divider} />
@@ -620,10 +806,20 @@ export default function HomeV2Page() {
               />
             )}
           </section>
-          {ctx?.hasProfile ? (
+          {ctx?.hasProfile && profilesQ.data && missingPlatforms.length > 0 ? (
             <div className={styles.slotInvite}>
-              <ProfilesInvite compact={compact} onManage={() => setProfilesOpen(true)} />
+              <ProfilesInvite compact={compact} missing={missingPlatforms} onAdd={addProfile} />
             </div>
+          ) : null}
+          {/* Switching stays possible once there is more than one profile (no card). */}
+          {(profilesQ.data ?? []).filter(x => x.handle).length > 1 ? (
+            <button
+              type="button"
+              className={[styles.ghost, styles.switchProfileLink].join(" ")}
+              onClick={() => setProfilesOpen(true)}
+            >
+              {C.profiles.switchProfile}
+            </button>
           ) : null}
         </aside>
 
@@ -639,8 +835,27 @@ export default function HomeV2Page() {
             onClose={() => setProfilesOpen(false)}
           />
         ) : null}
+        {addingPlatform ? (
+          <AddPlatformDialog
+            platform={addingPlatform}
+            label={PLATFORMS.find(p => p.id === addingPlatform)?.label ?? addingPlatform}
+            onClose={() => setAddingPlatform(null)}
+            onAdded={() => {
+              track("profile_added_inline", { platform: addingPlatform });
+              setAddingPlatform(null);
+              void utils.homeV2.invalidate();
+            }}
+          />
+        ) : null}
         {RemakeDialogs}
       </div>
     </div>
   );
+}
+
+/** 12100 -> "12K", 1500 -> "1.5K", 900 -> "900". */
+function compactNumber(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 1).replace(/\.0$/, "")}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1).replace(/\.0$/, "")}K`;
+  return String(Math.round(n));
 }

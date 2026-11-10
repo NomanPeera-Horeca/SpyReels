@@ -354,3 +354,12 @@ describe("semantic routing stays primary-only across platforms", () => {
     expect(routed.rejected[0]?.reason).toBe("missing_verdict");
   });
 });
+
+describe("tiktokSemanticActivePillars", () => {
+  it("judges non-restaurant pools against their own topic only", async () => {
+    const { tiktokSemanticActivePillars } = await import("../tiktokPoolDiscovery");
+    const { DEFAULT_CONTENT_PILLARS } = await import("../constants");
+    expect(tiktokSemanticActivePillars(" leadership ")).toEqual(["leadership"]);
+    expect(tiktokSemanticActivePillars(DEFAULT_CONTENT_PILLARS[0]!)).toBeUndefined();
+  });
+});

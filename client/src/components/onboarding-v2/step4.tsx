@@ -57,9 +57,22 @@ export type StepItem<T> = {
 };
 
 /** Real job state for this step's suggestions. */
+/** Grey placeholder lines so it is clear more suggestions are on the way. Decorative only. */
+function ComingSkeleton() {
+  return (
+    <div className={styles.skeletonCard} aria-hidden="true" data-testid="onboarding-coming-skeleton">
+      <span className={styles.skeletonLine} style={{ width: "55%" }} />
+      <span className={styles.skeletonLine} style={{ width: "85%" }} />
+      <span className={styles.skeletonLine} style={{ width: "40%" }} />
+    </div>
+  );
+}
+
 export type AiState =
   | { state: "idle" }
   | { state: "running" }
+  /** Some suggestions are already shown and the job is still adding more. */
+  | { state: "more" }
   | { state: "failed" }
   | { state: "clarify"; question: string };
 
@@ -214,6 +227,7 @@ function StepFrame({
           {common.ai.state === "running" ? (
             <AnalysisStatusLine status="running" handle="" className={styles.aiLine} label={P.thinking} />
           ) : null}
+          {common.ai.state === "running" ? <ComingSkeleton /> : null}
           {common.ai.state === "failed" ? (
             <p className={["sr-text-product-body-small", styles.muted].join(" ")} role="status">
               {P.failed}{" "}
@@ -225,6 +239,12 @@ function StepFrame({
             </p>
           ) : null}
           {children}
+          {common.ai.state === "more" ? (
+            <div className={styles.moreComing}>
+              <AnalysisStatusLine status="running" handle="" className={styles.aiLine} label={P.thinkingMore} />
+              <ComingSkeleton />
+            </div>
+          ) : null}
         </div>
       </OnboardingShell>
     </PendingEditsContext.Provider>

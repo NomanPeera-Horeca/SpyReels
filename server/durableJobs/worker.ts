@@ -83,6 +83,177 @@ function startDrain(signal: string): void {
   console.info(`[durableJobs] received ${signal}; stopping new claims`);
 }
 
+/**
+ * Viral library work, every few minutes in the worker (not restarted by web
+ * deploys; downloads + ffmpeg stay off the web server), starting 30s after
+ * boot. Each step is idempotent and bounded:
+ *   1. copy finished research into the library (no paid calls);
+ *   2. match new or changed creator strategies to topics (text AI);
+ *   3. understand a few viral/rising videos (daily USD cap inside).
+ * Off with VIRAL_LIBRARY_UNDERSTANDING=false.
+ */
+function startViralLibraryUnderstanding(): void {
+  if (process.env.VIRAL_LIBRARY_UNDERSTANDING === "false") return;
+  const everyMs = Math.max(60_000, Number(process.env.VIRAL_LIBRARY_UNDERSTANDING_MS ?? 5 * 60_000));
+  let running = false;
+  const step = async (name: string, run: () => Promise<unknown>) => {
+    try {
+      await run();
+    } catch (error) {
+      console.error(`[viralLibrary] ${name} failed`, error);
+    }
+  };
+  const tick = () => {
+    if (running || draining) return;
+    running = true;
+    void (async () => {
+      const library = await import("../viralPosts/library");
+      const topics = await import("../viralPosts/topics");
+      const understanding = await import("../viralPosts/videoUnderstanding");
+      await step("ingest", () => library.ingestResearchJobs({ perSource: 5 }));
+      await step("profile topics", () => topics.matchProfileTopics({ maxProfiles: 10 }));
+      await step("keyword bank", async () => {
+        const kw = await import("../viralPosts/keywords");
+        await kw.harvestDueTopics({ max: 2 });
+        // Viral counts per phrase change slowly: refresh about once an hour.
+        if (new Date().getUTCMinutes() < 5) await kw.refreshKeywordOutcomes();
+        // Google search volume (DataForSEO): up to 1,000 phrases per tick until all are checked.
+        const volume = await import("../viralPosts/searchVolume");
+        await volume.refreshSearchVolumes();
+        // Scoring v2 preparation (topic aliases, relevance labels): only when v2 or the experiment is switched on.
+        const relevance = await import("../viralPosts/keywordRelevance");
+        await relevance.prepareKeywordRelevance({ maxTopics: 2 });
+      });
+      await step("keyword experiment", async () => {
+        // Off unless KEYWORD_EXPERIMENT_RUNNER=on and an experiment row is 'ready' or 'running'.
+        const experiment = await import("../viralPosts/keywordExperiment");
+        await experiment.runKeywordExperimentTick();
+      });
+      await step("discovery pilot", async () => {
+        // Off unless DISCOVERY_PILOT_RUNNER=on and a pilot row is 'ready', 'running' or 'second_view'.
+        const pilot = await import("../viralPosts/discoveryPilot");
+        await pilot.runDiscoveryPilotTick();
+      });
+      await step("rising recheck", async () => {
+        const rising = await import("../viralPosts/risingRecheck");
+        await rising.runRisingRecheck({ max: 30 });
+      });
+      await step("youtube channels", async () => {
+        const yt = await import("../viralPosts/youtubeChannels");
+        await yt.repairYouTubeLibraryCreators({ max: 40 });
+        // "Can't judge" Shorts: settle the hopeless ones, measure channels' usual views (daily cap).
+        await yt.measureYouTubeBaselines({ maxChannels: 10 });
+      });
+      await step("understanding", () => understanding.processLibraryVideos());
+      await step("embeddings", async () => {
+        await understanding.embedMissingVideos({ max: 50 });
+        await topics.embedMissingProfiles({ max: 50 });
+      });
+    })()
+      .catch(error => console.error("[viralLibrary] tick failed", error))
+      .finally(() => {
+        running = false;
+      });
+  };
+  setInterval(tick, everyMs);
+  setTimeout(tick, 30_000);
+}
+
+startViralLibraryUnderstanding();
+
+/**
+ * One-time topic fill: first search of every topic pool, 3 pools every 5
+ * minutes, own loop so long searches never delay the library steps above.
+ * Total cap VIRAL_TOPIC_FILL_BUDGET_USD (default $20). When every topic was
+ * searched (or the cap is reached) the same loop switches to the recurring
+ * topic refresh (weekly cap VIRAL_TOPIC_REFRESH_WEEKLY_USD, default $10; off
+ * with VIRAL_TOPIC_REFRESH=false). Off entirely with VIRAL_TOPIC_FILL=false.
+ */
+function startViralTopicFill(): void {
+  if (process.env.VIRAL_TOPIC_FILL === "false") return;
+  const everyMs = Math.max(60_000, Number(process.env.VIRAL_TOPIC_FILL_MS ?? 5 * 60_000));
+  let running = false;
+  let fillFinished = false;
+  const tick = () => {
+    if (running || draining) return;
+    running = true;
+    void import("../viralPosts/topicFill")
+      .then(async m => {
+        if (!fillFinished) {
+          const r = await m.runTopicFill({ maxPools: 3 });
+          if (r.skipped === "done" || r.skipped === "budget_reached") {
+            fillFinished = true;
+            console.info(`[viralLibrary] fill stopped: ${r.skipped}; recurring topic refresh takes over`, r);
+          } else {
+            return;
+          }
+        }
+        // After the one-time fill: search topics again on a schedule (weekly cap).
+        if (process.env.VIRAL_TOPIC_REFRESH !== "false") await m.runTopicRefresh({ maxPools: 3 });
+      })
+      .catch(error => console.error("[viralLibrary] fill tick failed", error))
+      .finally(() => {
+        running = false;
+      });
+  };
+  setInterval(tick, everyMs);
+  setTimeout(tick, 90_000);
+}
+
+startViralTopicFill();
+
+/**
+ * Pre-research of the creators shown on Home (server/research/prefetch.ts):
+ * 2 creators every 2 minutes, daily cap RESEARCH_PREFETCH_DAILY_MAX (default
+ * 150). Off with RESEARCH_PREFETCH=false.
+ */
+function startResearchPrefetch(): void {
+  if (process.env.RESEARCH_PREFETCH === "false") return;
+  const everyMs = Math.max(60_000, Number(process.env.RESEARCH_PREFETCH_MS ?? 2 * 60_000));
+  let running = false;
+  const tick = () => {
+    if (running || draining) return;
+    running = true;
+    void import("../research/prefetch")
+      .then(m => m.runResearchPrefetch({ max: 2 }))
+      .catch(error => console.error("[research] prefetch tick failed", error))
+      .finally(() => {
+        running = false;
+      });
+  };
+  setInterval(tick, everyMs);
+  setTimeout(tick, 60_000);
+}
+
+startResearchPrefetch();
+
+/**
+ * "Your viral videos" (OWN_WINNERS=on): every 6 hours, a database check that
+ * queues creators' OWN accounts that are due: weekly if they posted in the
+ * last 30 days, monthly if quiet. New accounts are queued when added.
+ */
+function startOwnAccountResearch(): void {
+  if (process.env.OWN_WINNERS !== "on") return;
+  let running = false;
+  const tick = () => {
+    if (running || draining) return;
+    running = true;
+    void import("../viralPosts/ownWinners")
+      .then(async m => {
+        const n = await m.queueOwnAccountResearch();
+        if (n > 0) console.info("[viralLibrary] own_research_queued", { accounts: n });
+      })
+      .catch(error => console.error("[viralLibrary] own research tick failed", error))
+      .finally(() => {
+        running = false;
+      });
+  };
+  setInterval(tick, 6 * 60 * 60_000);
+  setTimeout(tick, 3 * 60_000);
+}
+
+startOwnAccountResearch();
+
 process.on("SIGTERM", () => startDrain("SIGTERM"));
 process.on("SIGINT", () => startDrain("SIGINT"));
 

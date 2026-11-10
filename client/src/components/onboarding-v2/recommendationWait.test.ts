@@ -40,6 +40,14 @@ describe("recommendationWaitState", () => {
         hasSavedSuggestions: true,
         status: { state: "running", at: 11 },
       }).state
+    ).toBe("more");
+    expect(
+      recommendationWaitState({
+        ...base,
+        hasSavedSuggestions: true,
+        waitExpired: true,
+        status: { state: "running", at: 11 },
+      }).state
     ).toBe("idle");
     expect(
       recommendationWaitState({

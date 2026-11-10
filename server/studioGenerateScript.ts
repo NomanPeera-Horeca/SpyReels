@@ -33,6 +33,7 @@ import { coachScriptModeForPlanCard, inferCoachScriptMode, type CoachScriptMode 
 import { enforceCoachScriptConstraints } from "./coachConstraintCorrection";
 import { coachScripts, planCards } from "../drizzle/schema";
 import { invokeLLM } from "./_core/llm";
+import { searchPhrasesBlockForWorkspace } from "./viralPosts/searchIdeas";
 import { getDb } from "./db";
 import { getCreatorCoachProfile, type CreatorCoachProfile } from "./planCoachProfile";
 import { formatAudienceSignalsForPrompt } from "@shared/audienceResearch";
@@ -145,6 +146,14 @@ export async function generateCoachScriptForWorkspace(args: {
     rawCreatorIdea: args.rawCreatorIdea,
     description: args.description,
   });
+  // Real searched phrases that fit this idea (keyword bank), for the hook and caption.
+  const searchPhrasesBlock = await searchPhrasesBlockForWorkspace({
+    workspaceId: args.workspaceId,
+    idea: rawCreatorIdea || args.description,
+  });
+  if (searchPhrasesBlock) {
+    audienceResearchBlock = [audienceResearchBlock, searchPhrasesBlock].filter(Boolean).join("\n\n");
+  }
   const creatorConstraints = extractCoachCreatorConstraints(rawCreatorIdea);
   const creatorConstraintsBlock = formatCoachCreatorConstraintsForPrompt(creatorConstraints);
 

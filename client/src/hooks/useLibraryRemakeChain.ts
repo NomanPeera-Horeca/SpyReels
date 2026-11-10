@@ -1,3 +1,5 @@
+import { hasVoiceProfile } from "@/lib/libraryRemakeChainCore";
+export { hasVoiceProfile };
 import { useCallback, useEffect, useRef, useState, createElement, Fragment } from "react";
 import { toast } from "sonner";
 import type { ReelClassificationLike } from "@/lib/remakeability";
@@ -21,7 +23,7 @@ import {
 import { trpc } from "@/lib/trpc";
 import { formatIdeaScriptErrorForUser } from "@shared/ideaScriptErrors";
 import { OnboardingVoiceGateDialog } from "@/components/OnboardingVoiceGateDialog";
-import { RemakeIntentDialog } from "@/components/RemakeIntentDialog";
+import { RemakeIntentDialog, type RemakeIntentPhase } from "@/components/RemakeIntentDialog";
 import {
   RemakeWorkspaceDialog,
   type RemakeWorkspaceTarget,
@@ -29,7 +31,14 @@ import {
 import type { OpenRemakeWorkspaceArgs } from "@/lib/oneClickRemakeAction";
 import {
   isValidRemakeIntent,
+  loadRemakeDraft,
+  newRemakeRequestId,
+  ownWinnerDefaultDraft,
+  type OwnWinnerContext,
+  remakeIntentToRequest,
   remakeIntentToTopic,
+  saveRemakeDraft,
+  type RemakeDraft,
   type RemakeIntent,
   type RemakeIntentMedia,
 } from "@/lib/remakeIntent";
@@ -45,20 +54,14 @@ export type StartRemakeOptions = {
   jobId?: number;
   /** Source preview for RemakeIntentDialog (owned by the remake chain, not a side channel). */
   media?: RemakeIntentMedia | null;
+  /** The creator's OWN winning video (OWN_WINNERS): own-winner options in the popup. */
+  ownWinner?: OwnWinnerContext | null;
 };
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function hasVoiceProfile(state: {
-  businessDescription?: string | null;
-  targetAudience?: string | null;
-} | null | undefined): boolean {
-  return Boolean(
-    state?.businessDescription?.trim() && state?.targetAudience?.trim()
-  );
-}
 
 function resolveOpenReelId(
   source: LibraryRemakeSource,
@@ -113,7 +116,14 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
     source: LibraryRemakeSource;
     key: string;
     media: RemakeIntentMedia | null;
+    /** choose → generating (after Create remake) → error (Try again). */
+    phase: RemakeIntentPhase;
+    errorMessage?: string | null;
   } | null>(null);
+  const intentPromptRef = useRef(intentPrompt);
+  intentPromptRef.current = intentPrompt;
+  /** The popup's choice and typed idea, per video (also in sessionStorage). */
+  const [draftByKey, setDraftByKey] = useState<Record<string, RemakeDraft>>({});
 
   const pendingRemakeRef = useRef<{
     source: LibraryRemakeSource;
@@ -126,7 +136,11 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
   const workspaceKeyRef = useRef<string | null>(null);
   const stateByKeyRef = useRef(stateByKey);
   const intentByKeyRef = useRef<Map<string, RemakeIntent>>(new Map());
+  /** Request id per video for the current "Create remake" press (duplicate guard). */
+  const requestIdByKeyRef = useRef<Map<string, string>>(new Map());
   const mediaByKeyRef = useRef<Map<string, RemakeIntentMedia>>(new Map());
+  /** Own-winner context per video, kept with the video like its preview. */
+  const ownWinnerByKeyRef = useRef<Map<string, OwnWinnerContext>>(new Map());
   stateByKeyRef.current = stateByKey;
 
   const resolveIntentMedia = useCallback(
@@ -273,6 +287,7 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
         | { featuredReelId: number }
         | { tiktokVideoId: number }
         | { youtubeVideoId: number }
+        | { libraryCandidateId: number }
     ) => trpcUtils.transcribe.status.fetch(input),
     [trpcUtils]
   );
@@ -296,11 +311,13 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
 
       const media = resolveIntentMedia(key, opts.media);
       const existingIntent = intentByKeyRef.current.get(key);
-      if (existingIntent) {
-        openWorkspaceForSource(source);
-      } else {
-        setIntentPrompt({ source, key, media });
-      }
+      setIntentPrompt({
+        source,
+        key,
+        media,
+        phase: existingIntent ? "generating" : "choose",
+        errorMessage: null,
+      });
 
       const classification = opts.classification;
       let reelId: number | undefined =
@@ -422,6 +439,31 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
               }
             );
           }
+        } else if (source.source === "library") {
+          // Shared library video: transcribed once from its link and reused.
+          const result = await transcribeStartMutation.mutateAsync({
+            libraryCandidateId: source.libraryCandidateId,
+          });
+          if (cancelledRef.current.has(key)) return;
+          if (result.status !== "completed") {
+            await waitForLibraryTranscriptionReady(
+              fetchTranscribeStatus,
+              { libraryCandidateId: source.libraryCandidateId },
+              {
+                isCancelled: () => cancelledRef.current.has(key),
+                onAttempt: (attempt) =>
+                  patchState(source, {
+                    stage: "transcribing",
+                    progressPercent: libraryEasedPercent(
+                      "transcribing",
+                      attempt,
+                      LIBRARY_TRANSCRIBE_MAX
+                    ),
+                    libraryCandidateId: source.libraryCandidateId,
+                  }),
+              }
+            );
+          }
         } else if (source.source === "youtube") {
           const result = await transcribeStartMutation.mutateAsync({
             youtubeVideoId: source.youtubeVideoId,
@@ -519,9 +561,7 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
 
         const intent = intentByKeyRef.current.get(key) ?? (await waitForIntent(key));
         if (!intent || cancelledRef.current.has(key)) return;
-
-        setIntentPrompt((current) => (current?.key === key ? null : current));
-        openWorkspaceForSource(source, { reelId: reelId ?? null });
+        // The popup stays open in its "Creating your remake…" state.
 
         patchState(source, {
           stage: "generating",
@@ -530,28 +570,45 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
         });
 
         const topic = remakeIntentToTopic(intent);
+        let clientRequestId = requestIdByKeyRef.current.get(key);
+        if (!clientRequestId) {
+          clientRequestId = newRemakeRequestId();
+          requestIdByKeyRef.current.set(key, clientRequestId);
+        }
+        const request = { ...remakeIntentToRequest(intent), clientRequestId };
         const generateInput =
           source.source === "featured"
             ? {
                 featuredReelId: source.featuredReelId,
                 topic,
+                ...request,
                 gradeLevel: "auto" as const,
               }
             : source.source === "tiktok"
               ? {
                   tiktokVideoId: source.tiktokVideoId,
                   topic,
+                  ...request,
                   gradeLevel: "auto" as const,
                 }
               : source.source === "youtube"
                 ? {
                     youtubeVideoId: source.youtubeVideoId,
                     topic,
+                    ...request,
                     gradeLevel: "auto" as const,
                   }
-                : {
+                : source.source === "library"
+                  ? {
+                      libraryCandidateId: source.libraryCandidateId,
+                      topic,
+                      ...request,
+                      gradeLevel: "auto" as const,
+                    }
+                  : {
                     reelId: reelId!,
                     topic,
+                    ...request,
                     gradeLevel: "auto" as const,
                   };
 
@@ -612,10 +669,49 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
           scriptId: promoted.id,
           ...resolveLibraryIds(source, reelId),
         });
+        if (intentPromptRef.current?.key === key) {
+          // Popup still open: swap it for the finished draft.
+          setIntentPrompt(null);
+          openWorkspaceForSource(source, { scriptId: promoted.id, reelId: reelId ?? null });
+        } else {
+          // Closed while generating ("we'll finish in the background").
+          toast.success("Your remake is ready", {
+            action: {
+              label: "Open",
+              onClick: () => openWorkspaceForSource(source, { scriptId: promoted.id, reelId: reelId ?? null }),
+            },
+          });
+        }
       } catch (err) {
         if (cancelledRef.current.has(key)) return;
-        setIntentPrompt((current) => (current?.key === key ? null : current));
         const message = formatIdeaScriptErrorForUser(err, "remake");
+        if (!isNoCaptionsOrNoVoiceFailure(message) && intentPromptRef.current?.key === key) {
+          runningRef.current.delete(key);
+          if (intentPromptRef.current.phase === "choose") {
+            // Still choosing: a background failure (e.g. the transcript) stays
+            // quiet. "Create remake" starts the chain again; only a failure
+            // after that shows the error state.
+            patchState(source, {
+              stage: "error",
+              progressPercent: 0,
+              errorMessage: message,
+              ...resolveLibraryIds(source, reelId),
+            });
+            return;
+          }
+          // After "Create remake": show the error state; choice and idea are kept.
+          patchState(source, {
+            stage: "error",
+            progressPercent: 0,
+            errorMessage: message,
+            ...resolveLibraryIds(source, reelId),
+          });
+          setIntentPrompt((current) =>
+            current?.key === key ? { ...current, phase: "error", errorMessage: message } : current
+          );
+          return;
+        }
+        setIntentPrompt((current) => (current?.key === key ? null : current));
         if (isNoCaptionsOrNoVoiceFailure(message)) {
           runningRef.current.delete(key);
           patchState(source, {
@@ -652,19 +748,31 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
       const prompt = intentPrompt;
       if (!prompt || !isValidRemakeIntent(intent)) return;
       intentByKeyRef.current.set(prompt.key, intent);
-      setIntentPrompt(null);
-      const current = stateByKeyRef.current[prompt.key];
-      openWorkspaceForSource(prompt.source, {
-        scriptId: null,
-        reelId: current?.reelId ?? null,
-      });
+      requestIdByKeyRef.current.set(prompt.key, newRemakeRequestId());
+      setIntentPrompt({ ...prompt, phase: "generating", errorMessage: null });
+      // "Try again" after an error: the chain has stopped, start it again
+      // with the same (or newly edited) choice and idea.
+      if (!runningRef.current.has(prompt.key)) {
+        void runChain(prompt.source, { media: prompt.media });
+      }
     },
-    [intentPrompt, openWorkspaceForSource]
+    [intentPrompt, runChain]
   );
 
   const cancelRemakeIntent = useCallback(() => {
     const prompt = intentPrompt;
     if (!prompt) return;
+    if (prompt.phase === "generating") {
+      // Keep going in the background; the creator is told when it is ready.
+      setIntentPrompt(null);
+      return;
+    }
+    if (prompt.phase === "error") {
+      // Next Remake click opens the popup again with the kept draft.
+      intentByKeyRef.current.delete(prompt.key);
+      setIntentPrompt(null);
+      return;
+    }
     cancelledRef.current.add(prompt.key);
     runningRef.current.delete(prompt.key);
     intentByKeyRef.current.delete(prompt.key);
@@ -672,28 +780,34 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
     setIntentPrompt(null);
   }, [intentPrompt, patchState]);
 
+  const getDraft = useCallback(
+    (key: string): RemakeDraft => {
+      const own = ownWinnerByKeyRef.current.get(key);
+      return draftByKey[key] ?? loadRemakeDraft(key, own ? ownWinnerDefaultDraft(own) : undefined);
+    },
+    [draftByKey]
+  );
+
+  const changeDraft = useCallback((key: string, draft: RemakeDraft) => {
+    setDraftByKey((prev) => ({ ...prev, [key]: draft }));
+    saveRemakeDraft(key, draft);
+  }, []);
+
   const startRemake = useCallback(
     (source: LibraryRemakeSource, opts?: StartRemakeOptions) => {
       const key = libraryRemakeKey(source);
       const current = stateByKey[key];
       const media = resolveIntentMedia(key, opts?.media);
+      if (opts?.ownWinner) ownWinnerByKeyRef.current.set(key, opts.ownWinner);
 
-      if (current?.stage === "transcribing") {
-        if (intentByKeyRef.current.has(key)) {
-          openWorkspaceForSource(source, {
-            scriptId: null,
-            reelId: current.reelId ?? null,
-          });
-        } else {
-          setIntentPrompt({ source, key, media });
-        }
-        return;
-      }
-
-      if (current?.stage === "generating") {
-        openWorkspaceForSource(source, {
-          scriptId: null,
-          reelId: current.reelId ?? null,
+      if (current?.stage === "transcribing" || current?.stage === "generating") {
+        // Already running: reopen the popup where it is.
+        setIntentPrompt({
+          source,
+          key,
+          media,
+          phase: intentByKeyRef.current.has(key) ? "generating" : "choose",
+          errorMessage: null,
         });
         return;
       }
@@ -771,6 +885,13 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
       open: intentPrompt != null,
       progressPercent: intentPromptState?.progressPercent ?? 0,
       media: intentPrompt?.media ?? null,
+      draft: intentPrompt ? getDraft(intentPrompt.key) : loadRemakeDraft(""),
+      ownWinner: intentPrompt ? ownWinnerByKeyRef.current.get(intentPrompt.key) ?? null : null,
+      onDraftChange: (draft: RemakeDraft) => {
+        if (intentPrompt) changeDraft(intentPrompt.key, draft);
+      },
+      phase: intentPrompt?.phase ?? "choose",
+      errorMessage: intentPrompt?.errorMessage ?? null,
       onSubmit: submitRemakeIntent,
       onCancel: cancelRemakeIntent,
     }),
@@ -835,6 +956,8 @@ export function useLibraryRemakeChain(options: UseLibraryRemakeChainOptions = {}
               youtubeVideoId: source.youtubeVideoId,
             });
           }
+        } else if (source.source === "library") {
+          throw new Error("Save this video from Viral Posts.");
         } else {
           if (reelId == null && source.transcriptionReelId != null) {
             reelId = source.transcriptionReelId;

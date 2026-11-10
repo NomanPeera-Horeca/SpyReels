@@ -15,6 +15,7 @@ import {
   VIRAL_SEED_POOL_PILLAR,
 } from "./constants";
 import type { PillarClassification } from "./pillarClassify";
+import { pickPoolsForRefresh } from "./poolRefreshQueue";
 
 function utcDateString(d = new Date()): string {
   return d.toISOString().slice(0, 10);
@@ -164,27 +165,43 @@ export async function listPoolsForNiche(
     .where(and(eq(viralPostPools.niche, niche), inArray(viralPostPools.platform, allowed)));
 }
 
-export async function listPoolsNeedingRefresh(limit = 8): Promise<ViralPostPool[]> {
+/**
+ * Pools the background refresher should work on next. Platforms take turns
+ * (see poolRefreshQueue.ts) so TikTok seed pools can no longer starve the
+ * Instagram and YouTube pools that Home reads.
+ */
+export async function listPoolsNeedingRefresh(
+  limit = 8,
+  enabledPlatforms: ReadonlySet<string> = new Set(
+    ["instagram", "tiktok", "youtube"].filter(isViralPostsV1Platform)
+  )
+): Promise<ViralPostPool[]> {
   const db = await getDb();
   if (!db) return [];
-  const staleBefore = new Date(Date.now() - 3 * 60 * 60 * 1000);
-  const rows = await db
-    .select()
-    .from(viralPostPools)
-    .orderBy(viralPostPools.priority, viralPostPools.lastRefreshedAt)
-    .limit(40);
-  const out: ViralPostPool[] = [];
-  for (const pool of rows) {
-    if (out.length >= limit) break;
-    if (!isViralPostsV1Platform(pool.platform)) continue;
-    const fresh = await countFreshPoolCandidates(pool.id);
-    const stale =
-      !pool.lastRefreshedAt || pool.lastRefreshedAt.getTime() < staleBefore.getTime();
-    if (fresh < pool.minFreshCandidates || stale) {
-      out.push(pool);
-    }
-  }
-  return out;
+  const since = new Date(
+    Date.now() - VIRAL_POOL_DEFAULTS.freshCandidateMaxAgeHours * 60 * 60 * 1000
+  );
+  const [pools, freshRows] = await Promise.all([
+    db.select().from(viralPostPools),
+    db
+      .select({
+        poolId: viralPostPoolCandidates.poolId,
+        fresh: sql<number>`count(*)`,
+      })
+      .from(viralPostPoolCandidates)
+      .innerJoin(
+        viralPostCandidates,
+        eq(viralPostPoolCandidates.candidateId, viralPostCandidates.id)
+      )
+      .where(gte(viralPostCandidates.discoveredAt, since))
+      .groupBy(viralPostPoolCandidates.poolId),
+  ]);
+  const freshByPool = new Map(freshRows.map(row => [row.poolId, Number(row.fresh) || 0]));
+  return pickPoolsForRefresh({
+    rows: pools.map(pool => ({ ...pool, freshCandidates: freshByPool.get(pool.id) ?? 0 })),
+    enabledPlatforms,
+    limit,
+  });
 }
 
 /**

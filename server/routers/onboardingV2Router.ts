@@ -59,6 +59,7 @@ import {
 } from "../personalization/onboarding/onboardingService";
 import { lookupPublicProfile, recallCachedPublicProfile } from "../personalization/onboarding/profileLookup";
 import { productionLookupDeps } from "../personalization/onboarding/profileLookupDeps";
+import { addLinkedProfile } from "../personalization/onboarding/linkedProfile";
 import {
   CONTENT_PURPOSES,
   STARTER_AUDIENCE_MAX,
@@ -189,6 +190,10 @@ export const onboardingV2Router = router({
         preview = again.profile;
       }
       const { profileId } = await confirmProfile(db, octx(ctx), preview);
+      if (process.env.OWN_WINNERS === "on") {
+        // Your viral videos: read the creator's own account right away.
+        void import("../research/prefetch").then(m => m.requestOwnResearch([{ platform: preview.platform, handle: preview.handle }]));
+      }
       const analysis = await startInitialAnalysis(db, ctx, profileId);
       if (analysis.status !== "rejected") {
         try {
@@ -245,6 +250,52 @@ export const onboardingV2Router = router({
         }
       }
       return { ok: true as const, profileId, analysis: analysis.status };
+    }),
+
+  /**
+   * Home "+ TikTok" popup: add the creator's own account on another platform.
+   * Copies their confirmed strategy (no onboarding again), keeps the current
+   * profile active, and starts the usual first analysis of the new account.
+   */
+  addLinkedProfile: v2Procedure
+    .input(z.object({ platform: z.enum(SOCIAL_PLATFORMS), handle: z.string().min(1).max(64) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = await requireDb();
+      let preview = recallCachedPublicProfile(input.platform, input.handle);
+      if (!preview) {
+        const again = await lookupPublicProfile({
+          userId: ctx.user.id,
+          platform: input.platform,
+          handle: input.handle,
+          deps: productionLookupDeps(),
+          warmMedia: true,
+        });
+        if (!again.ok) return { ok: false as const, reason: again.reason };
+        preview = again.profile;
+      }
+      const { profileId, copied } = await addLinkedProfile(db, octx(ctx), preview);
+      // What worked for them on this platform: the normal first analysis, in the background.
+      const analysis = await startInitialAnalysis(db, ctx, profileId);
+      if (analysis.status !== "rejected") {
+        try {
+          await createAnalysisStore(db).saveProfileEvidence(analysis.runId, profileEvidenceFromPreview(preview), {
+            platform: preview.platform,
+            handle: preview.handle,
+            followerCount: preview.followerCount,
+          });
+        } catch (err) {
+          console.warn("[personalization] linked_profile_evidence_not_saved", {
+            profileId,
+            reason: err instanceof Error ? err.name : "error",
+          });
+        }
+      }
+      if (process.env.OWN_WINNERS === "on") {
+        // Your viral videos: read this new account right away.
+        void import("../research/prefetch").then(m => m.requestOwnResearch([{ platform: preview.platform, handle: preview.handle }]));
+      }
+      console.info("[personalization] linked_profile_added", { platform: input.platform, copied, analysis: analysis.status });
+      return { ok: true as const, profileId };
     }),
 
   /** Client can see a saved suggestion. Internal QA accounts are included. No profile text. */

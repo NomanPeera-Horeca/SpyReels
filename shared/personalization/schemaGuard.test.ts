@@ -232,15 +232,21 @@ describe("migration gate: drafts cannot reach a database by accident", () => {
     // previously authorized jobs. Viral Posts has an independently authenticated,
     // feature-gated router and reads confirmed workspace-scoped strategy data.
     // Coach reads only the signed-in user's stored niche for display.
+    // Onboarding (getState) and Remake (recreate.generate) read only the
+    // signed-in member's confirmed niche + audience in the selected workspace,
+    // so new-onboarding creators are not asked again and remakes can adapt.
     // Adding any other server consumer requires a deliberate security review.
     expect(hits.sort()).toEqual([
       "server/durableJobs/pilotHandlers.ts",
       "server/planCoachProfile.ts",
       "server/routers/homeV2Router.ts",
+      "server/routers/onboardingRouter.ts",
       "server/routers/onboardingV2Router.ts",
+      "server/routers/recreateRouter.ts",
       "server/viralPosts/browseService.ts",
       "server/viralPosts/router.ts",
       "server/viralPosts/service.ts",
+      "server/viralPosts/topics.ts",
     ]);
 
     // These cross-feature paths may import ONLY the explicitly reviewed APIs.
@@ -253,12 +259,18 @@ describe("migration gate: drafts cannot reach a database by accident", () => {
       "server/viralPosts/browseService.ts": [
         "@shared/personalization/contentTaxonomy",
       ],
+      "server/routers/onboardingRouter.ts": ["../personalization/activeNiche"],
+      "server/routers/recreateRouter.ts": ["../personalization/activeNiche"],
       "server/viralPosts/router.ts": [
         "../personalization/home/inventoryMatch",
       ],
       "server/viralPosts/service.ts": [
         "../personalization/home/inventoryMatch",
         "../personalization/home/storedInventory",
+      ],
+      // Viral library topic matcher: confirmed niche, pillars and sub-topics only.
+      "server/viralPosts/topics.ts": [
+        "../personalization/home/topicStrategies",
       ],
     };
     for (const [file, allowed] of Object.entries(auditedImports)) {
@@ -279,6 +291,13 @@ describe("migration gate: drafts cannot reach a database by accident", () => {
     expect(stored).toContain("eq(workspaceMemberActiveProfiles.userId, userId)");
     expect(stored).toContain("eq(workspaceMemberActiveProfiles.workspaceId, scopedWorkspaceId)");
     expect(stored).toContain('eq(personalizationItems.status, "confirmed")');
+    const topicBridge = readFileSync(
+      path.join(root, "server/personalization/home/topicStrategies.ts"),
+      "utf8"
+    );
+    expect(topicBridge).toContain('eq(personalizationItems.status, "confirmed")');
+    expect(topicBridge).toContain('ne(pillarSubtopics.status, "dismissed")');
+    expect(topicBridge).not.toMatch(/\.(insert|update|delete)\(/);
 
     const viralRouter = readFileSync(path.join(root, "server/viralPosts/router.ts"), "utf8");
     expect(viralRouter).toContain("const viralPostsProcedure = protectedProcedure.use(");

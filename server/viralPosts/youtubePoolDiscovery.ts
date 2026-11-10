@@ -1,4 +1,7 @@
 import type { YouTubeVideoData } from "../youtube";
+import { noteScrapeCreatorsStatus } from "../scrapeCreatorsMeter";
+import { resolveShortChannels } from "./youtubeChannels";
+import { keywordQueriesFor, recordVideoSearch } from "./keywords";
 import type { AdaptedCandidate } from "./candidateAdapter";
 import { adaptYouTubeShorts } from "./platformAdapters";
 import {
@@ -157,8 +160,19 @@ export function prequalifyYouTubeSearchShorts(
   );
 }
 
+/**
+ * Search filters. The provider returns empty lists whenever sortBy=popular is
+ * set (checked 2026-11-01), so we never send it. Even-numbered queries search
+ * all time (relevance favours proven hits); odd ones only this month (fresh,
+ * rising videos). Pure; exported for tests.
+ */
+export function youtubeSearchFilters(queryIndex: number): Record<string, string> {
+  return queryIndex % 2 === 1 ? { type: "shorts", uploadDate: "this_month" } : { type: "shorts" };
+}
+
 async function searchYouTubeShorts(args: {
   query: string;
+  queryIndex: number;
   region?: string;
 }): Promise<YouTubeVideoData[]> {
   const apiKey = process.env.SCRAPECREATORS_API_KEY?.trim();
@@ -166,9 +180,7 @@ async function searchYouTubeShorts(args: {
 
   const url = new URL(`${SCRAPECREATORS_API_BASE}/v1/youtube/search`);
   url.searchParams.set("query", args.query);
-  url.searchParams.set("type", "shorts");
-  url.searchParams.set("sortBy", "popular");
-  url.searchParams.set("uploadDate", "this_month");
+  for (const [k, v] of Object.entries(youtubeSearchFilters(args.queryIndex))) url.searchParams.set(k, v);
   url.searchParams.set("includeExtras", "true");
   if (args.region?.trim()) url.searchParams.set("region", args.region.trim());
 
@@ -188,6 +200,7 @@ async function searchYouTubeShorts(args: {
         data = text;
       }
     }
+    noteScrapeCreatorsStatus(response.status);
     if (!response.ok) {
       throw new Error(`YouTube Shorts search failed: HTTP ${response.status}`);
     }
@@ -211,12 +224,19 @@ export async function discoverYouTubePoolCandidates(args: {
   region?: string;
 }): Promise<YouTubePoolDiscoveryResult> {
   const maxScCalls = Math.max(0, Math.floor(args.maxScCalls));
-  const queryGeneration = await generateYouTubeShortsSearchQueries({
-    niche: args.niche,
-    pillar: args.pillar,
-    limit: Math.min(YOUTUBE_POOL_MAX_SEARCH_QUERIES, maxScCalls || 1),
-  });
+  const queryLimit = Math.min(YOUTUBE_POOL_MAX_SEARCH_QUERIES, maxScCalls || 1);
+  // Real search phrases from the keyword bank first; AI-written ones only
+  // when the bank has none for this topic yet.
+  const bank = await keywordQueriesFor({ pillar: args.pillar, platform: "youtube", count: queryLimit });
+  const queryGeneration = bank
+    ? { queries: bank.queries, aiGenerated: false }
+    : await generateYouTubeShortsSearchQueries({
+        niche: args.niche,
+        pillar: args.pillar,
+        limit: queryLimit,
+      });
   const queries = queryGeneration.queries;
+  const queryById = new Map<string, string>();
 
   const allShorts = new Map<string, YouTubeVideoData>();
   let searchCalls = 0;
@@ -228,11 +248,14 @@ export async function discoverYouTubePoolCandidates(args: {
     if (searchCalls >= maxScCalls) break;
     searchCalls++;
     try {
-      const shorts = await searchYouTubeShorts({ query, region: args.region });
+      const shorts = await searchYouTubeShorts({ query, queryIndex: searchCalls - 1, region: args.region });
       searchSuccesses++;
       rawShorts += shorts.length;
       for (const short of shorts) {
-        if (!allShorts.has(short.videoId)) allShorts.set(short.videoId, short);
+        if (!allShorts.has(short.videoId)) {
+          allShorts.set(short.videoId, short);
+          queryById.set(short.videoId, query);
+        }
       }
     } catch (error) {
       searchFailures++;
@@ -288,6 +311,26 @@ export async function discoverYouTubePoolCandidates(args: {
     ];
   }
 
+  if (bank) {
+    // Per phrase: Shorts sent to the topic check, and those that passed.
+    const foundByQuery = new Map<string, number>();
+    for (const c of beforeSemantic) {
+      const q = queryById.get(c.sourceId);
+      if (q) foundByQuery.set(q, (foundByQuery.get(q) ?? 0) + 1);
+    }
+    const passedByQuery = new Map<string, string[]>();
+    for (const c of adapted) {
+      const q = queryById.get(c.sourceId);
+      if (q) passedByQuery.set(q, [...(passedByQuery.get(q) ?? []), c.sourceId]);
+    }
+    await recordVideoSearch({ pick: bank, platform: "youtube", foundByQuery, passedByQuery });
+  }
+
+  // Search results have no channel: look it up for Shorts that could be viral,
+  // so the viral rule, Home and pre-research see the real creator.
+  const channelLookup = await resolveShortChannels(adapted);
+  const totalScCalls = searchCalls + channelLookup.calls;
+
   const usdPerCredit =
     Number(process.env.SCRAPECREATORS_USD_PER_CREDIT) || DEFAULT_SC_USD_PER_CREDIT;
 
@@ -305,6 +348,7 @@ export async function discoverYouTubePoolCandidates(args: {
     semanticHaikuCalls,
     semanticRejected: semanticRejectedCandidates.length,
     currentPoolAdmitted: adapted.length,
+    channelLookups: channelLookup.calls,
   });
 
   return {
@@ -319,7 +363,7 @@ export async function discoverYouTubePoolCandidates(args: {
     prequalifiedShorts: prequalified.length,
     semanticHaikuCalls,
     semanticRejected: semanticRejectedCandidates.length,
-    totalScCalls: searchCalls,
-    costEstimateUsd: searchCalls * usdPerCredit,
+    totalScCalls,
+    costEstimateUsd: totalScCalls * usdPerCredit,
   };
 }

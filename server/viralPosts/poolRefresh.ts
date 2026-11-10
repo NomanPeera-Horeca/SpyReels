@@ -4,9 +4,13 @@ import { isViralPostsV1Platform } from "../../shared/viralPosts";
 import { scrapeTikTokVideos } from "../tiktok";
 import type { AdaptedCandidate } from "./candidateAdapter";
 import { VIRAL_POOL_DEFAULTS } from "./constants";
+import { classifyLibraryRowsInBackground } from "./library";
 import {
+  isViralPostsInstagramEnabled,
   isViralPostsLive,
   isViralPostsPoolRefresherEnabled,
+  isViralPostsTiktokEnabled,
+  isViralPostsYoutubeEnabled,
   viralPostsPoolRefreshMs,
 } from "./featureFlag";
 import { loadFeaturedTransferableCandidates } from "./featuredSupply";
@@ -135,6 +139,7 @@ async function linkAdaptedToPool(args: {
   if (adapted.length === 0) return 0;
 
   const upserted = await repo.upsertCandidates(adapted);
+  classifyLibraryRowsInBackground(upserted, "pool");
   const links = buildAdmittedPoolLinks({
     pool,
     adapted,
@@ -542,7 +547,14 @@ async function refreshYouTubePool(
  */
 export async function refreshPoolById(
   poolId: number,
-  opts?: { force?: boolean; owner?: string }
+  opts?: {
+    force?: boolean;
+    owner?: string;
+    /** Fixed call ceiling (scoring experiment: equal budget per search). */
+    maxScCalls?: number;
+    /** Scoring experiment only: use maxScCalls instead of the pool's daily budget (the experiment has its own cap). */
+    ignoreDailyBudget?: boolean;
+  }
 ): Promise<PoolRefreshResult> {
   const { getDb } = await import("../db");
   const { viralPostPools } = await import("../../drizzle/schema");
@@ -611,7 +623,10 @@ export async function refreshPoolById(
   }
 
   const used = await poolRepo.getBudgetUsed(pool.id);
-  const remaining = Math.max(0, pool.dailyCallBudget - used);
+  const remaining =
+    opts?.ignoreDailyBudget && opts.maxScCalls != null
+      ? opts.maxScCalls
+      : Math.min(Math.max(0, pool.dailyCallBudget - used), opts?.maxScCalls ?? Number.POSITIVE_INFINITY);
   const minBudget =
     pool.platform === "youtube" ? 1 : pool.platform === "tiktok" ? 3 : 5;
   if (remaining < minBudget) {
@@ -751,7 +766,14 @@ export function schedulePoolRefresh(poolId: number, force = false): void {
  * or process-local interval when VIRAL_POSTS_POOL_REFRESHER=true.
  */
 export async function refreshStalePools(limit = 3): Promise<PoolRefreshResult[]> {
-  const needing = await poolRepo.listPoolsNeedingRefresh(limit);
+  const enabledPlatforms = new Set(
+    [
+      isViralPostsInstagramEnabled ? "instagram" : "",
+      isViralPostsTiktokEnabled ? "tiktok" : "",
+      isViralPostsYoutubeEnabled ? "youtube" : "",
+    ].filter(Boolean)
+  );
+  const needing = await poolRepo.listPoolsNeedingRefresh(limit, enabledPlatforms);
   const results: PoolRefreshResult[] = [];
   for (const pool of needing) {
     results.push(await refreshPoolById(pool.id));
@@ -789,11 +811,15 @@ export function startViralPostsPoolRefresher(): void {
     note: "DB lease still prevents duplicate refreshes across instances",
   });
   setInterval(() => {
-    void refreshStalePools(2).catch((e) =>
-      console.error("[viralPosts.pool] refresher_tick_error", {
-        error: e instanceof Error ? e.message : String(e),
-      })
-    );
+    void refreshStalePools(2)
+      .catch((e) =>
+        console.error("[viralPosts.pool] refresher_tick_error", {
+          error: e instanceof Error ? e.message : String(e),
+        })
+      )
+      .catch(() => undefined);
+  // Library work (research copy, creator topics, video understanding) runs in
+  // the queue worker, which is not restarted by every web deploy.
   }, intervalMs);
   setTimeout(() => {
     void refreshStalePools(1).catch(() => undefined);

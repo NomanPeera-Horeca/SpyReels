@@ -13,7 +13,10 @@ export function navigateAfterScrapeStart(
   setLocation: (to: string) => void,
   from: string
 ): void {
-  if ("seededFromFeatured" in data && data.seededFromFeatured) {
+  if (
+    ("seededFromFeatured" in data && data.seededFromFeatured) ||
+    ("seededFromRecent" in data && data.seededFromRecent)
+  ) {
     setLocation(scrapeDashboardPath(data.jobId, from));
     return;
   }

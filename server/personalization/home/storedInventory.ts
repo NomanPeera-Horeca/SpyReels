@@ -13,6 +13,8 @@ import {
 } from "../../../drizzle/personalizationSchema";
 
 export type StoredContentInventory = {
+  /** The active creator profile these confirmed items belong to. */
+  socialProfileId: string;
   categoryLabel: string;
   nicheLabel: string;
   pillarTitles: string[];
@@ -106,6 +108,7 @@ export async function loadStoredContentInventory(
       .map((item) => field(item.payload, "title"))
       .filter(Boolean);
     return {
+      socialProfileId: profileId,
       categoryLabel,
       nicheLabel: field(niche?.payload, "label"),
       pillarTitles,

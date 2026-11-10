@@ -425,6 +425,24 @@ async function fetchYouTubeShortsPage(
   return { videos: [], nextContinuationToken: null };
 }
 
+/**
+ * A channel's newest Shorts with views: one provider call, no retries (the
+ * viral library uses it to measure usual views). Null when the call fails.
+ */
+export async function fetchChannelRecentShortViews(
+  handle: string
+): Promise<Array<{ views: number; postedAt: Date }> | null> {
+  const cleanHandle = cleanYouTubeHandle(handle);
+  if (!cleanHandle) return null;
+  const { status, data } = await scGet("/v1/youtube/channel/shorts", { handle: cleanHandle, sort: "newest" });
+  const items = status === 200 && data && Array.isArray((data as any).shorts) ? ((data as any).shorts as unknown[]) : null;
+  if (!items) return null;
+  return items
+    .map(item => parseYouTubeShort(item, cleanHandle))
+    .filter((v): v is YouTubeVideoData => v !== null)
+    .map(v => ({ views: v.viewCount, postedAt: v.postedAt }));
+}
+
 export async function scrapeYouTubeShorts(
   handle: string,
   onProgress?: (count: number, pageBatch?: YouTubeVideoData[]) => void,
@@ -567,7 +585,47 @@ export async function scrapeYouTubeShorts(
   };
 }
 
+/** YouTube video id from a watch, shorts, embed or youtu.be URL. */
+export function youtubeVideoIdFromUrl(url: string): string | null {
+  const m = url
+    .trim()
+    .match(/(?:youtu\.be\/|youtube\.com\/(?:shorts\/|embed\/|live\/|watch\?(?:.*&)?v=))([A-Za-z0-9_-]{11})/);
+  return m ? m[1]! : null;
+}
+
+/**
+ * Captions transcript for a YouTube video. Reuses the shared transcript store
+ * (one per public video) and saves new results there for every feature.
+ */
 export async function fetchYouTubeTranscript(
+  videoPageUrl: string
+): Promise<YouTubeTranscriptResult | null> {
+  const videoId = youtubeVideoIdFromUrl(videoPageUrl);
+  const { getSharedTranscript, saveSharedTranscript } = await import(
+    "./transcripts/sharedTranscriptStore"
+  );
+  if (videoId) {
+    const cached = await getSharedTranscript("youtube", videoId);
+    if (cached?.status === "ok") {
+      return { transcript: cached.transcript, segments: cached.segments };
+    }
+  }
+  const result = await fetchYouTubeTranscriptFromProvider(videoPageUrl);
+  if (videoId && result) {
+    const last = result.segments[result.segments.length - 1];
+    await saveSharedTranscript("youtube", videoId, {
+      status: "ok",
+      transcript: result.transcript,
+      segments: result.segments,
+      durationSec: last ? Math.round(last.end) : 0,
+      source: "youtube_captions",
+      partial: false,
+    });
+  }
+  return result;
+}
+
+async function fetchYouTubeTranscriptFromProvider(
   videoPageUrl: string
 ): Promise<YouTubeTranscriptResult | null> {
   const url = videoPageUrl.trim();
@@ -740,4 +798,40 @@ export async function fetchYouTubeVideoDetails(
   }
 
   return null;
+}
+
+/**
+ * Shorts search through the metered request helper (one provider call, no
+ * retries). Returns the raw provider body or null when the call fails. Used
+ * by the discovery pilot so every search counts against its budget.
+ */
+export async function searchYouTubeShortsRaw(
+  query: string,
+  filters: Record<string, string>
+): Promise<unknown | null> {
+  const { status, data } = await scGet("/v1/youtube/search", { query, ...filters, includeExtras: "true" });
+  if (status !== 200 || !data || typeof data !== "object" || (data as any).success === false) return null;
+  return data;
+}
+
+/**
+ * A channel's newest Shorts by stable channel ID (preferred) or handle: one
+ * provider call, no retries. Null when the call fails.
+ */
+export async function fetchChannelShortsByIdOrHandle(args: {
+  channelId?: string | null;
+  handle?: string | null;
+}): Promise<YouTubeVideoData[] | null> {
+  const channelId = args.channelId?.trim();
+  const handle = args.handle ? cleanYouTubeHandle(args.handle) : "";
+  if (!channelId && !handle) return null;
+  const query: Record<string, string> = { sort: "newest" };
+  if (channelId) query.channelId = channelId;
+  else query.handle = handle;
+  const { status, data } = await scGet("/v1/youtube/channel/shorts", query);
+  const items = status === 200 && data && Array.isArray((data as any).shorts) ? ((data as any).shorts as unknown[]) : null;
+  if (!items) return null;
+  return items
+    .map(item => parseYouTubeShort(item, handle || channelId || "youtube"))
+    .filter((v): v is YouTubeVideoData => v !== null);
 }

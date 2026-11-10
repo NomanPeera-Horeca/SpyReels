@@ -9,6 +9,7 @@
  * hidden when data is missing.
  */
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { MarketingIconProcessRemake } from "../../../../public-web/components/MarketingIcons";
 import { toast } from "sonner";
 import type { SocialPlatform } from "@shared/personalization/model";
 import type { FollowerViralBadge } from "@shared/viralTier";
@@ -22,6 +23,7 @@ import {
   IconToolScript,
 } from "@/design-system/icons";
 import { ResultCard } from "@/design-system/ResultCard";
+import { libraryPerformanceSignal } from "./libraryPerformance";
 import { PlatformFullColorMark } from "@/design-system/platformMarks";
 import { InstagramMark } from "@shared/ui/PlatformMarks";
 import {
@@ -29,7 +31,9 @@ import {
   formatEngagementPct,
   formatShortPostDate,
 } from "@/lib/viralPosts/format";
-import { safeHttpUrl } from "@/lib/viralPostPlayback";
+import { resolveViralPostPlayback, safeHttpUrl } from "@/lib/viralPostPlayback";
+import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
+import { YouTubeInlineEmbed } from "@/components/YouTubeInlineEmbed";
 import { HOME_COPY as C } from "./copy";
 import styles from "./home.module.css";
 
@@ -217,11 +221,14 @@ export function QuickActions({
   onWrite,
   onImprove,
   onHooks,
+  onRemix,
   compact = false,
 }: {
   onWrite: () => void;
   onImprove: () => void;
   onHooks: () => void;
+  /** "Remix my winners": only when the creator has proven ideas (OWN_WINNERS). */
+  onRemix?: () => void;
   /** Mobile (1498:2199): 44px chips that wrap; only "Write a script" keeps its icon. */
   compact?: boolean;
 }) {
@@ -239,6 +246,12 @@ export function QuickActions({
         {compact ? null : <IconToolHook />}
         {C.quick.hooks}
       </button>
+      {onRemix ? (
+        <button type="button" className={styles.chip} onClick={onRemix} data-testid="home-remix-winners">
+          {compact ? null : <MarketingIconProcessRemake className={styles.chipBrandIcon} />}
+          {C.quick.remix}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -315,7 +328,14 @@ export function SetupBanner({
 
 /* ---------- ideas ---------- */
 
-export type HomeIdea = { id: number; title: string; hook: string | null };
+export type HomeIdea = {
+  /** Plan card id, or "search:<phrase>" for an idea from real searches. */
+  id: number | string;
+  title: string;
+  hook: string | null;
+  /** Small label under the title, for example "Searched a lot on Google and YouTube". */
+  badge?: string | null;
+};
 
 export function IdeaCard({
   idea,
@@ -335,6 +355,9 @@ export function IdeaCard({
       >
         {idea.title}
       </p>
+      {idea.badge ? (
+        <p className={cx("sr-text-product-body-small", styles.muted)}>{idea.badge}</p>
+      ) : null}
       {idea.hook ? (
         <p
           className={cx("sr-text-product-body-small", styles.muted)}
@@ -373,6 +396,42 @@ export function IdeasSkeleton() {
  * Viral score and performance multiplier stay hidden: Home cannot prove the
  * creator-usual-views baseline required by the approved Figma signal policy.
  */
+/** Calls onSeen once, after the card has been at least half on screen for 1.2s. */
+function useSeenOnce(onSeen?: () => void) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const sent = useRef(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !onSeen || typeof IntersectionObserver === "undefined") return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry?.isIntersecting && entry.intersectionRatio >= 0.5) {
+          if (!timer && !sent.current) {
+            timer = setTimeout(() => {
+              sent.current = true;
+              onSeen();
+              observer.disconnect();
+            }, 1200);
+          }
+        } else if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+      },
+      { threshold: [0.5] }
+    );
+    observer.observe(el);
+    return () => {
+      if (timer) clearTimeout(timer);
+      observer.disconnect();
+    };
+    // onSeen identity may change per render; the first one is enough.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return ref;
+}
+
 export function HomeVideoCard({
   post,
   busy,
@@ -380,16 +439,51 @@ export function HomeVideoCard({
   onRemake,
   onToggleSave,
   onPlay,
+  onSeen,
+  onNotRelevant,
 }: {
   post: ViralPost;
   busy: boolean;
   /** Mobile: Expand hidden (Figma note on 288:666). */
   compact: boolean;
   onRemake: () => void;
-  onToggleSave: () => void;
-  /** Opens the existing in-app preview. Expand uses the same player on desktop. */
+  /** Absent: no save button (Result Card / Compact). */
+  onToggleSave?: () => void;
+  /** Only for videos that cannot play inside the card (shows the honest fallback). */
   onPlay: () => void;
+  /** Recorded once when the card has really been on screen (measurement only). */
+  onSeen?: () => void;
+  /** "Not relevant to my niche" in the card menu (same for every ranking). */
+  onNotRelevant?: () => void;
 }) {
+  const seenRef = useSeenOnce(onSeen);
+  const [playingInline, setPlayingInline] = useState(false);
+  const playback = resolveViralPostPlayback(post);
+  const stopInline = () => setPlayingInline(false);
+  // Play plays inside the card, like Viral Posts (its player has its own expand and close).
+  const inlineMedia = !playingInline ? null : playback.kind === "file" ? (
+    <DashboardReelGridMedia
+      className="h-full w-full"
+      thumbnailUrl={playback.thumbnailUrl}
+      videoUrl={playback.videoUrl}
+      shortcode={playback.shortcode}
+      reelId={playback.reelId}
+      platform={playback.platform}
+      videoPageUrl={playback.videoPageUrl}
+      externalWatch={playback.external}
+      size="compact"
+      autoStart
+      onPlayingChange={playing => {
+        if (!playing) stopInline();
+      }}
+    />
+  ) : playback.kind === "youtube" ? (
+    <YouTubeInlineEmbed className="h-full w-full" videoId={playback.videoId} onStop={stopInline} />
+  ) : null;
+  const playInCard = () => {
+    if (playback.kind === "unavailable") onPlay();
+    else setPlayingInline(true);
+  };
   const title = post.hook?.trim() || post.caption?.trim() || C.videos.untitled;
   const views = formatCompactCount(post.views);
   const engagement = formatEngagementPct(post.engagementRate);
@@ -402,6 +496,7 @@ export function HomeVideoCard({
   const handle = (post.creatorHandle || "").replace(/^@/, "");
   const originalUrl = safeHttpUrl(post.sourceUrl);
   return (
+    <div ref={seenRef} className={styles.videoCell}>
     <ResultCard
       testId="home-result-card"
       mediaFormat="portrait"
@@ -411,7 +506,7 @@ export function HomeVideoCard({
       title={title}
       creator={handle ? `@${handle}` : null}
       metrics={metrics}
-      signal={null}
+      signal={libraryPerformanceSignal(post)}
       labels={{
         play: C.videos.play,
         expand: C.videos.expand,
@@ -420,8 +515,8 @@ export function HomeVideoCard({
         saved: C.videos.saved,
         more: C.videos.more,
       }}
-      onPlay={onPlay}
-      onExpand={compact ? undefined : onPlay}
+      onPlay={playInCard}
+      inlineMedia={inlineMedia}
       onRemake={onRemake}
       remakeBusy={busy}
       saved={post.saved}
@@ -433,8 +528,10 @@ export function HomeVideoCard({
               label: C.videos.openOriginal,
               onSelect: () => toast.error("Original link unavailable"),
             },
+        ...(onNotRelevant ? [{ label: C.videos.notRelevant, onSelect: onNotRelevant }] : []),
       ]}
     />
+    </div>
   );
 }
 
@@ -451,19 +548,28 @@ export type HomeCreatorView = {
   badge: FollowerViralBadge | null;
 };
 
+/**
+ * One creator in "Creators going viral". The whole row is one button: it opens
+ * Research for this creator, which adds them to Creator Radar.
+ */
 export function CreatorRow({
   creator,
-  onSee,
+  onOpen,
   compact = false,
 }: {
   creator: HomeCreatorView;
-  onSee: () => void;
+  onOpen: () => void;
   compact?: boolean;
 }) {
   const [imgFailed, setImgFailed] = useState(false);
   const name = creator.displayName?.trim() || `@${creator.handle}`;
   return (
-    <div className={styles.creatorRow}>
+    <button
+      type="button"
+      className={cx(styles.creatorRow, styles.creatorRowButton)}
+      onClick={onOpen}
+      aria-label={C.creators.openLabel(name)}
+    >
       <span className={styles.avatar} aria-hidden>
         {creator.profilePicUrl && !imgFailed ? (
           <img
@@ -494,10 +600,13 @@ export function CreatorRow({
         </span>
         <ViralBadge badge={creator.badge} />
       </div>
-      <button type="button" className={compact ? cx(styles.ghost, styles.ghostBrand) : styles.ghost} onClick={onSee}>
-        {compact ? C.mobile.seeVideos : C.creators.seeVideos}
-      </button>
-    </div>
+      <span
+        className={compact ? cx(styles.ghost, styles.ghostBrand, styles.creatorAction) : cx(styles.ghost, styles.creatorAction)}
+        aria-hidden
+      >
+        {compact ? C.mobile.addToRadar : C.creators.addToRadar}
+      </span>
+    </button>
   );
 }
 
@@ -520,32 +629,47 @@ export function CreatorsSkeleton() {
 
 /* ---------- profiles ---------- */
 
+/**
+ * "+ TikTok  + YouTube" chips for the platforms the creator has not added yet
+ * (connector-style, like Perplexity's "+ Figma"). Hidden once all are added.
+ */
 export function ProfilesInvite({
-  onManage,
+  missing,
+  onAdd,
   compact = false,
 }: {
-  onManage: () => void;
-  /** Mobile (1498:2268): subtle panel, approved mobile copy, text link. */
+  missing: Array<{ id: SocialPlatform; label: string }>;
+  onAdd: (platform: SocialPlatform) => void;
+  /** Mobile: subtle panel. */
   compact?: boolean;
 }) {
+  if (missing.length === 0) return null;
   return (
-    <div className={cx(styles.card, styles.invite, compact && styles.inviteCompact)}>
+    <div className={cx(styles.card, styles.invite, compact && styles.inviteCompact)} data-testid="home-add-platforms">
       <span
         className={cx("sr-text-product-label", styles.h2)}
         style={{ fontWeight: compact ? 600 : 500 }}
       >
-        {compact ? C.mobile.inviteTitle : C.profiles.inviteTitle}
+        {C.profiles.inviteTitle}
       </span>
-      <span className={cx("sr-text-product-body-small", styles.muted)}>
-        {compact ? C.mobile.inviteBody : C.profiles.inviteBody}
-      </span>
-      <button
-        type="button"
-        className={compact ? cx(styles.ghost, styles.ghostBrand, styles.inviteAction) : cx(styles.outline, styles.inviteAction)}
-        onClick={onManage}
-      >
-        {compact ? C.mobile.manage : C.profiles.manage}
-      </button>
+      <span className={cx("sr-text-product-body-small", styles.muted)}>{C.profiles.inviteBody}</span>
+      <div className={styles.platformChips}>
+        {missing.map(p => (
+          <button
+            key={p.id}
+            type="button"
+            className={styles.platformChip}
+            onClick={() => onAdd(p.id)}
+            aria-label={C.profiles.addPlatform(p.label)}
+          >
+            <PlatformFullColorMark platform={p.id} size={16} />
+            {p.label}
+            <span className={styles.platformChipPlus} aria-hidden>
+              +
+            </span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -557,7 +681,7 @@ export type ProfileView = {
   active: boolean;
 };
 
-const PLATFORMS: Array<{ id: SocialPlatform; label: string }> = [
+export const PLATFORMS: Array<{ id: SocialPlatform; label: string }> = [
   { id: "instagram", label: "Instagram" },
   { id: "tiktok", label: "TikTok" },
   { id: "youtube", label: "YouTube" },

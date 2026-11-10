@@ -311,7 +311,7 @@ async function ensureBrowsePools(args: { niche: string; pillars: string[] }) {
   return poolRepo.ensurePools(browsePoolSpecs(args));
 }
 
-function candidateToAdapted(
+export function candidateToAdapted(
   candidate: ViralPostCandidate,
   primaryPillar: string,
   niche: string,
@@ -374,7 +374,7 @@ function decimalToNumber(v: string | number | null | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-function toViralPost(
+export function toViralPost(
   candidate: ViralPostCandidate,
   adapted: AdaptedCandidate,
   saved: boolean

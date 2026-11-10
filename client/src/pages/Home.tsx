@@ -107,6 +107,7 @@ export default function Home() {
   );
   const [handle, setHandle] = useState("");
   const [tiktokLandingHandle, setTikTokLandingHandle] = useState<string | null>(null);
+  const [youtubeLandingHandle, setYouTubeLandingHandle] = useState<string | null>(null);
   const [handleError, setHandleError] = useState<string | null>(null);
   const [timeframe, setTimeframe] = useState("30");
   const [, setLocation] = useLocation();
@@ -151,6 +152,7 @@ export default function Home() {
     const selectedPlatform = intent?.platform ?? pendingPlatform;
     setPlatform(selectedPlatform);
     if (selectedPlatform === "tiktok" && (intent?.autostart ?? autostart)) setTikTokLandingHandle(selected);
+    if (selectedPlatform === "youtube" && (intent?.autostart ?? autostart)) setYouTubeLandingHandle(selected);
     setHandle(selected);
     setHandleError(null);
     pendingAutostartRef.current = intent?.autostart ?? autostart;
@@ -631,7 +633,7 @@ export default function Home() {
         {platform === "tiktok" ? (
           <TikTokResearch initialJobId={initialTikTokJobId} initialHandle={tiktokLandingHandle ?? undefined} />
         ) : (
-          <YouTubeResearch initialJobId={initialYouTubeJobId} />
+          <YouTubeResearch initialJobId={initialYouTubeJobId} initialHandle={youtubeLandingHandle ?? undefined} />
         )}
       </div>
     );
@@ -1092,7 +1094,7 @@ export default function Home() {
           ) : platform === "tiktok" ? (
             <TikTokResearch initialJobId={initialTikTokJobId} initialHandle={tiktokLandingHandle ?? undefined} />
           ) : (
-            <YouTubeResearch initialJobId={initialYouTubeJobId} />
+            <YouTubeResearch initialJobId={initialYouTubeJobId} initialHandle={youtubeLandingHandle ?? undefined} />
           )}
         </div>
       </div>

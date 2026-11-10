@@ -1,0 +1,98 @@
+import { describe, expect, it } from "vitest";
+import { isIdeaPhrase, pickPillarIdeas, rankSearchIdeas, searchIdeaScore } from "../searchIdeas";
+
+const row = (phrase: string, topicSlug: string, demand: number, viral = 0, retired = 0) => ({
+  phrase,
+  topicSlug,
+  demand,
+  viral,
+  runs: viral > 0 ? 1 : 0,
+  retired,
+});
+
+describe("search ideas for Home", () => {
+  it("keeps real video ideas, not the bare topic name or one word", () => {
+    expect(isIdeaPhrase("meal prep for beginners", "Meal prep")).toBe(true);
+    expect(isIdeaPhrase("meal prep", "Meal prep")).toBe(false);
+    expect(isIdeaPhrase("mealprep", "Meal prep")).toBe(false);
+  });
+
+  it("merges platforms, ranks by demand plus proof, at most two per topic", () => {
+    const labels = new Map([["meal", "Meal prep"], ["fit", "Home workouts"]]);
+    const ideas = rankSearchIdeas(
+      [
+        row("meal prep for beginners", "meal", 90),
+        row("meal prep for beginners", "meal", 70, 4), // same phrase, other platform: viral adds up
+        row("cheap meal prep ideas", "meal", 85),
+        row("meal prep for weight loss", "meal", 80),
+        row("home workout no equipment", "fit", 60),
+        row("retired phrase here", "fit", 99, 0, 1),
+      ],
+      labels,
+      4
+    );
+    expect(ideas.map(i => i.phrase)).toEqual([
+      "meal prep for beginners",
+      "cheap meal prep ideas",
+      "home workout no equipment",
+    ]);
+    expect(ideas[0]).toMatchObject({ title: "Meal prep for beginners", demand: 90, viralFound: 4, topicLabel: "Meal prep" });
+  });
+
+  it("proof raises the score but demand leads", () => {
+    expect(searchIdeaScore({ demand: 60, viralFound: 8 })).toBeGreaterThan(searchIdeaScore({ demand: 60, viralFound: 0 }));
+    expect(searchIdeaScore({ demand: 95, viralFound: 0 })).toBeGreaterThan(searchIdeaScore({ demand: 60, viralFound: 3 }));
+  });
+});
+
+describe("search phrases for scripts and remakes", () => {
+  const idea = (phrase: string, demand: number, viralFound = 0) => ({
+    phrase,
+    title: phrase,
+    topicLabel: "Meal prep",
+    demand,
+    viralFound,
+  });
+
+  it("offers only phrases that share a real word with the idea, best match first", async () => {
+    const { phrasesForIdea } = await import("../searchIdeas");
+    const bank = [
+      idea("meal prep for beginners", 90),
+      idea("high protein meal prep ideas", 70, 5),
+      idea("home workout no equipment", 99),
+    ];
+    const out = phrasesForIdea(bank, "My easy high protein meal prep for the week", 3);
+    expect(out.map(p => p.phrase)).toEqual(["high protein meal prep ideas", "meal prep for beginners"]);
+    expect(phrasesForIdea(bank, "how I edit videos fast", 3)).toEqual([]);
+  });
+
+  it("formats a block that never forces a phrase", async () => {
+    const { formatSearchPhrasesBlock } = await import("../searchIdeas");
+    expect(formatSearchPhrasesBlock([])).toBe("");
+    const block = formatSearchPhrasesBlock([idea("meal prep for beginners", 90, 3)]);
+    expect(block).toContain('"meal prep for beginners" (already found viral videos)');
+    expect(block).toContain("if none fits, ignore this list");
+  });
+});
+
+
+describe("pickPillarIdeas", () => {
+  it("takes ideas round-robin across pillars, drops blanks and repeats, and caps", () => {
+    const rows = [
+      { label: "Decoy item strategy", pillarTitle: "Counterintuitive Pricing" },
+      { label: "Premium anchor pricing", pillarTitle: "Counterintuitive Pricing" },
+      { label: "Free perk clubs", pillarTitle: "Membership Model Tactics" },
+      { label: "decoy item strategy", pillarTitle: "Membership Model Tactics" },
+      { label: " ", pillarTitle: "Membership Model Tactics" },
+      { label: "Loyalty without discounts", pillarTitle: "Keeping Customers" },
+    ];
+    expect(pickPillarIdeas(rows, 3).map(r => r.label)).toEqual(["Decoy item strategy", "Free perk clubs", "Loyalty without discounts"]);
+    expect(pickPillarIdeas(rows, 10).map(r => r.label)).toEqual([
+      "Decoy item strategy",
+      "Free perk clubs",
+      "Loyalty without discounts",
+      "Premium anchor pricing",
+    ]);
+    expect(pickPillarIdeas([], 4)).toEqual([]);
+  });
+});

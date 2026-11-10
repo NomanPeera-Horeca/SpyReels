@@ -1,3 +1,10 @@
+import { searchPhrasesBlockForWorkspace } from "../viralPosts/searchIdeas";
+import { type RemakeTreatment, treatmentKeepsSourceTopic } from "../recreate/remakeTreatment";
+import { checkKeepsSourceTopic } from "../recreate/sameTopicCheck";
+import { isOwnWinnerVideo, ownWinnersEnabled } from "../viralPosts/ownWinners";
+import { REMAKE_CHOICES, findReusableRequest, isOwnWinnerChoice, resolveRemakeRequest, saveRemakeRequestFields } from "../remake/remakeRecords";
+import { findLibraryCandidateIdByUrl, getLibraryTranscript, libraryTablesReady, librarySourceEnabled, linkLibraryRemake, loadLibraryCandidate } from "../remake/libraryTranscripts";
+import { loadActiveCreatorBasics } from "../personalization/activeNiche";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
@@ -51,6 +58,22 @@ Place cues at the START of the line they apply to. Every 2-3 lines should have a
 }
 
 
+/** Searched phrases (keyword bank) for this remake's workspace that fit the idea; "" when none. Never throws. */
+async function remakeSearchPhrasesBlock(scriptId: number, idea: string): Promise<string> {
+  try {
+    const db = await getDb();
+    if (!db) return "";
+    const [row] = await db
+      .select({ workspaceId: recreatedScripts.workspaceId })
+      .from(recreatedScripts)
+      .where(eq(recreatedScripts.id, scriptId))
+      .limit(1);
+    return await searchPhrasesBlockForWorkspace({ workspaceId: row?.workspaceId ?? null, idea });
+  } catch {
+    return "";
+  }
+}
+
 export async function runScriptGeneration(
   scriptId: number,
   userId: number,
@@ -61,7 +84,8 @@ export async function runScriptGeneration(
   topic: string,
   gradeLevel: string,
   addCues: boolean,
-  platformLabel: "Instagram Reel" | "TikTok video" | "YouTube Short" = "Instagram Reel"
+  platformLabel: "Instagram Reel" | "TikTok video" | "YouTube Short" = "Instagram Reel",
+  treatment: RemakeTreatment | null = null
 ): Promise<void> {
   try {
     const profile = await getCreatorCoachProfile(userId).catch(() => null);
@@ -89,7 +113,8 @@ export async function runScriptGeneration(
     });
 
     const researchGroundingBlock = formatResearchGroundingForPrompt(researchItems);
-    const generated = await generateRemakeContent({
+    const searchPhrasesBlock = await remakeSearchPhrasesBlock(scriptId, researchIdea);
+    const generateOnce = () => generateRemakeContent({
       originalTranscript,
       caption,
       reel,
@@ -101,6 +126,7 @@ export async function runScriptGeneration(
       gradeLevel,
       addCues,
       researchGroundingBlock,
+      searchPhrasesBlock,
       trustedResearchTexts: researchItems.flatMap((item) => [
         item.title,
         item.snippet ?? "",
@@ -108,7 +134,20 @@ export async function runScriptGeneration(
       ]),
       platformLabel,
       viralStructureOverride: structureResult.structure,
+      treatment,
     });
+    let generated = await generateOnce();
+    if (treatmentKeepsSourceTopic(treatment)) {
+      // Prism format / Refresh must stay on the original video's topic: check
+      // once, rewrite once if it drifted, then fail clearly.
+      const source = `${caption}\n${originalTranscript.slice(0, 1500)}`;
+      if (!(await checkKeepsSourceTopic(source, generated.generatedScript))) {
+        generated = await generateOnce();
+        if (!(await checkKeepsSourceTopic(source, generated.generatedScript))) {
+          throw new Error("The remake drifted away from your video's topic. Try again.");
+        }
+      }
+    }
 
     await updateRecreatedScript(scriptId, {
       viralStructure: generated.viralStructure as any,
@@ -329,6 +368,21 @@ Return ONLY valid JSON.`;
 
 export const recreateRouter = router({
     /** Start script re-creation: analyze viral structure + generate new script */
+    /**
+     * Whether Remake on a library video goes straight from the library
+     * (REMAKE_LIBRARY_SOURCE=on), and, for a pasted link, which library video it is.
+     */
+    libraryRoute: protectedProcedure
+      .input(z.object({ url: z.string().max(2000).optional() }).optional())
+      .query(async ({ input }) => {
+        if (!librarySourceEnabled()) return { enabled: false, candidateId: null as number | null };
+        const db = await getDb();
+        if (!db || !(await libraryTablesReady(db))) return { enabled: false, candidateId: null as number | null };
+        const url = input?.url?.trim();
+        const candidateId = url ? await findLibraryCandidateIdByUrl(db, url).catch(() => null) : null;
+        return { enabled: true, candidateId };
+      }),
+
     generate: protectedProcedure
       .input(
         z
@@ -337,7 +391,17 @@ export const recreateRouter = router({
             featuredReelId: z.number().optional(),
             tiktokVideoId: z.number().optional(),
             youtubeVideoId: z.number().optional(),
+            /** Shared library video (viral_post_candidates.id); REMAKE_LIBRARY_SOURCE=on only. */
+            libraryCandidateId: z.number().int().positive().optional(),
             topic: z.string().max(2000).optional().default(""),
+            /** Typed popup choice; wins over `topic` (kept for older clients). */
+            choice: z.enum(REMAKE_CHOICES).optional(),
+            /** The typed idea for "Use my idea". */
+            idea: z.string().max(2000).optional(),
+            /** Prism format id (own winners, PR 4). */
+            prismFormat: z.string().max(48).optional(),
+            /** Same id within 10 minutes returns the existing remake (duplicate guard). */
+            clientRequestId: z.string().min(8).max(64).optional(),
             gradeLevel: z.enum(["auto", "2", "3", "4", "5", "6", "7", "8"]),
             /** When true and plan allows AI cues, first-generation matches Rewrite behavior. */
             addCues: z.boolean().optional().default(true),
@@ -349,16 +413,45 @@ export const recreateRouter = router({
                 d.featuredReelId,
                 d.tiktokVideoId,
                 d.youtubeVideoId,
+                d.libraryCandidateId,
               ].filter((id) => id != null).length === 1,
             {
               message:
-                "Provide exactly one of reelId, featuredReelId, tiktokVideoId, or youtubeVideoId",
+                "Provide exactly one of reelId, featuredReelId, tiktokVideoId, youtubeVideoId, or libraryCandidateId",
             }
           )
       )
       .mutation(async ({ ctx, input }) => {
-        const source: "user" | "featured" | "tiktok" | "youtube" =
-          input.featuredReelId != null
+        // Own-winner choices: only on the creator's OWN library video, with OWN_WINNERS on.
+        let ownWinnerAllowed = false;
+        if (input.choice && isOwnWinnerChoice(input.choice)) {
+          const ownDb = await getDb();
+          ownWinnerAllowed =
+            ownWinnersEnabled() &&
+            input.libraryCandidateId != null &&
+            ownDb != null &&
+            (await isOwnWinnerVideo(ownDb, ctx.workspaceId, input.libraryCandidateId).catch(() => false));
+        }
+        const request = resolveRemakeRequest(input, { ownWinnerAllowed });
+        if (!request.ok) throw new TRPCError({ code: "BAD_REQUEST", message: request.message });
+        if (input.clientRequestId) {
+          // A repeated request (double click, network retry) gets the same remake
+          // instead of a second run and a second usage charge.
+          const recordsDb = await getDb();
+          const existing = recordsDb
+            ? await findReusableRequest(recordsDb, {
+                userId: ctx.user.id,
+                workspaceId: ctx.workspaceId,
+                clientRequestId: input.clientRequestId,
+              })
+            : null;
+          if (existing != null) return { scriptId: existing, status: "processing" as const };
+        }
+        let libraryPlatform: "instagram" | "tiktok" | "youtube" | null = null;
+        const source: "user" | "featured" | "tiktok" | "youtube" | "library" =
+          input.libraryCandidateId != null
+            ? "library"
+            : input.featuredReelId != null
             ? "featured"
             : input.tiktokVideoId != null
               ? "tiktok"
@@ -369,7 +462,23 @@ export const recreateRouter = router({
         let transcription: Awaited<ReturnType<typeof getTranscriptionByReelId>>;
         let reelForGeneration: any;
 
-        if (source === "featured") {
+        if (source === "library") {
+          // Public library video: its shared transcript, no Collected Reels copy.
+          if (!librarySourceEnabled()) throw new TRPCError({ code: "BAD_REQUEST", message: "Library remake is not enabled." });
+          const db = await getDb();
+          if (!db || !(await libraryTablesReady(db))) {
+            throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Library remake is not ready yet." });
+          }
+          const candidate = await loadLibraryCandidate(db, input.libraryCandidateId!);
+          if (!candidate) throw new TRPCError({ code: "NOT_FOUND", message: "Video not found" });
+          libraryPlatform = candidate.platform;
+          caption = candidate.caption;
+          reelForGeneration = { shortcode: candidate.sourceId, caption: candidate.caption, ownerUsername: candidate.creatorHandle };
+          const t = await getLibraryTranscript(db, candidate.id);
+          transcription = (t && t.status === "completed"
+            ? { status: "completed", transcript: t.transcript, segments: t.segments }
+            : null) as unknown as typeof transcription;
+        } else if (source === "featured") {
           const fr = await getFeaturedReelById(input.featuredReelId!);
           if (!fr) {
             throw new TRPCError({ code: "NOT_FOUND", message: "Featured reel not found" });
@@ -463,9 +572,12 @@ export const recreateRouter = router({
           }
         }
 
-        const typed = input.topic.trim();
+        const typed = request.topic;
         const biz = (ctx.user.businessDescription ?? "").trim();
-        const aud = (ctx.user.targetAudience ?? "").trim();
+        // New-onboarding creators have no old businessDescription/targetAudience:
+        // read their confirmed niche and audience so "Adapt to my niche" really adapts.
+        const basics = await loadActiveCreatorBasics(ctx.user.id, ctx.workspaceId);
+        const aud = (ctx.user.targetAudience ?? "").trim() || basics.audience || "";
 
         const hasExplicitUserAngle = typed.length > 0;
 
@@ -476,18 +588,24 @@ export const recreateRouter = router({
             targetAudience: aud || null,
             businessDescription: biz || null,
           });
-        } else if (aud || biz) {
-          const profile = await getCreatorCoachProfile(ctx.user.id);
-          const { signals } = await getOrFetchAudienceSignals({
-            workspaceId: ctx.workspaceId,
-            nicheSlug: profile.nicheSlug,
-            nicheLabel: profile.niche,
-            targetAudience: profile.targetAudience,
-          });
+        } else if (aud || biz || basics.nicheLabel) {
+          const profile = await getCreatorCoachProfile(ctx.user.id).catch(() => null);
+          const niche = basics.nicheLabel || profile?.niche || "";
+          const targetAudience = aud || profile?.targetAudience || "General audience";
+          const signals = profile
+            ? (
+                await getOrFetchAudienceSignals({
+                  workspaceId: ctx.workspaceId,
+                  nicheSlug: profile.nicheSlug,
+                  nicheLabel: niche,
+                  targetAudience,
+                })
+              ).signals
+            : [];
           promptAngle = buildRecreateDefaultTopicPrompt({
-            niche: profile.niche,
-            targetAudience: profile.targetAudience,
-            businessDescription: biz || profile.brandDescription,
+            niche,
+            targetAudience,
+            businessDescription: biz || profile?.brandDescription || null,
             audienceResearchBlock: formatAudienceSignalsForPrompt(signals.slice(0, 5)),
           });
         } else {
@@ -514,16 +632,34 @@ export const recreateRouter = router({
           gradeLevel: input.gradeLevel,
           status: "processing",
         });
+        if (source === "library") {
+          const db = await getDb();
+          if (db) await linkLibraryRemake(db, scriptId, input.libraryCandidateId!);
+        }
+        {
+          const recordsDb = await getDb();
+          if (recordsDb) {
+            await saveRemakeRequestFields(recordsDb, scriptId, {
+              sourceKind: source,
+              libraryCandidateId: source === "library" ? input.libraryCandidateId! : null,
+              choice: request.choice,
+              prismFormat: request.prismFormat,
+              idea: request.idea,
+              clientRequestId: input.clientRequestId ?? null,
+            });
+          }
+        }
 
         const subGen = await getUserSubscription(ctx.user.id);
         const limitsGen = getPlanLimits(subGen.plan as PlanId);
         const effectiveAddCues = Boolean(input.addCues && limitsGen.hasAiCues);
 
         const originalTranscript = transcription.transcript!;
+        const platformSource = source === "library" ? libraryPlatform : source;
         const platformLabel =
-          source === "tiktok"
+          platformSource === "tiktok"
             ? "TikTok video" as const
-            : source === "youtube"
+            : platformSource === "youtube"
               ? "YouTube Short" as const
               : "Instagram Reel" as const;
         await dispatchPilotJob({
@@ -540,6 +676,7 @@ export const recreateRouter = router({
             gradeLevel: input.gradeLevel,
             addCues: effectiveAddCues,
             platformLabel,
+            treatment: request.treatment,
           },
           runInline: () =>
             runScriptGeneration(
@@ -552,7 +689,8 @@ export const recreateRouter = router({
               promptAngle,
               input.gradeLevel,
               effectiveAddCues,
-              platformLabel
+              platformLabel,
+              request.treatment
             ),
           onInlineError: (error) =>
             console.error(`Script generation ${scriptId} failed:`, error),

@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createClaudeClient } from "../_core/claudeClient";
 import { reportDirectAnthropicUsage } from "../_core/llmMeasured";
 import {
   createDiscoveryScCallTracker,
@@ -16,6 +17,7 @@ import {
 } from "../discovery/scoring";
 import type { AdaptedCandidate } from "./candidateAdapter";
 import { deriveHook } from "./candidateAdapter";
+import { keywordQueriesFor, recordVideoSearch } from "./keywords";
 import {
   DEFAULT_CONTENT_PILLARS,
   VIRAL_POOL_DEFAULTS,
@@ -416,7 +418,7 @@ async function generatePopularQueries(args: {
   }
 
   try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const client = createClaudeClient({ apiKey: process.env.ANTHROPIC_API_KEY });
     const response = await client.messages.create({
       model: SEMANTIC_POOL_MODEL,
       max_tokens: 400,
@@ -512,11 +514,20 @@ export async function discoverInstagramPopularFirstCandidates(args: {
     return empty;
   }
 
-  const queryGen = await generatePopularQueries({
-    niche: args.niche,
+  // Real search phrases from the keyword bank first; AI-written ones only
+  // when the bank has none for this topic yet.
+  const bank = await keywordQueriesFor({
     pillar: args.pillar,
+    platform: "instagram",
     count: VIRAL_POOL_DEFAULTS.instagramPoolMaxPopularQueries,
   });
+  const queryGen = bank
+    ? { queries: bank.queries, haikuCalls: 0 }
+    : await generatePopularQueries({
+        niche: args.niche,
+        pillar: args.pillar,
+        count: VIRAL_POOL_DEFAULTS.instagramPoolMaxPopularQueries,
+      });
   const tracker = createDiscoveryScCallTracker(maxScCalls);
 
   return runWithDiscoveryScCallTracker(tracker, async () => {
@@ -653,6 +664,24 @@ export async function discoverInstagramPopularFirstCandidates(args: {
         candidates: finalCandidates,
         verdicts: finalSemantic.verdicts,
       });
+    }
+
+    if (bank) {
+      const queryByShortcode = new Map<string, string>();
+      const foundByQuery = new Map<string, number>();
+      for (const post of collected) {
+        if (!queryByShortcode.has(post.shortcode)) queryByShortcode.set(post.shortcode, post.query);
+      }
+      for (const row of strictRows) {
+        const q = queryByShortcode.get(row.post.shortcode);
+        if (q) foundByQuery.set(q, (foundByQuery.get(q) ?? 0) + 1);
+      }
+      const passedByQuery = new Map<string, string[]>();
+      for (const c of routed.currentPool) {
+        const q = queryByShortcode.get(c.sourceId);
+        if (q) passedByQuery.set(q, [...(passedByQuery.get(q) ?? []), c.sourceId]);
+      }
+      await recordVideoSearch({ pick: bank, platform: "instagram", foundByQuery, passedByQuery });
     }
 
     const totalScCalls = tracker.count;

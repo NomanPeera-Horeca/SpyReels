@@ -1,4 +1,14 @@
 import { z } from "zod";
+import {
+  claimLibraryTranscription,
+  getLibraryTranscript,
+  libraryTablesReady,
+  librarySourceEnabled,
+  loadLibraryCandidate,
+  runLibraryTranscription,
+  shouldStartLibraryTranscription,
+  toTranscriptionStatus,
+} from "../remake/libraryTranscripts";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { transcriptions, tiktokVideos, youtubeVideos } from "../../drizzle/schema";
@@ -48,15 +58,16 @@ const sourceReferenceInput = z
     featuredReelId: z.number().optional(),
     tiktokVideoId: z.number().optional(),
     youtubeVideoId: z.number().optional(),
+    libraryCandidateId: z.number().int().positive().optional(),
   })
   .refine(
     (d) =>
-      [d.reelId, d.featuredReelId, d.tiktokVideoId, d.youtubeVideoId].filter(
+      [d.reelId, d.featuredReelId, d.tiktokVideoId, d.youtubeVideoId, d.libraryCandidateId].filter(
         (id) => id != null
       ).length === 1,
     {
       message:
-        "Provide exactly one of reelId, featuredReelId, tiktokVideoId, or youtubeVideoId",
+        "Provide exactly one of reelId, featuredReelId, tiktokVideoId, youtubeVideoId, or libraryCandidateId",
     }
   );
 
@@ -69,6 +80,8 @@ export const transcribeRouter = router({
             featuredReelId: z.number().optional(),
             tiktokVideoId: z.number().optional(),
             youtubeVideoId: z.number().optional(),
+            /** Shared library video (viral_post_candidates.id); REMAKE_LIBRARY_SOURCE=on only. */
+            libraryCandidateId: z.number().int().positive().optional(),
           })
           .refine(
             (d) =>
@@ -77,14 +90,54 @@ export const transcribeRouter = router({
                 d.featuredReelId,
                 d.tiktokVideoId,
                 d.youtubeVideoId,
+                d.libraryCandidateId,
               ].filter((id) => id != null).length === 1,
             {
               message:
-                "Provide exactly one of reelId, featuredReelId, tiktokVideoId, or youtubeVideoId",
+                "Provide exactly one of reelId, featuredReelId, tiktokVideoId, youtubeVideoId, or libraryCandidateId",
             }
           )
       )
       .mutation(async ({ ctx, input }) => {
+        if (input.libraryCandidateId != null) {
+          // Public library video: transcribe once from its link, shared by everyone;
+          // nothing is copied into the user's Collected Reels.
+          if (!librarySourceEnabled()) throw new TRPCError({ code: "BAD_REQUEST", message: "Library remake is not enabled." });
+          const db = await getDb();
+          if (!db || !(await libraryTablesReady(db))) {
+            throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Library remake is not ready yet." });
+          }
+          const candidate = await loadLibraryCandidate(db, input.libraryCandidateId);
+          if (!candidate) throw new TRPCError({ code: "NOT_FOUND", message: "Video not found" });
+          const existing = await getLibraryTranscript(db, candidate.id);
+          if (!shouldStartLibraryTranscription(existing)) {
+            return {
+              transcriptionId: candidate.id,
+              status: existing!.status === "completed" ? ("completed" as const) : ("processing" as const),
+              queuePending: false,
+            };
+          }
+          const bypass = await isFirstRemakeUsageBypassEligible(ctx.user.id, ctx.user.hasCompletedFirstSpy, "transcribeCount");
+          if (!bypass) {
+            const usageCheck = await checkUsageLimit(ctx.user.id, "transcribeCount", ctx.user.openId);
+            if (!usageCheck.allowed) {
+              throw new TRPCError({
+                code: "FORBIDDEN",
+                message: `You've reached your monthly transcription limit (${usageCheck.used}/${usageCheck.limit}). Upgrade to ${usageCheck.planRequired || "a higher plan"} for more.`,
+              });
+            }
+          }
+          // Only the caller that claims the job runs it. It is charged only when a
+          // transcript is actually made: a failed attempt (e.g. the speech-to-text
+          // service is down or out of credits) never uses up a transcription.
+          if (await claimLibraryTranscription(db, candidate)) {
+            const userId = ctx.user.id;
+            void runLibraryTranscription(candidate, {
+              onCompleted: () => incrementUsage(userId, "transcribeCount"),
+            });
+          }
+          return { transcriptionId: candidate.id, status: "processing" as const, queuePending: false };
+        }
         const source: "user" | "featured" | "tiktok" | "youtube" =
           input.featuredReelId != null
             ? "featured"
@@ -458,6 +511,7 @@ export const transcribeRouter = router({
             featuredReelId: z.number().optional(),
             tiktokVideoId: z.number().optional(),
             youtubeVideoId: z.number().optional(),
+            libraryCandidateId: z.number().int().positive().optional(),
           })
           .refine(
             (d) =>
@@ -466,14 +520,20 @@ export const transcribeRouter = router({
                 d.featuredReelId,
                 d.tiktokVideoId,
                 d.youtubeVideoId,
+                d.libraryCandidateId,
               ].filter((id) => id != null).length === 1,
             {
               message:
-                "Provide exactly one of reelId, featuredReelId, tiktokVideoId, or youtubeVideoId",
+                "Provide exactly one of reelId, featuredReelId, tiktokVideoId, youtubeVideoId, or libraryCandidateId",
             }
           )
       )
       .query(async ({ input }) => {
+        if (input.libraryCandidateId != null) {
+          const db = await getDb();
+          if (!db || !(await libraryTablesReady(db))) return null;
+          return toTranscriptionStatus(await getLibraryTranscript(db, input.libraryCandidateId));
+        }
         const transcription =
           input.featuredReelId != null
             ? await getTranscriptionByFeaturedReelId(input.featuredReelId)
@@ -492,6 +552,26 @@ export const transcribeRouter = router({
     sourceReference: protectedProcedure
       .input(sourceReferenceInput)
       .query(async ({ ctx, input }) => {
+        if (input.libraryCandidateId != null) {
+          const db = await getDb();
+          if (!librarySourceEnabled() || !db || !(await libraryTablesReady(db))) {
+            throw new TRPCError({ code: "NOT_FOUND", message: "Source video not found" });
+          }
+          const c = await loadLibraryCandidate(db, input.libraryCandidateId);
+          if (!c) throw new TRPCError({ code: "NOT_FOUND", message: "Source video not found" });
+          const t = await getLibraryTranscript(db, c.id);
+          return {
+            platform: c.platform,
+            creator: c.creatorHandle,
+            title: c.caption || null,
+            durationSec: null,
+            thumbnailUrl: null,
+            originalUrl: c.sourceUrl || null,
+            transcript: t?.transcript ?? null,
+            segments: t?.segments ?? null,
+            transcriptionStatus: t?.status ?? null,
+          };
+        }
         if (input.featuredReelId != null) {
           const reel = await getFeaturedReelById(input.featuredReelId);
           if (!reel) {

@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createClaudeClient } from "../_core/claudeClient";
 import { reportDirectAnthropicUsage } from "../_core/llmMeasured";
 import type { AdaptedCandidate } from "./candidateAdapter";
 import { DEFAULT_CONTENT_PILLARS } from "./constants";
@@ -171,6 +172,19 @@ export function normalizeSemanticPoolVerdict(
   };
 }
 
+/**
+ * Shorten text for the prompt without leaving half an emoji behind. A cut in
+ * the middle of an emoji leaves a lone surrogate, which the Anthropic API
+ * rejects as invalid JSON (the whole batch then fails). Pure; exported for tests.
+ */
+export function clipForPrompt(text: string | null | undefined, max: number): string {
+  return (text || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, max)
+    .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, "");
+}
+
 async function classifyBatch(
   client: Anthropic,
   niche: string,
@@ -179,8 +193,8 @@ async function classifyBatch(
 ): Promise<SemanticPoolVerdict[]> {
   const candidateLines = candidates
     .map((candidate) => {
-      const caption = (candidate.caption || "").replace(/\s+/g, " ").trim().slice(0, 520);
-      const hook = (candidate.hook || "").replace(/\s+/g, " ").trim().slice(0, 180);
+      const caption = clipForPrompt(candidate.caption, 520);
+      const hook = clipForPrompt(candidate.hook, 180);
       const platform = candidate.platform || "unknown";
       return `- sourceId: ${candidate.sourceId}\n  platform: ${platform}\n  creator: ${candidate.creatorHandle || candidate.creatorName}\n  hook: ${hook || "(none)"}\n  caption: ${caption || "(none)"}`;
     })
@@ -230,7 +244,7 @@ export async function classifySemanticPoolRelevance(args: {
     throw new Error("ANTHROPIC_API_KEY is not configured for semantic pool relevance");
   }
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  const client = createClaudeClient({ apiKey: process.env.ANTHROPIC_API_KEY });
   const verdicts: SemanticPoolVerdict[] = [];
   let haikuCalls = 0;
   for (const batch of chunkArray(args.candidates, SEMANTIC_BATCH_SIZE)) {

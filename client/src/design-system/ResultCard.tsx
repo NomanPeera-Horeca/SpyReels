@@ -55,9 +55,15 @@ export type ResultCardProps = {
   onRemake: () => void;
   remakeBusy?: boolean;
   saved: boolean;
-  onToggleSave: () => void;
+  /** Absent: no save button (Result Card / Compact, e.g. the creator's own videos). */
+  onToggleSave?: () => void;
   menu: ResultCardMenuItem[];
   testId?: string;
+  /**
+   * Inline player shown inside the media box. It replaces the thumbnail, Play,
+   * the signal and Expand (the player has its own expand and close).
+   */
+  inlineMedia?: ReactNode;
 };
 
 export function ResultCard({
@@ -78,6 +84,7 @@ export function ResultCard({
   onToggleSave,
   menu,
   testId,
+  inlineMedia = null,
 }: ResultCardProps) {
   const [thumbFailed, setThumbFailed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -100,7 +107,8 @@ export function ResultCard({
   return (
     <article className={["sr-mode-product", styles.card, mediaFormat === "portrait" && styles.portrait].filter(Boolean).join(" ")} data-testid={testId}>
       <div className={styles.media}>
-        {thumbnailUrl && !thumbFailed ? (
+        {inlineMedia ? <div className={styles.inlineMedia}>{inlineMedia}</div> : null}
+        {!inlineMedia && thumbnailUrl && !thumbFailed ? (
           <img
             className={styles.thumb}
             src={thumbnailUrl}
@@ -114,8 +122,8 @@ export function ResultCard({
           <PlatformFullColorMark platform={platform} size={16} />
           {platformLabel}
         </span>
-        {signal?.kind === "viral_score" ? <span className={styles.topEnd}>{signal.node}</span> : null}
-        {signal?.kind === "performance" ? (
+        {!inlineMedia && signal?.kind === "viral_score" ? <span className={styles.topEnd}>{signal.node}</span> : null}
+        {!inlineMedia && signal?.kind === "performance" ? (
           <button
             type="button"
             className={styles.signalTarget}
@@ -128,10 +136,12 @@ export function ResultCard({
             </span>
           </button>
         ) : null}
-        <button type="button" className={[styles.iconButton, styles.play].join(" ")} onClick={onPlay} aria-label={labels.play}>
-          <IconPlay />
-        </button>
-        {onExpand ? (
+        {!inlineMedia ? (
+          <button type="button" className={[styles.iconButton, styles.play].join(" ")} onClick={onPlay} aria-label={labels.play}>
+            <IconPlay />
+          </button>
+        ) : null}
+        {onExpand && !inlineMedia ? (
           <button
             type="button"
             className={[styles.iconButton, styles.expand].join(" ")}
@@ -156,15 +166,17 @@ export function ResultCard({
           >
             {labels.remake}
           </button>
-          <button
-            type="button"
-            className={styles.iconButton}
-            onClick={onToggleSave}
-            aria-pressed={saved}
-            aria-label={saved ? labels.saved : labels.save}
-          >
-            <IconStar filled={saved} />
-          </button>
+          {onToggleSave ? (
+            <button
+              type="button"
+              className={styles.iconButton}
+              onClick={onToggleSave}
+              aria-pressed={saved}
+              aria-label={saved ? labels.saved : labels.save}
+            >
+              <IconStar filled={saved} />
+            </button>
+          ) : null}
           <button
             type="button"
             className={styles.iconButton}

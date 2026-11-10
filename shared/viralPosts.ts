@@ -100,6 +100,13 @@ export type ViralPost = {
   relevanceLabel: string;
   relevanceReason: string;
 
+  /**
+   * Shared library only: the one viral rule's multiple and what it compares
+   * against ("usual_views" = the creator's median of recent videos).
+   */
+  viralMultiple?: number | null;
+  viralBasis?: "usual_views" | "followers" | null;
+
   hookMechanism?: string | null;
   format?: string | null;
   adaptabilityReason?: string | null;

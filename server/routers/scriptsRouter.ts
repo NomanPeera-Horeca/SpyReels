@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { createDraftPublication } from "../remake/remakeRecords";
 import { TRPCError } from "@trpc/server";
 import { router, protectedProcedure } from "../_core/trpc";
 import { invokeLLM } from "../_core/llm";
@@ -119,11 +120,19 @@ export const scriptsRouter = router({
           return { id: recreatedScriptId, created: false as const, updated: false as const };
         }
 
-        return ensureSavedScriptFromRecreate({
+        const saved = await ensureSavedScriptFromRecreate({
           workspaceId: ctx.workspaceId,
           userId: ctx.user.id,
           recreated,
         });
+        // Record the draft for later results tracking (no-op before 0118).
+        await createDraftPublication({
+          savedScriptId: saved.id,
+          recreatedScriptId,
+          workspaceId: ctx.workspaceId,
+          userId: ctx.user.id,
+        });
+        return saved;
       }),
 
     /** Get a single script with tags and versions */

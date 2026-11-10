@@ -12,6 +12,7 @@ import { SCRAPE_JOB_STALE_MS, SCRAPE_JOB_ZOMBIE_MESSAGE } from "../scrapeJobSwee
 import { scheduleScrapeJobPostCompleteWork, reelIdsForJobShortcodes, scheduleScrapeReelPostCompleteWork } from "../scrapePostComplete";
 import { tryAcquireScrapeSlot, releaseScrapeSlot } from "../scrapeSemaphore";
 import { checkUsageLimit, incrementUsage, decrementUsage } from "../stripe/stripe-service";
+import { seedFromRecentResearch } from "../research/recentResearchSeed";
 import { normalizeInstagramHandle, isValidInstagramHandleNormalized, INSTAGRAM_HANDLE_INVALID_MESSAGE } from "@shared/instagramHandle";
 import { and, not, sql, eq, inArray, or } from "drizzle-orm";
 import { maybeMarkFirstSpyCompleted } from "./_shared";
@@ -57,16 +58,26 @@ async function runScrapeJob(
 }
 
 
-async function runScrapeJobInner(
+/**
+ * The research run itself. `system` runs (background pre-research, not a
+ * user's request) skip the per-user side effects: no usage refund and no
+ * onboarding "first research" flag.
+ */
+export async function runScrapeJobInner(
   jobId: number,
   userId: number,
   handle: string,
-  timeframeDays: number
+  timeframeDays: number,
+  opts: { system?: boolean; maxReels?: number } = {}
 ): Promise<void> {
+  const markFirstSpy = async (id: number) => {
+    if (!opts.system) await maybeMarkFirstSpyCompleted(id);
+  };
   // Centralized refund helper so the multiple failure paths stay in sync.
   // Only safe to call once per job (we never enter more than one failure
   // branch in a single run).
   const refundScrapeQuota = async (reason: string) => {
+    if (opts.system) return;
     try {
       await decrementUsage(userId, "scrapeCount");
       console.warn(
@@ -170,7 +181,7 @@ async function runScrapeJobInner(
               });
             }
           },
-          { maxReels: 500, timeoutMs: 5 * 60 * 1000 }
+          { maxReels: opts.maxReels ?? 500, timeoutMs: 5 * 60 * 1000 }
         )
     );
 
@@ -222,7 +233,7 @@ async function runScrapeJobInner(
           errorMessage: null,
           failureReason: null,
         });
-        await maybeMarkFirstSpyCompleted(jobId);
+        await markFirstSpy(jobId);
         console.log(
           `[runScrapeJob ${jobId}] completed with seeded catalog (live pull returned 0) handle=@${cleanHandleForLog} reels=${seededReelCount}`
         );
@@ -307,7 +318,7 @@ async function runScrapeJobInner(
         errorMessage: null,
         failureReason: null,
       });
-      await maybeMarkFirstSpyCompleted(jobId);
+      await markFirstSpy(jobId);
       console.log(
         `[runScrapeJob ${jobId}] completed handle=@${cleanHandleForLog} reels=0 followers=${followerCount}`
       );
@@ -357,7 +368,7 @@ async function runScrapeJobInner(
       errorMessage: null,
       failureReason: null,
     });
-    await maybeMarkFirstSpyCompleted(jobId);
+    await markFirstSpy(jobId);
     scheduleScrapeJobPostCompleteWork(jobId);
     console.log(
       `[runScrapeJob ${jobId}] completed handle=@${cleanHandleForLog} reels=${finalReelCount} followers=${followerCount}`
@@ -645,6 +656,7 @@ export const scrapeRouter = router({
           await incrementUsage(ctx.user.id, "scrapeCount");
 
           let seededFromFeatured = false;
+          let seededFromRecent = false;
           if (featuredAccountId != null) {
             await seedFeaturedReelsIntoJob(
               jobId,
@@ -652,6 +664,17 @@ export const scrapeRouter = router({
               input.timeframeDays
             );
             seededFromFeatured = true;
+          } else {
+            // Anyone researched this creator recently: show those videos now;
+            // the live run below refreshes them (rows are de-duplicated).
+            seededFromRecent =
+              (await seedFromRecentResearch({
+                platform: "instagram",
+                handle: normalizedHandle,
+                jobId,
+                workspaceId: ctx.workspaceId,
+                timeframeDays: input.timeframeDays,
+              })) > 0;
           }
 
           // Run scraping in background (releases the semaphore in finally).
@@ -660,7 +683,9 @@ export const scrapeRouter = router({
           });
           launched = true;
 
-          return seededFromFeatured ? { jobId, seededFromFeatured: true as const } : { jobId };
+          if (seededFromFeatured) return { jobId, seededFromFeatured: true as const };
+          if (seededFromRecent) return { jobId, seededFromRecent: true as const };
+          return { jobId };
         } finally {
           if (!launched) releaseScrapeSlot();
         }

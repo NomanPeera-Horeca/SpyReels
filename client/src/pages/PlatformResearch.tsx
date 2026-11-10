@@ -16,7 +16,7 @@ import {
 import { toast } from "sonner";
 import { TRPCClientError } from "@trpc/client";
 import { MIN_SPY_DISPLAY_REELS } from "@shared/spyReelsLimits";
-import { isValidTikTokHandleNormalized } from "@shared/socialHandles";
+import { isValidTikTokHandleNormalized, isValidYouTubeHandleNormalized } from "@shared/socialHandles";
 import { resolveFromParamFallback } from "@shared/appNavigation";
 import { useAppBack } from "@/hooks/useAppBack";
 import { trpc } from "@/lib/trpc";
@@ -217,13 +217,23 @@ export default function PlatformResearch({
       }
     },
   });
+  // A creator link (e.g. Home's "Creators going viral") starts research once.
   useEffect(() => {
-    if (config.platform !== "tiktok" || !initialHandle || initialJobId != null) return;
-    if (!isValidTikTokHandleNormalized(initialHandle) || autoStartedHandleRef.current === initialHandle) return;
+    if (!initialHandle || initialJobId != null) return;
+    if (autoStartedHandleRef.current === initialHandle) return;
+    const valid =
+      config.platform === "tiktok"
+        ? isValidTikTokHandleNormalized(initialHandle)
+        : isValidYouTubeHandleNormalized(initialHandle);
+    if (!valid) return;
     autoStartedHandleRef.current = initialHandle;
     setHandle(initialHandle);
-    tiktokStart.mutate({ handle: initialHandle, timeframe: "30" });
-  }, [config.platform, initialHandle, initialJobId, tiktokStart]);
+    if (config.platform === "tiktok") {
+      tiktokStart.mutate({ handle: initialHandle, timeframe: "30" });
+    } else {
+      youtubeStart.mutate({ handle: initialHandle, timeframe: "30" });
+    }
+  }, [config.platform, initialHandle, initialJobId, tiktokStart, youtubeStart]);
 
   const startPending =
     config.platform === "tiktok"

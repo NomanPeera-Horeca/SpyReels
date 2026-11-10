@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { createClaudeClient } from "../_core/claudeClient";
 import { reportDirectAnthropicUsage } from "../_core/llmMeasured";
 
 export const YOUTUBE_QUERY_MODEL = "claude-haiku-4-5-20251001";
@@ -114,7 +115,7 @@ export async function generateYouTubeShortsSearchQueries(args: {
   }
 
   try {
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+    const client = createClaudeClient({ apiKey: process.env.ANTHROPIC_API_KEY });
     const response = await client.messages.create({
       model: YOUTUBE_QUERY_MODEL,
       max_tokens: 220,

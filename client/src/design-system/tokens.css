@@ -101,3 +101,65 @@
 .sr-scope-light :where(h1, h2, h3, h4, p) {
   margin: 0;
 }
+
+/*
+ * Dark surface scope (EXTEND). Values are the Figma "Color" collection, Dark
+ * mode, read from file RhR9xgyxthgIuL1FtgSKKr (same names as Light above).
+ * Opt-in per surface, like .sr-scope-light; first used by the Remake popup.
+ */
+.sr-scope-dark {
+  color-scheme: dark;
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+
+  --sr-color-brand-primary: #9b86ff;
+  --sr-color-brand-strong: #c8bcff;
+  --sr-color-brand-surface-subtle: #27272e;
+  --sr-color-brand-surface-selected: #3c3c44;
+  --sr-color-text-brand: #c8bcff;
+  --sr-color-text-primary: #ffffff;
+  --sr-color-text-on-brand: #ffffff;
+  --sr-color-text-secondary: #d5d5dd;
+  --sr-color-text-tertiary: #a6a6b0;
+  --sr-color-text-disabled: #575761;
+  --sr-color-text-inverse: #101014;
+  --sr-color-surface-page: #101014;
+  --sr-color-surface-default: #19191f;
+  --sr-color-surface-subtle: #27272e;
+  --sr-color-surface-raised: #27272e;
+  --sr-color-surface-hover: #27272e;
+  --sr-color-surface-icon-tile: #27272e;
+  --sr-color-border-subtle: #27272e;
+  --sr-color-border-default: #3c3c44;
+  --sr-color-border-strong: #575761;
+  --sr-color-border-control: #70707a;
+  --sr-color-action-primary: #7157ff;
+  --sr-color-action-primary-default: #7157ff;
+  --sr-color-action-primary-hover: #4c3e9a;
+  --sr-color-action-primary-pressed: #433091;
+  --sr-color-action-selected-subtle: #433091;
+  --sr-color-action-selected-strong: #9b86ff;
+  --sr-color-action-disabled-background: #27272e;
+  --sr-color-action-disabled-text: #575761;
+  --sr-color-action-ghost-background: transparent;
+  --sr-color-focus-border: #9b86ff;
+  --sr-color-focus-ring: #9b86ff;
+  --sr-color-focus-primary-action: #9b86ff;
+  --sr-color-focus-neutral-action: #9b86ff;
+  --sr-color-status-error-background: #321a1d;
+  --sr-color-status-error-foreground: #ff7a70;
+  --sr-color-status-error-border: #8b3a34;
+  --sr-color-badge-neutral-background: #3c3c44;
+  --sr-color-badge-neutral-foreground: #e7e7ec;
+  /* Re-declared so the rings resolve with the Dark focus colors above. */
+  --sr-elevation-focus-neutral-action: 0 0 0 4px
+    color-mix(in srgb, var(--sr-color-focus-neutral-action) 22%, transparent);
+  --sr-elevation-focus-primary-action: 0 0 0 4px
+    color-mix(in srgb, var(--sr-color-focus-primary-action) 22%, transparent);
+  color: var(--sr-color-text-primary);
+  background: var(--sr-color-surface-default);
+}
+
+.sr-scope-dark :where(h1, h2, h3, h4, p) {
+  margin: 0;
+}
