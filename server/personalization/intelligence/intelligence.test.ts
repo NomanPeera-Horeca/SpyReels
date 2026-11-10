@@ -2371,3 +2371,54 @@ describe("starter answers reach the strategy as trusted evidence", () => {
     expect(JSON.stringify(llm.calls[0].messages)).toContain("home workouts for busy moms");
   });
 });
+
+describe("goal step double failure with ONBOARDING_CLAIM_SUPPORT", () => {
+  it("both drafts rejected: returns one question, writes no goal, and leaves confirmed edits intact", async () => {
+    vi.stubEnv("ONBOARDING_CLAIM_SUPPORT", "on");
+    try {
+      const store = new MemoryRecoStore();
+      const niche = item("niche", { slug: "restaurants-cafes", label: "My own niche wording" });
+      const audience = item("audience", { who: "Restaurant owners I edited", outcome: "buy the right gear" });
+      store.items.push(niche, audience);
+      const before = JSON.stringify(store.items);
+      const llm = fakeLlm(
+        goalOut("Help coworkers plan office parties."),
+        goalOut("Help neighbors organize block parties.")
+      );
+      const reviews: InvokeParams[] = [];
+      const reviewInvoker = async (params: InvokeParams): Promise<InvokeResult> => {
+        reviews.push(params);
+        return {
+          id: "x",
+          created: 0,
+          model: "claude-haiku-4-5-20251001",
+          choices: [
+            {
+              index: 0,
+              message: {
+                role: "assistant",
+                content: JSON.stringify({ reviews: [{ index: 0, verdict: "unsupported", unsupported: ["parties"] }] }),
+              },
+              finish_reason: "end_turn",
+            },
+          ],
+          usage: { prompt_tokens: 500, completion_tokens: 30, total_tokens: 530 },
+        };
+      };
+      const r = await generateRecommendations(
+        { store, invoker: llm.invoker, reviewInvoker },
+        { ctx, socialProfileId: "prof-1", step: "goal" }
+      );
+      expect(r).toMatchObject({ status: "needs_clarification", reason: "unverified" });
+      expect(r.status === "needs_clarification" && r.question).toContain("why do you create content");
+      expect(reviews).toHaveLength(2);
+      expect(store.items.some(i => i.kind === "goal")).toBe(false);
+      // Confirmed user edits are never touched by a failed generation.
+      expect(JSON.stringify(store.items.filter(i => i.status === "confirmed"))).toBe(
+        JSON.stringify(JSON.parse(before).filter((i: ItemRecord) => i.status === "confirmed"))
+      );
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+});

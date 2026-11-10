@@ -8,6 +8,7 @@
  * strength only caps confidence. It does not override that decision.
  */
 import { z } from "zod";
+import { DEFAULT_GOAL_QUESTION } from "@shared/personalization/goalQuestion";
 import type { SuggestionConfidence } from "@shared/personalization/model";
 import {
   evidenceBlock,
@@ -38,17 +39,18 @@ import {
 } from "./guards";
 import {
   callStructured,
+  IntelligenceError,
   type LlmInvoker,
   type LlmUsage,
   type ParseResult,
 } from "./structuredLlm";
+import { claimSupportEnabled, logClaimReview, reviewClaims, supportEvidenceText } from "./claimSupport";
 
 export const GOAL_PROMPT_VERSION = "goal-v4";
 /** Hard cap after parsing. The prompt still asks for 18 words; this only stops rambling. */
 const MAX_GOAL_WORDS = 24;
 const MAX_GOAL_CHARS = 170;
-export const DEFAULT_CLARIFYING_QUESTION =
-  "In one sentence, why do you create content? For example: to grow your business, teach a skill, or entertain people.";
+export const DEFAULT_CLARIFYING_QUESTION = DEFAULT_GOAL_QUESTION;
 
 export type GoalInference =
   | {
@@ -56,12 +58,19 @@ export type GoalInference =
       goal: string;
       confidence: SuggestionConfidence;
       evidenceBasis: (EvidenceSource | "posts")[];
+      /**
+       * A starting direction for the subject, not an inferred purpose: the
+       * profile is thin, or the evidence review could not confirm the purpose
+       * (ONBOARDING_CLAIM_SUPPORT). Shown as a starter until the creator edits it.
+       */
+      starter: boolean;
       usage: LlmUsage;
       attempts: number;
     }
   | {
       status: "needs_clarification";
-      reason: "insufficient_evidence" | "ambiguous";
+      /** unverified: every draft made claims the evidence does not support (ONBOARDING_CLAIM_SUPPORT). */
+      reason: "insufficient_evidence" | "ambiguous" | "unverified";
       question: string;
       usage: LlmUsage | null;
       attempts: number;
@@ -127,6 +136,10 @@ type Parsed =
       goal: string;
       confidence: SuggestionConfidence;
       basis: (EvidenceSource | "posts")[];
+      /** Capitalised words not found verbatim in the evidence: a review signal, not a verdict. */
+      nameFlags: string[];
+      /** Set by the evidence review. */
+      uncertain?: boolean;
     }
   | { kind: "clarify"; question: string };
 
@@ -174,7 +187,13 @@ export function parseGoalOutput(
   raw: unknown,
   e: CreatorEvidence,
   /** The creator's posts were shown, so "posts" is a real evidence source. */
-  hasPosts = false
+  hasPosts = false,
+  /**
+   * false (ONBOARDING_CLAIM_SUPPORT): unfamiliar capitalised words are only
+   * flagged for the semantic evidence review instead of rejecting the goal,
+   * because the exact-word check rejects valid paraphrases.
+   */
+  namesAreHard = true
 ): ParseResult<Parsed> {
   const shape = Shape.safeParse(raw);
   if (!shape.success)
@@ -212,7 +231,7 @@ export function parseGoalOutput(
   const names = namesCheckApplies(e, capitalizationMarksNames)
     ? unsupportedProperNouns(goal, e.corpus, [e.outputLanguage.label])
     : [];
-  if (names.length)
+  if (names.length && namesAreHard)
     return {
       ok: false,
       reason: `goal names things not in the evidence (${names.join(", ")})`,
@@ -241,6 +260,7 @@ export function parseGoalOutput(
       goal: goal.endsWith(".") ? goal : `${goal}.`,
       confidence: o.confidence,
       basis,
+      nameFlags: names,
     },
   };
 }
@@ -252,8 +272,11 @@ export async function inferGoal(input: {
   invoker?: LlmInvoker;
   timeoutMs?: number;
   onRejected?: (reason: string) => void;
+  /** Evidence review model (ONBOARDING_CLAIM_SUPPORT). Defaults to the shared invoker. */
+  reviewInvoker?: LlmInvoker;
 }): Promise<GoalInference> {
   const e = input.evidence;
+  const supportOn = claimSupportEnabled();
   if (e.strength === "none") {
     return {
       status: "needs_clarification",
@@ -265,19 +288,39 @@ export async function inferGoal(input: {
   }
   const posts = input.posts ?? EMPTY_POST_CONTEXT;
   const prompt = buildGoalPrompt(e, posts);
-  const { value, usage, attempts } = await callStructured({
-    operation: "personalization_goal_inference",
-    system: prompt.system,
-    user: prompt.user,
-    schemaName: "creator_goal",
-    schema: SCHEMA,
-    parse: raw => parseGoalOutput(raw, e, posts.posts.length > 0),
-    invoker: input.invoker,
-    timeoutMs: input.timeoutMs,
-    onRejected: input.onRejected,
-    maxTokens: 400,
-    images: postImagesForCall(posts),
-  });
+  let called: Awaited<ReturnType<typeof callStructured<Parsed>>>;
+  try {
+    called = await callStructured<Parsed>({
+      operation: "personalization_goal_inference",
+      system: prompt.system,
+      user: prompt.user,
+      schemaName: "creator_goal",
+      schema: SCHEMA,
+      parse: raw => parseGoalOutput(raw, e, posts.posts.length > 0, !supportOn),
+      verify: supportOn
+        ? value => verifyGoalAgainstEvidence(value, e, posts, input.reviewInvoker)
+        : undefined,
+      invoker: input.invoker,
+      timeoutMs: input.timeoutMs,
+      onRejected: input.onRejected,
+      maxTokens: 400,
+      images: postImagesForCall(posts),
+    });
+  } catch (err) {
+    // Every draft was rejected: ask one short question instead of leaving an
+    // empty box. Provider errors and timeouts still fail (the UI offers Try again).
+    if (supportOn && err instanceof IntelligenceError && err.kind === "invalid_output") {
+      return {
+        status: "needs_clarification",
+        reason: "unverified",
+        question: DEFAULT_CLARIFYING_QUESTION,
+        usage: err.usage,
+        attempts: err.attempts,
+      };
+    }
+    throw err;
+  }
+  const { value, usage, attempts } = called;
   if (value.kind === "clarify") {
     return {
       status: "needs_clarification",
@@ -297,16 +340,55 @@ export async function inferGoal(input: {
     strong: "high",
   };
   const order: SuggestionConfidence[] = ["low", "medium", "high"];
-  const confidence =
-    order[
-      Math.min(order.indexOf(value.confidence), order.indexOf(cap[e.strength]))
-    ];
+  const starter = supportOn && (e.strength === "weak" || value.uncertain === true);
+  const confidence = starter
+    ? "low"
+    : order[
+        Math.min(order.indexOf(value.confidence), order.indexOf(cap[e.strength]))
+      ];
   return {
     status: "suggested",
     goal: value.goal,
     confidence,
     evidenceBasis: value.basis,
+    starter,
     usage,
     attempts,
   };
+}
+
+/**
+ * ONBOARDING_CLAIM_SUPPORT: review the parsed goal against the evidence the
+ * writer saw. Unsupported claims are rejected (one corrected retry);
+ * uncertain ones are kept as a starter; when the review cannot run, the old
+ * exact-word name rule decides, so an outage never loosens the rules.
+ */
+export async function verifyGoalAgainstEvidence(
+  value: Parsed,
+  e: CreatorEvidence,
+  posts: PostContext,
+  reviewInvoker?: LlmInvoker
+): Promise<ParseResult<Parsed>> {
+  if (value.kind !== "suggest") return { ok: true, value };
+  const batch = await reviewClaims({
+    evidenceText: supportEvidenceText(e, posts),
+    claims: [value.goal],
+    invoker: reviewInvoker,
+  });
+  const review = batch.reviews[0] ?? { verdict: "unavailable" as const, unsupported: [] };
+  let result: ParseResult<Parsed>;
+  if (review.verdict === "unsupported") {
+    result = {
+      ok: false,
+      reason: `goal makes claims the evidence does not show (${review.unsupported.join(", ")})`,
+    };
+  } else if (review.verdict === "unavailable") {
+    result = value.nameFlags.length
+      ? { ok: false, reason: `goal names things not in the evidence (${value.nameFlags.join(", ")})` }
+      : { ok: true, value };
+  } else {
+    result = { ok: true, value: { ...value, uncertain: review.verdict === "uncertain" } };
+  }
+  logClaimReview("goal", batch, result.ok ? "kept" : "rejected");
+  return result;
 }
