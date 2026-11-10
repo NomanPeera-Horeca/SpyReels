@@ -88,7 +88,6 @@ export const HOME_COPY = {
   provenIdeas: {
     title: "Your proven ideas",
     subtitle: "Your own videos that did 2× your usual views. Remake one in a new format.",
-    tryAs: (format: string) => `Try it as: ${format}`,
   },
 
   /** "+ TikTok" popup: add your own account on another platform. */

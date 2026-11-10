@@ -17,16 +17,3 @@ export function libraryPerformanceSignal(
   };
 }
 
-/**
- * "Your proven ideas" (Figma 1743:3): the creator's OWN video vs their usual
- * views, shown from 2x with one decimal ("3.2×"). Other creators' videos keep
- * the >= 5x rule above.
- */
-export function ownWinnerPerformanceSignal(
-  post: Pick<ViralPost, "viralMultiple">
-): ResultCardSignal | null {
-  const m = post.viralMultiple;
-  if (m == null || !Number.isFinite(m) || m < 2) return null;
-  const label = `${Math.round(m * 10) / 10}×`;
-  return { kind: "performance", label, description: `${label} your usual views` };
-}

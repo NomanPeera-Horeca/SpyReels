@@ -23,7 +23,7 @@ import {
   IconToolScript,
 } from "@/design-system/icons";
 import { ResultCard } from "@/design-system/ResultCard";
-import { libraryPerformanceSignal, ownWinnerPerformanceSignal } from "./libraryPerformance";
+import { libraryPerformanceSignal } from "./libraryPerformance";
 import { PlatformFullColorMark } from "@/design-system/platformMarks";
 import { InstagramMark } from "@shared/ui/PlatformMarks";
 import {
@@ -441,18 +441,9 @@ export function HomeVideoCard({
   onPlay,
   onSeen,
   onNotRelevant,
-  subline,
-  metricsOverride,
-  ownWinner = false,
 }: {
   post: ViralPost;
   busy: boolean;
-  /** Replaces the creator line (proven ideas: "Try it as: Mistake breakdown"). */
-  subline?: string | null;
-  /** Replaces the metrics line (proven ideas: "48K views · Instagram"). */
-  metricsOverride?: string[];
-  /** The creator's own video: "↗ 3.2×" from 2x (proven ideas). */
-  ownWinner?: boolean;
   /** Mobile: Expand hidden (Figma note on 288:666). */
   compact: boolean;
   onRemake: () => void;
@@ -513,9 +504,9 @@ export function HomeVideoCard({
       platformLabel={PLATFORM_BADGE[post.platform] ?? post.platform}
       thumbnailUrl={post.thumbnailUrl ?? null}
       title={title}
-      creator={subline !== undefined ? subline : handle ? `@${handle}` : null}
-      metrics={metricsOverride ?? metrics}
-      signal={ownWinner ? ownWinnerPerformanceSignal(post) : libraryPerformanceSignal(post)}
+      creator={handle ? `@${handle}` : null}
+      metrics={metrics}
+      signal={libraryPerformanceSignal(post)}
       labels={{
         play: C.videos.play,
         expand: C.videos.expand,

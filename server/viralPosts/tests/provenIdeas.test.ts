@@ -133,5 +133,9 @@ describe("wiring", () => {
     expect(home).toContain("onRemix={provenIdeas.length > 0 ? scrollToProven : undefined}");
     expect(home).toContain("scrollIntoView");
     expect(home).not.toContain("PrismRemakeDialog");
+    // Proven ideas use exactly the same grid and card as "Viral Videos for you".
+    const proven = home.slice(home.indexOf('data-testid="home-proven-ideas"'), home.indexOf('aria-labelledby="home-v2-videos"'));
+    expect(proven).toContain("styles.videoGrid");
+    expect(proven).not.toMatch(/subline|metricsOverride|ownWinner\b|provenGrid/);
   });
 });
