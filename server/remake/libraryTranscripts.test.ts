@@ -75,3 +75,22 @@ describe("audienceLine (new-onboarding audience used by Adapt to my niche)", () 
     expect(audienceLine(null)).toBeNull();
   });
 });
+
+describe("library transcripts are charged only when a transcript is made", () => {
+  const { readFileSync } = require("node:fs") as typeof import("node:fs");
+  const { resolve } = require("node:path") as typeof import("node:path");
+  const router = readFileSync(resolve(__dirname, "../routers/transcribeRouter.ts"), "utf8");
+  const lib = readFileSync(resolve(__dirname, "./libraryTranscripts.ts"), "utf8");
+  it("no usage is counted when the job starts; it is counted on completion", () => {
+    const branch = router.slice(router.indexOf("if (input.libraryCandidateId != null) {"), router.indexOf("const source: \"user\""));
+    expect(branch).toContain("onCompleted: () => incrementUsage(userId, \"transcribeCount\")");
+    expect(branch).not.toMatch(/await incrementUsage\(/);
+    // Called only after a successful finish, never in the failure paths.
+    const run = lib.slice(lib.indexOf("export async function runLibraryTranscription"));
+    const calls = run.split("opts.onCompleted").length - 1;
+    expect(calls).toBe(2);
+    for (const part of run.split("opts.onCompleted").slice(0, -1)) {
+      expect(part.trimEnd().endsWith("{ error:")).toBe(false);
+    }
+  });
+});

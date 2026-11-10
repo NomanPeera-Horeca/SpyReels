@@ -923,17 +923,7 @@
   }
 }
 
-/* "Your proven ideas": 3 compact Result Cards in a row (Figma 1743:3). */
-.provenGrid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--sr-space-4);
-}
-
 @container (max-width: 640px) {
-  .provenGrid {
-    grid-template-columns: 1fr;
-  }
   .slotProven {
     order: 5;
   }

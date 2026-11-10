@@ -20,6 +20,9 @@ export function librarySourceEnabled(): boolean {
   return process.env.REMAKE_LIBRARY_SOURCE === "on";
 }
 
+/** Shown when the transcript service itself failed: nothing the creator did wrong. */
+export const LIBRARY_TRANSCRIPT_RETRY_MESSAGE = "We couldn't read this video right now. Try again in a few minutes.";
+
 /** A transcription stuck in "processing" this long is retried. */
 const STALE_PROCESSING_MS = 15 * 60_000;
 const MAX_TRANSCRIPT_CHARS = 60_000;
@@ -173,7 +176,10 @@ async function finish(db: Db, candidateId: number, ok: { transcript: string; seg
  * and speech-to-text as Collected Reels). Writes the result to
  * library_transcripts. Never throws.
  */
-export async function runLibraryTranscription(c: LibraryCandidate): Promise<void> {
+export async function runLibraryTranscription(
+  c: LibraryCandidate,
+  opts: { onCompleted?: () => Promise<unknown> } = {}
+): Promise<void> {
   const db = await getDb();
   if (!db) return;
   try {
@@ -190,6 +196,7 @@ export async function runLibraryTranscription(c: LibraryCandidate): Promise<void
         return;
       }
       await finish(db, c.id, { transcript, segments: yt?.segments ?? [] });
+      await opts.onCompleted?.().catch(() => {});
       return;
     }
     const { fetchCollectedReelMetadataForPlatform } = await import("../collectedReelFetch");
@@ -206,7 +213,10 @@ export async function runLibraryTranscription(c: LibraryCandidate): Promise<void
     const { transcribeReel } = await import("../services/transcribeReel");
     const result = await transcribeReel({ videoUrl, shortcode: externalId });
     if (!result.success) {
-      await finish(db, c.id, { error: result.userMessage });
+      // UNKNOWN covers the speech-to-text service being down or out of credits.
+      await finish(db, c.id, {
+        error: result.errorCode === "UNKNOWN" ? LIBRARY_TRANSCRIPT_RETRY_MESSAGE : result.userMessage,
+      });
       return;
     }
     if (!result.transcript.trim()) {
@@ -214,6 +224,7 @@ export async function runLibraryTranscription(c: LibraryCandidate): Promise<void
       return;
     }
     await finish(db, c.id, { transcript: result.transcript.trim(), segments: result.segments });
+    await opts.onCompleted?.().catch(() => {});
   } catch (err) {
     console.warn("[remake] library_transcription_failed", {
       candidateId: c.id,

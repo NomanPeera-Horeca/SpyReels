@@ -38,10 +38,7 @@ import { ingestUrlAndStartLibraryRemake } from "@/lib/ingestUrlAndStartLibraryRe
 import { buildRemakeIntentMedia } from "@/lib/remakeIntent";
 import { ViralPostPlayer } from "@/components/ViralPostPlayer";
 import { AddPlatformDialog } from "./AddPlatformDialog";
-import { prismFormat } from "@shared/remakeFormats";
 
-/** Platform name on proven-idea cards ("48K views · Instagram"). */
-const PLATFORM_NAME: Record<string, string> = { instagram: "Instagram", tiktok: "TikTok", youtube: "YouTube" };
 import { researchReturnTo } from "@shared/researchIntent";
 import { HOME_COPY as C } from "./copy";
 import {
@@ -610,24 +607,19 @@ export default function HomeV2Page() {
                   </p>
                 </div>
               </div>
-              <div className={styles.provenGrid}>
+              {/* Exactly the same grid and card as "Viral Videos for you" (owner decision). */}
+              <div className={styles.videoGrid}>
                 {provenIdeas.map(item => {
-                  const format = prismFormat(item.recommended?.id);
-                  const views = item.post.views != null ? compactNumber(item.post.views) : null;
+                  const p = { ...item.post, saved: savedOverride[item.post.id] ?? item.post.saved };
                   return (
                     <HomeVideoCard
                       key={`proven-${item.post.id}`}
-                      post={item.post}
+                      post={p}
                       compact={compact}
                       busy={false}
-                      ownWinner
-                      subline={format ? C.provenIdeas.tryAs(format.label) : null}
-                      metricsOverride={[
-                        ...(views ? [`${views} views`] : []),
-                        PLATFORM_NAME[item.post.platform] ?? item.post.platform,
-                      ]}
                       onPlay={() => setPlayingPost(item.post)}
                       onRemake={() => remakeProvenIdea(item)}
+                      onToggleSave={() => void toggleSave(p)}
                     />
                   );
                 })}
