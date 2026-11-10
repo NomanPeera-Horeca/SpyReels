@@ -1,0 +1,31 @@
+# Live-AI evaluation of ONBOARDING_CLAIM_SUPPORT: labelled claims (with
+# held-out profiles and repeats) and the real Goal/Audience code flag off vs on.
+# Synthetic data only, no DB, no deploy. Spend cap $1.20.
+# Runs only when the commit message STARTS with "eval: [claim-support]".
+name: SpyReels Onboarding Claim Support Eval
+
+on:
+  push:
+    branches:
+      - claude/personalization-baseline-eval
+
+permissions:
+  contents: read
+
+jobs:
+  eval:
+    if: "${{ startsWith(github.event.head_commit.message, 'eval: [claim-support]') }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Evaluate (cap $1.20)
+        run: pnpm exec tsx scripts/onboarding-claim-support-eval.ts --confirm-spend --cap=1.20
