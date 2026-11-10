@@ -104,6 +104,8 @@ export const COPY = {
       languageLabel: "Language",
       main: "Looks right, continue",
       placeholder: "What you want your content to do",
+      /** Under an AI starter goal for a thin profile (ONBOARDING_CLAIM_SUPPORT). */
+      starterNote: "A starting point from your topic. Edit it to say why you create.",
     },
     audience: {
       title: "Who you want to reach",

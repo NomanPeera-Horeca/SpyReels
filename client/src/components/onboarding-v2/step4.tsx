@@ -9,6 +9,7 @@
  * draft kept). Skip is deliberate and does not save. An editor leaves edit
  * mode only after the server confirms the save.
  */
+import { DEFAULT_GOAL_QUESTION } from "@shared/personalization/goalQuestion";
 import {
   createContext,
   useCallback,
@@ -69,7 +70,8 @@ function ComingSkeleton() {
 }
 
 export type AiState =
-  | { state: "idle" }
+  /** settled: this step's job finished (or the wait ran out) without a failure or question. */
+  | { state: "idle"; settled?: boolean }
   | { state: "running" }
   /** Some suggestions are already shown and the job is still adding more. */
   | { state: "more" }
@@ -694,7 +696,13 @@ export function GoalStep({
   onSaveLanguage: (payload: LanguagePayload, itemId: string | null) => Promise<boolean>;
 }) {
   const [editing, setEditing] = useState<"niche" | "language" | null>(null);
-  const clarify = common.ai.state === "clarify" ? common.ai.question : null;
+  // Never an unexplained empty box: when this step's job has finished (or the
+  // wait ran out) and no goal exists, ask the one short question, whatever
+  // status the server reported.
+  const settledWithoutGoal = common.ai.state === "idle" && common.ai.settled === true && goals.length === 0;
+  const clarify =
+    common.ai.state === "clarify" ? common.ai.question : settledWithoutGoal ? DEFAULT_GOAL_QUESTION : null;
+  const starterShown = goals.some(g => g.status === "suggested" && g.payload.starter === true);
   return (
     <StepFrame
       step="goal"
@@ -704,6 +712,17 @@ export function GoalStep({
       common={common}
       canConfirm
     >
+      {clarify !== null && goals.length === 0 ? (
+        // The question was only the input's screen-reader label, so sighted
+        // users saw an open, empty field. Show it, in the failure line's style.
+        <p
+          className={["sr-text-product-body-small", styles.muted].join(" ")}
+          role="status"
+          data-testid="onboarding-goal-question"
+        >
+          {clarify}
+        </p>
+      ) : null}
       <ChipGroup
         groupLabel={P.goal.groupLabel}
         items={goals.map(g => ({ id: g.id, label: g.payload.text }))}
@@ -718,6 +737,16 @@ export function GoalStep({
         onSaveDraft={(text, id) => onSaveGoal({ text }, id)}
         onRemove={onRemoveGoal}
       />
+      {starterShown ? (
+        // A starter direction for a thin profile is not an inferred purpose: say so.
+        <p
+          className={["sr-text-product-body-small", styles.muted].join(" ")}
+          role="note"
+          data-testid="onboarding-goal-starter-note"
+        >
+          {P.goal.starterNote}
+        </p>
+      ) : null}
       <div className={styles.twoUp}>
         <ValueCard
           label={P.goal.nicheLabel}

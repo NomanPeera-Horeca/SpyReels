@@ -97,6 +97,24 @@ describe("recommendationWaitState", () => {
   });
 });
 
+describe("recommendationWaitState settled", () => {
+  it("marks idle as settled once the job is finished or the wait is over, so the step never shows an empty box", () => {
+    expect(recommendationWaitState({ ...base, status: { state: "done", at: 20 } })).toEqual({ state: "idle", settled: true });
+    expect(recommendationWaitState({ ...base, hasSavedSuggestions: true, waitExpired: true })).toEqual({
+      state: "idle",
+      settled: true,
+    });
+    expect(
+      recommendationWaitState({ ...base, hasSavedSuggestions: true, waitExpired: true, status: { state: "running", at: 11 } })
+    ).toEqual({ state: "idle", settled: true });
+  });
+
+  it("is not settled while still waiting", () => {
+    expect(recommendationWaitState(base)).toEqual({ state: "idle" });
+    expect(recommendationWaitState({ ...base, requested: false })).toEqual({ state: "idle" });
+  });
+});
+
 describe("stepHasDisplaySuggestions", () => {
   it("keeps profile-phase niche and language visible after posts arrive", () => {
     const items = [
