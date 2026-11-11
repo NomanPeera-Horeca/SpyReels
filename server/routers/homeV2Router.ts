@@ -28,12 +28,14 @@ import {
 } from "../personalization/home/homeService";
 import { contentInventoryPlan } from "../personalization/home/inventoryMatch";
 import { browseIndexedViralPosts } from "../viralPosts/browseService";
-import { libraryHomeForProfile, homeVideoItems, mergeHomeLists } from "../viralPosts/libraryHome";
+import { libraryHomeForProfile, homeVideoItems } from "../viralPosts/libraryHome";
 import { requestPrefetch, requestPrefetchForPosts } from "../research/prefetch";
 import { withResearchAvatars } from "../research/creatorAvatars";
 import { loadProvenIdeas, ownWinnersEnabled, profileHandles } from "../viralPosts/ownWinners";
 import { combineProfilesEnabled, siblingProfileIds } from "../viralPosts/combinedProfile";
 import { pillarIdeasForProfile, searchIdeasForProfile } from "../viralPosts/searchIdeas";
+import { writtenIdeasForProfile } from "../viralPosts/homeIdeas";
+import { relevanceTiersEnabled } from "../viralPosts/relevanceHome";
 
 export const HOME_VIDEO_LIMIT = 4;
 
@@ -101,9 +103,11 @@ export const homeV2Router = router({
       libraryHomeForProfile(libraryInput(ctx.user.id, c)),
     ]);
     // Today's results first; the shared library fills the rest so Home is never blank.
-    const merged = mergeHomeLists(
+    // RELEVANCE_TIERS: creators of the ranker's checked videos (direct matches
+    // first) lead, and unchecked pool creators are not used as filler.
+    const merged = homeVideoItems(
       res.creators,
-      library?.creators ?? [],
+      library ? { items: library.creators, ranked: library.ranked } : null,
       HOME_CREATOR_LIMIT,
       x => `${x.platform}:${x.handle.toLowerCase()}`
     );
@@ -154,6 +158,14 @@ export const homeV2Router = router({
   /** Video ideas from phrases people really search in the profile's topics (keyword bank). */
   searchIdeas: homeProcedure.query(async ({ ctx }) => {
     const c = await context(ctx);
+    if (relevanceTiersEnabled()) {
+      // Clear video ideas from the creator's own pillars (and matching search
+      // phrases); no raw keyword phrases from broad topics. Pillar sub-topics when
+      // the writer has nothing.
+      const written = await writtenIdeasForProfile({ socialProfileId: c.socialProfileId, limit: 3 });
+      const pillarIdeas = written.length ? written : await pillarIdeasForProfile({ socialProfileId: c.socialProfileId, limit: 3 });
+      return { ideas: [], pillarIdeas };
+    }
     const ideas = await searchIdeasForProfile({ socialProfileId: c.socialProfileId, limit: 4 });
     // A new or very specific niche has no search phrases yet: offer the creator's own pillar sub-topics meanwhile.
     const pillarIdeas = ideas.length < 4 ? await pillarIdeasForProfile({ socialProfileId: c.socialProfileId, limit: 4 - ideas.length }) : [];

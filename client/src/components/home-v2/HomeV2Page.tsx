@@ -209,12 +209,8 @@ export default function HomeV2Page() {
       id: `search:${i.phrase}`,
       title: i.title,
       hook: null,
-      badge:
-        i.searchVolume != null && i.searchVolume >= 10
-          ? C.ideas.searchedVolume(compactNumber(i.searchVolume))
-          : i.viralFound > 0
-            ? C.ideas.searchedProven(i.viralFound)
-            : C.ideas.searched,
+      // No search counts on the card (owner decision): they read as noise, not as an idea.
+      badge: i.viralFound > 0 ? C.ideas.searchedProven(i.viralFound) : C.ideas.searched,
     }));
     // Until search ideas exist, the creator's own pillar sub-topics are the ideas.
     const fromPillars: HomeIdea[] = (searchIdeasQ.data?.pillarIdeas ?? []).map(i => ({

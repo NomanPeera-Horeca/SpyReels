@@ -254,7 +254,8 @@ export async function pillarIdeasForProfile(args: { socialProfileId: string | nu
       SELECT s.label AS label, CAST(p.payload AS CHAR) AS payload
       FROM pillar_subtopics s
       JOIN personalization_items p ON p.id = s.pillarItemId
-      WHERE s.socialProfileId = ${args.socialProfileId} AND s.status <> 'dismissed' AND p.status <> 'dismissed'
+      WHERE s.socialProfileId = ${args.socialProfileId} AND s.status <> 'dismissed'
+        AND p.status NOT IN ('dismissed', 'superseded')
       ORDER BY s.createdAt
       LIMIT 60
     `)) as unknown as [Array<{ label: string; payload: string | null }>];

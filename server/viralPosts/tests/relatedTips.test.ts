@@ -30,7 +30,8 @@ describe("related tips", () => {
   it("cleans tips: dashes, quotes, length and word limits", () => {
     expect(cleanTip("Show how ventilation is planned — before the walls go up.")).toBe("Show how ventilation is planned , before the walls go up");
     expect(cleanTip('"Film your factory floor"')).toBe("Film your factory floor");
-    expect(cleanTip("one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen")).toBe("");
+    expect(cleanTip("one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen")).toBe("");
+    expect(cleanTip("Show how kitchen ventilation is planned before the fit-out starts on site")).not.toBe("");
     expect(cleanTip(42)).toBe("");
   });
 
@@ -67,5 +68,14 @@ describe("related tips", () => {
     expect((await relatedTips({ subject, videos, invoker: down.invoker })).size).toBe(0);
     const slow = await relatedTips({ subject, videos, invoker: () => new Promise(() => {}), timeoutMs: 10 });
     expect(slow.size).toBe(0);
+  });
+
+  it("an unusable answer is not remembered, so it is tried again", async () => {
+    const bad = fake('{"tips":[]}');
+    await relatedTips({ subject, videos, invoker: bad.invoker });
+    const good = fake('{"tips":[{"index":0,"tip":"Show duct planning"},{"index":1,"tip":"Explain hood cleaning access"}]}');
+    const r = await relatedTips({ subject, videos, invoker: good.invoker });
+    expect(good.calls).toHaveLength(1);
+    expect(r.get(1)).toBe("Show duct planning");
   });
 });
