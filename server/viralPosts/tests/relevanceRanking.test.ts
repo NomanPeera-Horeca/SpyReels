@@ -347,3 +347,13 @@ describe("homeVideoItems", () => {
     expect(homeVideoItems(["pool1"], null, 4, k)).toEqual(["pool1"]);
   });
 });
+
+describe("ranking before topic matching (brand-new creator)", () => {
+  it("finds direct matches by meaning when the profile has no topics yet", () => {
+    const fresh = profile({ topicSlugs: new Set() });
+    const onSubject = video({ caption: "home workout for moms", embedding: E.momFit, topicSlugs: ["unrelated-topic"] });
+    const offSubject = video({ caption: "Restaurant menu pricing", embedding: E.restaurant });
+    const r = rankForProfile(fresh, [onSubject, offSubject], { limit: 4, now, tiers: true });
+    expect(r.picked.map(p => p.video.id)).toEqual([onSubject.id]);
+  });
+});

@@ -415,7 +415,17 @@ export const onboardingV2Router = router({
       resolveStep(await requireDb(), octx(ctx), input.step, input.action)
     ),
 
-  complete: v2Procedure.mutation(async ({ ctx }) => completeOnboarding(await requireDb(), octx(ctx))),
+  complete: v2Procedure.mutation(async ({ ctx }) => {
+    const result = await completeOnboarding(await requireDb(), octx(ctx));
+    // Match this creator to library topics now, so Home's first visit has
+    // videos and creators instead of waiting for the worker's next cycle.
+    // Never awaited and never fails the request.
+    void import("../viralPosts/topics")
+      .then(m => m.matchProfileTopics({ onlyProfileId: result.profileId, maxProfiles: 1 }))
+      .then(r => console.info("[viralLibrary] profile_match_on_complete", { matched: r.matched, newTopics: r.newTopics, skipped: r.skipped ?? null }))
+      .catch(err => console.warn("[viralLibrary] profile_match_on_complete_failed", { error: err instanceof Error ? err.message : String(err) }));
+    return result;
+  }),
 
   /**
    * Claude's editing UI: add a subtopic the user typed.

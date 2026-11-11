@@ -775,12 +775,64 @@ export function appendSuggestionsEnabled(): boolean {
 
 export const APPEND_CAP: Partial<Record<PersonalizationItemKind, number>> = { audience: 5, pillar: 7 };
 
-/** New suggestions that fit after the live ones (suggested or confirmed). Pure; exported for tests. */
-export function appendedInserts<T>(kind: PersonalizationItemKind, items: readonly ItemRecord[], inserts: readonly T[]): T[] {
+const NEAR_DUP_STOP = new Set(
+  "a an and are as at be by for from how in is it its of on or that the this to with your you who their them they".split(" ")
+);
+
+/** Content words of a suggestion's visible text, lightly stemmed. Pure. */
+function suggestionWords(text: string): Set<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .replace(/[^\p{L}\p{N}\s]+/gu, " ")
+      .split(/\s+/)
+      .filter(w => w.length > 2 && !NEAR_DUP_STOP.has(w))
+      .map(w => (w.length > 4 && w.endsWith("s") ? w.slice(0, -1) : w))
+  );
+}
+
+/** The text a creator sees for an audience (who) or a pillar (title). */
+function visibleText(payload: unknown): string {
+  const p = (payload ?? {}) as { who?: unknown; title?: unknown };
+  return String(p.who ?? p.title ?? "");
+}
+
+/**
+ * Near-duplicates: at least three quarters of the words of the shorter one are shared
+ * ("Small business owners seeking growth" / "Small business owners seeking
+ * more leads"). Not: "Restaurant owners" / "New restaurant founders". Pure; exported for tests.
+ */
+export function isNearDuplicate(a: string, b: string): boolean {
+  const wa = suggestionWords(a);
+  const wb = suggestionWords(b);
+  if (wa.size === 0 || wb.size === 0) return false;
+  let shared = 0;
+  for (const w of wa) if (wb.has(w)) shared += 1;
+  return shared / Math.min(wa.size, wb.size) >= 0.75;
+}
+
+/**
+ * New suggestions that fit after the live ones (suggested or confirmed):
+ * near-duplicates of what is already there (or of each other) are skipped,
+ * then capped at APPEND_CAP. Pure; exported for tests.
+ */
+export function appendedInserts<T extends { payload?: unknown }>(
+  kind: PersonalizationItemKind,
+  items: readonly ItemRecord[],
+  inserts: readonly T[]
+): T[] {
   const cap = APPEND_CAP[kind];
   if (cap === undefined) return [...inserts];
-  const live = items.filter(i => i.kind === kind && (i.status === "suggested" || i.status === "confirmed")).length;
-  return inserts.slice(0, Math.max(0, cap - live));
+  const liveItems = items.filter(i => i.kind === kind && (i.status === "suggested" || i.status === "confirmed"));
+  const seen = liveItems.map(i => visibleText(i.payload));
+  const fresh: T[] = [];
+  for (const ins of inserts) {
+    const text = visibleText(ins.payload);
+    if (text && seen.some(t => isNearDuplicate(t, text))) continue;
+    seen.push(text);
+    fresh.push(ins);
+  }
+  return fresh.slice(0, Math.max(0, cap - liveItems.length));
 }
 
 const EMPTY_USAGE: LlmUsage = {

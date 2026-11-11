@@ -339,7 +339,11 @@ export function profileEmbeddingText(p: ProfileStrategy): string {
  * Match creator profiles whose strategy is new or changed, up to
  * `maxProfiles` per call (one AI call each).
  */
-export async function matchProfileTopics(args: { maxProfiles?: number } = {}): Promise<{
+export async function matchProfileTopics(args: {
+  maxProfiles?: number;
+  /** Match only this profile (onboarding just finished), instead of waiting for the worker. */
+  onlyProfileId?: string;
+} = {}): Promise<{
   matched: number;
   newTopics: number;
   skipped?: "db_unavailable" | "migration_missing" | "no_api_key";
@@ -356,7 +360,9 @@ export async function matchProfileTopics(args: { maxProfiles?: number } = {}): P
   const maxProfiles = Math.max(1, Math.min(200, args.maxProfiles ?? 10));
 
   const strategies = (await listConfirmedTopicStrategies(2_000)).filter(
-    p => p.niche || p.pillars.length > 0 || p.subtopics.length > 0
+    p =>
+      (p.niche || p.pillars.length > 0 || p.subtopics.length > 0) &&
+      (!args.onlyProfileId || p.socialProfileId === args.onlyProfileId)
   );
   const runs = await db.select().from(viralProfileTopicRuns);
   const lastHash = new Map(runs.map(r => [r.socialProfileId, r.strategyHash]));

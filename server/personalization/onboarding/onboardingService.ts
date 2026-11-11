@@ -1014,7 +1014,7 @@ export async function completeOnboarding(db: Db, ctx: OnboardingCtx) {
     .update(users)
     .set({ onboardingCompletedAt: now })
     .where(and(eq(users.id, ctx.userId), isNull(users.onboardingCompletedAt)));
-  return { completed: isPersonalizationComplete(steps) };
+  return { completed: isPersonalizationComplete(steps), profileId: profile.id };
 }
 
 /** Steps whose stage list is all present (used by tests and the API). */
