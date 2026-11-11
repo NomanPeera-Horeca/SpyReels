@@ -11,6 +11,7 @@
   },
   "openGraph": {
     "description": "Free viral Reel finder for Instagram. Paste a public creator handle, rank Reels by views and engagement, then remake what worked in your own voice.",
+    "image": "https://spyreels.ai/brand/og-default.jpg",
     "site_name": "SpyReels",
     "title": "Viral Reel Finder for Instagram | SpyReels",
     "type": "website",
@@ -19,6 +20,7 @@
   "twitter": {
     "card": "summary_large_image",
     "description": "Free viral Reel finder for Instagram. Paste a public creator handle, rank Reels by views and engagement, then remake what worked in your own voice.",
+    "image": "https://spyreels.ai/brand/og-default.jpg",
     "title": "Viral Reel Finder for Instagram | SpyReels"
   },
   "h1": "Find viral Instagram Reels in your niche.",

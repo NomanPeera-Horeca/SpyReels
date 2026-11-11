@@ -1,3 +1,4 @@
+import { DEFAULT_OG_IMAGE } from "../../../shared/defaultOgImage";
 import { buildFaqPageJsonLd } from "../../components/marketingFaqJsonLd";
 import {
   isValidTikTokHandleNormalized,
@@ -111,11 +112,13 @@ export const tiktokFinderConfig: FinderConfig = {
       siteName: "SpyReels",
       title,
       description,
+      images: [{ url: DEFAULT_OG_IMAGE }],
     },
     twitter: {
       card: "summary_large_image",
       title,
       description,
+      images: [DEFAULT_OG_IMAGE],
     },
   },
   hero: {
