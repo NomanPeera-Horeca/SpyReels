@@ -169,7 +169,7 @@ export async function loadRelevanceLibrary(db: Db): Promise<RelevanceVideo[]> {
 }
 
 /** Ranked library videos for one creator profile, or null (keep the current Home). */
-export async function relevanceRankForProfile(args: { socialProfileId: string; limit: number; exclude?: ReadonlySet<number> }): Promise<(RankResult & { niche: string }) | null> {
+export async function relevanceRankForProfile(args: { socialProfileId: string; limit: number; exclude?: ReadonlySet<number> }): Promise<(RankResult & { niche: string; pillars: string[] }) | null> {
   const db = await getDb();
   if (!db) return null;
   try {
@@ -188,6 +188,7 @@ export async function relevanceRankForProfile(args: { socialProfileId: string; l
     return {
       ...rankForProfile(profile, library, { limit: args.limit, exclude: args.exclude, tiers: relevanceTiersEnabled() }),
       niche: profile.niche,
+      pillars: profile.pillars,
     };
   } catch (err) {
     console.warn("[viralLibrary] relevance_rank_failed", { error: err instanceof Error ? err.message : String(err) });

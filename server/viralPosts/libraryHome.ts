@@ -30,6 +30,7 @@ import * as repo from "./repository";
 import { isTopicsReady } from "./topics";
 import { combineProfilesEnabled, siblingProfileIds } from "./combinedProfile";
 import { relevanceArmFor, relevanceRankForProfile, relevanceTiersEnabled } from "./relevanceHome";
+import { relatedTips, relatedTipsEnabled } from "./relatedTips";
 import { RELEVANCE_VERSION, type ScoredVideo } from "./relevanceRanking";
 
 /** Card label for a relevance-ranked video. Pure; exported for tests. */
@@ -267,6 +268,17 @@ export async function libraryHomeForProfile(args: {
           if (handle && hidden.has(handle)) return [];
           return [{ candidate: f.candidate, status: f.status, basis: f.basis, multiple: f.multiple != null ? Number(f.multiple) : null, tier: 1 as const, overlap: 0, categoryLabel: null, label: relevanceLabel(p, { related, niche: ranked.niche }), related }];
         });
+        // "How to adapt this" for the related videos Home will show (RELEVANCE_RELATED_TIPS).
+        const tipFor =
+          tiers && relatedTipsEnabled()
+            ? await relatedTips({
+                subject: { niche: ranked.niche, pillars: ranked.pillars },
+                videos: rows
+                  .slice(0, args.limit)
+                  .filter(r => r.related)
+                  .map(r => ({ id: r.candidate.id, caption: r.candidate.caption ?? "", summary: ranked.adjacent.find(a => a.video.id === r.candidate.id)?.video.summary ?? null })),
+              })
+            : new Map<number, string>();
         const toPostR = (r: LibraryRow): ViralPost => {
           const adapted = candidateToAdapted(r.candidate, "", "", null);
           return {
@@ -274,6 +286,7 @@ export async function libraryHomeForProfile(args: {
             viralMultiple: r.multiple,
             viralBasis: r.basis === "usual_views" || r.basis === "followers" ? r.basis : null,
             ...(tiers ? { fit: r.related ? ("related" as const) : ("direct" as const) } : {}),
+            ...(tipFor.has(r.candidate.id) ? { relatedTip: tipFor.get(r.candidate.id) } : {}),
           };
         };
         const creators: IndexedHomeCreator[] = rows.slice(0, args.creatorLimit).map(r => {

@@ -103,6 +103,8 @@ export type ViralPost = {
    * related inspiration, not a direct match. Absent when not set by the ranker.
    */
   fit?: "direct" | "related";
+  /** RELEVANCE_RELATED_TIPS: one line on how this creator could adapt a related video. */
+  relatedTip?: string;
   relevanceReason: string;
 
   /**

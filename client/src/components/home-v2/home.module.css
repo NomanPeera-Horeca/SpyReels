@@ -430,6 +430,11 @@
   min-width: 0;
 }
 
+/* "Related inspiration · tip" under a related card (existing small muted text). */
+.relatedNote {
+  margin-top: var(--sr-space-2);
+}
+
 /* This section alone uses the portrait grid; ideas keep their approved two-up layout. */
 
 /* Badge (Figma Badge: neutral, success, brand, info, warning). */
