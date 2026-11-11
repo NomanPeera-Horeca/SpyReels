@@ -29,7 +29,7 @@ import { candidateToAdapted, toViralPost, type IndexedHomeCreator } from "./brow
 import * as repo from "./repository";
 import { isTopicsReady } from "./topics";
 import { combineProfilesEnabled, siblingProfileIds } from "./combinedProfile";
-import { relevanceArmFor, relevanceRankForProfile } from "./relevanceHome";
+import { relevanceArmFor, relevanceRankForProfile, relevanceTiersEnabled } from "./relevanceHome";
 import { RELEVANCE_VERSION, type ScoredVideo } from "./relevanceRanking";
 
 /** Card label for a relevance-ranked video. Pure; exported for tests. */
@@ -58,6 +58,8 @@ export type LibraryRow = {
   categoryLabel: string | null;
   /** Card label set by the relevance ranking (Phase 1); overrides the tier label. */
   label?: string;
+  /** Related inspiration, not a direct match (relevance ranking). */
+  related?: boolean;
 };
 
 /** Higher is better: viral multiple (log), freshness, topic overlap. Pure; exported for tests. */
@@ -188,7 +190,12 @@ async function loadRows(args: {
   }));
 }
 
-export type LibraryHome = { items: ViralPost[]; creators: IndexedHomeCreator[] };
+export type LibraryHome = {
+  items: ViralPost[];
+  creators: IndexedHomeCreator[];
+  /** The relevance ranker chose these (direct matches first, then related). Home shows them ahead of pool videos. */
+  ranked?: boolean;
+};
 
 /**
  * Library videos and creators for one creator profile. Null when the
@@ -240,7 +247,8 @@ export async function libraryHomeForProfile(args: {
         // Genuine matches only. Labelled related inspiration is held back unless
         // RELEVANCE_RELATED=on: the first-page review found meaning scores alone do
         // not reliably tell useful related videos from unrelated ones.
-        const showRelated = process.env.RELEVANCE_RELATED === "on";
+        const tiers = relevanceTiersEnabled();
+        const showRelated = tiers || process.env.RELEVANCE_RELATED === "on";
         const shown = [...ranked.picked.map(p => ({ p, related: false })), ...(showRelated ? ranked.adjacent : []).map(p => ({ p, related: true }))];
         const ids = shown.map(x => x.p.video.id);
         const full = ids.length
@@ -257,7 +265,7 @@ export async function libraryHomeForProfile(args: {
           if (!f) return [];
           const handle = (f.candidate.creatorId || f.candidate.creatorHandle || "").toLowerCase().replace(/^@/, "");
           if (handle && hidden.has(handle)) return [];
-          return [{ candidate: f.candidate, status: f.status, basis: f.basis, multiple: f.multiple != null ? Number(f.multiple) : null, tier: 1 as const, overlap: 0, categoryLabel: null, label: relevanceLabel(p, { related, niche: ranked.niche }) }];
+          return [{ candidate: f.candidate, status: f.status, basis: f.basis, multiple: f.multiple != null ? Number(f.multiple) : null, tier: 1 as const, overlap: 0, categoryLabel: null, label: relevanceLabel(p, { related, niche: ranked.niche }), related }];
         });
         const toPostR = (r: LibraryRow): ViralPost => {
           const adapted = candidateToAdapted(r.candidate, "", "", null);
@@ -265,6 +273,7 @@ export async function libraryHomeForProfile(args: {
             ...toViralPost(r.candidate, { ...adapted, relevanceLabel: tierLabel(r) }, saved.has(r.candidate.id)),
             viralMultiple: r.multiple,
             viralBasis: r.basis === "usual_views" || r.basis === "followers" ? r.basis : null,
+            ...(tiers ? { fit: r.related ? ("related" as const) : ("direct" as const) } : {}),
           };
         };
         const creators: IndexedHomeCreator[] = rows.slice(0, args.creatorLimit).map(r => {
@@ -292,8 +301,9 @@ export async function libraryHomeForProfile(args: {
           related: showRelated ? ranked.adjacent.length : 0,
           relatedHeldBack: showRelated ? 0 : ranked.adjacent.length,
           shown: rows.length,
+          tiers,
         });
-        return { items: rows.slice(0, args.limit).map(toPostR), creators };
+        return { items: rows.slice(0, args.limit).map(toPostR), creators, ...(tiers && rows.length > 0 ? { ranked: true } : {}) };
       }
     }
     const tier1 = await loadRows({ topicSlugs: [...profileTopics], statuses: ["viral", "rising"], tier: 1, profileTopics, categoryOf });
@@ -359,5 +369,21 @@ export function mergeHomeLists<T>(current: T[], library: T[], limit: number, key
     out.push(item);
   }
   return out;
+}
+
+/**
+ * Home's video row. RELEVANCE_TIERS: when the ranker chose the library videos
+ * (direct, then related), they go first and pool videos, which have no
+ * relevance check, are not used as filler. Otherwise pool videos first, as
+ * before. Pure; exported for tests.
+ */
+export function homeVideoItems<T>(
+  pool: T[],
+  library: { items: T[]; ranked?: boolean } | null,
+  limit: number,
+  key: (item: T) => string
+): T[] {
+  if (library?.ranked) return mergeHomeLists(library.items, [], limit, key);
+  return mergeHomeLists(pool, library?.items ?? [], limit, key);
 }
 

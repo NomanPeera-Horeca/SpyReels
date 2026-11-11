@@ -98,6 +98,11 @@ export type ViralPost = {
 
   contentPillar?: string | null;
   relevanceLabel: string;
+  /**
+   * RELEVANCE_TIERS: "direct" = about the creator's own subject; "related" =
+   * related inspiration, not a direct match. Absent when not set by the ranker.
+   */
+  fit?: "direct" | "related";
   relevanceReason: string;
 
   /**

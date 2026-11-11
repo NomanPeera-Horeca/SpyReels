@@ -28,7 +28,7 @@ import {
 } from "../personalization/home/homeService";
 import { contentInventoryPlan } from "../personalization/home/inventoryMatch";
 import { browseIndexedViralPosts } from "../viralPosts/browseService";
-import { libraryHomeForProfile, mergeHomeLists } from "../viralPosts/libraryHome";
+import { libraryHomeForProfile, homeVideoItems, mergeHomeLists } from "../viralPosts/libraryHome";
 import { requestPrefetch, requestPrefetchForPosts } from "../research/prefetch";
 import { withResearchAvatars } from "../research/creatorAvatars";
 import { loadProvenIdeas, ownWinnersEnabled, profileHandles } from "../viralPosts/ownWinners";
@@ -120,7 +120,7 @@ export const homeV2Router = router({
       browseIndexedViralPosts(indexedBrowseInput(ctx.user.id, c)),
       libraryHomeForProfile(libraryInput(ctx.user.id, c)),
     ]);
-    const items = mergeHomeLists(res.items, library?.items ?? [], HOME_VIDEO_LIMIT, x => `${x.platform}:${x.sourceId}`);
+    const items = homeVideoItems(res.items, library, HOME_VIDEO_LIMIT, x => `${x.platform}:${x.sourceId}`);
     void requestPrefetchForPosts(items);
     return { personalized: c.nicheLabel !== null, nicheLabel: c.nicheLabel, items };
   }),
