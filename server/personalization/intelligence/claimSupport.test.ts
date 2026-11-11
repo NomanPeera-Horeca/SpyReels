@@ -440,3 +440,13 @@ describe("audiences with ONBOARDING_CLAIM_SUPPORT", () => {
     expect(w.calls).toHaveLength(1);
   });
 });
+
+describe("number rule (deterministic false rejection found by the live eval)", () => {
+  it("accepts a number the evidence shows when it ends a sentence or list", async () => {
+    const { unsupportedNumbers } = await import("./guards");
+    expect(unsupportedNumbers("Break down films from A24.", "movie breakdowns villeneuve, nolan, a24")).toEqual([]);
+    expect(unsupportedNumbers("Top 5, then more.", "top 5 picks")).toEqual([]);
+    expect(unsupportedNumbers("Reach 50,000 people.", "a24")).toEqual(["50,000"]);
+    expect(unsupportedNumbers("Grow 25% faster.", "a24")).toEqual(["25%"]);
+  });
+});

@@ -292,3 +292,58 @@ describe("off by default", () => {
     expect(relevanceRankingEnabled()).toBe(true);
   });
 });
+
+describe("RELEVANCE_TIERS: direct matches first, related after, never mixed", () => {
+  // Enough strong matches to fill the limit, plus a far more viral loose video.
+  const build = () => {
+    const strong = Array.from({ length: 3 }, (_, i) =>
+      video({ caption: "home workout for moms", embedding: E.momFit, multiple: 5 + i })
+    );
+    const looseViral = video({
+      caption: "A quick home workout you can do in ten minutes",
+      embedding: [0.3, 0.6, 0, 0.6],
+      topicSlugs: ["home-workouts", "womens-fitness"],
+      multiple: 5000,
+    });
+    return { strong, looseViral };
+  };
+
+  it("before (tiers off): a full set of strong matches lets a loose viral video into the direct set", () => {
+    const { strong, looseViral } = build();
+    const r = rankForProfile(profile(), [...strong, looseViral], { limit: 3, now });
+    expect(r.picked.map(p => p.video.id)).toContain(looseViral.id);
+  });
+
+  it("tiers on: direct matches are strong matches only, however viral the loose one is", () => {
+    const { strong, looseViral } = build();
+    const r = rankForProfile(profile(), [...strong, looseViral], { limit: 3, now, tiers: true });
+    expect(r.picked.map(p => p.video.id).sort()).toEqual(strong.map(s => s.id).sort());
+    expect(r.coverage).toBe("ok");
+  });
+
+  it("tiers on: with fewer direct matches, related inspiration follows them and is not counted as coverage", () => {
+    const { strong, looseViral } = build();
+    const r = rankForProfile(profile(), [strong[0], looseViral], { limit: 3, now, tiers: true });
+    expect(r.picked.map(p => p.video.id)).toEqual([strong[0].id]);
+    expect(r.adjacent.map(p => p.video.id)).toEqual([looseViral.id]);
+    expect(r.coverage).toBe("thin");
+  });
+
+  it("tiers on: off-subject videos are neither direct nor related (no filler)", () => {
+    const { strong } = build();
+    const offSubject = video({ caption: "Restaurant menu pricing tips", embedding: E.restaurant, topicSlugs: ["home-workouts"], multiple: 9000 });
+    const r = rankForProfile(profile(), [strong[0], offSubject], { limit: 3, now, tiers: true });
+    expect(r.picked.map(p => p.video.id)).toEqual([strong[0].id]);
+    expect(r.adjacent).toHaveLength(0);
+  });
+});
+
+describe("homeVideoItems", () => {
+  it("ranked library videos come first and pool videos are not used as filler", async () => {
+    const { homeVideoItems } = await import("../libraryHome");
+    const k = (x: string) => x;
+    expect(homeVideoItems(["pool1", "pool2"], { items: ["direct1"], ranked: true }, 4, k)).toEqual(["direct1"]);
+    expect(homeVideoItems(["pool1", "pool2"], { items: ["lib1"] }, 4, k)).toEqual(["pool1", "pool2", "lib1"]);
+    expect(homeVideoItems(["pool1"], null, 4, k)).toEqual(["pool1"]);
+  });
+});

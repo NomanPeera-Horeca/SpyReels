@@ -55,6 +55,7 @@ export const HOME_COPY = {
     untitled: "Viral post in your niche",
     notRelevant: "Not relevant to my niche",
     notRelevantThanks: "Thanks — we'll show fewer like this",
+    related: "Related inspiration",
   },
   creators: {
     title: "Creators going viral",

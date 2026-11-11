@@ -443,7 +443,23 @@ export type RankResult = {
  * Retrieve, score, gate and pick. `limit` videos at most, one per creator;
  * fewer when coverage is thin. Pure; exported for tests.
  */
-export function rankForProfile(p: RelevanceProfile, library: readonly RelevanceVideo[], opts: { limit: number; now?: Date; exclude?: ReadonlySet<number>; final?: { relevance: number; performance: number } }): RankResult {
+export function rankForProfile(
+  p: RelevanceProfile,
+  library: readonly RelevanceVideo[],
+  opts: {
+    limit: number;
+    now?: Date;
+    exclude?: ReadonlySet<number>;
+    final?: { relevance: number; performance: number };
+    /**
+     * RELEVANCE_TIERS: direct matches are strong subject matches ONLY, even
+     * when there are plenty of them (before, a full set of strong matches let
+     * looser, more viral videos fill `picked`). Everything else that passes
+     * goes to `adjacent` (related inspiration), shown after the direct ones.
+     */
+    tiers?: boolean;
+  }
+): RankResult {
   const now = opts.now ?? new Date();
   const sig = profileSignals(p);
   const pool = library.filter(v => !opts.exclude?.has(v.id));
@@ -478,7 +494,10 @@ export function rankForProfile(p: RelevanceProfile, library: readonly RelevanceV
   const isStrong = (s: ScoredVideo) => s.parts.cosine == null || s.parts.semantic >= RELEVANCE.subjectStrong || (sparse && s.parts.topic > 0);
   const strong = onePerCreator(ok.filter(isStrong), opts.limit);
   const seen = new Set<string>();
-  const picked = strong.length >= opts.limit ? onePerCreator(ok, opts.limit, seen) : onePerCreator(ok.filter(isStrong), opts.limit, seen);
+  const picked =
+    strong.length >= opts.limit && !opts.tiers
+      ? onePerCreator(ok, opts.limit, seen)
+      : onePerCreator(ok.filter(isStrong), opts.limit, seen);
   const pickedIds = new Set(picked.map(s => s.video.id));
   // Related inspiration: only when coverage is thin, at most relatedMax. For a
   // place-specific creator only videos about the same place. Each must clear

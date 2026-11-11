@@ -531,6 +531,13 @@ export function HomeVideoCard({
         ...(onNotRelevant ? [{ label: C.videos.notRelevant, onSelect: onNotRelevant }] : []),
       ]}
     />
+    {post.fit === "related" ? (
+      // Related, not a direct match: say so, with how to adapt it when known.
+      <p className={cx("sr-text-product-body-small", styles.muted, styles.relatedNote)} data-testid="home-related-note">
+        {C.videos.related}
+        {post.relatedTip ? ` · ${post.relatedTip}` : ""}
+      </p>
+    ) : null}
     </div>
   );
 }
