@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fillerBudgetLeft, prefetchDailyMax, prefetchHandle, prefetchTargets } from "./prefetch";
+import { PREFETCH_ORDER, fillerBudgetLeft, prefetchDailyMax, prefetchHandle, prefetchTargets } from "./prefetch";
 
 describe("prefetchTargets", () => {
   it("keeps one entry per platform and handle, in the research routers' handle form", () => {
@@ -42,5 +42,11 @@ describe("fillerBudgetLeft", () => {
     expect(fillerBudgetLeft(150, 40, 0.3)).toBe(5);
     expect(fillerBudgetLeft(150, 45, 0.3)).toBe(0);
     expect(fillerBudgetLeft(150, 120, 0.3)).toBe(0);
+  });
+});
+
+describe("research queue order", () => {
+  it("a creator's own account is researched first, so proven ideas appear right after onboarding", () => {
+    expect(PREFETCH_ORDER).toEqual(["own", "pending", "watch", "similar"]);
   });
 });

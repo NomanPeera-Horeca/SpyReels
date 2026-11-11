@@ -156,6 +156,9 @@ export async function requestPrefetch(creators: Array<{ platform: string; handle
 /** A creator's own account counts as fresh for this long (the weekly refresh decides when). */
 export const OWN_REFRESH_FRESH_DAYS = 5;
 
+/** Order the research queue is worked in. Exported for tests. */
+export const PREFETCH_ORDER = ["own", "pending", "watch", "similar"] as const;
+
 /**
  * Queue a creator's OWN accounts ("Your winners") with their own status, so
  * they are never filler and are not skipped by the 14-day freshness rule.
@@ -414,8 +417,10 @@ export async function runResearchPrefetch(args: { max?: number } = {}): Promise<
     let fillerBudget = fillerBudgetLeft(prefetchDailyMax(), Number(n), prefetchFillerShare());
 
     const take = Math.max(1, Math.min(10, args.max ?? 2));
-    // Creators shown to users first ("pending"), then the weekly watchlist
-    // ("watch"), then new creators found in thin niches ("similar").
+    // A creator's OWN accounts first ("own": their proven ideas should appear
+    // right after onboarding, not behind every creator shown on Home), then
+    // creators shown to users ("pending"), then the weekly watchlist ("watch"),
+    // then new creators found in thin niches ("similar").
     const pending = () =>
       db
         .select({ platform: researchPrefetch.platform, handle: researchPrefetch.handle, status: researchPrefetch.status })
@@ -423,7 +428,7 @@ export async function runResearchPrefetch(args: { max?: number } = {}): Promise<
         .where(
           inArray(researchPrefetch.status, fillerBudget > 0 ? ["pending", "own", "watch", "similar"] : ["pending", "own"])
         )
-        .orderBy(sql`FIELD(${researchPrefetch.status}, 'pending', 'own', 'watch', 'similar')`, asc(researchPrefetch.requestedAt))
+        .orderBy(sql`FIELD(${researchPrefetch.status}, ${PREFETCH_ORDER[0]}, ${PREFETCH_ORDER[1]}, ${PREFETCH_ORDER[2]}, ${PREFETCH_ORDER[3]})`, asc(researchPrefetch.requestedAt))
         .limit(take);
     let due = await pending();
     if (due.length === 0 && fillerBudget > 0) {

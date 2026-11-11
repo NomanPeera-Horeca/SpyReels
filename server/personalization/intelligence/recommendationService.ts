@@ -712,21 +712,23 @@ export async function generateRecommendations(
     versionNow,
     "unavailable" // recommendations are never performance-backed
   );
-  const supersedeIds = idsToSupersedeOnRegeneration(items, "__none__", [
-    kind,
-  ]).filter(id => {
-    const row = items.find(i => i.id === id);
-    return row?.basedOnInputsHash !== inputsHash;
-  });
+  const append = appendSuggestionsEnabled();
+  const supersedeIds = append
+    ? [] // ONBOARDING_APPEND_SUGGESTIONS: suggestions already on screen stay.
+    : idsToSupersedeOnRegeneration(items, "__none__", [kind]).filter(id => {
+        const row = items.find(i => i.id === id);
+        return row?.basedOnInputsHash !== inputsHash;
+      });
+  const inserts = append ? appendedInserts(kind, items, plan.insert) : plan.insert;
   const applied = await deps.store.applyGeneratedSuggestions(profile.id, {
     kind,
     guard: { type: "inputs_unchanged", expected: upstream },
     expectedVersion: versionAtStart,
     supersedeIds,
-    inserts: plan.insert.map(i => ({ ...i, generationMeta: meta })),
+    inserts: inserts.map(i => ({ ...i, generationMeta: meta })),
   });
   if (applied === "stale") return { status: "stale_discarded", usage };
-  if (applied === "applied" && plan.insert.length) noteSaved(input.step);
+  if (applied === "applied" && inserts.length) noteSaved(input.step);
   if (input.step === "pillars" && subtopicGroups.length) {
     // The pillars are already saved. A failed topic save must not fail the pillar
     // step or be retried here: the pillar card offers "Find topic ideas" instead.
@@ -757,6 +759,28 @@ export async function generateRecommendations(
     usage,
     confidence,
   };
+}
+
+/**
+ * ONBOARDING_APPEND_SUGGESTIONS=on (off by default): when a step runs again
+ * (for example after the creator's posts are analysed), audience and pillar
+ * suggestions already on screen are kept and the new ones are ADDED after them,
+ * up to APPEND_CAP live items. Exact duplicates are already skipped by
+ * planAiSuggestionMerge. Before, the second pass superseded every unconfirmed
+ * suggestion, so what the creator was reading disappeared.
+ */
+export function appendSuggestionsEnabled(): boolean {
+  return process.env.ONBOARDING_APPEND_SUGGESTIONS === "on";
+}
+
+export const APPEND_CAP: Partial<Record<PersonalizationItemKind, number>> = { audience: 5, pillar: 7 };
+
+/** New suggestions that fit after the live ones (suggested or confirmed). Pure; exported for tests. */
+export function appendedInserts<T>(kind: PersonalizationItemKind, items: readonly ItemRecord[], inserts: readonly T[]): T[] {
+  const cap = APPEND_CAP[kind];
+  if (cap === undefined) return [...inserts];
+  const live = items.filter(i => i.kind === kind && (i.status === "suggested" || i.status === "confirmed")).length;
+  return inserts.slice(0, Math.max(0, cap - live));
 }
 
 const EMPTY_USAGE: LlmUsage = {

@@ -2422,3 +2422,49 @@ describe("goal step double failure with ONBOARDING_CLAIM_SUPPORT", () => {
     }
   });
 });
+
+describe("ONBOARDING_APPEND_SUGGESTIONS: a second pass adds, never replaces", () => {
+  const secondAudiences = {
+    audiences: [
+      { who: "Restaurant owners", outcome: "pick reliable equipment", why: "Same as before." },
+      { who: "Hotel kitchen managers", outcome: "plan a kitchen refit", why: "They buy in volume." },
+    ],
+    confidence: "high",
+  };
+
+  async function twoPasses() {
+    const store = new MemoryRecoStore();
+    const llm = fakeLlm(audienceOut, secondAudiences);
+    await generateRecommendations({ store, invoker: llm.invoker }, { ctx, socialProfileId: "prof-1", step: "audience" });
+    // The creator's posts finish analysing: new evidence, so the step runs again.
+    store.snapshot = snap(Array.from({ length: 12 }, (_, i) => `Hotel kitchen refit walkthrough ${i}`));
+    await generateRecommendations({ store, invoker: llm.invoker }, { ctx, socialProfileId: "prof-1", step: "audience" });
+    return store.items.filter(i => i.kind === "audience");
+  }
+
+  it("flag off (before): the second pass supersedes what was on screen", async () => {
+    const audiences = await twoPasses();
+    expect(audiences.filter(a => a.status === "superseded").length).toBeGreaterThan(0);
+  });
+
+  it("flag on: earlier suggestions stay, new ones are added after them, duplicates skipped", async () => {
+    vi.stubEnv("ONBOARDING_APPEND_SUGGESTIONS", "on");
+    try {
+      const audiences = await twoPasses();
+      expect(audiences.some(a => a.status === "superseded")).toBe(false);
+      const who = audiences.filter(a => a.status === "suggested").map(a => (a.payload as { who: string }).who);
+      expect(who).toEqual(["Restaurant owners", "New restaurant founders", "Hotel kitchen managers"]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it("caps how many live suggestions a step can grow to", async () => {
+    const { appendedInserts } = await import("./recommendationService");
+    const live = (n: number) => Array.from({ length: n }, () => item("audience", { who: `A${++n}`, outcome: "x" }, { status: "suggested" }));
+    expect(appendedInserts("audience", live(4), ["a", "b", "c"])).toEqual(["a"]);
+    expect(appendedInserts("audience", live(5), ["a"])).toEqual([]);
+    expect(appendedInserts("pillar", [], ["a", "b"])).toEqual(["a", "b"]);
+    expect(appendedInserts("goal", live(9), ["a"])).toEqual(["a"]);
+  });
+});
