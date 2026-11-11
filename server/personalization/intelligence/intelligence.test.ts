@@ -2461,10 +2461,25 @@ describe("ONBOARDING_APPEND_SUGGESTIONS: a second pass adds, never replaces", ()
 
   it("caps how many live suggestions a step can grow to", async () => {
     const { appendedInserts } = await import("./recommendationService");
-    const live = (n: number) => Array.from({ length: n }, () => item("audience", { who: `A${++n}`, outcome: "x" }, { status: "suggested" }));
-    expect(appendedInserts("audience", live(4), ["a", "b", "c"])).toEqual(["a"]);
-    expect(appendedInserts("audience", live(5), ["a"])).toEqual([]);
-    expect(appendedInserts("pillar", [], ["a", "b"])).toEqual(["a", "b"]);
-    expect(appendedInserts("goal", live(9), ["a"])).toEqual(["a"]);
+    const names = ["Plumbers", "Electricians", "Roofers", "Painters", "Landscapers", "Bakers", "Florists"];
+    const live = (n: number) => names.slice(0, n).map(who => item("audience", { who, outcome: "x" }, { status: "suggested" }));
+    const ins = (...who: string[]) => who.map(w => ({ payload: { who: w } }));
+    expect(appendedInserts("audience", live(4), ins("Dentists", "Lawyers", "Chefs"))).toEqual(ins("Dentists"));
+    expect(appendedInserts("audience", live(5), ins("Dentists"))).toEqual([]);
+    expect(appendedInserts("pillar", [], [{ payload: { title: "A" } }, { payload: { title: "B" } }])).toHaveLength(2);
+  });
+
+  it("skips near-duplicates of what is on screen and of each other", async () => {
+    const { appendedInserts, isNearDuplicate } = await import("./recommendationService");
+    expect(isNearDuplicate("Small business owners seeking growth", "Small business owners seeking more leads")).toBe(true);
+    expect(isNearDuplicate("Restaurant owners", "New restaurant founders")).toBe(false);
+    expect(isNearDuplicate("Tradespeople and HVAC professionals", "HVAC and trades business operators")).toBe(false);
+    const onScreen = [item("audience", { who: "Small business owners seeking growth", outcome: "x" }, { status: "suggested" })];
+    const out = appendedInserts("audience", onScreen, [
+      { payload: { who: "Small business owners seeking more leads" } },
+      { payload: { who: "HVAC and trades business operators" } },
+      { payload: { who: "HVAC and trades business operators near you" } },
+    ]);
+    expect(out.map(o => o.payload.who)).toEqual(["HVAC and trades business operators"]);
   });
 });

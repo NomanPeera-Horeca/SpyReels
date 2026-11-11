@@ -227,7 +227,11 @@ export async function libraryHomeForProfile(args: {
         .where(inArray(viralProfileTopics.socialProfileId, others));
       for (const t of theirs) profileTopics.add(t.slug);
     }
-    if (profileTopics.size === 0) return null;
+    // RELEVANCE_TIERS: a brand-new creator is not matched to topics yet, but the
+    // ranker can still find videos by meaning (profile vs video summaries), so it
+    // runs anyway instead of leaving Home empty until topic matching catches up.
+    const rankWithoutTopics = relevanceTiersEnabled() && relevanceArmFor(args.userId) === "new";
+    if (profileTopics.size === 0 && !rankWithoutTopics) return null;
 
     const allTopics = await db.select({ slug: viralTopics.slug, category: viralTopics.category }).from(viralTopics);
     const categoryOf = new Map(allTopics.map(t => [t.slug, t.category]));
@@ -319,6 +323,8 @@ export async function libraryHomeForProfile(args: {
         return { items: rows.slice(0, args.limit).map(toPostR), creators, ...(tiers && rows.length > 0 ? { ranked: true } : {}) };
       }
     }
+    // The topic-based path below needs topics (ranking without them returned nothing usable).
+    if (profileTopics.size === 0) return null;
     const tier1 = await loadRows({ topicSlugs: [...profileTopics], statuses: ["viral", "rising"], tier: 1, profileTopics, categoryOf });
     const tier2 = await loadRows({ topicSlugs: siblingTopics, statuses: ["viral", "rising"], tier: 2, profileTopics, categoryOf });
     const tier3 = await loadRows({ topicSlugs: null, statuses: ["viral"], tier: 3, profileTopics, categoryOf });
