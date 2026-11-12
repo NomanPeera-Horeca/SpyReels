@@ -1,5 +1,6 @@
 import { and, desc, eq, sql } from "drizzle-orm";
-import { reels, viralPostCandidates } from "../../drizzle/schema";
+import { reels, viralPostCandidates, type ViralPostCandidate } from "../../drizzle/schema";
+import { ensureViralMirrorReel } from "./ensureMirrorReel";
 import { getDb } from "../db";
 import { getPersonalWorkspaceId } from "../personalWorkspace";
 import {
@@ -26,11 +27,7 @@ export async function saveViralCandidateCanonical(
   if (!db) throw new Error("Database not available");
 
   const [candidate] = await db
-    .select({
-      platform: viralPostCandidates.platform,
-      sourceId: viralPostCandidates.sourceId,
-      mirroredReelId: viralPostCandidates.mirroredReelId,
-    })
+    .select()
     .from(viralPostCandidates)
     .where(eq(viralPostCandidates.id, candidateId))
     .limit(1);
@@ -43,12 +40,11 @@ export async function saveViralCandidateCanonical(
 
   if (!sourceId) throw new Error("Viral post candidate has no source id");
 
-  const mirroredReelId = await resolveWorkspaceMirrorId({
-    workspaceId,
-    platform,
-    sourceId,
-    hintedReelId: candidate.mirroredReelId,
-  });
+  // Saved Reels shows a save only when it points at a workspace reel, so a star
+  // creates that reel (same as the daily feed does) instead of only looking
+  // one up. Before, most stars from Home and Viral Posts were saved but never
+  // shown in Saved Reels.
+  const mirroredReelId = await ensureMirrorForSave({ candidate, workspaceId, platform, sourceId });
 
   const existing = await loadCanonicalLibraryRows({
     workspaceId,
@@ -250,13 +246,42 @@ function isMissingCanonicalIdentityColumn(err: unknown): boolean {
  * Resolve a mirror only inside the caller's workspace. A global candidate's
  * mirroredReelId is a cache hint and may point to another workspace.
  */
+/**
+ * The workspace reel a Viral save points at: created when missing (Instagram,
+ * TikTok and YouTube, like Collected Reels), otherwise the existing one. If
+ * creating fails, falls back to an existing mirror so the save never fails.
+ */
+export async function ensureMirrorForSave(args: {
+  candidate: ViralPostCandidate;
+  workspaceId: string;
+  platform: string;
+  sourceId: string;
+}): Promise<number | null> {
+  {
+    try {
+      const id = await ensureViralMirrorReel(args.candidate, args.workspaceId, { allowYouTube: true });
+      if (id != null) return id;
+    } catch (err) {
+      console.warn("[viralPosts] save_mirror_failed", {
+        candidateId: args.candidate.id,
+        error: err instanceof Error ? err.message.slice(0, 120) : "error",
+      });
+    }
+  }
+  return resolveWorkspaceMirrorId({
+    workspaceId: args.workspaceId,
+    platform: args.platform,
+    sourceId: args.sourceId,
+    hintedReelId: args.candidate.mirroredReelId,
+  });
+}
+
 async function resolveWorkspaceMirrorId(args: {
   workspaceId: string;
   platform: string;
   sourceId: string;
   hintedReelId: number | null;
 }): Promise<number | null> {
-  if (args.platform === "youtube") return null;
   const db = await getDb();
   if (!db) return null;
 

@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { platformFromReelUrl } from "@/lib/reelUrlPlatform";
 import { usePostHog } from "@posthog/react";
 import type { inferRouterOutputs } from "@trpc/server";
 import { useLocation } from "wouter";
@@ -1112,6 +1113,7 @@ export default function SavedReels() {
                         reelId={item.source === "scraped" ? reel.id : undefined}
                         duration={reel.duration}
                         reelUrl={reel.reelUrl}
+                        mediaPlatform={platformFromReelUrl(reel.reelUrl)}
                         interactiveMedia
                         inlinePlaying={inlinePlayingId === item.id}
                         onInlinePlayRequest={() => setInlinePlayingId(item.id)}
