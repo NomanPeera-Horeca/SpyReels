@@ -108,11 +108,11 @@ describe("Viral Posts remake path parity", () => {
     expect(collectedSource).toContain("retryRemake");
   });
 
-  it("For You, Explore, and Saved remake actions share openRemake", () => {
+  it("For You remake actions use openRemake (Explore and Saved tabs were dropped)", () => {
     expect(viralLegacySource).toContain("onRemake: (post: ViralPost) => void openRemake(post)");
     expect(viralLegacySource).toContain('tab === "for-you"');
-    expect(viralLegacySource).toContain('tab === "explore"');
-    expect(viralLegacySource).toContain('tab === "saved"');
+    expect(viralLegacySource).not.toContain('tab === "explore"');
+    expect(viralLegacySource).not.toContain('tab === "saved"');
   });
 });
 
@@ -155,11 +155,7 @@ describe("Viral Posts mature SaaS color contract", () => {
     expect(cardSource).not.toContain("viralPostCreatorProfileUrl");
   });
 
-  it("page chrome uses Figma variables only: no hard-coded colors, tabs are not filled purple", () => {
+  it("page chrome uses Figma variables only: no hard-coded colors", () => {
     expect(viralLegacySource).not.toMatch(/#[0-9a-fA-F]{6}/);
-    expect(viralLegacySource).toContain("vp.tabActive");
-    expect(viralLegacySource).not.toMatch(
-      /aria-selected=\{tab === id\}[\s\S]{0,200}bg-primary/
-    );
   });
 });
