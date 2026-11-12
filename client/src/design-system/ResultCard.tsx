@@ -17,6 +17,8 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { SocialPlatform } from "@shared/personalization/model";
 import { IconArrowRight, IconArrowUpRight, IconExpand, IconMore, IconPlay, IconStar } from "./icons";
 import { PlatformFullColorMark } from "./platformMarks";
+import { toast } from "sonner";
+import { copyLink, shareNatively, shareTargetHref, type SharePayload } from "@/lib/shareLink";
 import styles from "./ResultCard.module.css";
 
 /** Top-right media overlay. Exactly one kind, never both. */
@@ -66,6 +68,12 @@ export type ResultCardProps = {
   /** Absent: no save button (Result Card / Compact, e.g. the creator's own videos). */
   onToggleSave?: () => void;
   menu: ResultCardMenuItem[];
+  /**
+   * Share (approved Nov 2026): first item of the ··· menu. Opens the device's
+   * share sheet; without one, the menu shows Copy link, WhatsApp, Email and
+   * Text message. Absent: no Share item.
+   */
+  share?: SharePayload | null;
   testId?: string;
   /**
    * Inline player shown inside the media box. It replaces the thumbnail, Play,
@@ -93,12 +101,33 @@ export function ResultCard({
   saved,
   onToggleSave,
   menu,
+  share = null,
   testId,
   inlineMedia = null,
 }: ResultCardProps) {
   const [thumbFailed, setThumbFailed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuMode, setMenuMode] = useState<"actions" | "share">("actions");
   const actionsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) setMenuMode("actions");
+  }, [menuOpen]);
+  const startShare = async () => {
+    if (!share) return;
+    const result = await shareNatively(share);
+    if (result === "unavailable") {
+      setMenuMode("share");
+      setMenuOpen(true);
+    } else {
+      setMenuOpen(false);
+    }
+  };
+  const copyShareLink = async () => {
+    if (!share) return;
+    setMenuOpen(false);
+    if (await copyLink(share.url)) toast.success("Link copied");
+    else toast.error("Couldn't copy the link");
+  };
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -211,8 +240,44 @@ export function ResultCard({
           >
             <IconMore />
           </button>
-          {menuOpen ? (
+          {menuOpen && menuMode === "share" && share ? (
+            <div className={styles.menu} role="menu" aria-label="Share" data-testid="result-card-share-menu">
+              <button type="button" role="menuitem" className={styles.menuItem} onClick={() => void copyShareLink()}>
+                Copy link
+              </button>
+              {(
+                [
+                  ["whatsapp", "WhatsApp"],
+                  ["email", "Email"],
+                  ["sms", "Text message"],
+                ] as const
+              ).map(([target, label]) => (
+                <a
+                  key={target}
+                  role="menuitem"
+                  className={styles.menuItem}
+                  href={shareTargetHref(target, share)}
+                  target={target === "whatsapp" ? "_blank" : undefined}
+                  rel="noopener noreferrer"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  {label}
+                </a>
+              ))}
+            </div>
+          ) : menuOpen ? (
             <div className={styles.menu} role="menu">
+              {share ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.menuItem}
+                  onClick={() => void startShare()}
+                  data-testid="result-card-share"
+                >
+                  Share
+                </button>
+              ) : null}
               {menu.map(item =>
                 item.href ? (
                   <a

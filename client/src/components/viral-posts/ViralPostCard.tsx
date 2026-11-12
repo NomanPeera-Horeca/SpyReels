@@ -10,6 +10,7 @@ import { ResultCard } from "@/design-system/ResultCard";
 import { libraryPerformanceSignal } from "@/components/home-v2/libraryPerformance";
 import { useCardInlinePlayback } from "@/components/useCardInlinePlayback";
 import { trpc } from "@/lib/trpc";
+import { safeHttpUrl } from "@/lib/viralPostPlayback";
 import {
   formatCompactCount,
   formatCreatorHandle,
@@ -155,6 +156,7 @@ export function ViralPostCard({
   }, [post.id]);
 
   const handle = formatCreatorHandle(post.creatorHandle || post.creatorName);
+  const originalUrl = safeHttpUrl(post.sourceUrl);
 
   return (
     <div ref={cellRef} className={styles.cell} data-testid="viral-post-card">
@@ -185,6 +187,7 @@ export function ViralPostCard({
         }}
         saved={post.saved}
         onToggleSave={() => onToggleSave(post)}
+        share={originalUrl ? { url: originalUrl, title: cardCaption(post) } : null}
         menu={[
           { label: "View details", onSelect: openDetails },
           { label: "Open creator", onSelect: () => onOpenCreator(post) },

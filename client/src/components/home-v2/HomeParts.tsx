@@ -440,6 +440,7 @@ export function HomeVideoCard({
   onPlay,
   onSeen,
   onNotRelevant,
+  onOpenCreator,
 }: {
   post: ViralPost;
   busy: boolean;
@@ -454,6 +455,8 @@ export function HomeVideoCard({
   onSeen?: () => void;
   /** "Not relevant to my niche" in the card menu (same for every ranking). */
   onNotRelevant?: () => void;
+  /** Creator link: opens this creator in SpyReels. Absent (e.g. your own videos): plain text. */
+  onOpenCreator?: () => void;
 }) {
   const seenRef = useSeenOnce(onSeen);
   // Play plays inside the card, like Viral Posts (its player has its own expand and close).
@@ -479,6 +482,7 @@ export function HomeVideoCard({
       thumbnailUrl={post.thumbnailUrl ?? null}
       title={title}
       creator={handle ? `@${handle}` : null}
+      onOpenCreator={handle ? onOpenCreator : undefined}
       metrics={metrics}
       signal={libraryPerformanceSignal(post)}
       labels={{
@@ -495,6 +499,7 @@ export function HomeVideoCard({
       remakeBusy={busy}
       saved={post.saved}
       onToggleSave={onToggleSave}
+      share={originalUrl ? { url: originalUrl, title } : null}
       menu={[
         originalUrl
           ? { label: C.videos.openOriginal, href: originalUrl }
