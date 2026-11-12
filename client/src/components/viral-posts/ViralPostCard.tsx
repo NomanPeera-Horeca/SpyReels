@@ -1,8 +1,14 @@
+/**
+ * One Viral Posts card, on the shared Figma Result Card (288:666), the same
+ * card Home uses. Viral Posts keeps its own behaviour around it: impressions
+ * and feedback signals, View details, More like this, Hide creator and the
+ * "What's wrong with this?" reasons.
+ */
 import { useEffect, useRef, useState } from "react";
-import { MoreHorizontal, Star } from "lucide-react";
-import { ViralPostPreview } from "@/components/viral-posts/ViralPostPreview";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import type { SocialPlatform } from "@shared/personalization/model";
+import { ResultCard } from "@/design-system/ResultCard";
+import { libraryPerformanceSignal } from "@/components/home-v2/libraryPerformance";
+import { useCardInlinePlayback } from "@/components/useCardInlinePlayback";
 import { trpc } from "@/lib/trpc";
 import {
   formatCompactCount,
@@ -12,6 +18,7 @@ import {
   formatShortPostDate,
 } from "@/lib/viralPosts/format";
 import type { ViralPost } from "@/lib/viralPosts/types";
+import styles from "./viralPosts.module.css";
 
 type ViralPostCardProps = {
   post: ViralPost;
@@ -37,27 +44,30 @@ const NEGATIVE_REASONS: Array<{ type: NegativeReason; label: string }> = [
   { type: "already_seen", label: "I've seen ideas like this" },
 ];
 
+const PLATFORM_LABEL: Record<string, string> = {
+  instagram: "Reels",
+  tiktok: "TikTok",
+  youtube: "Shorts",
+};
+
 function cardCaption(post: ViralPost): string {
   if (post.hook?.trim()) return post.hook.trim();
   if (post.caption?.trim()) return post.caption.trim();
   return "Viral post in your niche";
 }
 
-function cardMetricsLine(post: ViralPost): {
-  leading: string[];
-  signal: string | null;
-  date: string | null;
-} {
-  const leading: string[] = [];
+/** "69.2K views · 22.3% eng · 1.7x niche avg · Sep 11", only the parts we have. Pure. */
+export function viralPostMetrics(post: ViralPost): string[] {
   const views = formatCompactCount(post.views);
-  if (views) leading.push(`${views} views`);
   const eng = formatEngagementPct(post.engagementRate);
-  if (eng) leading.push(eng);
-  return {
-    leading,
-    signal: formatNicheSignal(post.reachMultiplier),
-    date: formatShortPostDate(post.publishedAt),
-  };
+  const signal = formatNicheSignal(post.reachMultiplier);
+  const date = formatShortPostDate(post.publishedAt);
+  return [
+    ...(views ? [`${views} views`] : []),
+    ...(eng ? [eng] : []),
+    ...(signal ? [signal] : []),
+    ...(date ? [date] : []),
+  ];
 }
 
 export function ViralPostCard({
@@ -70,20 +80,11 @@ export function ViralPostCard({
   onNotRelevant,
   onHideCreator,
 }: ViralPostCardProps) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [negativeOpen, setNegativeOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const negativeRef = useRef<HTMLDivElement>(null);
-  const kebabRef = useRef<HTMLButtonElement>(null);
-  const articleRef = useRef<HTMLElement>(null);
+  const [reasonsOpen, setReasonsOpen] = useState(false);
+  const cellRef = useRef<HTMLDivElement>(null);
+  const reasonsRef = useRef<HTMLDivElement>(null);
   const impressionSentRef = useRef(false);
   const signalMutation = trpc.viralPosts.feedback.useMutation();
-
-  const handle = formatCreatorHandle(
-    post.creatorHandle || post.creatorName
-  );
-  const { leading: metricParts, signal, date } = cardMetricsLine(post);
-  const caption = cardCaption(post);
 
   const recordSignal = (
     feedbackType:
@@ -96,26 +97,29 @@ export function ViralPostCard({
     signalMutation.mutate({ postId: post.id, feedbackType });
   };
 
-  useEffect(() => {
-    if (!menuOpen && !negativeOpen) return;
-    const onDocClick = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (
-        menuRef.current?.contains(target) ||
-        negativeRef.current?.contains(target) ||
-        kebabRef.current?.contains(target)
-      ) {
-        return;
-      }
-      setMenuOpen(false);
-      setNegativeOpen(false);
-    };
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, [menuOpen, negativeOpen]);
+  const openDetails = () => {
+    recordSignal("why_it_works_opened");
+    onWhyItWorks(post);
+  };
+  // Videos that cannot play inside the card open the details (they link to the original).
+  const { inlineMedia, play } = useCardInlinePlayback(post, openDetails);
 
   useEffect(() => {
-    const node = articleRef.current;
+    if (!reasonsOpen) return;
+    const onDown = (event: MouseEvent) => {
+      if (!reasonsRef.current?.contains(event.target as Node)) setReasonsOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => event.key === "Escape" && setReasonsOpen(false);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [reasonsOpen]);
+
+  useEffect(() => {
+    const node = cellRef.current;
     if (!node || impressionSentRef.current) return;
 
     let visibleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -150,119 +154,57 @@ export function ViralPostCard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [post.id]);
 
-  const openDetails = () => {
-    recordSignal("why_it_works_opened");
-    onWhyItWorks(post);
-  };
+  const handle = formatCreatorHandle(post.creatorHandle || post.creatorName);
 
   return (
-    <article
-      ref={articleRef}
-      className="workspace-reel-card relative flex h-full flex-col overflow-hidden rounded-[16px] border border-[#2b2739] bg-[#1a1821] shadow-[0_8px_32px_rgba(0,0,0,.28)]"
-    >
-      <button
-        type="button"
-        className="block w-full cursor-pointer text-left"
-        onClick={openDetails}
-        aria-label="View post details"
-      >
-        <ViralPostPreview post={post} quiet />
-      </button>
+    <div ref={cellRef} className={styles.cell} data-testid="viral-post-card">
+      <ResultCard
+        mediaFormat="portrait"
+        platform={post.platform as SocialPlatform}
+        platformLabel={PLATFORM_LABEL[post.platform] ?? post.platform}
+        thumbnailUrl={post.thumbnailUrl ?? null}
+        title={cardCaption(post)}
+        creator={handle || null}
+        onOpenCreator={handle ? () => onOpenCreator(post) : undefined}
+        metrics={viralPostMetrics(post)}
+        signal={libraryPerformanceSignal(post)}
+        labels={{
+          play: "Play video",
+          expand: "View details",
+          remake: "Remake",
+          save: "Save post",
+          saved: "Remove from saved",
+          more: "More options",
+        }}
+        onPlay={play}
+        inlineMedia={inlineMedia}
+        onExpand={openDetails}
+        onRemake={() => {
+          recordSignal("remake_started");
+          onRemake(post);
+        }}
+        saved={post.saved}
+        onToggleSave={() => onToggleSave(post)}
+        menu={[
+          { label: "View details", onSelect: openDetails },
+          { label: "Open creator", onSelect: () => onOpenCreator(post) },
+          { label: "More like this", onSelect: () => onMoreLikeThis(post) },
+          { label: "Not relevant", onSelect: () => setReasonsOpen(true) },
+          { label: "Hide creator", onSelect: () => onHideCreator(post) },
+        ]}
+      />
 
-      <div className="flex flex-1 flex-col gap-2 px-3 pb-3 pt-3">
-        <p className="line-clamp-2 min-h-[2.7em] text-[13px] font-semibold leading-snug text-[#f5f3f8]">
-          {caption}
-        </p>
-
-        <div className="grid gap-1">
-          <button
-            type="button"
-            className="w-fit text-left text-[12px] font-medium text-[#a8a3b3] hover:text-[#f5f3f8] hover:underline"
-            title="Open creator in SpyReels"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenCreator(post);
-            }}
-          >
-            {handle}
-          </button>
-          {(metricParts.length > 0 || signal || date) && (
-            <p className="text-[11px] leading-snug text-[#a8a3b3]">
-              {metricParts.join(" · ")}
-              {signal ? (
-                <>
-                  {metricParts.length > 0 ? " · " : null}
-                  <span className="font-semibold text-[#e8e4f0]">{signal}</span>
-                </>
-              ) : null}
-              {date ? (
-                <>
-                  {metricParts.length > 0 || signal ? " · " : null}
-                  {date}
-                </>
-              ) : null}
-            </p>
-          )}
-        </div>
-
-        <div className="mt-auto grid grid-cols-[1fr_auto_auto] gap-1.5 pt-1">
-          <Button
-            type="button"
-            variant="outline"
-            className="h-9 border-[#2b2739] bg-transparent px-2.5 text-[11px] font-semibold text-[#e8e2f4] hover:border-[rgba(155,108,255,.45)] hover:bg-[rgba(155,108,255,.08)] hover:text-white"
-            onClick={() => {
-              recordSignal("remake_started");
-              onRemake(post);
-            }}
-          >
-            Remake
-          </Button>
-          <button
-            type="button"
-            aria-label={post.saved ? "Remove from saved" : "Save post"}
-            title={post.saved ? "Saved" : "Save"}
-            className={cn(
-              "grid h-9 w-9 place-items-center rounded-[10px] border border-[#2b2739] bg-transparent text-[#a8a3b3] hover:border-[rgba(155,108,255,.4)] hover:text-[#f5f3f8]",
-              post.saved && "border-[rgba(155,108,255,.4)] text-[#f5f3f8]"
-            )}
-            onClick={() => onToggleSave(post)}
-          >
-            <Star
-              className={cn("h-3.5 w-3.5", post.saved && "fill-current")}
-            />
-          </button>
-          <button
-            ref={kebabRef}
-            type="button"
-            aria-label="More options"
-            aria-expanded={menuOpen}
-            className="grid h-9 w-9 place-items-center rounded-[10px] border border-[#2b2739] bg-transparent text-[#a8a3b3] hover:border-[rgba(155,108,255,.4)] hover:text-[#f5f3f8]"
-            onClick={(e) => {
-              e.stopPropagation();
-              setNegativeOpen(false);
-              setMenuOpen((open) => !open);
-            }}
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-
-      {negativeOpen ? (
-        <div
-          ref={negativeRef}
-          className="absolute bottom-14 right-3 z-30 grid min-w-[210px] gap-0.5 rounded-[12px] border border-[#2b2739] bg-[#1d1b24] p-1.5 shadow-[0_18px_50px_rgba(0,0,0,.45)]"
-        >
-          <p className="px-2.5 pb-1 pt-1 text-[10px] font-bold uppercase tracking-wide text-[#7e788d]">
-            What's wrong with this?
-          </p>
+      {reasonsOpen ? (
+        <div ref={reasonsRef} className={styles.reasons} role="menu" aria-label="What's wrong with this?">
+          <p className={styles.reasonsTitle}>What's wrong with this?</p>
           {NEGATIVE_REASONS.map((reason) => (
             <button
               key={reason.type}
               type="button"
-              className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-white/[0.06] hover:text-white"
+              role="menuitem"
+              className={styles.reasonItem}
               onClick={() => {
-                setNegativeOpen(false);
+                setReasonsOpen(false);
                 recordSignal(reason.type);
                 onNotRelevant(post);
               }}
@@ -272,64 +214,6 @@ export function ViralPostCard({
           ))}
         </div>
       ) : null}
-
-      {menuOpen ? (
-        <div
-          ref={menuRef}
-          className="absolute bottom-14 right-3 z-20 grid min-w-[170px] gap-0.5 rounded-[12px] border border-[#2b2739] bg-[#1d1b24] p-1.5 shadow-[0_18px_50px_rgba(0,0,0,.45)]"
-        >
-          <button
-            type="button"
-            className="rounded-lg px-2.5 py-2 text-left text-xs text-[#f5f3f8] hover:bg-white/[0.06]"
-            onClick={() => {
-              setMenuOpen(false);
-              openDetails();
-            }}
-          >
-            View details
-          </button>
-          <button
-            type="button"
-            className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-white/[0.06] hover:text-white"
-            onClick={() => {
-              setMenuOpen(false);
-              onOpenCreator(post);
-            }}
-          >
-            Open creator
-          </button>
-          <button
-            type="button"
-            className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-white/[0.06] hover:text-white"
-            onClick={() => {
-              setMenuOpen(false);
-              onMoreLikeThis(post);
-            }}
-          >
-            More like this
-          </button>
-          <button
-            type="button"
-            className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-white/[0.06] hover:text-white"
-            onClick={() => {
-              setMenuOpen(false);
-              setNegativeOpen(true);
-            }}
-          >
-            Not relevant
-          </button>
-          <button
-            type="button"
-            className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-[rgba(255,107,122,.08)] hover:text-[#ffb4bd]"
-            onClick={() => {
-              setMenuOpen(false);
-              onHideCreator(post);
-            }}
-          >
-            Hide creator
-          </button>
-        </div>
-      ) : null}
-    </article>
+    </div>
   );
 }

@@ -126,12 +126,11 @@ describe("Viral Posts mature SaaS color contract", () => {
     "utf8"
   );
 
-  it("keeps card Remake soft (not filled primary purple)", () => {
-    expect(cardSource).toMatch(/Remake\s*<\/Button>/);
+  it("uses the shared Figma Result Card, whose Remake is the soft (not filled purple) button", () => {
+    expect(cardSource).toContain('from "@/design-system/ResultCard"');
+    expect(cardSource).toContain("<ResultCard");
     expect(cardSource).not.toContain("Remake in your voice");
-    expect(cardSource).toContain('variant="outline"');
-    expect(cardSource).not.toMatch(/Remake\s*<\/Button>[\s\S]{0,80}bg-\[#7c3aed\]/);
-    expect(cardSource).not.toMatch(/Remake\s*<\/Button>[\s\S]{0,80}bg-primary/);
+    expect(cardSource).not.toMatch(/#[0-9a-fA-F]{6}/);
   });
 
   it("uses brand primary only on drawer Remake commit CTA", () => {
@@ -151,23 +150,14 @@ describe("Viral Posts mature SaaS color contract", () => {
     expect(viralLegacySource).toContain("timeframeDays: 30");
   });
 
-  it("keeps creator links muted (not brand purple)", () => {
-    expect(cardSource).toContain("text-[#a8a3b3]");
-    expect(cardSource).not.toContain("text-[#9b6cff]");
-    expect(cardSource).not.toContain("text-[#d7c7ff]");
-    expect(drawerSource).not.toContain("text-[#9b6cff]");
+  it("the creator is the approved brand link (Figma 288:666 Creator link) and opens in-app", () => {
+    expect(cardSource).toContain("onOpenCreator={");
+    expect(cardSource).not.toContain("viralPostCreatorProfileUrl");
   });
 
-  it("emphasizes niche signal without purple", () => {
-    expect(cardSource).toContain("text-[#e8e4f0]");
-    expect(drawerSource).toContain("text-[#e8e4f0]");
-  });
-
-  it("keeps tab selection soft in the page chrome", () => {
-    expect(viralLegacySource).toContain('bg-white/[0.08]');
-    expect(viralLegacySource).not.toMatch(
-      /aria-selected=\{tab === id\}[\s\S]{0,200}bg-\[#7c3aed\]/
-    );
+  it("page chrome uses Figma variables only: no hard-coded colors, tabs are not filled purple", () => {
+    expect(viralLegacySource).not.toMatch(/#[0-9a-fA-F]{6}/);
+    expect(viralLegacySource).toContain("vp.tabActive");
     expect(viralLegacySource).not.toMatch(
       /aria-selected=\{tab === id\}[\s\S]{0,200}bg-primary/
     );

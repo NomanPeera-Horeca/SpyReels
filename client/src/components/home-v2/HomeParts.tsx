@@ -31,9 +31,8 @@ import {
   formatEngagementPct,
   formatShortPostDate,
 } from "@/lib/viralPosts/format";
-import { resolveViralPostPlayback, safeHttpUrl } from "@/lib/viralPostPlayback";
-import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
-import { YouTubeInlineEmbed } from "@/components/YouTubeInlineEmbed";
+import { safeHttpUrl } from "@/lib/viralPostPlayback";
+import { useCardInlinePlayback } from "@/components/useCardInlinePlayback";
 import { HOME_COPY as C } from "./copy";
 import styles from "./home.module.css";
 
@@ -457,33 +456,8 @@ export function HomeVideoCard({
   onNotRelevant?: () => void;
 }) {
   const seenRef = useSeenOnce(onSeen);
-  const [playingInline, setPlayingInline] = useState(false);
-  const playback = resolveViralPostPlayback(post);
-  const stopInline = () => setPlayingInline(false);
   // Play plays inside the card, like Viral Posts (its player has its own expand and close).
-  const inlineMedia = !playingInline ? null : playback.kind === "file" ? (
-    <DashboardReelGridMedia
-      className="h-full w-full"
-      thumbnailUrl={playback.thumbnailUrl}
-      videoUrl={playback.videoUrl}
-      shortcode={playback.shortcode}
-      reelId={playback.reelId}
-      platform={playback.platform}
-      videoPageUrl={playback.videoPageUrl}
-      externalWatch={playback.external}
-      size="compact"
-      autoStart
-      onPlayingChange={playing => {
-        if (!playing) stopInline();
-      }}
-    />
-  ) : playback.kind === "youtube" ? (
-    <YouTubeInlineEmbed className="h-full w-full" videoId={playback.videoId} onStop={stopInline} />
-  ) : null;
-  const playInCard = () => {
-    if (playback.kind === "unavailable") onPlay();
-    else setPlayingInline(true);
-  };
+  const { inlineMedia, play: playInCard } = useCardInlinePlayback(post, onPlay);
   const title = post.hook?.trim() || post.caption?.trim() || C.videos.untitled;
   const views = formatCompactCount(post.views);
   const engagement = formatEngagementPct(post.engagementRate);

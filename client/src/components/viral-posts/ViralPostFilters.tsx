@@ -49,9 +49,9 @@ export function ViralPostFilters({
         <button
           type="button"
           className={cn(
-            "rounded-full border border-[#2b2739] bg-[#111019] px-3 py-1.5 text-xs font-bold text-[#a9a4b8] hover:text-white",
+            "rounded-full border border-[var(--sr-color-border-default)] bg-[var(--sr-color-surface-default)] px-3 py-1.5 text-xs font-bold text-[var(--sr-color-text-secondary)] hover:text-[var(--sr-color-text-primary)]",
             quickFilter === "rising" &&
-              "border-[rgba(155,108,255,.48)] bg-[rgba(124,58,237,.15)] text-white"
+              "border-[var(--sr-color-brand-primary)] bg-[var(--sr-color-brand-surface-subtle)] text-[var(--sr-color-text-brand)]"
           )}
           onClick={() => toggleQuick("rising")}
         >
@@ -60,9 +60,9 @@ export function ViralPostFilters({
         <button
           type="button"
           className={cn(
-            "rounded-full border border-[#2b2739] bg-[#111019] px-3 py-1.5 text-xs font-bold text-[#a9a4b8] hover:text-white",
+            "rounded-full border border-[var(--sr-color-border-default)] bg-[var(--sr-color-surface-default)] px-3 py-1.5 text-xs font-bold text-[var(--sr-color-text-secondary)] hover:text-[var(--sr-color-text-primary)]",
             quickFilter === "proven" &&
-              "border-[rgba(155,108,255,.48)] bg-[rgba(124,58,237,.15)] text-white"
+              "border-[var(--sr-color-brand-primary)] bg-[var(--sr-color-brand-surface-subtle)] text-[var(--sr-color-text-brand)]"
           )}
           onClick={() => toggleQuick("proven")}
         >
@@ -70,7 +70,7 @@ export function ViralPostFilters({
         </button>
         <button
           type="button"
-          className="rounded-full border border-[#2b2739] bg-[#111019] px-3 py-1.5 text-xs font-bold text-[#a9a4b8] hover:text-white"
+          className="rounded-full border border-[var(--sr-color-border-default)] bg-[var(--sr-color-surface-default)] px-3 py-1.5 text-xs font-bold text-[var(--sr-color-text-secondary)] hover:text-[var(--sr-color-text-primary)]"
           onClick={openDrawer}
         >
           Filters
@@ -80,10 +80,10 @@ export function ViralPostFilters({
       <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
         <SheetContent
           side="right"
-          className="w-full border-[#2b2739] bg-[#111019] text-[#f6f4fb] sm:max-w-md"
+          className="w-full border-[var(--sr-color-border-default)] bg-[var(--sr-color-surface-default)] text-[var(--sr-color-text-primary)] sm:max-w-md"
         >
           <SheetHeader>
-            <SheetTitle className="text-[#f6f4fb]">Explore filters</SheetTitle>
+            <SheetTitle className="text-[var(--sr-color-text-primary)]">Explore filters</SheetTitle>
           </SheetHeader>
 
           <div className="mt-6 space-y-6 overflow-y-auto px-1 pb-4">
@@ -120,7 +120,7 @@ export function ViralPostFilters({
               ).map(([value, label]) => (
                 <label
                   key={value}
-                  className="flex items-center justify-between gap-3 rounded-lg px-1 py-2 text-sm text-[#a9a4b8]"
+                  className="flex items-center justify-between gap-3 rounded-lg px-1 py-2 text-sm text-[var(--sr-color-text-secondary)]"
                 >
                   <span>{label}</span>
                   <input
@@ -130,18 +130,18 @@ export function ViralPostFilters({
                     onChange={() =>
                       setDraft((d) => ({ ...d, postedWithin: value }))
                     }
-                    className="accent-[#7c3aed]"
+                    className="accent-[var(--sr-color-action-primary)]"
                   />
                 </label>
               ))}
             </FilterGroup>
           </div>
 
-          <SheetFooter className="mt-auto flex-row gap-2 border-t border-[#2b2739] pt-4">
+          <SheetFooter className="mt-auto flex-row gap-2 border-t border-[var(--sr-color-border-default)] pt-4">
             <Button
               type="button"
               variant="outline"
-              className="border-[#2b2739] bg-transparent text-[#f6f4fb]"
+              className="border-[var(--sr-color-border-default)] bg-transparent text-[var(--sr-color-text-primary)]"
               onClick={() => {
                 const next = normalizeExploreFilters(DEFAULT_EXPLORE_FILTERS);
                 setDraft(next);
@@ -154,7 +154,7 @@ export function ViralPostFilters({
             </Button>
             <Button
               type="button"
-              className="bg-[#7c3aed] text-white hover:bg-[#6d28d9]"
+              className="bg-[var(--sr-color-action-primary)] text-white hover:bg-[var(--sr-color-action-primary-hover)]"
               onClick={() => {
                 const next = normalizeExploreFilters(draft);
                 onFiltersChange(next);
@@ -180,7 +180,7 @@ function FilterGroup({
 }) {
   return (
     <div>
-      <h4 className="mb-2 text-sm font-bold text-white">{title}</h4>
+      <h4 className="mb-2 text-sm font-bold text-[var(--sr-color-text-primary)]">{title}</h4>
       <div className="space-y-1">{children}</div>
     </div>
   );
@@ -200,7 +200,7 @@ function CheckRow({
   return (
     <label
       className={cn(
-        "flex items-center justify-between gap-3 rounded-lg px-1 py-2 text-sm text-[#a9a4b8]",
+        "flex items-center justify-between gap-3 rounded-lg px-1 py-2 text-sm text-[var(--sr-color-text-secondary)]",
         disabled && "cursor-not-allowed opacity-55"
       )}
     >
@@ -210,7 +210,7 @@ function CheckRow({
         checked={checked}
         disabled={disabled}
         onChange={(e) => onChange(e.target.checked)}
-        className="accent-[#7c3aed]"
+        className="accent-[var(--sr-color-action-primary)]"
       />
     </label>
   );

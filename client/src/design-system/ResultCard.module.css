@@ -163,6 +163,42 @@
   line-height: var(--sr-type-product-body-small-line);
 }
 
+/* Creator link (Figma 288:666, approved): Product / Label, color/text/brand, small arrow. */
+.creatorLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  align-self: flex-start;
+  max-width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--sr-color-text-brand);
+  font: inherit;
+  font-size: var(--sr-type-product-body-small-size);
+  font-weight: var(--sr-font-weight-medium);
+  line-height: var(--sr-type-product-body-small-line);
+  text-align: left;
+  cursor: pointer;
+}
+
+.creatorLink svg {
+  flex: 0 0 auto;
+}
+
+.creatorLink:hover > span {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.creatorLink:focus-visible {
+  outline: none;
+  border-radius: var(--sr-radius-8);
+  box-shadow: var(--sr-elevation-focus-neutral-action);
+}
+
 .ellipsis {
   overflow: hidden;
   text-overflow: ellipsis;

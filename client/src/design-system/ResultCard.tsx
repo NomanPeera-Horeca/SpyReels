@@ -15,7 +15,7 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { SocialPlatform } from "@shared/personalization/model";
-import { IconArrowUpRight, IconExpand, IconMore, IconPlay, IconStar } from "./icons";
+import { IconArrowRight, IconArrowUpRight, IconExpand, IconMore, IconPlay, IconStar } from "./icons";
 import { PlatformFullColorMark } from "./platformMarks";
 import styles from "./ResultCard.module.css";
 
@@ -39,6 +39,14 @@ export type ResultCardProps = {
   mediaFormat?: "portrait" | "wide";
   title: string;
   creator: string | null;
+  /**
+   * Creator link (Figma 288:666 "Creator link", approved Nov 2026): when set,
+   * the handle is a brand-colored link with an arrow that opens the creator
+   * in SpyReels. Absent: plain secondary text, as before.
+   */
+  onOpenCreator?: () => void;
+  /** Tooltip and accessible name for the creator link. */
+  openCreatorLabel?: string;
   metrics: string[];
   signal?: ResultCardSignal | null;
   labels: {
@@ -73,6 +81,8 @@ export function ResultCard({
   mediaFormat = "wide",
   title,
   creator,
+  onOpenCreator,
+  openCreatorLabel = "See this creator's top videos",
   metrics,
   signal = null,
   labels,
@@ -154,7 +164,21 @@ export function ResultCard({
       </div>
       <div className={styles.content}>
         <p className={styles.title}>{title}</p>
-        {creator ? <p className={[styles.meta, styles.ellipsis].join(" ")}>{creator}</p> : null}
+        {creator && onOpenCreator ? (
+          <button
+            type="button"
+            className={styles.creatorLink}
+            onClick={onOpenCreator}
+            title={openCreatorLabel}
+            aria-label={`${creator}: ${openCreatorLabel}`}
+            data-testid="result-card-creator-link"
+          >
+            <span className={styles.ellipsis}>{creator}</span>
+            <IconArrowRight size={16} />
+          </button>
+        ) : creator ? (
+          <p className={[styles.meta, styles.ellipsis].join(" ")}>{creator}</p>
+        ) : null}
         {metrics.length ? <p className={styles.meta}>{metrics.join(" · ")}</p> : null}
         <div className={styles.actions} ref={actionsRef}>
           <button
