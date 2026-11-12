@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/select";
 import { UpgradePrompt } from "@/components/UpgradePrompt";
 import { useUsageGate } from "@/hooks/useUsageGate";
-import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
+import { LibraryCardGrid } from "@/components/LibraryVideoCard";
 import { formatNumber, InlineWorkflow } from "@/components/InlineWorkflow";
 import { GridReelWorkflowDialog } from "@/components/GridReelWorkflowDialog";
 import Tooltip from "@/components/Tooltip";
@@ -1029,7 +1029,7 @@ export default function PlatformResearch({
             ) : null}
 
             <div className="space-y-3">
-              <div className={WORKSPACE_REEL_GRID_CLASS}>
+              <LibraryCardGrid>
                 {sortedVideos.map((video, index) => {
                   const isSaved = !!savedMap[video.id];
 
@@ -1065,7 +1065,7 @@ export default function PlatformResearch({
                     />
                   );
                 })}
-              </div>
+              </LibraryCardGrid>
             </div>
           </div>
         </div>

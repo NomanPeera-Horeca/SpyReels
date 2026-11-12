@@ -55,16 +55,10 @@ import {
   REEL_LIBRARY_INITIAL_VISIBLE,
   REEL_LIBRARY_VISIBLE_STEP,
 } from "@/lib/reelLibraryPagination";
-import { WorkspaceReelGridTile } from "@/components/WorkspaceReelGridTile";
-import { WorkspaceReelGridSkeleton } from "@/components/WorkspaceReelGridSkeleton";
-import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
+import { LibraryCardGrid, LibraryCardGridSkeleton, LibraryVideoCard } from "@/components/LibraryVideoCard";
 import { GridReelWorkflowDialog } from "@/components/GridReelWorkflowDialog";
 import {
-  QuietCreatorButton,
-  QuietReelCaption,
-  QuietReelMetrics,
-  QuietRemakeActions,
-  QuietRemakeStatusChip,
+  quietReelMetricParts,
   quietRemakeStatusFromState,
 } from "@/components/QuietWorkspaceReelChrome";
 import { useOpenCreatorInApp } from "@/hooks/useOpenCreatorInApp";
@@ -205,7 +199,6 @@ export default function SavedReels() {
   const [gridModalSavedId, setGridModalSavedId] = useState<number | null>(null);
   /** Freeze-safe: only one grid tile mounts an inline player at a time. */
   const [inlinePlayingId, setInlinePlayingId] = useState<number | null>(null);
-  const [quietMoreId, setQuietMoreId] = useState<number | null>(null);
   const { openCreator } = useOpenCreatorInApp("saved");
   const viewModeRef = useRef(viewMode);
   viewModeRef.current = viewMode;
@@ -728,7 +721,7 @@ export default function SavedReels() {
         </div>
       ) : null}
 
-      {!savedQuery.isError && savedQuery.isLoading && <WorkspaceReelGridSkeleton count={8} />}
+      {!savedQuery.isError && savedQuery.isLoading && <LibraryCardGridSkeleton count={8} />}
 
       {!savedQuery.isError && !savedQuery.isLoading && savedReels.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -1039,11 +1032,10 @@ export default function SavedReels() {
               )}
 
               {viewMode === "grid" && (
-                <div className={WORKSPACE_REEL_GRID_CLASS}>
+                <LibraryCardGrid>
                   {items.map((item, index) => {
                     const reel = item.reel;
                     const engagementRate = engagementPercent(item);
-                    const isModalOpen = gridModalSavedId === item.id;
                     const hasTranscription = !!item.transcription && item.transcription.status === "completed";
                     const isNoSpeech = transcriptionIsNoSpeech(item.transcription);
                     const recreateSt = reelRecreateState(
@@ -1101,140 +1093,51 @@ export default function SavedReels() {
                       hasSavedScript: Boolean(batchEntry?.latestScriptId || hookState?.scriptId),
                     });
 
+                    const savedPlatform = platformFromReelUrl(reel.reelUrl);
+                    const savedHandle = reel.ownerUsername || item.job.handle;
                     return (
-                      <WorkspaceReelGridTile
+                      <LibraryVideoCard
                         key={item.id}
-                        chrome="quiet"
-                        index={index}
-                        isActive={isModalOpen}
+                        testId="saved-result-card"
+                        platform={savedPlatform}
                         thumbnailUrl={reel.thumbnailUrl}
                         videoUrl={reel.videoUrl}
                         shortcode={reel.shortcode}
-                        reelId={item.source === "scraped" ? reel.id : undefined}
-                        duration={reel.duration}
+                        reelId={item.source === "scraped" ? reel.id : null}
                         reelUrl={reel.reelUrl}
-                        mediaPlatform={platformFromReelUrl(reel.reelUrl)}
-                        interactiveMedia
+                        caption={reel.caption}
+                        creatorHandle={savedHandle}
+                        onOpenCreator={() =>
+                          void openCreator({ handle: savedHandle, platform: savedPlatform })
+                        }
+                        metrics={quietReelMetricParts({
+                          views: reel.viewCount,
+                          engagementPct: engagementRate,
+                          reachViews: reel.viewCount,
+                          reachFollowers:
+                            item.job.followerCount && item.job.followerCount > 0
+                              ? item.job.followerCount
+                              : null,
+                          postedAt:
+                            reel.postedAt instanceof Date
+                              ? reel.postedAt.toISOString()
+                              : reel.postedAt,
+                        })}
+                        statusLabel={remakeStatusLabel}
+                        remake={oneClickRemake}
+                        saved
+                        onToggleSave={() => onToggleSave(item)}
+                        onViewDetails={() => setGridModalSavedId(item.id)}
+                        extraMenu={[{ label: "Remove from saved", onSelect: () => onToggleSave(item) }]}
                         inlinePlaying={inlinePlayingId === item.id}
                         onInlinePlayRequest={() => setInlinePlayingId(item.id)}
                         onInlinePlayStop={() =>
                           setInlinePlayingId((cur) => (cur === item.id ? null : cur))
                         }
-                        onMetaClick={() => setGridModalSavedId(item.id)}
-                        statusChip={
-                          remakeStatusLabel ? (
-                            <QuietRemakeStatusChip label={remakeStatusLabel} />
-                          ) : undefined
-                        }
-                        caption={
-                          <QuietReelCaption>
-                            {reel.caption || (
-                              <span className="italic text-[#a8a3b3]">No caption</span>
-                            )}
-                          </QuietReelCaption>
-                        }
-                        creator={
-                          <QuietCreatorButton
-                            handle={item.job.handle}
-                            onOpen={() =>
-                              void openCreator({
-                                handle: item.job.handle,
-                                platform: "instagram",
-                              })
-                            }
-                          />
-                        }
-                        stats={
-                          <QuietReelMetrics
-                            views={reel.viewCount}
-                            engagementPct={engagementRate}
-                            reachViews={reel.viewCount}
-                            reachFollowers={
-                              item.job.followerCount && item.job.followerCount > 0
-                                ? item.job.followerCount
-                                : null
-                            }
-                            postedAt={
-                              reel.postedAt instanceof Date
-                                ? reel.postedAt.toISOString()
-                                : reel.postedAt
-                            }
-                          />
-                        }
-                        actions={
-                          oneClickRemake ? (
-                            <QuietRemakeActions
-                              remakeLabel={oneClickRemake.label}
-                              remakeDisabled={oneClickRemake.disabled}
-                              remakeBusy={oneClickRemake.loading}
-                              onRemake={() => oneClickRemake.onClick()}
-                              saved
-                              onToggleSave={() => onToggleSave(item)}
-                              moreOpen={quietMoreId === item.id}
-                              onToggleMore={() =>
-                                setQuietMoreId((cur) =>
-                                  cur === item.id ? null : item.id
-                                )
-                              }
-                              moreMenu={
-                                quietMoreId === item.id ? (
-                                  <div className="absolute bottom-11 right-0 z-30 grid min-w-[160px] gap-0.5 rounded-[12px] border border-[#2b2739] bg-[#1d1b24] p-1.5 shadow-[0_18px_50px_rgba(0,0,0,.45)]">
-                                    <button
-                                      type="button"
-                                      className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-white/[0.06] hover:text-white"
-                                      onClick={() => {
-                                        setQuietMoreId(null);
-                                        setGridModalSavedId(item.id);
-                                      }}
-                                    >
-                                      View details
-                                    </button>
-                                    {item.job.handle ? (
-                                      <button
-                                        type="button"
-                                        className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-white/[0.06] hover:text-white"
-                                        onClick={() => {
-                                          setQuietMoreId(null);
-                                          void openCreator({
-                                            handle: item.job.handle,
-                                            platform: "instagram",
-                                          });
-                                        }}
-                                      >
-                                        Open creator
-                                      </button>
-                                    ) : null}
-                                    {reel.reelUrl ? (
-                                      <a
-                                        href={reel.reelUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-white/[0.06] hover:text-white"
-                                        onClick={() => setQuietMoreId(null)}
-                                      >
-                                        Open source
-                                      </a>
-                                    ) : null}
-                                    <button
-                                      type="button"
-                                      className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-[rgba(255,107,122,.08)] hover:text-[#ffb4bd]"
-                                      onClick={() => {
-                                        setQuietMoreId(null);
-                                        onToggleSave(item);
-                                      }}
-                                    >
-                                      Remove from saved
-                                    </button>
-                                  </div>
-                                ) : null
-                              }
-                            />
-                          ) : null
-                        }
                       />
                     );
                   })}
-                </div>
+                </LibraryCardGrid>
               )}
             </div>
           );
