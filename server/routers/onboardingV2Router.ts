@@ -354,7 +354,7 @@ export const onboardingV2Router = router({
 
   /** Ask the engine for this step's suggestions (cached for the same answers). */
   requestRecommendations: v2Procedure
-    .input(z.object({ step: z.enum(PERSONALIZATION_STEPS) }))
+    .input(z.object({ step: z.enum(PERSONALIZATION_STEPS), retry: z.boolean().optional() }))
     .mutation(async ({ ctx, input }) => {
       const db = await requireDb();
       const state = await loadOnboardingState(db, octx(ctx));
@@ -366,7 +366,8 @@ export const onboardingV2Router = router({
           socialProfileId: state.profile.id,
           step: input.step,
         },
-        state.version
+        state.version,
+        { retry: input.retry === true }
       );
       return { mode };
     }),

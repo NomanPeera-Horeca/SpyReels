@@ -97,6 +97,10 @@ export type RecommendationJobState =
 /** Last known state per job key (inline path; bounded, newest wins). */
 const recommendationStates = new Map<string, RecommendationJobState>();
 
+function forgetState(key: string) {
+  recommendationStates.delete(key);
+}
+
 function rememberState(key: string, state: RecommendationJobState) {
   recommendationStates.delete(key);
   recommendationStates.set(key, state);
@@ -512,11 +516,50 @@ export async function enqueuePreliminarySuggestions(input: {
  * so an edit upstream starts a new job while a reload of the same answers
  * collapses into the finished job.
  */
+/** "Try again" may re-run a failed step this many extra times for the same answers. */
+export const RECOMMENDATION_MAX_MANUAL_RETRIES = 3;
+
+/**
+ * "Try again" after a failure: reopen the failed job row so the claim below can
+ * run it once more. Before, a failed row for the same answers was final, so the
+ * button did nothing. Only failed rows are reopened (never a success or a
+ * running job), at most RECOMMENDATION_MAX_MANUAL_RETRIES times. Never throws.
+ */
+export async function reopenFailedRecommendation(key: string): Promise<boolean> {
+  try {
+    const db = await requireDb();
+    const { sql } = await import("drizzle-orm");
+    const res = await db.execute(sql`
+      UPDATE durable_jobs
+      SET status = 'running',
+          leaseExpiresAt = DATE_SUB(NOW(3), INTERVAL 1 SECOND),
+          maxAttempts = maxAttempts + 1
+      WHERE idempotencyKey = ${key}
+        AND jobType = 'personalization_recommendations'
+        AND status IN ('failed', 'dead')
+        AND maxAttempts < ${RECOMMENDATION_MAX_ATTEMPTS + RECOMMENDATION_MAX_MANUAL_RETRIES}
+    `);
+    const affected = Number((res as unknown as [{ affectedRows?: number }])[0]?.affectedRows ?? 0);
+    if (affected > 0) forgetState(key);
+    return affected > 0;
+  } catch (err) {
+    console.warn("[personalization] recommendation_retry_reopen_failed", { error: err instanceof Error ? err.message : String(err) });
+    return false;
+  }
+}
+
 export async function enqueueRecommendations(
   payload: RecommendationPayload,
-  version: number
+  version: number,
+  opts: { retry?: boolean } = {}
 ): Promise<"durable" | "inline"> {
   const key = await recommendationJobKeyFor(payload.socialProfileId, payload.step, version);
+  // The durable queue already requeues failed rows on a duplicate key; the
+  // inline path needs the failed row reopened.
+  if (opts.retry && !isPilotQueueEnabled("personalization_recommendations")) {
+    const reopened = await reopenFailedRecommendation(key);
+    console.info("[personalization] recommendation_retry", { step: payload.step, reopened });
+  }
   if (isPilotQueueEnabled("personalization_recommendations")) {
     await enqueueDurableJob({
       jobType: "personalization_recommendations",
