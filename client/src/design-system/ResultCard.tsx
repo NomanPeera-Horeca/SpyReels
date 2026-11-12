@@ -15,8 +15,10 @@
  */
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { SocialPlatform } from "@shared/personalization/model";
-import { IconArrowUpRight, IconExpand, IconMore, IconPlay, IconStar } from "./icons";
+import { IconArrowRight, IconArrowUpRight, IconExpand, IconMore, IconPlay, IconStar } from "./icons";
 import { PlatformFullColorMark } from "./platformMarks";
+import { toast } from "sonner";
+import { copyLink, shareNatively, shareTargetHref, type SharePayload } from "@/lib/shareLink";
 import styles from "./ResultCard.module.css";
 
 /** Top-right media overlay. Exactly one kind, never both. */
@@ -39,6 +41,14 @@ export type ResultCardProps = {
   mediaFormat?: "portrait" | "wide";
   title: string;
   creator: string | null;
+  /**
+   * Creator link (Figma 288:666 "Creator link", approved Nov 2026): when set,
+   * the handle is a brand-colored link with an arrow that opens the creator
+   * in SpyReels. Absent: plain secondary text, as before.
+   */
+  onOpenCreator?: () => void;
+  /** Tooltip and accessible name for the creator link. */
+  openCreatorLabel?: string;
   metrics: string[];
   signal?: ResultCardSignal | null;
   labels: {
@@ -58,6 +68,12 @@ export type ResultCardProps = {
   /** Absent: no save button (Result Card / Compact, e.g. the creator's own videos). */
   onToggleSave?: () => void;
   menu: ResultCardMenuItem[];
+  /**
+   * Share (approved Nov 2026): first item of the ··· menu. Opens the device's
+   * share sheet; without one, the menu shows Copy link, WhatsApp, Email and
+   * Text message. Absent: no Share item.
+   */
+  share?: SharePayload | null;
   testId?: string;
   /**
    * Inline player shown inside the media box. It replaces the thumbnail, Play,
@@ -73,6 +89,8 @@ export function ResultCard({
   mediaFormat = "wide",
   title,
   creator,
+  onOpenCreator,
+  openCreatorLabel = "See this creator's top videos",
   metrics,
   signal = null,
   labels,
@@ -83,12 +101,33 @@ export function ResultCard({
   saved,
   onToggleSave,
   menu,
+  share = null,
   testId,
   inlineMedia = null,
 }: ResultCardProps) {
   const [thumbFailed, setThumbFailed] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [menuMode, setMenuMode] = useState<"actions" | "share">("actions");
   const actionsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!menuOpen) setMenuMode("actions");
+  }, [menuOpen]);
+  const startShare = async () => {
+    if (!share) return;
+    const result = await shareNatively(share);
+    if (result === "unavailable") {
+      setMenuMode("share");
+      setMenuOpen(true);
+    } else {
+      setMenuOpen(false);
+    }
+  };
+  const copyShareLink = async () => {
+    if (!share) return;
+    setMenuOpen(false);
+    if (await copyLink(share.url)) toast.success("Link copied");
+    else toast.error("Couldn't copy the link");
+  };
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -154,7 +193,21 @@ export function ResultCard({
       </div>
       <div className={styles.content}>
         <p className={styles.title}>{title}</p>
-        {creator ? <p className={[styles.meta, styles.ellipsis].join(" ")}>{creator}</p> : null}
+        {creator && onOpenCreator ? (
+          <button
+            type="button"
+            className={styles.creatorLink}
+            onClick={onOpenCreator}
+            title={openCreatorLabel}
+            aria-label={`${creator}: ${openCreatorLabel}`}
+            data-testid="result-card-creator-link"
+          >
+            <span className={styles.ellipsis}>{creator}</span>
+            <IconArrowRight size={16} />
+          </button>
+        ) : creator ? (
+          <p className={[styles.meta, styles.ellipsis].join(" ")}>{creator}</p>
+        ) : null}
         {metrics.length ? <p className={styles.meta}>{metrics.join(" · ")}</p> : null}
         <div className={styles.actions} ref={actionsRef}>
           <button
@@ -187,8 +240,44 @@ export function ResultCard({
           >
             <IconMore />
           </button>
-          {menuOpen ? (
+          {menuOpen && menuMode === "share" && share ? (
+            <div className={styles.menu} role="menu" aria-label="Share" data-testid="result-card-share-menu">
+              <button type="button" role="menuitem" className={styles.menuItem} onClick={() => void copyShareLink()}>
+                Copy link
+              </button>
+              {(
+                [
+                  ["whatsapp", "WhatsApp"],
+                  ["email", "Email"],
+                  ["sms", "Text message"],
+                ] as const
+              ).map(([target, label]) => (
+                <a
+                  key={target}
+                  role="menuitem"
+                  className={styles.menuItem}
+                  href={shareTargetHref(target, share)}
+                  target={target === "whatsapp" ? "_blank" : undefined}
+                  rel="noopener noreferrer"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  {label}
+                </a>
+              ))}
+            </div>
+          ) : menuOpen ? (
             <div className={styles.menu} role="menu">
+              {share ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  className={styles.menuItem}
+                  onClick={() => void startShare()}
+                  data-testid="result-card-share"
+                >
+                  Share
+                </button>
+              ) : null}
               {menu.map(item =>
                 item.href ? (
                   <a

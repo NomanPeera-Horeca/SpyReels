@@ -33,31 +33,31 @@ function stageLabel(elapsedMs: number): string {
 function ExploreCardSkeleton({ delayMs }: { delayMs: number }) {
   return (
     <div
-      className="overflow-hidden rounded-[16px] border border-[#2b2739] bg-[#111019] shadow-[0_18px_50px_rgba(0,0,0,.18)]"
+      className="overflow-hidden rounded-[16px] border border-[var(--sr-color-border-default)] bg-[var(--sr-color-surface-default)] shadow-[var(--sr-elevation-surface-raised)]"
       style={{ animationDelay: `${delayMs}ms` }}
     >
-      <div className="relative aspect-[9/11.2] overflow-hidden bg-[#171522]">
-        <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-[#1d1a2a] via-[#221f30] to-[#171522]" />
+      <div className="relative aspect-[9/11.2] overflow-hidden bg-[var(--sr-color-surface-subtle)]">
+        <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-[var(--sr-color-surface-hover)] via-[var(--sr-color-surface-hover)] to-[var(--sr-color-surface-subtle)]" />
         <div className="absolute inset-x-0 bottom-0 h-2/5 bg-gradient-to-t from-black/70 to-transparent" />
-        <div className="absolute left-2.5 top-2.5 h-5 w-16 animate-pulse rounded-full bg-white/10" />
-        <div className="absolute right-2.5 top-2.5 h-5 w-20 animate-pulse rounded-full bg-white/10" />
+        <div className="absolute left-2.5 top-2.5 h-5 w-16 animate-pulse rounded-full bg-[var(--sr-color-surface-hover)]" />
+        <div className="absolute right-2.5 top-2.5 h-5 w-20 animate-pulse rounded-full bg-[var(--sr-color-surface-hover)]" />
         <div className="absolute bottom-3 left-3 right-8 space-y-2">
-          <div className="h-3 w-[88%] animate-pulse rounded bg-white/20" />
-          <div className="h-3 w-[62%] animate-pulse rounded bg-white/15" />
+          <div className="h-3 w-[88%] animate-pulse rounded bg-[var(--sr-color-surface-hover)]" />
+          <div className="h-3 w-[62%] animate-pulse rounded bg-[var(--sr-color-surface-hover)]" />
         </div>
       </div>
       <div className="space-y-3 p-3.5">
         <div className="flex items-center gap-2.5">
-          <div className="h-8 w-8 animate-pulse rounded-full bg-[#221f30]" />
+          <div className="h-8 w-8 animate-pulse rounded-full bg-[var(--sr-color-surface-hover)]" />
           <div className="min-w-0 flex-1 space-y-1.5">
-            <div className="h-3 w-28 animate-pulse rounded bg-[#221f30]" />
-            <div className="h-2.5 w-16 animate-pulse rounded bg-[#1d1a2a]" />
+            <div className="h-3 w-28 animate-pulse rounded bg-[var(--sr-color-surface-hover)]" />
+            <div className="h-2.5 w-16 animate-pulse rounded bg-[var(--sr-color-surface-hover)]" />
           </div>
         </div>
-        <div className="h-8 animate-pulse rounded-md bg-[#171522]" />
+        <div className="h-8 animate-pulse rounded-md bg-[var(--sr-color-surface-subtle)]" />
         <div className="grid grid-cols-[1fr_auto] gap-2">
-          <div className="h-9 animate-pulse rounded-md bg-[rgba(124,58,237,.22)]" />
-          <div className="h-9 w-[72px] animate-pulse rounded-md bg-[#171522]" />
+          <div className="h-9 animate-pulse rounded-md bg-[var(--sr-color-brand-surface-subtle)]" />
+          <div className="h-9 w-[72px] animate-pulse rounded-md bg-[var(--sr-color-surface-subtle)]" />
         </div>
       </div>
     </div>
@@ -85,35 +85,35 @@ export function ExploreSearchLoading({
 
   return (
     <div className={cn("space-y-5", className)}>
-      <div className="rounded-2xl border border-[#2b2739] bg-[#111019] px-4 py-4 sm:px-5">
+      <div className="rounded-2xl border border-[var(--sr-color-border-default)] bg-[var(--sr-color-surface-default)] px-4 py-4 sm:px-5">
         <div className="flex items-start gap-3">
-          <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[rgba(124,58,237,.16)]">
-            <Loader2 className="h-4 w-4 animate-spin text-[#c4b0ff]" />
+          <div className="mt-0.5 grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-[var(--sr-color-brand-surface-subtle)]">
+            <Loader2 className="h-4 w-4 animate-spin text-[var(--sr-color-text-brand)]" />
           </div>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-bold text-[#f6f4fb]">
+            <p className="text-sm font-bold text-[var(--sr-color-text-primary)]">
               Searching Instagram
             </p>
-            <p className="mt-0.5 truncate text-xs text-[#a9a4b8]">
+            <p className="mt-0.5 truncate text-xs text-[var(--sr-color-text-secondary)]">
               {query.trim() ? `“${query.trim()}”` : "Your topic"}
             </p>
-            <p className="mt-2 text-[13px] font-medium text-[#ddceff]">
+            <p className="mt-2 text-[13px] font-medium text-[var(--sr-color-text-brand)]">
               {label}
             </p>
           </div>
-          <span className="shrink-0 text-[11px] font-semibold tabular-nums text-[#7e788d]">
+          <span className="shrink-0 text-[11px] font-semibold tabular-nums text-[var(--sr-color-text-tertiary)]">
             {seconds}s
           </span>
         </div>
 
         <div className="mt-4">
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-[#1d1a2a]">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-[var(--sr-color-surface-hover)]">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-[#7c3aed] to-[#9b6cff] transition-[width] duration-300 ease-out"
+              className="h-full rounded-full bg-gradient-to-r from-[var(--sr-color-action-primary)] to-[var(--sr-color-brand-primary)] transition-[width] duration-300 ease-out"
               style={{ width: `${percent}%` }}
             />
           </div>
-          <div className="mt-2 flex items-center justify-between text-[11px] text-[#7e788d]">
+          <div className="mt-2 flex items-center justify-between text-[11px] text-[var(--sr-color-text-tertiary)]">
             <span>Live Instagram discovery</span>
             <span className="tabular-nums">{percent}%</span>
           </div>

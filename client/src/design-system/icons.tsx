@@ -171,6 +171,24 @@ export function IconArrowLeft(props: IconProps) {
 }
 
 /**
+ * Icon / Action Arrow Right (660:1216). Stroke follows the text color
+ * (currentColor) so it matches the link it sits in.
+ */
+export function IconArrowRight(props: IconProps) {
+  return (
+    <svg {...base(props)}>
+      <path
+        d="M4.5 10H15.5M12 6.5L15.5 10L12 13.5"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/**
  * Icon / Error (44:20). `tone="warning"` is the Partial status tint used by
  * Status / Analysis Line (status/warning/foreground).
  */

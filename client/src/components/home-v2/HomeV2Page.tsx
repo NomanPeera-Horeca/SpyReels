@@ -323,6 +323,18 @@ export default function HomeV2Page() {
     signal.mutate({ postId: post.id, feedbackType }, { onError: () => {} });
   };
   const [hiddenPosts, setHiddenPosts] = useState<Record<string, true>>({});
+  // Creator link on a video card: research this creator (same as "Creators going viral").
+  const openCreatorFromVideo = (post: ViralPost) => {
+    const handle = (post.creatorHandle || "").replace(/^@/, "");
+    if (!handle) return;
+    track("creator_open", { platform: post.platform, from: "video_card" });
+    try {
+      navigate(researchReturnTo(handle, post.platform as SocialPlatform));
+    } catch {
+      navigate("/research");
+    }
+  };
+
   const markNotRelevant = (post: ViralPost) => {
     sendSignal(post, "not_my_niche");
     track("video_not_relevant", { platform: post.platform });
@@ -694,6 +706,7 @@ export default function HomeV2Page() {
                       onToggleSave={() => void toggleSave(p)}
                       onSeen={() => sendSignal(post, "post_impression")}
                       onNotRelevant={() => markNotRelevant(post)}
+                      onOpenCreator={() => openCreatorFromVideo(post)}
                     />
                   );
                 })}

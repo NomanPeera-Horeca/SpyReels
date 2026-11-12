@@ -1,4 +1,6 @@
 import { ViralPostCard } from "@/components/viral-posts/ViralPostCard";
+import { ResultCardSkeleton } from "@/design-system/ResultCard";
+import styles from "./viralPosts.module.css";
 import type { ViralPost } from "@/lib/viralPosts/types";
 
 type ViralPostGridProps = {
@@ -53,26 +55,6 @@ function visibleAutomaticFeedPosts(posts: ViralPost[]): ViralPost[] {
   });
 }
 
-function GridCardSkeleton() {
-  return (
-    <div className="overflow-hidden rounded-[16px] border border-[#2b2739] bg-[#1a1821]">
-      <div className="relative aspect-[9/14] overflow-hidden bg-[#121018]">
-        <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-[#1d1a2a] via-[#221f30] to-[#171522]" />
-      </div>
-      <div className="space-y-2.5 p-3">
-        <div className="h-8 w-[92%] animate-pulse rounded bg-[#221f30]" />
-        <div className="h-3 w-28 animate-pulse rounded bg-[#1d1a2a]" />
-        <div className="h-3 w-40 animate-pulse rounded bg-[#1d1a2a]" />
-        <div className="grid grid-cols-[1fr_auto_auto] gap-1.5 pt-1">
-          <div className="h-9 animate-pulse rounded-[10px] bg-[#171522]" />
-          <div className="h-9 w-9 animate-pulse rounded-[10px] bg-[#171522]" />
-          <div className="h-9 w-9 animate-pulse rounded-[10px] bg-[#171522]" />
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function ViralPostGrid({
   posts,
   loading = false,
@@ -88,9 +70,9 @@ export function ViralPostGrid({
 }: ViralPostGridProps) {
   if (loading) {
     return (
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+      <div className={styles.grid}>
         {Array.from({ length: 6 }).map((_, i) => (
-          <GridCardSkeleton key={i} />
+          <ResultCardSkeleton key={i} mediaFormat="portrait" />
         ))}
       </div>
     );
@@ -99,17 +81,15 @@ export function ViralPostGrid({
   const visiblePosts = visibleAutomaticFeedPosts(posts);
   if (!visiblePosts.length) {
     return (
-      <div className="rounded-2xl border border-[#2b2739] bg-[#111019] px-6 py-14 text-center">
-        <h3 className="text-lg font-bold text-[#f6f4fb]">{emptyTitle}</h3>
-        <p className="mx-auto mt-2 max-w-md text-sm text-[#a9a4b8]">
-          {emptyDescription}
-        </p>
+      <div className={styles.state}>
+        <h3 className={styles.stateTitle}>{emptyTitle}</h3>
+        <p className={styles.stateText}>{emptyDescription}</p>
       </div>
     );
   }
 
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+    <div className={styles.grid}>
       {visiblePosts.map((post) => (
         <ViralPostCard
           key={post.id}
