@@ -2482,4 +2482,33 @@ describe("ONBOARDING_APPEND_SUGGESTIONS: a second pass adds, never replaces", ()
     ]);
     expect(out.map(o => o.payload.who)).toEqual(["HVAC and trades business operators"]);
   });
+
+  it("skips a pillar whose sub-topics mostly match a live pillar, under another name", async () => {
+    const { appendedInserts, isSameSuggestion } = await import("./recommendationService");
+    const tech = ["SEO for restaurants", "email and text campaigns", "AI phone ordering"];
+    const cautionary = ["COVID impact lessons", "food cost surges", "franchise collapse stories"];
+    const adoption = item("pillar", { title: "Restaurant Tech Adoption" }, { status: "suggested" });
+    const cases = item("pillar", { title: "Restaurant Industry Cautionary Cases" }, { status: "suggested" });
+    const existing = new Map([
+      [adoption.id, tech],
+      [cases.id, cautionary],
+    ]);
+    const incoming = new Map([
+      ["Restaurant Tech Tools", ["AI phone ordering", "SEO for restaurants", "Email and text campaigns"]],
+      ["Restaurant Financial Pitfalls", ["Food cost surges", "Bankruptcy case studies", "Debt and overhead risks"]],
+      ["Cutting Third-Party Fees", ["Saving on commissions", "Fee comparison breakdown", "Direct ordering setup"]],
+    ]);
+    const out = appendedInserts(
+      "pillar",
+      [adoption, cases],
+      [...incoming.keys()].map(title => ({ payload: { title } })),
+      { existing, incoming }
+    );
+    expect(out.map(o => o.payload.title)).toEqual(["Restaurant Financial Pitfalls", "Cutting Third-Party Fees"]);
+    // One shared sub-topic is normal overlap; two is the same pillar.
+    expect(isSameSuggestion({ title: "A pillar", topics: cautionary }, { title: "Other", topics: ["food cost surges", "x y", "z w"] })).toBe(false);
+    expect(isSameSuggestion({ title: "A pillar", topics: tech }, { title: "Other", topics: ["SEO for restaurants", "AI phone ordering"] })).toBe(true);
+    // Without sub-topics (e.g. they could not be read), titles alone decide, as before.
+    expect(appendedInserts("pillar", [adoption], [{ payload: { title: "Restaurant Tech Tools" } }])).toHaveLength(1);
+  });
 });
