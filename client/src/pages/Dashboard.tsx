@@ -91,22 +91,16 @@ import { ONBOARDING_NICHES_BY_SLUG } from "@/data/onboardingNiches";
 import { V13ReelClassificationBadges } from "@/components/V13ReelClassificationBadges";
 import { resolveFromParamFallback } from "@shared/appNavigation";
 import { useAppBack } from "@/hooks/useAppBack";
-import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
 import {
   REEL_LIBRARY_INITIAL_VISIBLE,
   REEL_LIBRARY_VISIBLE_STEP,
 } from "@/lib/reelLibraryPagination";
-import { WorkspaceReelGridTile } from "@/components/WorkspaceReelGridTile";
+import { LibraryCardGrid, LibraryCardGridSkeleton, LibraryVideoCard } from "@/components/LibraryVideoCard";
 import {
-  QuietCreatorButton,
-  QuietReelCaption,
-  QuietReelMetrics,
-  QuietRemakeActions,
-  QuietRemakeStatusChip,
+  quietReelMetricParts,
   quietRemakeStatusFromState,
 } from "@/components/QuietWorkspaceReelChrome";
 import { useOpenCreatorInApp } from "@/hooks/useOpenCreatorInApp";
-import { WorkspaceReelGridSkeleton } from "@/components/WorkspaceReelGridSkeleton";
 import { WorkspaceReelListRow } from "@/components/WorkspaceReelListRow";
 
 type SortOption =
@@ -397,7 +391,6 @@ export default function Dashboard() {
   const [gridModalReelId, setGridModalReelId] = useState<number | null>(null);
   /** Freeze-safe: only one grid tile mounts an inline player at a time. */
   const [inlinePlayingId, setInlinePlayingId] = useState<number | null>(null);
-  const [quietMoreId, setQuietMoreId] = useState<number | null>(null);
   const { openCreator } = useOpenCreatorInApp("dashboard");
   const viewModeRef = useRef(viewMode);
   viewModeRef.current = viewMode;
@@ -2448,7 +2441,7 @@ export default function Dashboard() {
                 </div>
                 <p className="text-xs text-muted-foreground">Almost there...</p>
               </div>
-              <WorkspaceReelGridSkeleton count={8} />
+              <LibraryCardGridSkeleton count={8} />
             </div>
           )}
 
@@ -2728,9 +2721,8 @@ export default function Dashboard() {
           {/* Grid view  -  same actions as List; full workflow opens in a dialog (Bugs #44-46 tier 3). */}
           {canDisplayJobReels && sortedReels.length > 0 && viewMode === "grid" && (
             <div key="grid" className="space-y-3">
-              <div className={WORKSPACE_REEL_GRID_CLASS}>
+              <LibraryCardGrid>
                 {displayedReels.map((reel, index) => {
-                  const isModalOpen = gridModalReelId === reel.id;
                   const hasTranscription = reel.transcription?.status === "completed";
                   const isNoSpeech = transcriptionIsNoSpeech(reel.transcription);
                   const isSaved = !!savedMap[reel.id];
@@ -2795,132 +2787,56 @@ export default function Dashboard() {
                   });
 
                   return (
-                    <div key={reel.id} ref={setReelRowRef(reel.id)}>
-                      <WorkspaceReelGridTile
-                        chrome="quiet"
-                        className={
-                          isFirstVisitDashboard && index === 0
-                            ? "rounded-xl ring-2 ring-primary/40"
-                            : undefined
-                        }
-                        isActive={isModalOpen}
-                        index={index}
+                    <div
+                      key={reel.id}
+                      ref={setReelRowRef(reel.id)}
+                      className={
+                        isFirstVisitDashboard && index === 0
+                          ? "rounded-xl ring-2 ring-primary/40"
+                          : undefined
+                      }
+                    >
+                      <LibraryVideoCard
+                        platform="instagram"
                         thumbnailUrl={reel.thumbnailUrl}
                         videoUrl={reel.videoUrl}
                         shortcode={reel.shortcode}
                         reelId={reel.id}
-                        duration={reel.duration}
                         reelUrl={reel.reelUrl}
-                        interactiveMedia
+                        caption={reel.caption}
+                        creatorHandle={creatorHandle}
+                        onOpenCreator={() =>
+                          void openCreator({ handle: creatorHandle, platform: "instagram" })
+                        }
+                        metrics={quietReelMetricParts({
+                          views: reel.viewCount,
+                          engagementPct: reel.engagementRate,
+                          reachViews: reel.viewCount,
+                          reachFollowers: followerCount > 0 ? followerCount : null,
+                          postedAt:
+                            reel.postedAt instanceof Date
+                              ? reel.postedAt.toISOString()
+                              : reel.postedAt,
+                        })}
+                        statusLabel={remakeStatusLabel}
+                        remake={oneClickRemake}
+                        saved={isSaved}
+                        onToggleSave={() =>
+                          isFeaturedView
+                            ? toggleSave.mutate({ featuredReelId: reel.id })
+                            : toggleSave.mutate({ reelId: reel.id, jobId: jobId! })
+                        }
+                        onViewDetails={() => setGridModalReelId(reel.id)}
                         inlinePlaying={inlinePlayingId === reel.id}
                         onInlinePlayRequest={() => setInlinePlayingId(reel.id)}
                         onInlinePlayStop={() =>
                           setInlinePlayingId((cur) => (cur === reel.id ? null : cur))
                         }
-                        onMetaClick={() => setGridModalReelId(reel.id)}
-                        statusChip={
-                          remakeStatusLabel ? (
-                            <QuietRemakeStatusChip label={remakeStatusLabel} />
-                          ) : undefined
-                        }
-                        caption={
-                          <QuietReelCaption>
-                            {reel.caption || (
-                              <span className="italic text-[#a8a3b3]">No caption</span>
-                            )}
-                          </QuietReelCaption>
-                        }
-                        creator={
-                          <QuietCreatorButton
-                            handle={creatorHandle}
-                            onOpen={() =>
-                              void openCreator({
-                                handle: creatorHandle,
-                                platform: "instagram",
-                              })
-                            }
-                          />
-                        }
-                        stats={
-                          <QuietReelMetrics
-                            views={reel.viewCount}
-                            engagementPct={reel.engagementRate}
-                            reachViews={reel.viewCount}
-                            reachFollowers={followerCount > 0 ? followerCount : null}
-                            postedAt={
-                              reel.postedAt instanceof Date
-                                ? reel.postedAt.toISOString()
-                                : reel.postedAt
-                            }
-                          />
-                        }
-                        actions={
-                          oneClickRemake ? (
-                            <QuietRemakeActions
-                              remakeLabel={oneClickRemake.label}
-                              remakeDisabled={oneClickRemake.disabled}
-                              remakeBusy={oneClickRemake.loading}
-                              onRemake={() => oneClickRemake.onClick()}
-                              saved={isSaved}
-                              onToggleSave={() =>
-                                isFeaturedView
-                                  ? toggleSave.mutate({ featuredReelId: reel.id })
-                                  : toggleSave.mutate({ reelId: reel.id, jobId: jobId! })
-                              }
-                              moreOpen={quietMoreId === reel.id}
-                              onToggleMore={() =>
-                                setQuietMoreId((cur) => (cur === reel.id ? null : reel.id))
-                              }
-                              moreMenu={
-                                quietMoreId === reel.id ? (
-                                  <div className="absolute bottom-11 right-0 z-30 grid min-w-[160px] gap-0.5 rounded-[12px] border border-[#2b2739] bg-[#1d1b24] p-1.5 shadow-[0_18px_50px_rgba(0,0,0,.45)]">
-                                    <button
-                                      type="button"
-                                      className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-white/[0.06] hover:text-white"
-                                      onClick={() => {
-                                        setQuietMoreId(null);
-                                        setGridModalReelId(reel.id);
-                                      }}
-                                    >
-                                      View details
-                                    </button>
-                                    {creatorHandle ? (
-                                      <button
-                                        type="button"
-                                        className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-white/[0.06] hover:text-white"
-                                        onClick={() => {
-                                          setQuietMoreId(null);
-                                          void openCreator({
-                                            handle: creatorHandle,
-                                            platform: "instagram",
-                                          });
-                                        }}
-                                      >
-                                        Open creator
-                                      </button>
-                                    ) : null}
-                                    {reel.reelUrl ? (
-                                      <a
-                                        href={reel.reelUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-white/[0.06] hover:text-white"
-                                        onClick={() => setQuietMoreId(null)}
-                                      >
-                                        Open source
-                                      </a>
-                                    ) : null}
-                                  </div>
-                                ) : null
-                              }
-                            />
-                          ) : null
-                        }
                       />
                     </div>
                   );
                 })}
-              </div>
+              </LibraryCardGrid>
             </div>
           )}
 
