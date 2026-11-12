@@ -18,6 +18,8 @@ import {
 import {
   claimInlineRecommendation,
   finishInlineRecommendation,
+  reopenFailedRecommendation,
+  RECOMMENDATION_MAX_MANUAL_RETRIES,
   type RecommendationPayload,
 } from "../personalization/jobs";
 
@@ -211,6 +213,29 @@ describe.skipIf(!source)("durable claim ownership", () => {
     const confirmed = await claimInlineRecommendation(nextKey, payload);
     expect(confirmed.owned).toBe(true);
     expect(await rows()).toHaveLength(2);
+  });
+
+  it("Try again reopens a failed inline job a limited number of times, never a success", async () => {
+    await reset();
+    const usage = { model: null, inputTokens: 0, outputTokens: 0, estimatedUsd: 0 };
+    const key = "personalization_recommendations:profile-1:goal:v1:evidence:retry";
+    const first = await claimInlineRecommendation(key, payload);
+    await finishInlineRecommendation(key, first.token, payload, { status: "failed", kind: "invalid_output", usage });
+    expect((await claimInlineRecommendation(key, payload)).owned).toBe(false);
+
+    for (let i = 0; i < RECOMMENDATION_MAX_MANUAL_RETRIES; i++) {
+      expect(await reopenFailedRecommendation(key)).toBe(true);
+      const again = await claimInlineRecommendation(key, payload);
+      expect(again.owned).toBe(true);
+      await finishInlineRecommendation(key, again.token, payload, { status: "failed", kind: "invalid_output", usage });
+    }
+    // Cap reached: no more model calls for the same answers.
+    expect(await reopenFailedRecommendation(key)).toBe(false);
+
+    const okKey = "personalization_recommendations:profile-1:goal:v1:evidence:retry-ok";
+    const ok = await claimInlineRecommendation(okKey, payload);
+    await finishInlineRecommendation(okKey, ok.token, payload, { status: "already_confirmed" });
+    expect(await reopenFailedRecommendation(okKey)).toBe(false);
   });
 
   it("reclaims an expired inline lease once and blocks the old owner", async () => {

@@ -417,7 +417,8 @@ export default function OnboardingV2Flow() {
     recSeenAt.current = latestRecAt.current;
     setRecWaitExpired(false);
     setRequested(r => ({ ...r, [step4]: requestKey }));
-    requestRecs.mutate({ step: step4 });
+    // After "Try again", ask the server to re-run a failed step for the same answers.
+    requestRecs.mutate({ step: step4, retry: suggestionRetry > 0 });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     step4,

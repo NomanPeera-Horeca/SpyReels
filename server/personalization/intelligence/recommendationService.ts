@@ -773,7 +773,7 @@ export function appendSuggestionsEnabled(): boolean {
   return process.env.ONBOARDING_APPEND_SUGGESTIONS === "on";
 }
 
-export const APPEND_CAP: Partial<Record<PersonalizationItemKind, number>> = { audience: 5, pillar: 7 };
+export const APPEND_CAP: Partial<Record<PersonalizationItemKind, number>> = { audience: 5, pillar: 5 };
 
 const NEAR_DUP_STOP = new Set(
   "a an and are as at be by for from how in is it its of on or that the this to with your you who their them they".split(" ")
