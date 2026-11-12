@@ -51,51 +51,11 @@
   margin-top: var(--sr-space-1);
 }
 
-.hint {
-  margin: var(--sr-space-1) 0 0;
-  color: var(--sr-color-text-tertiary);
-  font-size: var(--sr-type-product-caption-size);
-  line-height: var(--sr-type-product-caption-line);
-}
 
-/* Tabs (34:4): text tabs with a brand underline on the active one. */
-.tabs {
-  display: flex;
-  gap: var(--sr-space-1);
-  margin-bottom: var(--sr-space-6);
-  overflow-x: auto;
-  border-bottom: var(--sr-shape-border-default-width, 1px) solid var(--sr-color-border-subtle);
-}
 
-.tab {
-  flex: 0 0 auto;
-  padding: var(--sr-space-2) var(--sr-space-3);
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: transparent;
-  color: var(--sr-color-text-secondary);
-  font: inherit;
-  font-size: var(--sr-type-product-label-size);
-  font-weight: var(--sr-type-product-label-weight);
-  line-height: var(--sr-type-product-label-line);
-  white-space: nowrap;
-  cursor: pointer;
-}
 
-.tab:hover {
-  color: var(--sr-color-text-primary);
-}
 
-.tab:focus-visible {
-  outline: none;
-  border-radius: var(--sr-radius-8);
-  box-shadow: var(--sr-elevation-focus-neutral-action);
-}
 
-.tabActive {
-  border-bottom-color: var(--sr-color-brand-primary);
-  color: var(--sr-color-text-brand);
-}
 
 /* Section headings */
 .sectionHead {
@@ -124,17 +84,7 @@
   line-height: var(--sr-type-product-heading-4-line);
 }
 
-.h3NoGap {
-  margin: 0;
-  color: var(--sr-color-text-primary);
-  font-size: var(--sr-type-product-heading-4-size);
-  font-weight: var(--sr-type-product-heading-4-weight);
-  line-height: var(--sr-type-product-heading-4-line);
-}
 
-.dayBlockFirst {
-  margin-bottom: var(--sr-space-6);
-}
 
 .status {
   color: var(--sr-color-text-secondary);
@@ -244,62 +194,12 @@
   margin-top: var(--sr-space-8);
 }
 
-/* Explore search */
-.searchRow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sr-space-2);
-  margin-top: var(--sr-space-4);
-}
 
-.searchInput {
-  flex: 1 1 16rem;
-  min-width: 0;
-  height: 44px;
-  box-sizing: border-box;
-  padding: 0 var(--sr-space-3);
-  border: var(--sr-shape-border-default-width, 1px) solid var(--sr-color-border-control);
-  border-radius: var(--sr-shape-input-radius);
-  background: var(--sr-color-surface-default);
-  color: var(--sr-color-text-primary);
-  font: inherit;
-  font-size: var(--sr-type-product-body-small-size);
-}
 
-.searchInput::placeholder {
-  color: var(--sr-color-text-tertiary);
-}
 
-.searchInput:focus-visible {
-  outline: none;
-  border-color: var(--sr-color-focus-border);
-  box-shadow: var(--sr-elevation-focus-neutral-action);
-}
 
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sr-space-2);
-  margin-top: var(--sr-space-3);
-}
 
-.chip {
-  padding: var(--sr-space-1) var(--sr-space-3);
-  border: var(--sr-shape-border-default-width, 1px) solid var(--sr-color-border-default);
-  border-radius: 999px;
-  background: var(--sr-color-surface-default);
-  color: var(--sr-color-text-secondary);
-  font: inherit;
-  font-size: var(--sr-type-product-caption-size);
-  font-weight: var(--sr-font-weight-medium);
-  line-height: var(--sr-type-product-caption-line);
-  cursor: pointer;
-}
 
-.chip:hover {
-  border-color: var(--sr-color-brand-primary);
-  color: var(--sr-color-text-brand);
-}
 
 .spin {
   animation: vpSpin 0.9s linear infinite;

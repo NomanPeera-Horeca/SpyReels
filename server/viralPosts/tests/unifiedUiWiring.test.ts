@@ -40,16 +40,19 @@ describe("Viral Posts unified UI wiring", () => {
     expect(page).not.toContain('tab === "explore"');
   });
 
-  it("Legacy Explore source file wires browse when not searching", () => {
+  it("Explore and Saved tabs are dropped (owner decision, Nov 2026); the server search stays for the rebuild", () => {
     const legacy = readFileSync(
       resolve(process.cwd(), "client/src/pages/ViralPostsLegacy.tsx"),
       "utf8"
     );
-    expect(legacy).toContain("viralPosts.browse.useQuery");
-    expect(legacy).toContain("viralPosts.search.useQuery");
-    expect(legacy).toContain("usingExploreSearch");
-    expect(legacy).toContain("clearExploreSearch");
-    expect(legacy).toContain("applyExplorePostFilters");
+    expect(legacy).not.toContain("viralPosts.browse.useQuery");
+    expect(legacy).not.toContain("viralPosts.search.useQuery");
+    expect(legacy).not.toContain("viralPosts.getSaved.useQuery");
+    expect(legacy).not.toContain('role="tablist"');
+    expect(legacy).toContain('setLocation("/saved")');
+    const router = readFileSync(resolve(process.cwd(), "server/viralPosts/router.ts"), "utf8");
+    expect(router).toContain("browse: viralPostsProcedure");
+    expect(router).toContain("search: viralPostsProcedure");
   });
 
   it("browse and search results share Explore filters including YouTube", () => {

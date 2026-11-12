@@ -19,10 +19,18 @@ import { isDurableReelVideoUrl, scheduleReelVideoMirror } from "../reelVideoR2";
  */
 export async function ensureViralMirrorReel(
   candidate: ViralPostCandidate,
-  workspaceId: string
+  workspaceId: string,
+  opts: {
+    /**
+     * Saves only: also mirror YouTube, as Collected Reels does, so a starred
+     * Short shows in Saved Reels (shortcode = video id, reelUrl = YouTube link).
+     * The feed keeps skipping YouTube (no inline file playback).
+     */
+    allowYouTube?: boolean;
+  } = {}
 ): Promise<number | null> {
   const platform = (candidate.platform || "instagram").toLowerCase();
-  if (platform === "youtube") return null;
+  if (platform === "youtube" && !opts.allowYouTube) return null;
 
   const shortcode = (candidate.sourceId || "").trim();
   if (!shortcode) return null;
@@ -68,7 +76,9 @@ export async function ensureViralMirrorReel(
 
   const reelUrl =
     (candidate.sourceUrl || "").trim() ||
-    `https://www.instagram.com/reel/${shortcode}/`;
+    (platform === "youtube"
+      ? `https://www.youtube.com/shorts/${shortcode}`
+      : `https://www.instagram.com/reel/${shortcode}/`);
   const videoUrl = (candidate.videoUrl || "").trim() || "";
   const thumb =
     (candidate.thumbnailUrl || candidate.sourceThumbnailUrl || "").trim() || "";
@@ -107,6 +117,8 @@ function scheduleBackgroundVideoMirror(
   reelId: number,
   candidate: Pick<ViralPostCandidate, "sourceId" | "videoUrl" | "platform">
 ): void {
+  // YouTube has no downloadable file to mirror; it plays in the YouTube embed.
+  if ((candidate.platform || "").toLowerCase() === "youtube") return;
   const src = (candidate.videoUrl || "").trim();
   if (!src) return;
   if (isDurableReelVideoUrl(src)) return;

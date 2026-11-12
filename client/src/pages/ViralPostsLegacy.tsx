@@ -1,12 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useLocation, useSearch } from "wouter";
+import { useLocation } from "wouter";
 import { toast } from "sonner";
 import { TRPCClientError } from "@trpc/client";
 import { Loader2 } from "lucide-react";
 import { RemakeHowSpyReelsWritesDialog } from "@/components/RemakeHowSpyReelsWritesDialog";
-import { ExploreSearchLoading } from "@/components/viral-posts/ExploreSearchLoading";
-import { SavedPostFilters } from "@/components/viral-posts/SavedPostFilters";
-import { ViralPostFilters } from "@/components/viral-posts/ViralPostFilters";
 import { ViralPostGrid } from "@/components/viral-posts/ViralPostGrid";
 import { ViralPostDetailsDrawer } from "@/components/viral-posts/ViralPostDetailsDrawer";
 import { PrimaryButton, SecondaryButton } from "@/design-system/core";
@@ -23,33 +20,14 @@ import {
   normalizeCreatorHandle,
   pathForCreatorResearchJob,
 } from "@/lib/openCreatorInApp";
-import {
-  EXPLORE_SUGGESTED_SEARCHES,
-} from "@/lib/viralPosts/viralPostsService";
 import { browserTimezone, formatFeedLocalDate, localDateString } from "@/lib/viralPosts/format";
-import type {
-  ExploreAdvancedFilters,
-  ExploreQuickFilter,
-  SavedPostsFilter,
-  ViralPost,
-  ViralPostsTab,
-} from "@/lib/viralPosts/types";
-import { DEFAULT_EXPLORE_FILTERS, normalizeExploreFilters } from "@/lib/viralPosts/types";
+import type { ViralPost, ViralPostsTab } from "@/lib/viralPosts/types";
 import type { ViralDailyFeedResponse } from "@shared/viralPosts";
-import {
-  applyExplorePostFilters,
-  exploreEmptyCopy,
-} from "@shared/viralPostsExploreFilters";
 import { isViralPostsV1Platform } from "@shared/viralPosts";
 import {
   invalidateViralPostsSaveQueries,
   patchSavedFlagInPosts,
 } from "@/lib/viralPosts/savedState";
-
-function parseTab(raw: string | null): ViralPostsTab {
-  if (raw === "explore" || raw === "saved" || raw === "for-you") return raw;
-  return "for-you";
-}
 
 function filterVisiblePosts(
   items: ViralPost[],
@@ -65,25 +43,15 @@ function filterVisiblePosts(
 }
 
 export default function ViralPosts() {
-  const searchString = useSearch();
   const [, setLocation] = useLocation();
   const { resolvedTheme } = useTheme();
-  const tab = useMemo(
-    () => parseTab(new URLSearchParams(searchString).get("tab")),
-    [searchString]
-  );
+  // Explore and Saved were dropped (Nov 2026): Viral Posts is For You only.
+  // Saved posts live in Saved Reels; Search comes back once it is rebuilt.
+  const tab: ViralPostsTab = "for-you";
 
   const timezone = useMemo(() => browserTimezone(), []);
   const localDate = useMemo(() => localDateString(), []);
 
-  const [exploreQuery, setExploreQuery] = useState("");
-  const [exploreQuick, setExploreQuick] = useState<ExploreQuickFilter>("all");
-  const [exploreFilters, setExploreFiltersRaw] = useState<ExploreAdvancedFilters>(
-    DEFAULT_EXPLORE_FILTERS
-  );
-  const setExploreFilters = (value: ExploreAdvancedFilters) =>
-    setExploreFiltersRaw(normalizeExploreFilters(value));
-  const [savedFilter, setSavedFilter] = useState<SavedPostsFilter>("all");
   const [bannerVisible, setBannerVisible] = useState(true);
 
   const [whyPost, setWhyPost] = useState<ViralPost | null>(null);
@@ -181,39 +149,6 @@ export default function ViralPosts() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, localDate, timezone]);
 
-  // Explore: debounce submitted query; changing key cancels stale React Query fetches
-  const [exploreSubmitted, setExploreSubmitted] = useState("");
-  const [exploreDebounceMs] = useState(400);
-  useEffect(() => {
-    const q = exploreQuery.trim();
-    if (q.length < 3) {
-      setExploreSubmitted("");
-      return;
-    }
-    const t = window.setTimeout(() => setExploreSubmitted(q), exploreDebounceMs);
-    return () => window.clearTimeout(t);
-  }, [exploreQuery, exploreDebounceMs]);
-
-  const searchQuery = trpc.viralPosts.search.useQuery(
-    {
-      query: exploreSubmitted,
-    },
-    {
-      enabled: tab === "explore" && exploreSubmitted.trim().length >= 3,
-      staleTime: 60_000,
-    }
-  );
-
-  const browseQuery = trpc.viralPosts.browse.useQuery(undefined, {
-    enabled: tab === "explore",
-    staleTime: 60_000,
-  });
-
-  const savedQuery = trpc.viralPosts.getSaved.useQuery(undefined, {
-    enabled: tab === "saved",
-    staleTime: 30_000,
-  });
-
   const saveMutation = trpc.viralPosts.save.useMutation({
     onError: (err) => toast.error(err.message || "Could not save"),
   });
@@ -222,13 +157,6 @@ export default function ViralPosts() {
   });
   const feedbackMutation = trpc.viralPosts.feedback.useMutation();
   const hideMutation = trpc.viralPosts.hideCreator.useMutation();
-
-  const setTab = useCallback(
-    (next: ViralPostsTab) => {
-      setLocation(`/viral-posts?tab=${next}`, { replace: true });
-    },
-    [setLocation]
-  );
 
   const dailyPosts = useMemo(
     () => filterVisiblePosts(feed?.items ?? [], hiddenCreatorKeys),
@@ -255,68 +183,6 @@ export default function ViralPosts() {
     fallbackPosts.length > 0 &&
     (feed?.status === "refreshing" || feed?.status === "error" || feedError != null);
   const displayedDailyPosts = usingFallbackFeed ? fallbackPosts : dailyPosts;
-
-  const usingExploreSearch = exploreSubmitted.trim().length >= 3;
-
-  const explorePosts = useMemo(
-    () =>
-      applyExplorePostFilters({
-        posts: usingExploreSearch
-          ? searchQuery.data?.items ?? []
-          : browseQuery.data?.items ?? [],
-        platforms: exploreFilters.platforms,
-        postedWithin: exploreFilters.postedWithin,
-        quickFilter: exploreQuick,
-        hiddenCreatorKeys,
-      }),
-    [
-      usingExploreSearch,
-      searchQuery.data?.items,
-      browseQuery.data?.items,
-      exploreFilters.platforms,
-      exploreFilters.postedWithin,
-      exploreQuick,
-      hiddenCreatorKeys,
-    ]
-  );
-  const exploreEmpty = exploreEmptyCopy({
-    platforms: exploreFilters.platforms,
-    usingSearch: usingExploreSearch,
-    rawResultCount: usingExploreSearch
-      ? searchQuery.data?.items.length ?? 0
-      : browseQuery.data?.items.length ?? 0,
-    quickFilter: exploreQuick,
-  });
-
-  const exploreSearching =
-    tab === "explore" &&
-    usingExploreSearch &&
-    searchQuery.isFetching &&
-    explorePosts.length === 0;
-
-  const noExplorePlatformSelected =
-    !exploreFilters.platforms.instagram && !exploreFilters.platforms.tiktok;
-
-  const exploreBrowseLoading =
-    tab === "explore" &&
-    !usingExploreSearch &&
-    browseQuery.isLoading &&
-    !noExplorePlatformSelected;
-
-  const savedPosts = useMemo(() => {
-    let items = (savedQuery.data?.items ?? []).filter((p) =>
-      isViralPostsV1Platform(p.platform)
-    );
-    items = items.filter((p) => {
-      const key = (p.creatorId || p.creatorHandle || "")
-        .toLowerCase()
-        .replace(/^@/, "");
-      return !key || !hiddenCreatorKeys.has(key);
-    });
-    if (savedFilter === "remade") items = items.filter((p) => p.remade);
-    if (savedFilter === "unused") items = items.filter((p) => !p.remade);
-    return items;
-  }, [savedQuery.data?.items, savedFilter, hiddenCreatorKeys]);
 
   const patchHistoryItems = useCallback(
     (updater: (items: ViralPost[]) => ViralPost[]) => {
@@ -657,16 +523,6 @@ export default function ViralPosts() {
     onHideCreator: (post: ViralPost) => void handleHideCreator(post),
   };
 
-  const runExploreSearch = (q?: string) => {
-    const next = (q ?? exploreQuery).trim();
-    setExploreQuery(next);
-    if (next.length >= 3) setExploreSubmitted(next);
-  };
-
-  const clearExploreSearch = () => {
-    setExploreQuery("");
-    setExploreSubmitted("");
-  };
 
   const feedUpdatedToday =
     feed?.status === "ready" &&
@@ -689,27 +545,6 @@ export default function ViralPosts() {
           Adjust recommendations
         </SecondaryButton>
       </header>
-
-      <div role="tablist" className={vp.tabs}>
-        {(
-          [
-            ["for-you", "For You"],
-            ["explore", "Explore"],
-            ["saved", "Saved"],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={tab === id}
-            className={cn(vp.tab, tab === id && vp.tabActive)}
-            onClick={() => setTab(id)}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
 
       {tab === "for-you" ? (
         <section>
@@ -777,9 +612,6 @@ export default function ViralPosts() {
                 <SecondaryButton type="button" onClick={() => setAdjustOpen(true)}>
                   Adjust recommendations
                 </SecondaryButton>
-                <SecondaryButton type="button" onClick={() => setTab("explore")}>
-                  Explore more posts
-                </SecondaryButton>
               </div>
             </div>
           ) : (
@@ -791,7 +623,7 @@ export default function ViralPosts() {
                 posts={displayedDailyPosts}
                 loading={feedLoading}
                 emptyTitle="We couldn't find enough strong matches yet."
-                emptyDescription="Try adjusting recommendations or explore more posts."
+                emptyDescription="Try adjusting recommendations."
                 {...cardHandlers}
               />
             </div>
@@ -839,167 +671,15 @@ export default function ViralPosts() {
             <div className={cn(vp.state, vp.dayBlock)}>
               <h3 className={vp.stateTitle}>You've seen today's best matches</h3>
               <p className={vp.stateText}>
-                Explore more Instagram and TikTok posts when you want more options.
+                New matches arrive every day. Your saved posts are in Saved Reels.
               </p>
               <div className={vp.actionsRow}>
-                <PrimaryButton type="button" trailingIcon={false} onClick={() => setTab("explore")}>
-                  Explore more posts
-                </PrimaryButton>
+                <SecondaryButton type="button" onClick={() => setLocation("/saved")}>
+                  Open Saved Reels
+                </SecondaryButton>
               </div>
             </div>
           ) : null}
-        </section>
-      ) : null}
-
-      {tab === "explore" ? (
-        <section>
-          <div className={vp.dayBlockFirst}>
-            <h2 className={vp.h2}>Explore viral posts</h2>
-            <p className={vp.subtitle}>
-              Browse fresh posts from your niche, or search for a topic, creator,
-              or competitor.
-            </p>
-            <div className={vp.searchRow}>
-              <input
-                value={exploreQuery}
-                onChange={(e) => {
-                  const next = e.target.value;
-                  setExploreQuery(next);
-                  if (next.trim().length < 3 && usingExploreSearch) {
-                    setExploreSubmitted("");
-                  }
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") runExploreSearch();
-                }}
-                placeholder="Search a topic, creator, or competitor"
-                disabled={exploreSearching}
-                aria-label="Search a topic, creator, or competitor"
-                className={vp.searchInput}
-              />
-              {usingExploreSearch ? (
-                <SecondaryButton type="button" onClick={clearExploreSearch}>
-                  Clear
-                </SecondaryButton>
-              ) : null}
-              <PrimaryButton
-                type="button"
-                trailingIcon={false}
-                onClick={() => runExploreSearch()}
-                disabled={exploreSearching || exploreQuery.trim().length < 3}
-              >
-                {exploreSearching ? "Searching" : "Search"}
-              </PrimaryButton>
-            </div>
-            <div className={vp.chips}>
-              {EXPLORE_SUGGESTED_SEARCHES.map((chip) => (
-                <button
-                  key={chip.label}
-                  type="button"
-                  className={vp.chip}
-                  onClick={() => runExploreSearch(chip.query)}
-                >
-                  {chip.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className={vp.sectionHead}>
-            <div>
-              <h3 className={vp.h3NoGap}>
-                {usingExploreSearch
-                  ? `Search results for "${exploreSubmitted.trim()}"`
-                  : browseQuery.data?.niche
-                    ? `Popular in ${browseQuery.data.niche}`
-                    : "Popular posts for you"}
-              </h3>
-              {!usingExploreSearch && browseQuery.data?.poolRefreshStarted ? (
-                <p className={vp.hint}>
-                  Refreshing your niche pool in the background for more options.
-                </p>
-              ) : null}
-            </div>
-            <ViralPostFilters
-              quickFilter={exploreQuick}
-              onQuickFilterChange={setExploreQuick}
-              filters={exploreFilters}
-              onFiltersChange={setExploreFilters}
-              onApply={() => {
-                toast.success("Filters applied");
-              }}
-              onReset={() => {
-                setExploreFilters(DEFAULT_EXPLORE_FILTERS);
-                setExploreQuick("all");
-                toast.message("Filters cleared");
-              }}
-            />
-          </div>
-
-          {browseQuery.error && !usingExploreSearch ? (
-            <div className={vp.state}>
-              <h3 className={vp.stateTitle}>We couldn't load Explore</h3>
-              <p className={vp.stateText}>
-                {browseQuery.error.message || "Please try again."}
-              </p>
-              <div className={vp.actionsRow}>
-                <PrimaryButton type="button" trailingIcon={false} onClick={() => void browseQuery.refetch()}>
-                  Try again
-                </PrimaryButton>
-              </div>
-            </div>
-          ) : searchQuery.error && usingExploreSearch ? (
-            <div className={vp.state}>
-              <h3 className={vp.stateTitle}>Search failed</h3>
-              <p className={vp.stateText}>{searchQuery.error.message}</p>
-              <div className={vp.actionsRow}>
-                <PrimaryButton type="button" trailingIcon={false} onClick={() => void searchQuery.refetch()}>
-                  Try again
-                </PrimaryButton>
-              </div>
-            </div>
-          ) : exploreSearching ? (
-            <ExploreSearchLoading query={exploreSubmitted} />
-          ) : (
-            <ViralPostGrid
-              posts={explorePosts}
-              loading={exploreBrowseLoading}
-              emptyTitle={exploreEmpty.title}
-              emptyDescription={exploreEmpty.description}
-              {...cardHandlers}
-            />
-          )}
-        </section>
-      ) : null}
-
-      {tab === "saved" ? (
-        <section>
-          <div className={vp.sectionHead}>
-            <div>
-              <h2 className={vp.h2}>Saved posts</h2>
-              <p className={vp.muted}>
-                Keep promising ideas until you are ready to remake them.
-              </p>
-            </div>
-          </div>
-          <SavedPostFilters value={savedFilter} onChange={setSavedFilter} />
-          <ViralPostGrid
-            posts={savedPosts}
-            loading={savedQuery.isLoading}
-            emptyTitle={
-              savedFilter === "remade"
-                ? "No remade posts yet"
-                : savedFilter === "unused"
-                  ? "No posts matching filters"
-                  : "No saved posts yet"
-            }
-            emptyDescription={
-              savedFilter === "all"
-                ? "Save a post from For You or Explore and it will appear here."
-                : "Try another saved filter."
-            }
-            {...cardHandlers}
-          />
         </section>
       ) : null}
 

@@ -281,3 +281,10 @@
   border-radius: var(--sr-radius-8);
   background: var(--sr-color-surface-hover);
 }
+
+/* Grid of Result Cards (Home rhythm): as many 16rem-or-wider columns as fit. */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+  gap: var(--sr-space-4);
+}
