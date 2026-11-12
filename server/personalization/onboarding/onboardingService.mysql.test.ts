@@ -538,6 +538,29 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
     expect(finalTopics.find(t => t.id === food.id)?.status).toBe("suggested");
   });
 
+  it("the duplicate check reads each live pillar's sub-topics, without dismissed ones", async () => {
+    const { profileId } = await confirmProfile(db, A, preview("test.tech"));
+    const { itemId } = await addItem(db, A, "pillar", {
+      title: "Restaurant Tech Adoption",
+      description: "Tools owners use",
+      viewSharePercent: null,
+    });
+    await saveGeneratedSubtopics(db, {
+      workspaceId: WS_A,
+      socialProfileId: profileId,
+      groups: [{
+        title: "Restaurant Tech Adoption",
+        labels: ["SEO for restaurants", "AI phone ordering", "Email and text campaigns"],
+        pillarHash: "pillar-hash",
+      }],
+    });
+    const state = await loadOnboardingState(db, A);
+    const seo = state.pillarSubtopics.find(t => t.pillarItemId === itemId && t.label === "SEO for restaurants")!;
+    await dismissPillarSubtopic(db, { workspaceId: WS_A, socialProfileId: profileId, subtopicId: seo.id });
+    const byPillar = await createRecommendationStore(db).loadPillarSubtopics!(profileId);
+    expect(byPillar.get(itemId)?.sort()).toEqual(["AI phone ordering", "Email and text campaigns"]);
+  });
+
   it("a changed pillar title keeps old topics as history, lets the new title generate, and keeps dismissals for the old title", async () => {
     const { profileId } = await confirmProfile(db, A, preview("test.kitchen"));
     const { itemId } = await addItem(db, A, "pillar", {

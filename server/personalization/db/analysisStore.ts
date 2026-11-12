@@ -42,6 +42,7 @@ import {
   type RunSummaryWithKey,
 } from "../analysis/contract";
 import {
+  listProfileSubtopics,
   saveGeneratedSubtopics,
 } from "../subtopics";
 import type {
@@ -610,6 +611,21 @@ export function createRecommendationStore(db: Db): RecommendationStore {
         socialProfileId: profileId,
         groups,
       });
+    },
+
+    async loadPillarSubtopics(profileId) {
+      const byPillar = new Map<string, string[]>();
+      const [owner] = await db
+        .select({ workspaceId: socialProfiles.workspaceId })
+        .from(socialProfiles)
+        .where(eq(socialProfiles.id, profileId))
+        .limit(1);
+      if (!owner) return byPillar;
+      for (const row of await listProfileSubtopics(db, profileId, owner.workspaceId)) {
+        if (row.status === "dismissed") continue;
+        byPillar.set(row.pillarItemId, [...(byPillar.get(row.pillarItemId) ?? []), row.label]);
+      }
+      return byPillar;
     },
   };
 }

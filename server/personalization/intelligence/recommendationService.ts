@@ -154,6 +154,8 @@ export interface RecommendationStore {
     profileId: string,
     groups: { title: string; labels: string[]; pillarHash: string }[]
   ): Promise<void>;
+  /** Sub-topic labels (not dismissed) of the profile's pillars, by pillar item id. */
+  loadPillarSubtopics?(profileId: string): Promise<Map<string, string[]>>;
 }
 
 export type RecommendationResult =
@@ -719,7 +721,19 @@ export async function generateRecommendations(
         const row = items.find(i => i.id === id);
         return row?.basedOnInputsHash !== inputsHash;
       });
-  const inserts = append ? appendedInserts(kind, items, plan.insert) : plan.insert;
+  const inserts = append
+    ? appendedInserts(
+        kind,
+        items,
+        plan.insert,
+        kind === "pillar"
+          ? {
+              existing: await loadPillarTopicsSafely(deps.store, profile.id),
+              incoming: new Map(subtopicGroups.map(g => [g.title, g.labels])),
+            }
+          : undefined
+      )
+    : plan.insert;
   const applied = await deps.store.applyGeneratedSuggestions(profile.id, {
     kind,
     guard: { type: "inputs_unchanged", expected: upstream },
@@ -811,28 +825,71 @@ export function isNearDuplicate(a: string, b: string): boolean {
   return shared / Math.min(wa.size, wb.size) >= 0.75;
 }
 
+/** Pillars whose sub-topics mostly match are the same pillar under another name. */
+const SAME_PILLAR_SHARED_TOPICS = 2;
+
+/**
+ * Two pillars are the same when their titles are near-duplicates, or when at
+ * least two sub-topics of one are near-duplicates of the other's ("Restaurant
+ * Tech Adoption" / "Restaurant Tech Tools", both with SEO, email and text
+ * campaigns, AI phone ordering). One shared sub-topic is normal overlap. Pure;
+ * exported for tests.
+ */
+export function isSameSuggestion(
+  a: { title: string; topics: readonly string[] },
+  b: { title: string; topics: readonly string[] }
+): boolean {
+  if (isNearDuplicate(a.title, b.title)) return true;
+  let shared = 0;
+  for (const t of b.topics) if (a.topics.some(x => isNearDuplicate(x, t))) shared += 1;
+  return shared >= SAME_PILLAR_SHARED_TOPICS;
+}
+
+export type PillarTopics = {
+  /** Live pillars' sub-topics, by pillar item id. */
+  existing: ReadonlyMap<string, readonly string[]>;
+  /** New pillars' sub-topics, by title. */
+  incoming: ReadonlyMap<string, readonly string[]>;
+};
+
 /**
  * New suggestions that fit after the live ones (suggested or confirmed):
  * near-duplicates of what is already there (or of each other) are skipped,
- * then capped at APPEND_CAP. Pure; exported for tests.
+ * then capped at APPEND_CAP. For pillars, sub-topics are compared too
+ * (isSameSuggestion). Pure; exported for tests.
  */
 export function appendedInserts<T extends { payload?: unknown }>(
   kind: PersonalizationItemKind,
   items: readonly ItemRecord[],
-  inserts: readonly T[]
+  inserts: readonly T[],
+  topics?: PillarTopics
 ): T[] {
   const cap = APPEND_CAP[kind];
   if (cap === undefined) return [...inserts];
   const liveItems = items.filter(i => i.kind === kind && (i.status === "suggested" || i.status === "confirmed"));
-  const seen = liveItems.map(i => visibleText(i.payload));
+  const seen = liveItems.map(i => ({ title: visibleText(i.payload), topics: topics?.existing.get(i.id) ?? [] }));
   const fresh: T[] = [];
   for (const ins of inserts) {
-    const text = visibleText(ins.payload);
-    if (text && seen.some(t => isNearDuplicate(t, text))) continue;
-    seen.push(text);
+    const title = visibleText(ins.payload);
+    const candidate = { title, topics: topics?.incoming.get(title) ?? [] };
+    if (title && seen.some(s => isSameSuggestion(s, candidate))) continue;
+    seen.push(candidate);
     fresh.push(ins);
   }
   return fresh.slice(0, Math.max(0, cap - liveItems.length));
+}
+
+/** Existing pillars' sub-topics, or none when they cannot be read (titles are still compared). Never throws. */
+async function loadPillarTopicsSafely(
+  store: { loadPillarSubtopics?(profileId: string): Promise<Map<string, string[]>> },
+  profileId: string
+): Promise<Map<string, string[]>> {
+  try {
+    return (await store.loadPillarSubtopics?.(profileId)) ?? new Map();
+  } catch (err) {
+    console.warn("[personalization] pillar topics not read for duplicate check", subtopicSaveFailureFields(err));
+    return new Map();
+  }
 }
 
 const EMPTY_USAGE: LlmUsage = {
