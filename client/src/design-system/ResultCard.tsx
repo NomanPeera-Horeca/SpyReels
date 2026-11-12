@@ -29,7 +29,9 @@ export type ResultCardSignal =
    * New "↗ N×" pill. Only for a server-validated baseline (creator usual
    * views, comparison window, enough data). Never pass a guessed number.
    */
-  | { kind: "performance"; label: string; description: string };
+  | { kind: "performance"; label: string; description: string }
+  /** Where a saved video is in the remake flow ("Script ready"), Badge / Neutral look. */
+  | { kind: "status"; label: string };
 
 export type ResultCardMenuItem = { label: string; href?: string; onSelect?: () => void };
 
@@ -60,10 +62,14 @@ export type ResultCardProps = {
     more: string;
   };
   onPlay: () => void;
+  /** False hides Play (a video that is still loading or failed). Default true. */
+  playable?: boolean;
   /** Omit to hide Expand (mobile). */
   onExpand?: () => void;
   onRemake: () => void;
   remakeBusy?: boolean;
+  /** Remake cannot start for this video (e.g. no speech to rewrite). */
+  remakeDisabled?: boolean;
   saved: boolean;
   /** Absent: no save button (Result Card / Compact, e.g. the creator's own videos). */
   onToggleSave?: () => void;
@@ -95,9 +101,11 @@ export function ResultCard({
   signal = null,
   labels,
   onPlay,
+  playable = true,
   onExpand,
   onRemake,
   remakeBusy = false,
+  remakeDisabled = false,
   saved,
   onToggleSave,
   menu,
@@ -162,6 +170,11 @@ export function ResultCard({
           {platformLabel}
         </span>
         {!inlineMedia && signal?.kind === "viral_score" ? <span className={styles.topEnd}>{signal.node}</span> : null}
+        {!inlineMedia && signal?.kind === "status" ? (
+          <span className={styles.topEnd}>
+            <span className={styles.signal} data-testid="result-card-status">{signal.label}</span>
+          </span>
+        ) : null}
         {!inlineMedia && signal?.kind === "performance" ? (
           <button
             type="button"
@@ -175,7 +188,7 @@ export function ResultCard({
             </span>
           </button>
         ) : null}
-        {!inlineMedia ? (
+        {!inlineMedia && playable ? (
           <button type="button" className={[styles.iconButton, styles.play].join(" ")} onClick={onPlay} aria-label={labels.play}>
             <IconPlay />
           </button>
@@ -214,7 +227,7 @@ export function ResultCard({
             type="button"
             className={styles.remake}
             onClick={onRemake}
-            disabled={remakeBusy}
+            disabled={remakeBusy || remakeDisabled}
             aria-busy={remakeBusy}
           >
             {labels.remake}
@@ -331,3 +344,6 @@ export function ResultCardSkeleton({
     </div>
   );
 }
+
+/** Class for a grid of Result Cards (same columns everywhere). */
+export const resultCardGridClass = styles.grid;

@@ -61,22 +61,22 @@ import {
   formatPostedTime,
 } from "@/components/InlineWorkflow";
 import { ReelGridThumbnail } from "@/components/ReelGridThumbnail";
-import { WorkspaceReelGridTile } from "@/components/WorkspaceReelGridTile";
+import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
+import { YouTubeInlineEmbed } from "@/components/YouTubeInlineEmbed";
+import { ResultCard, ResultCardSkeleton, resultCardGridClass } from "@/design-system/ResultCard";
+import { resolveYouTubeVideoId } from "@/lib/youtubeVideoId";
+import { safeHttpUrl } from "@/lib/viralPostPlayback";
+import { cn } from "@/lib/utils";
+import { useTheme } from "@/contexts/ThemeContext";
 import {
-  QuietCreatorButton,
-  QuietReelCaption,
-  QuietReelMetrics,
-  QuietRemakeActions,
-  QuietRemakeStatusChip,
+  quietReelMetricParts,
   quietRemakeStatusFromState,
 } from "@/components/QuietWorkspaceReelChrome";
 import { useOpenCreatorInApp } from "@/hooks/useOpenCreatorInApp";
-import { WORKSPACE_REEL_GRID_CLASS } from "@/lib/workspaceReelGridLayout";
 import {
   REEL_LIBRARY_INITIAL_VISIBLE,
   REEL_LIBRARY_VISIBLE_STEP,
 } from "@/lib/reelLibraryPagination";
-import { WorkspaceReelGridSkeleton } from "@/components/WorkspaceReelGridSkeleton";
 import { GridReelWorkflowDialog } from "@/components/GridReelWorkflowDialog";
 import { ReelActionButtons } from "@/components/ReelActionButtons";
 import { BrandCoachBadge } from "@/components/BrandCoachBadge";
@@ -119,6 +119,12 @@ const SORT_OPTIONS = [
 const RECREATE_BATCH_STALE_MS = 300_000;
 const RECREATE_BATCH_POLL_MS = 5_000;
 const VIEW_MODE_STORAGE_KEY = "reels-dashboard:viewMode";
+
+const COLLECTED_PLATFORM_BADGE: Record<"instagram" | "tiktok" | "youtube", string> = {
+  instagram: "Reels",
+  tiktok: "TikTok",
+  youtube: "Shorts",
+};
 
 function collectedPlatform(
   reel: CollectedRow
@@ -171,11 +177,11 @@ function collectedRowToLibraryRemakeSource(
 }
 
 export default function CollectedReels() {
+  const { resolvedTheme } = useTheme();
   const posthog = usePostHog();
   const utils = trpc.useUtils();
   const transcribeGate = useUsageGate("transcribeCount");
   const { openCreator } = useOpenCreatorInApp("collected");
-  const [quietMoreId, setQuietMoreId] = useState<number | null>(null);
 
   const collectedQuery = trpc.collected.list.useQuery(undefined, {
     refetchInterval: (query) => {
@@ -1109,7 +1115,13 @@ export default function CollectedReels() {
         </div>
       ) : null}
 
-      {!collectedQuery.isError && collectedQuery.isLoading && <WorkspaceReelGridSkeleton count={8} />}
+      {!collectedQuery.isError && collectedQuery.isLoading && (
+        <div className={cn(resolvedTheme === "dark" ? "sr-scope-dark" : "sr-scope-light", "sr-mode-product", resultCardGridClass)} style={{ background: "transparent" }}>
+          {Array.from({ length: 8 }).map((_, i) => (
+            <ResultCardSkeleton key={i} mediaFormat="portrait" />
+          ))}
+        </div>
+      )}
 
       {!collectedQuery.isError && !collectedQuery.isLoading && collectedRows.length === 0 && (
         <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -1311,7 +1323,11 @@ export default function CollectedReels() {
       )}
 
       {sortedReels.length > 0 && viewMode === "grid" && (
-        <div key="grid" className={WORKSPACE_REEL_GRID_CLASS}>
+        <div
+          key="grid"
+          className={cn(resolvedTheme === "dark" ? "sr-scope-dark" : "sr-scope-light", "sr-mode-product", resultCardGridClass)}
+          style={{ background: "transparent" }}
+        >
           {displayedReels.map((reel, index) => {
             const mappedReelId = reel.transcriptionReelId ?? null;
             const isPending = reel.status === "pending";
@@ -1400,178 +1416,115 @@ export default function CollectedReels() {
                 })
               : null;
 
+            const platform = collectedPlatform(reel);
+            const openThisCreator = () =>
+              void openCreator({ handle: reel.ownerUsername, platform });
+            const youtubeId =
+              platform === "youtube"
+                ? resolveYouTubeVideoId({ shortcode: reel.shortcode, reelUrl: reel.reelUrl })
+                : null;
+            const stopInline = () =>
+              setInlinePlayingId((cur) => (cur === reel.id ? null : cur));
+            const inlineMedia =
+              inlinePlayingId !== reel.id || !isReady ? null : platform === "youtube" ? (
+                youtubeId ? (
+                  <YouTubeInlineEmbed className="h-full w-full" videoId={youtubeId} onStop={stopInline} />
+                ) : null
+              ) : (
+                <DashboardReelGridMedia
+                  className="h-full w-full"
+                  thumbnailUrl={reel.thumbnailUrl}
+                  videoUrl={reel.videoUrl}
+                  shortcode={reel.shortcode}
+                  reelId={mappedReelId ?? undefined}
+                  platform={platform === "tiktok" ? "tiktok" : "instagram"}
+                  videoPageUrl={reel.reelUrl}
+                  size="compact"
+                  autoStart
+                  onPlayingChange={(playing) => {
+                    if (!playing) stopInline();
+                  }}
+                />
+              );
+            const originalUrl = safeHttpUrl(reel.reelUrl);
+            const removeItem = { label: "Remove", onSelect: () => deleteMutation.mutate({ id: reel.id }) };
+
             return (
-              <WorkspaceReelGridTile
+              <ResultCard
                 key={reel.id}
-                chrome="quiet"
-                index={index}
-                isActive={isReady && gridModalCollectedId === reel.id}
+                testId="collected-result-card"
+                mediaFormat="portrait"
+                platform={platform}
+                platformLabel={COLLECTED_PLATFORM_BADGE[platform]}
                 thumbnailUrl={hasThumb ? reel.thumbnailUrl : null}
-                videoUrl={hasThumb ? reel.videoUrl : null}
-                shortcode={reel.shortcode}
-                reelId={mappedReelId ?? undefined}
-                duration={isReady ? reel.duration : null}
-                reelUrl={isReady ? reel.reelUrl : null}
-                interactiveMedia={isReady && hasThumb}
-                inlinePlaying={inlinePlayingId === reel.id}
-                onInlinePlayRequest={() => setInlinePlayingId(reel.id)}
-                onInlinePlayStop={() =>
-                  setInlinePlayingId((cur) => (cur === reel.id ? null : cur))
+                title={
+                  !isReady
+                    ? statusMessage ?? "Loading this video"
+                    : reel.caption?.trim() || "No caption"
                 }
-                onMetaClick={isReady ? () => setGridModalCollectedId(reel.id) : undefined}
-                statusChip={
-                  remakeStatusLabel ? (
-                    <QuietRemakeStatusChip label={remakeStatusLabel} />
-                  ) : undefined
+                creator={isReady && reel.ownerUsername ? `@${reel.ownerUsername.replace(/^@/, "")}` : null}
+                onOpenCreator={isReady && reel.ownerUsername ? openThisCreator : undefined}
+                metrics={
+                  isReady
+                    ? quietReelMetricParts({
+                        views: effectiveViews,
+                        engagementPct: engagementRate,
+                        reachViews: effectiveViews,
+                        reachFollowers: reel.monitoredFollowerCount || reel.ownerFollowerCount,
+                        postedAt:
+                          reel.postedAt instanceof Date ? reel.postedAt.toISOString() : reel.postedAt,
+                      })
+                    : []
                 }
-                mediaPlatform={collectedPlatform(reel)}
-                mediaFallback={
-                  <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-muted/40 p-4 text-center">
-                    {isPending ? (
-                      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground/60" />
-                    ) : isFailed ? (
-                      <AlertCircle className="h-8 w-8 text-destructive/70" />
-                    ) : (
-                      <Film className="h-8 w-8 text-muted-foreground/60" />
-                    )}
-                    <span className="line-clamp-4 text-[10px] leading-snug text-muted-foreground">
-                      {statusMessage ?? "No thumbnail"}
-                    </span>
-                  </div>
+                signal={remakeStatusLabel ? { kind: "status", label: remakeStatusLabel } : null}
+                labels={{
+                  play: "Play video",
+                  expand: "View details",
+                  remake: isPending
+                    ? "Fetching…"
+                    : isFailed
+                      ? "Retry"
+                      : oneClickRemakeForQuiet?.label ?? "Remake",
+                  save: "Save",
+                  saved: "Saved",
+                  more: "More options",
+                }}
+                onPlay={() => {
+                  if (!isReady) return;
+                  if (platform === "youtube" && !youtubeId) {
+                    if (originalUrl) window.open(originalUrl, "_blank", "noopener,noreferrer");
+                    return;
+                  }
+                  setInlinePlayingId(reel.id);
+                }}
+                inlineMedia={inlineMedia}
+                playable={isReady}
+                onExpand={isReady ? () => setGridModalCollectedId(reel.id) : undefined}
+                onRemake={() => {
+                  if (isFailed) retryMutation.mutate({ id: reel.id });
+                  else oneClickRemakeForQuiet?.onClick();
+                }}
+                remakeBusy={isPending || (isFailed ? retryMutation.isPending : Boolean(oneClickRemakeForQuiet?.loading))}
+                remakeDisabled={isReady ? !oneClickRemakeForQuiet || oneClickRemakeForQuiet.disabled : false}
+                saved={isCollectedSaved(reel)}
+                onToggleSave={
+                  isReady ? () => toggleCollectedSave.mutate({ collectedReelId: reel.id }) : undefined
                 }
-                caption={
-                  <QuietReelCaption>
-                    {!isReady ? (
-                      statusMessage
-                    ) : reel.caption ? (
-                      reel.caption
-                    ) : (
-                      <span className="italic text-[#a8a3b3]">No caption</span>
-                    )}
-                  </QuietReelCaption>
-                }
-                creator={
-                  isReady ? (
-                    <QuietCreatorButton
-                      handle={reel.ownerUsername}
-                      onOpen={() =>
-                        void openCreator({
-                          handle: reel.ownerUsername,
-                          platform:
-                            collectedPlatform(reel) === "tiktok"
-                              ? "tiktok"
-                              : collectedPlatform(reel) === "youtube"
-                                ? "youtube"
-                                : "instagram",
-                        })
-                      }
-                    />
-                  ) : null
-                }
-                stats={
-                  isReady ? (
-                    <QuietReelMetrics
-                      views={effectiveViews}
-                      engagementPct={engagementRate}
-                      reachViews={effectiveViews}
-                      reachFollowers={
-                        reel.monitoredFollowerCount || reel.ownerFollowerCount
-                      }
-                      postedAt={
-                        reel.postedAt instanceof Date
-                          ? reel.postedAt.toISOString()
-                          : reel.postedAt
-                      }
-                    />
-                  ) : (
-                    <div className="min-h-[0.875rem]" aria-hidden />
-                  )
-                }
-                actions={
-                  isReady && oneClickRemakeForQuiet ? (
-                    <QuietRemakeActions
-                      remakeLabel={oneClickRemakeForQuiet.label}
-                      remakeDisabled={oneClickRemakeForQuiet.disabled}
-                      remakeBusy={oneClickRemakeForQuiet.loading}
-                      onRemake={() => oneClickRemakeForQuiet.onClick()}
-                      saved={isCollectedSaved(reel)}
-                      onToggleSave={() => {
-                        if (reel.status !== "ready") return;
-                        toggleCollectedSave.mutate({ collectedReelId: reel.id });
-                      }}
-                      moreOpen={quietMoreId === reel.id}
-                      onToggleMore={() =>
-                        setQuietMoreId((cur) => (cur === reel.id ? null : reel.id))
-                      }
-                      moreMenu={
-                        quietMoreId === reel.id ? (
-                          <div className="absolute bottom-11 right-0 z-30 grid min-w-[160px] gap-0.5 rounded-[12px] border border-[#2b2739] bg-[#1d1b24] p-1.5 shadow-[0_18px_50px_rgba(0,0,0,.45)]">
-                            <button
-                              type="button"
-                              className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-white/[0.06] hover:text-white"
-                              onClick={() => {
-                                setQuietMoreId(null);
-                                setGridModalCollectedId(reel.id);
-                              }}
-                            >
-                              View details
-                            </button>
-                            {reel.ownerUsername ? (
-                              <button
-                                type="button"
-                                className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-white/[0.06] hover:text-white"
-                                onClick={() => {
-                                  setQuietMoreId(null);
-                                  void openCreator({
-                                    handle: reel.ownerUsername,
-                                    platform:
-                                      collectedPlatform(reel) === "tiktok"
-                                        ? "tiktok"
-                                        : collectedPlatform(reel) === "youtube"
-                                          ? "youtube"
-                                          : "instagram",
-                                  });
-                                }}
-                              >
-                                Open creator
-                              </button>
-                            ) : null}
-                            {reel.reelUrl ? (
-                              <a
-                                href={reel.reelUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-white/[0.06] hover:text-white"
-                                onClick={() => setQuietMoreId(null)}
-                              >
-                                Open source
-                              </a>
-                            ) : null}
-                            <button
-                              type="button"
-                              className="rounded-lg px-2.5 py-2 text-left text-xs text-[#a9a4b8] hover:bg-[rgba(255,107,122,.08)] hover:text-[#ffb4bd]"
-                              onClick={() => {
-                                setQuietMoreId(null);
-                                deleteMutation.mutate({ id: reel.id });
-                              }}
-                            >
-                              Remove
-                            </button>
-                          </div>
-                        ) : null
-                      }
-                    />
-                  ) : (
-                    renderCollectedActions(reel, {
-                      mappedReelId,
-                      hideExternal: true,
-                      gridTile: true,
-                    })
-                  )
+                share={isReady && originalUrl ? { url: originalUrl, title: reel.caption?.trim() || "A video for you" } : null}
+                menu={
+                  isReady
+                    ? [
+                        { label: "View details", onSelect: () => setGridModalCollectedId(reel.id) },
+                        ...(reel.ownerUsername ? [{ label: "Open creator", onSelect: openThisCreator }] : []),
+                        ...(originalUrl ? [{ label: "Open source", href: originalUrl }] : []),
+                        removeItem,
+                      ]
+                    : [removeItem]
                 }
               />
             );
           })}
+
         </div>
       )}
 

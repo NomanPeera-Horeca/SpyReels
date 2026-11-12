@@ -65,6 +65,26 @@ export function QuietCreatorButton({
   );
 }
 
+/** Same facts as QuietReelMetrics, as plain parts for the Result Card metrics line. Pure. */
+export function quietReelMetricParts(m: {
+  views?: number | null;
+  engagementPct?: number | null;
+  reachViews?: number | null;
+  reachFollowers?: number | null;
+  postedAt?: string | null;
+}): string[] {
+  const viewLabel = formatCompactCount(m.views ?? null);
+  const eng = formatAccountEngPct(m.engagementPct);
+  const signal = quietReachSignal(m.reachViews ?? m.views, m.reachFollowers);
+  const date = formatShortPostDate(m.postedAt);
+  return [
+    ...(viewLabel ? [`${viewLabel} views`] : []),
+    ...(eng ? [eng] : []),
+    ...(signal ? [signal] : []),
+    ...(date ? [date] : []),
+  ];
+}
+
 export function QuietReelMetrics({
   views,
   engagementPct,
