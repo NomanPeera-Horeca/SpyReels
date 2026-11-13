@@ -11,7 +11,7 @@
  * restorePersonalizationItem returns that same row to its previous status
  * and does not change subtopic rows.
  */
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { MySql2Database } from "drizzle-orm/mysql2";
 import {
   ANALYSIS_STAGES,
@@ -574,6 +574,18 @@ export function createRecommendationStore(db: Db): RecommendationStore {
             );
         }
         if (input.inserts.length) {
+          // New suggestions go after the ones already on screen (a second pass
+          // appends), so the list never reshuffles under the creator.
+          const [last] = (await tx
+            .select({ maxOrder: sql<number | null>`MAX(${personalizationItems.sortOrder})` })
+            .from(personalizationItems)
+            .where(
+              and(
+                eq(personalizationItems.socialProfileId, profileId),
+                eq(personalizationItems.kind, input.kind)
+              )
+            )) as Array<{ maxOrder: number | null }>;
+          const firstOrder = last?.maxOrder == null ? 0 : Number(last.maxOrder) + 1;
           await tx.insert(personalizationItems).values(
             input.inserts.map((i, idx) => ({
               id: randomUUID(),
@@ -591,7 +603,7 @@ export function createRecommendationStore(db: Db): RecommendationStore {
               basedOnInputsHash: i.basedOnInputsHash ?? null,
               confidence: i.confidence ?? null,
               generationMeta: i.generationMeta,
-              sortOrder: idx,
+              sortOrder: firstOrder + idx,
             }))
           );
         }
