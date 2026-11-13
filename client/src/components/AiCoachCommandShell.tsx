@@ -115,6 +115,7 @@ export function AiCoachCommandShell({
   onClearPlanContext,
   heroSubhead,
   nichePill = null,
+  starterChips = [],
 }: AiCoachCommandShellProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [linkBusy, setLinkBusy] = useState(false);
@@ -262,6 +263,28 @@ export function AiCoachCommandShell({
               </Button>
             </div>
           </div>
+
+          {!description.trim() && starterChips.length > 0 ? (
+            <div className="mx-auto mt-5 max-w-[680px]" data-testid="agent-starter-ideas">
+              <p className="mb-2 text-center text-xs text-muted-foreground">Ideas for your next video</p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {starterChips.map((chip) => (
+                  <button
+                    key={chip.value}
+                    type="button"
+                    title={chip.value}
+                    className="max-w-full truncate rounded-full border border-border/70 bg-card/70 px-3 py-1.5 text-xs text-foreground/80 transition-colors hover:border-violet-500/40 hover:text-foreground"
+                    onClick={() => {
+                      onDescriptionChange(chip.value);
+                      textareaRef.current?.focus();
+                    }}
+                  >
+                    {chip.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           {intent ? (
             <div className="mx-auto mt-5 max-w-[680px] rounded-2xl border border-border/60 bg-card/40 px-4 py-3 text-sm text-muted-foreground">

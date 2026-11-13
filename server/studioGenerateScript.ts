@@ -119,7 +119,7 @@ export async function generateCoachScriptForWorkspace(args: {
     }
   }
 
-  const profile = args.profileOverride ?? (await getCreatorCoachProfile(args.userId));
+  const profile = args.profileOverride ?? (await getCreatorCoachProfile(args.userId, { confirmedProfile: true, workspaceId: args.workspaceId }));
   const db = await getDb();
   if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
 
@@ -544,7 +544,7 @@ export async function convertRoughScriptForWorkspace(args: {
     }
   }
 
-  const profile = await getCreatorCoachProfile(args.userId);
+  const profile = await getCreatorCoachProfile(args.userId, { confirmedProfile: true, workspaceId: args.workspaceId });
   args.onPhase?.("write_script");
 
   const mapped = buildCoachSectionsFromRemakeScript(trimmed);

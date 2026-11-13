@@ -4,6 +4,12 @@ export type StarterPromptContext = {
   selectedNicheSlugs?: string[] | null;
   businessDescription?: string | null;
   targetAudience?: string | null;
+  /** Niche confirmed in the new onboarding; wins over the old category. */
+  activeNicheLabel?: string | null;
+  /** First confirmed audience from the new onboarding. */
+  activeAudience?: string | null;
+  /** Written video ideas from the creator's pillars (same as Home). */
+  writtenIdeas?: readonly string[] | null;
 };
 
 export type StarterChip = { label: string; value: string };
@@ -133,6 +139,8 @@ function chipsForSlug(slug: string): StarterChip[] | null {
 }
 
 function displayTopicLabel(ctx: StarterPromptContext | null | undefined): string {
+  const confirmed = ctx?.activeNicheLabel?.trim();
+  if (confirmed) return confirmed;
   const slug = resolvePrimaryNicheSlug(ctx ?? {});
   return slug
     .split("-")
@@ -183,6 +191,14 @@ function buildFallbackChips(ctx: StarterPromptContext | null | undefined): Start
 export function buildIdeaStarterChips(
   ctx: StarterPromptContext | null | undefined
 ): StarterChip[] {
+  // The creator's own written ideas (Home "Ideas for your next video") first.
+  const written = (ctx?.writtenIdeas ?? []).map(i => i.trim()).filter(Boolean);
+  if (written.length) {
+    return written.slice(0, 3).map(idea => ({
+      label: idea.length > 48 ? `${idea.slice(0, 47).trimEnd()}…` : idea,
+      value: idea,
+    }));
+  }
   const slugs = ctx?.selectedNicheSlugs ?? [];
   for (const slug of slugs) {
     const chips = chipsForSlug(slug);
@@ -222,7 +238,7 @@ export function buildIdeaStarterPanelHeader(ctx: StarterPromptContext | null | u
 /** Short empty-state line under the H1. Never dump onboarding bios here. */
 export function buildIdeaStarterHeroSubhead(ctx: StarterPromptContext | null | undefined): string {
   const topic = displayTopicLabel(ctx);
-  const audience = shortAudienceForUi(ctx?.targetAudience);
+  const audience = shortAudienceForUi(ctx?.activeAudience ?? ctx?.targetAudience);
   if (audience) {
     return `Scripts for ${topic} · ${audience}`;
   }

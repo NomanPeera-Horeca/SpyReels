@@ -59,3 +59,22 @@ describe("ideaStarterPrompts", () => {
     expect(subhead).not.toMatch(/for for /i);
   });
 });
+
+describe("Agent starter: confirmed profile wins", () => {
+  it("shows the confirmed niche, not the old category", async () => {
+    const m = await import("@shared/ideaStarterPrompts");
+    const ctx = { selectedNicheSlugs: ["business-entrepreneurship"], activeNicheLabel: "points and travel for entrepreneurs" };
+    expect(m.buildIdeaStarterNichePill(ctx)).toBe("points and travel for entrepreneurs");
+    expect(m.buildIdeaStarterNichePill({ selectedNicheSlugs: ["business-entrepreneurship"] })).toBe("Business Entrepreneurship");
+  });
+
+  it("starting suggestions are the creator's written ideas when there are some", async () => {
+    const m = await import("@shared/ideaStarterPrompts");
+    const long = "Stack hotel points across multiple credit cards to fund luxury European stays";
+    const chips = m.buildIdeaStarterChips({ selectedNicheSlugs: ["business-entrepreneurship"], writtenIdeas: [long, "Solo trips build confidence"] });
+    expect(chips.map(c => c.value)).toEqual([long, "Solo trips build confidence"]);
+    expect(chips[0].label.length).toBeLessThanOrEqual(48);
+    expect(m.buildIdeaStarterChips({ selectedNicheSlugs: ["business-entrepreneurship"] }).length).toBeGreaterThan(0);
+  });
+});
+

@@ -231,7 +231,8 @@ describe("migration gate: drafts cannot reach a database by accident", () => {
     // Onboarding and Home routers are rollout gated. Durable handlers run
     // previously authorized jobs. Viral Posts has an independently authenticated,
     // feature-gated router and reads confirmed workspace-scoped strategy data.
-    // Coach reads only the signed-in user's stored niche for display.
+    // Coach reads only the signed-in user's stored niche for display, and (Agent /
+    // 30-Day Plan) the member's confirmed active-profile strategy via coachProfileLoader.
     // Onboarding (getState) and Remake (recreate.generate) read only the
     // signed-in member's confirmed niche + audience in the selected workspace,
     // so new-onboarding creators are not asked again and remakes can adapt.
@@ -252,9 +253,15 @@ describe("migration gate: drafts cannot reach a database by accident", () => {
     // These cross-feature paths may import ONLY the explicitly reviewed APIs.
     // This is intentionally narrower than adding whole folders to an allowlist.
     const auditedImports: Record<string, string[]> = {
+      // coachProfileLoader (Agent / 30-Day Plan): reads only the signed-in member's
+      // ACTIVE profile in the selected workspace (workspace_member_active_profiles
+      // keyed by userId + workspaceId), then the pure, tested coachProfileResolver
+      // drops other-profile/workspace, unconfirmed AI and stale rows. Same scope as
+      // activeNiche.loadActiveCreatorBasics. Reviewed Nov 2026.
       "server/planCoachProfile.ts": [
         "@shared/personalization/contentTaxonomy",
         "./personalization/activeNiche",
+        "./personalization/coachProfileLoader",
       ],
       "server/viralPosts/browseService.ts": [
         "@shared/personalization/contentTaxonomy",
