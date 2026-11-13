@@ -1,4 +1,5 @@
 import { useAuth } from "@/_core/hooks/useAuth";
+import "@/design-system/tokens.css";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -116,7 +117,7 @@ const SIDEBAR_NAV_TOOLTIPS: Partial<Record<string, string>> = {
     "Match Pexels stock video B-roll to your Reel scripts by beat",
   "/saved": "Reels you bookmarked for later",
   "/viral-posts":
-    "Fresh Instagram Reels selected for your niche",
+    "Viral videos picked for your niche, updated daily",
   "/interests":
     "Niches and creators for sidebar recommendations and the /research feed",
 };
@@ -130,7 +131,7 @@ type SidebarNavItem = {
   icon: LucideIcon;
   label: string;
   path: string;
-  badge?: "new";
+  badge?: "new" | "beta";
   featured?: boolean;
 };
 
@@ -156,7 +157,7 @@ function buildNavSections(showUnpolishedTools: boolean, homeV2 = false): Sidebar
       id: "create",
       label: "Create",
       items: [
-        { icon: Sparkles, label: "Agent", path: "/studio", badge: "new", featured: true },
+        { icon: Sparkles, label: "Agent", path: "/studio", badge: "beta", featured: true },
         { icon: CalendarDays, label: "30-Day Plan", path: "/plan" },
         // { icon: Lightbulb, label: "Idea to Script", path: "/ideas" },
         ...(showUnpolishedTools
@@ -189,12 +190,7 @@ function buildNavSections(showUnpolishedTools: boolean, homeV2 = false): Sidebar
             ]
           : []),
         { icon: Search, label: "Spy Viral Reels", path: "/research" },
-        {
-          icon: Flame,
-          label: "Viral Posts",
-          path: "/viral-posts",
-          badge: "new",
-        },
+        { icon: Flame, label: "Viral Posts", path: "/viral-posts" },
         { icon: Inbox, label: "Collected Reels", path: "/collected" },
         { icon: Radar, label: "Creator Radar", path: "/history" },
         { icon: Bookmark, label: "Saved Reels", path: "/saved" },
@@ -262,16 +258,22 @@ function SidebarNicheCard({
   );
 }
 
-function NavBadge({ active, kind }: { active: boolean; kind: "new" }) {
-  if (kind !== "new") return null;
+/**
+ * Figma Badge (34:5), Tone=Brand: light brand tint, brand text, Product / Caption
+ * (Inter 12, regular), sentence case. On the selected (filled) row it turns white
+ * so it stays readable. "Beta" = in testing (Agent); "New" = recently added.
+ */
+function NavBadge({ active, kind }: { active: boolean; kind: "new" | "beta" }) {
   return (
     <span
       className={cn(
-        "ml-auto shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide",
-        active ? "bg-primary-foreground/20 text-primary-foreground" : "bg-primary text-primary-foreground"
+        "ml-auto shrink-0 rounded-full border px-2 py-px text-[12px] font-normal leading-4",
+        active
+          ? "border-primary-foreground/50 text-primary-foreground"
+          : "border-transparent bg-[var(--sr-color-brand-surface-subtle)] text-[var(--sr-color-text-brand)]"
       )}
     >
-      NEW
+      {kind === "beta" ? "Beta" : "New"}
     </span>
   );
 }
