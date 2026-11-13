@@ -124,7 +124,6 @@ export function LibraryVideoCard(p: LibraryVideoCardProps) {
       }}
       onPlay={play}
       inlineMedia={inlineMedia}
-      onExpand={p.onViewDetails}
       onRemake={() => p.remake?.onClick()}
       remakeBusy={Boolean(p.remake?.loading)}
       remakeDisabled={!p.remake || Boolean(p.remake.disabled) || Boolean(p.saveBusy)}

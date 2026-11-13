@@ -180,7 +180,6 @@ export function ViralPostCard({
         }}
         onPlay={play}
         inlineMedia={inlineMedia}
-        onExpand={openDetails}
         onRemake={() => {
           recordSignal("remake_started");
           onRemake(post);

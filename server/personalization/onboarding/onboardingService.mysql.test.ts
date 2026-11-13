@@ -538,6 +538,37 @@ describe.skipIf(!url)("onboarding v2 service on real MySQL", () => {
     expect(finalTopics.find(t => t.id === food.id)?.status).toBe("suggested");
   });
 
+  it("a second pass appends after what is on screen, never between it", async () => {
+    const { profileId } = await confirmProfile(db, A, preview("test.order"));
+    const store = createRecommendationStore(db);
+    const insert = (title: string) =>
+      ({
+        kind: "pillar",
+        payload: { title, description: title, viewSharePercent: null },
+        source: "ai_suggested",
+        status: "suggested",
+        evidence: "profile_inferred",
+        basedOnVersion: 0,
+        dismissedAtVersion: null,
+        supersedesItemId: null,
+        analysisRunId: null,
+        generationMeta: {},
+      }) as never;
+    const apply = async (titles: string[]) =>
+      store.applyGeneratedSuggestions(profileId, {
+        kind: "pillar",
+        guard: { type: "inputs_unchanged", expected: upstreamInputsHash("pillar", await store.loadItems(profileId)) },
+        supersedeIds: [],
+        inserts: titles.map(insert),
+      });
+    expect(await apply(["First", "Second"])).toBe("applied");
+    expect(await apply(["Third"])).toBe("applied");
+    const titles = (await store.loadItems(profileId))
+      .filter(i => i.kind === "pillar")
+      .map(i => (i.payload as { title: string }).title);
+    expect(titles).toEqual(["First", "Second", "Third"]);
+  });
+
   it("the duplicate check reads each live pillar's sub-topics, without dismissed ones", async () => {
     const { profileId } = await confirmProfile(db, A, preview("test.tech"));
     const { itemId } = await addItem(db, A, "pillar", {

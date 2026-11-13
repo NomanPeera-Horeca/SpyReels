@@ -1499,7 +1499,6 @@ export default function CollectedReels() {
                 }}
                 inlineMedia={inlineMedia}
                 playable={isReady}
-                onExpand={isReady ? () => setGridModalCollectedId(reel.id) : undefined}
                 onRemake={() => {
                   if (isFailed) retryMutation.mutate({ id: reel.id });
                   else oneClickRemakeForQuiet?.onClick();
