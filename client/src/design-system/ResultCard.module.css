@@ -219,7 +219,8 @@
   min-width: 0;
   min-height: 44px;
   overflow: hidden;
-  padding: var(--sr-space-3) var(--sr-space-4);
+  /* Narrow side padding so "Remake" never truncates next to Save and ···. */
+  padding: var(--sr-space-3) var(--sr-space-2);
   border: var(--sr-shape-border-default-width) solid var(--sr-color-border-default);
   border-radius: var(--sr-shape-control-radius);
   background: var(--sr-color-surface-default);

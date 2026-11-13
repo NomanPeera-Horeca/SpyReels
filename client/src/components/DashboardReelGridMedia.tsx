@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useId, useMemo } from "react";
 import { usePostHog } from "@posthog/react";
-import { Loader2, Maximize2, Play, X } from "lucide-react";
+import { Loader2, Maximize2, Play } from "lucide-react";
 import { toast } from "sonner";
 import { ReelPreviewLightbox } from "@/components/ReelPreviewLightbox";
 import { cn } from "@/lib/utils";
@@ -18,6 +18,9 @@ import {
   releaseGridVideoPlay,
   requestGridVideoPlay,
 } from "@/lib/gridVideoPlaybackCoordinator";
+
+/** Height of the browser's video control bar: clicks there seek, not toggle. */
+const VIDEO_CONTROL_BAR_PX = 56;
 
 type Size = "default" | "compact";
 
@@ -409,6 +412,25 @@ export function DashboardReelGridMedia({
     tryPlay();
   };
 
+  // Click anywhere on the video (not its control bar) to play or pause.
+  // Chrome's built-in bar ignores clicks on the picture; Firefox and Safari
+  // toggle by themselves, so we only act when the browser did not.
+  const pausedAtPointerDownRef = useRef<boolean | null>(null);
+  const rememberPausedState = (e: React.PointerEvent<HTMLVideoElement>) => {
+    pausedAtPointerDownRef.current = e.currentTarget.paused;
+  };
+  const togglePlayOnClick = (e: React.MouseEvent<HTMLVideoElement>) => {
+    const v = e.currentTarget;
+    const rect = v.getBoundingClientRect();
+    if (e.clientY > rect.bottom - VIDEO_CONTROL_BAR_PX) return;
+    const before = pausedAtPointerDownRef.current ?? v.paused;
+    window.setTimeout(() => {
+      if (v.paused !== before) return;
+      if (v.paused) void v.play().catch(() => undefined);
+      else v.pause();
+    }, 0);
+  };
+
   const handleVideoPause = () => {
     if (programmaticPauseRef.current) {
       programmaticPauseRef.current = false;
@@ -507,7 +529,9 @@ export function DashboardReelGridMedia({
             disablePictureInPicture
             loop={false}
             preload="auto"
-            className="max-h-[100dvh] max-w-full rounded-lg bg-black object-contain"
+            className="sr-video-no-fullscreen max-h-[100dvh] max-w-full rounded-lg bg-black object-contain"
+            onPointerDown={rememberPausedState}
+            onClick={togglePlayOnClick}
             onLoadedData={lightboxOnly ? handleVideoLoadedData : undefined}
             onPause={handleVideoPause}
             onPlay={handleVideoPlay}
@@ -535,7 +559,9 @@ export function DashboardReelGridMedia({
             disablePictureInPicture
             loop={false}
             preload="metadata"
-            className="absolute inset-0 h-full w-full object-cover"
+            className="sr-video-no-fullscreen absolute inset-0 h-full w-full object-cover"
+            onPointerDown={rememberPausedState}
+            onClick={togglePlayOnClick}
             onLoadedData={handleVideoLoadedData}
             onPause={handleVideoPause}
             onPlay={handleVideoPlay}
@@ -546,7 +572,7 @@ export function DashboardReelGridMedia({
             type="button"
             className={cn(
               "absolute z-30 flex items-center justify-center rounded-full bg-black/70 text-white backdrop-blur hover:bg-black/90",
-              isCompact ? "right-10 top-8 h-7 w-7" : "right-12 top-12 h-8 w-8"
+              isCompact ? "right-2 top-2 h-7 w-7" : "right-3 top-3 h-8 w-8"
             )}
             aria-label="Enlarge video"
             title="Enlarge"
@@ -556,18 +582,6 @@ export function DashboardReelGridMedia({
             }}
           >
             <Maximize2 className={isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} />
-          </button>
-          <button
-            type="button"
-            className={cn(
-              "absolute right-2 z-30 flex items-center justify-center rounded-full bg-black/70 text-white backdrop-blur hover:bg-black/90",
-              isCompact ? "top-8 h-7 w-7" : "top-12 h-8 w-8"
-            )}
-            aria-label="Close video"
-            title="Close video"
-            onClick={stopPlayback}
-          >
-            <X className={isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} />
           </button>
         </div>
       ) : (

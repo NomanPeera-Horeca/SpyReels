@@ -340,3 +340,12 @@
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
+
+/*
+ * Video players block fullscreen (vertical reels letterbox sideways; we use our
+ * own enlarge), so Chrome shows a greyed-out fullscreen icon in the control
+ * bar. Hide just that icon; the rest of the bar stays.
+ */
+video.sr-video-no-fullscreen::-webkit-media-controls-fullscreen-button {
+  display: none !important;
+}

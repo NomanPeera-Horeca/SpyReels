@@ -1,5 +1,4 @@
 import { useEffect, useId, useMemo } from "react";
-import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   registerGridVideoPlayer,
@@ -11,6 +10,8 @@ import { youtubeEmbedSrc } from "@/lib/youtubeVideoId";
 /**
  * In-app YouTube Shorts playback. We do not mirror YouTube as MP4, so the
  * embed keeps the creator inside SpyReels instead of bouncing to youtube.com.
+ * No close (X) button: YouTube's own player pauses on click (owner decision,
+ * same as the file player). `onStop` still runs when another card starts.
  */
 export function YouTubeInlineEmbed({
   videoId,
@@ -52,20 +53,6 @@ export function YouTubeInlineEmbed({
         allowFullScreen
         referrerPolicy="strict-origin-when-cross-origin"
       />
-      {onStop ? (
-        <button
-          type="button"
-          className="absolute right-2 top-2 z-10 grid h-8 w-8 place-items-center rounded-full bg-black/70 text-white backdrop-blur hover:bg-black/90"
-          aria-label="Close preview"
-          title="Close"
-          onClick={(e) => {
-            e.stopPropagation();
-            onStop();
-          }}
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      ) : null}
     </div>
   );
 }
