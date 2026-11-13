@@ -278,7 +278,7 @@ export const planRouter = router({
 
       try {
         setPlanProgressStep(ctx.user.id, "read_profile");
-        const profile = await getCreatorCoachProfile(ctx.user.id);
+        const profile = await getCreatorCoachProfile(ctx.user.id, { confirmedProfile: true, workspaceId: ctx.workspaceId });
         const db = await getDb();
         if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
 
@@ -607,7 +607,7 @@ export const planRouter = router({
         });
       }
 
-      const profile = await getCreatorCoachProfile(ctx.user.id);
+      const profile = await getCreatorCoachProfile(ctx.user.id, { confirmedProfile: true, workspaceId: ctx.workspaceId });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
 
@@ -734,7 +734,7 @@ export const studioRouter = router({
   analyze: protectedProcedure
     .input(z.object({ description: z.string().min(10).max(8000) }))
     .mutation(async ({ ctx, input }) => {
-      const profile = await getCreatorCoachProfile(ctx.user.id);
+      const profile = await getCreatorCoachProfile(ctx.user.id, { confirmedProfile: true, workspaceId: ctx.workspaceId });
       return analyzeCoachIdea({
         description: input.description,
         niche: profile.niche,
@@ -906,7 +906,7 @@ Return: {"cta":"..."}`,
 
       let coachJudge: CoachScriptJudgeMeta | undefined = notes?.coachJudge;
       try {
-        const profile = await getCreatorCoachProfile(ctx.user.id);
+        const profile = await getCreatorCoachProfile(ctx.user.id, { confirmedProfile: true, workspaceId: ctx.workspaceId });
         const judged = await invokeCoachScriptJudge(
           {
             description: notes?.sourceDescription?.trim() || script.title || "Script refine",
@@ -966,7 +966,7 @@ Return: {"cta":"..."}`,
     .input(z.object({ id: z.number() }))
     .mutation(async ({ ctx, input }) => {
       await assertCoachScriptInWorkspace(input.id, ctx.workspaceId);
-      const profile = await getCreatorCoachProfile(ctx.user.id);
+      const profile = await getCreatorCoachProfile(ctx.user.id, { confirmedProfile: true, workspaceId: ctx.workspaceId });
       const db = await getDb();
       if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Database unavailable" });
 
@@ -1188,7 +1188,7 @@ Return: {"cta":"..."}`,
         sections,
       });
 
-      const profile = await getCreatorCoachProfile(ctx.user.id);
+      const profile = await getCreatorCoachProfile(ctx.user.id, { confirmedProfile: true, workspaceId: ctx.workspaceId });
 
       try {
         const result = await generateSeoInstagramCaption({

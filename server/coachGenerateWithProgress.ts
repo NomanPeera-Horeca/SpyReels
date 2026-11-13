@@ -69,7 +69,7 @@ export async function generateCoachScriptWithProgress(args: {
 
   try {
     setCoachStep(args.userId, "read_profile");
-    const profile = await getCreatorCoachProfile(args.userId);
+    const profile = await getCreatorCoachProfile(args.userId, { confirmedProfile: true, workspaceId: args.workspaceId });
     const labels = {
       ...personalizedCoachScriptStepLabels({
         niche: profile.niche,
@@ -186,7 +186,7 @@ export async function convertRoughScriptWithProgress(args: {
   });
 
   try {
-    const profile = await getCreatorCoachProfile(args.userId);
+    const profile = await getCreatorCoachProfile(args.userId, { confirmedProfile: true, workspaceId: args.workspaceId });
     const labels = {
       ...personalizedCoachScriptStepLabels({
         niche: profile.niche,

@@ -153,9 +153,24 @@ export default function AiCoach() {
   );
   const { data: savedScriptsList } = trpc.scripts.list.useQuery({}, { staleTime: 60_000 });
   const { data: planData } = trpc.plan.listCards.useQuery(undefined, { staleTime: 60_000 });
-  const { data: onboardingState } = trpc.onboarding.getState.useQuery(undefined, {
+  const { data: onboardingStateRaw } = trpc.onboarding.getState.useQuery(undefined, {
     staleTime: 60_000,
   });
+  // Same written ideas as Home's "Ideas for your next video" (cached server-side).
+  const { data: homeIdeas } = trpc.homeV2.searchIdeas.useQuery(undefined, {
+    staleTime: 5 * 60_000,
+    retry: false,
+  });
+  const onboardingState = useMemo(
+    () =>
+      onboardingStateRaw
+        ? {
+            ...onboardingStateRaw,
+            writtenIdeas: (homeIdeas?.pillarIdeas ?? []).map(i => i.label),
+          }
+        : onboardingStateRaw,
+    [onboardingStateRaw, homeIdeas]
+  );
 
   const planCards = planData?.cards ?? [];
   const recentScripts = historyData?.scripts ?? [];
