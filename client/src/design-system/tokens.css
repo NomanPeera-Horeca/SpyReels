@@ -14,6 +14,9 @@
 @import "../../../public-web/app/type-tokens.css";
 
 :root {
+  /* Figma color/platform/tiktok/logo (EXTEND, 2026-11-23): TikTok glyph, near-black on light. */
+  --sr-color-platform-tiktok-logo: #111116;
+
   /* Shape primitives (Figma Shape Primitives) */
   --sr-radius-8: 8px;
   --sr-radius-10: 10px;
@@ -111,6 +114,9 @@
   color-scheme: dark;
   font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+
+  /* Figma color/platform/tiktok/logo, Dark: the TikTok glyph turns white on dark surfaces. */
+  --sr-color-platform-tiktok-logo: #ffffff;
 
   --sr-color-brand-primary: #9b86ff;
   --sr-color-brand-strong: #c8bcff;

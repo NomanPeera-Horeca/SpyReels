@@ -3,7 +3,7 @@ import { isUnauthorizedError } from "@/lib/recovery/classifyServerQuery";
 import { trpc } from "@/lib/trpc";
 import type { ExperienceAccess } from "@shared/onboardingV2Access";
 
-const LEGACY: ExperienceAccess = { onboarding: "legacy", home: "research", sidebar: "legacy", internal: false };
+const LEGACY: ExperienceAccess = { onboarding: "legacy", home: "research", sidebar: "legacy", research: "legacy", internal: false };
 
 /**
  * Per-user answer from the server (ONBOARDING_V2_MODE / HOME_V2_MODE).

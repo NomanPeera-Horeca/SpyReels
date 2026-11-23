@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useExperienceAccess } from "@/lib/experienceAccess";
+import { CreatorResearchV2 } from "@/components/creator-research/CreatorResearchV2";
 import { SidebarV2PageLink } from "@/components/SidebarV2PageLink";
 import { Radar } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -102,6 +104,8 @@ function TipDot() {
 
 export default function Home() {
   const posthog = usePostHog();
+  const { access: experienceAccess } = useExperienceAccess();
+  const researchV2 = experienceAccess.research === "v2";
   const utils = trpc.useUtils();
   const search = useSearch();
   const [platform, setPlatform] = useState<"instagram" | "tiktok" | "youtube">(
@@ -625,6 +629,183 @@ export default function Home() {
     }
   };
 
+  // Profile preview + error under the Instagram handle field (same in both layouts).
+  const profilePreviewCard = (
+    <>
+              {/* Profile Preview Card */}
+              {profileFound && profile.found && (
+                <div
+                  className={
+                    profileCardCanStartSpy
+                      ? "relative rounded-lg border border-border bg-background p-4 animate-in fade-in slide-in-from-top-2 duration-300 cursor-pointer transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      : "rounded-lg border border-border bg-background p-4 animate-in fade-in slide-in-from-top-2 duration-300"
+                  }
+                  role={profileCardCanStartSpy ? "button" : undefined}
+                  tabIndex={profileCardCanStartSpy ? 0 : undefined}
+                  aria-label={
+                    profileCardCanStartSpy
+                      ? `Start spy session for @${profile.username}`
+                      : undefined
+                  }
+                  onClick={profileCardCanStartSpy ? () => requestStartSpy() : undefined}
+                  onKeyDown={handleProfileCardKeyDown}
+                >
+                  {profileCardCanStartSpy && (
+                    <span className="absolute top-3 right-3 hidden items-center gap-0.5 text-[10px] font-medium text-primary sm:flex">
+                      Click to start
+                      <ArrowRight className="h-3 w-3 shrink-0" aria-hidden />
+                    </span>
+                  )}
+                  <div className="flex items-start gap-4">
+                    {/* Profile Picture */}
+                    <div className="shrink-0">
+                      {profile.profilePicUrl ? (
+                        <img
+                          src={profile.profilePicUrl}
+                          alt={profile.username}
+                          className="w-16 h-16 rounded-full object-cover border-2 border-border"
+                          onError={e => {
+                            (e.target as HTMLImageElement).style.display = "none";
+                          }}
+                        />
+                      ) : (
+                        <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center border-2 border-border">
+                          <ImageIcon className="h-6 w-6 text-muted-foreground" />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Profile Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-0.5">
+                        <h3 className="text-sm font-bold text-foreground truncate">
+                          {profile.username}
+                        </h3>
+                        {profile.isVerified && (
+                          <BadgeCheck className="h-4 w-4 text-blue-500 shrink-0" />
+                        )}
+                        {profile.isPrivate && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] h-4 border-orange-500/50 text-orange-400"
+                          >
+                            <Lock className="mr-0.5 h-2.5 w-2.5" />
+                            Private
+                          </Badge>
+                        )}
+                      </div>
+
+                      {profile.fullName && (
+                        <p className="text-xs text-muted-foreground mb-1">
+                          {profile.fullName}
+                        </p>
+                      )}
+
+                      {profile.category && (
+                        <Badge
+                          variant="secondary"
+                          className="text-[10px] h-4 mb-1.5"
+                        >
+                          {profile.category}
+                        </Badge>
+                      )}
+
+                      {profile.biography && (
+                        <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 mb-2">
+                          {profile.biography}
+                        </p>
+                      )}
+
+                      {/* Stats */}
+                      <div className="flex items-center gap-4 text-xs">
+                        <div className="text-center">
+                          <p className="font-bold text-foreground">
+                            {formatCount(profile.postCount)}
+                          </p>
+                          <p className="text-muted-foreground text-[10px]">
+                            posts
+                          </p>
+                        </div>
+                        <div className="text-center">
+                          <p className="font-bold text-foreground">
+                            {formatCount(profile.followerCount)}
+                          </p>
+                          <p className="text-muted-foreground text-[10px]">
+                            followers
+                          </p>
+                        </div>
+                        <div className="hidden text-center sm:block">
+                          <p className="font-bold text-foreground">
+                            {formatCount(profile.followingCount)}
+                          </p>
+                          <p className="text-muted-foreground text-[10px]">
+                            following
+                          </p>
+                        </div>
+                        {profile.externalUrl && (
+                          <a
+                            href={profile.externalUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
+                            className="ml-auto hidden items-center gap-1 text-primary hover:underline sm:flex"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            <span className="text-[10px] truncate max-w-[120px]">
+                              {profile.externalUrl.replace(/^https?:\/\//, "")}
+                            </span>
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {profile.isPrivate && (
+                    <>
+                      <Separator className="my-3" />
+                      <p className="text-xs text-orange-400 flex items-center gap-1.5">
+                        <Lock className="h-3 w-3" />
+                        This account is private. Only public accounts can be
+                        analyzed.
+                      </p>
+                    </>
+                  )}
+                </div>
+              )}
+
+              {/* Profile Error */}
+              {profileError && (
+                <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 animate-in fade-in duration-200">
+                  <p className="text-xs text-destructive flex items-center gap-1.5">
+                    <XCircle className="h-3 w-3 shrink-0" />
+                    {profileError}
+                  </p>
+                  {isLikelyInstagramRateLimitMessage(profileError) ? (
+                    <div className="mt-3 flex flex-col gap-2 border-t border-destructive/15 pt-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-xs text-muted-foreground">
+                        Skip the wait: open a hand-picked creator with reels already loaded.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        className="min-h-10 w-full shrink-0 sm:w-auto"
+                        onClick={() =>
+                          document
+                            .getElementById("featured-creators")
+                            ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                        }
+                      >
+                        Browse featured creators
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              )}
+
+    </>
+  );
+
   const viewingPlatformJobResults =
     (platform === "tiktok" && initialTikTokJobId != null) ||
     (platform === "youtube" && initialYouTubeJobId != null);
@@ -638,6 +819,115 @@ export default function Home() {
           <YouTubeResearch initialJobId={initialYouTubeJobId} initialHandle={youtubeLandingHandle ?? undefined} />
         )}
       </div>
+    );
+  }
+
+  if (researchV2) {
+    const researchBoxV2 = (
+      <div className="space-y-4">
+        <Tabs value={platform} onValueChange={(value) => setPlatform(value as "instagram" | "tiktok" | "youtube")}>
+          <TabsList className="grid w-full max-w-sm grid-cols-3">
+            <TabsTrigger value="instagram">Instagram</TabsTrigger>
+            <TabsTrigger value="tiktok">TikTok</TabsTrigger>
+            <TabsTrigger value="youtube">YouTube</TabsTrigger>
+          </TabsList>
+        </Tabs>
+        {platform === "instagram" ? (
+          <form onSubmit={handleSubmit} className="space-y-3" data-testid="research-form-v2">
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="relative min-w-0 flex-1">
+                <Input
+                  id="handle"
+                  placeholder="@username or profile link"
+                  value={handle}
+                  onChange={(e) => {
+                    setHandle(e.target.value);
+                    setHandleError(null);
+                  }}
+                  onBlur={() => {
+                    const n = normalizeInstagramHandle(handle);
+                    if (handle.trim() && !previewOk && !isValidInstagramHandleNormalized(n)) {
+                      setHandleError(INSTAGRAM_HANDLE_INVALID_MESSAGE);
+                    }
+                  }}
+                  className="h-11 pr-9"
+                  aria-label="Instagram username or profile link"
+                  aria-invalid={Boolean(handleError || profileError)}
+                  aria-describedby={handleError ? "handle-error" : undefined}
+                />
+                {isLoadingProfile ? (
+                  <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+                ) : profileFound ? (
+                  <CheckCircle2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-500" />
+                ) : profileError ? (
+                  <XCircle className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-destructive" />
+                ) : null}
+              </div>
+              <Select value={timeframe} onValueChange={setTimeframe}>
+                <SelectTrigger className="h-11 sm:w-44" aria-label="Timeframe">
+                  <Clock className="mr-2 h-4 w-4 text-muted-foreground" />
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="30">Last 30 days</SelectItem>
+                  <SelectItem value="90">Last 90 days</SelectItem>
+                  <SelectItem value="180">Last 180 days</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button type="submit" className="h-11 px-6" disabled={startSpyingDisabled}>
+                {startScrape.isPending ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Starting…
+                  </>
+                ) : (
+                  "Research"
+                )}
+              </Button>
+            </div>
+            {handleError ? (
+              <p id="handle-error" className="text-sm text-destructive" role="alert">
+                {handleError}
+              </p>
+            ) : null}
+            {profilePreviewCard}
+            {!scrapeGate.isLoading && !scrapeGate.allowed ? (
+              <UpgradePrompt
+                action="scrapeCount"
+                used={scrapeGate.used}
+                limit={scrapeGate.limit}
+                planRequired={scrapeGate.planRequired}
+                variant="inline"
+              />
+            ) : null}
+          </form>
+        ) : platform === "tiktok" ? (
+          <TikTokResearch initialJobId={initialTikTokJobId} initialHandle={tiktokLandingHandle ?? undefined} />
+        ) : (
+          <YouTubeResearch initialJobId={initialYouTubeJobId} initialHandle={youtubeLandingHandle ?? undefined} />
+        )}
+      </div>
+    );
+    return (
+      <CreatorResearchV2
+        researchBox={researchBoxV2}
+        explore={{
+          creators: featuredCreators,
+          loading: featuredLoading,
+          error: featuredError,
+          onRetry: () => {
+            if (selectedNicheSlug === "all") setAllRetryNonce((v) => v + 1);
+            else void accountsBySelectedNicheQuery.refetch();
+          },
+          niches: allNiches,
+          selectedNicheSlug,
+          onSelectNiche: setSelectedNicheSlug,
+          onOpen: (creator) => {
+            if (showHintCard) void dismissHint();
+            setLocation(`/dashboard?featuredAccountId=${creator.id}`);
+          },
+        }}
+      />
     );
   }
 
@@ -851,176 +1141,7 @@ export default function Home() {
                 ) : null}
               </div>
 
-              {/* Profile Preview Card */}
-              {profileFound && profile.found && (
-                <div
-                  className={
-                    profileCardCanStartSpy
-                      ? "relative rounded-lg border border-border bg-background p-4 animate-in fade-in slide-in-from-top-2 duration-300 cursor-pointer transition-colors hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                      : "rounded-lg border border-border bg-background p-4 animate-in fade-in slide-in-from-top-2 duration-300"
-                  }
-                  role={profileCardCanStartSpy ? "button" : undefined}
-                  tabIndex={profileCardCanStartSpy ? 0 : undefined}
-                  aria-label={
-                    profileCardCanStartSpy
-                      ? `Start spy session for @${profile.username}`
-                      : undefined
-                  }
-                  onClick={profileCardCanStartSpy ? () => requestStartSpy() : undefined}
-                  onKeyDown={handleProfileCardKeyDown}
-                >
-                  {profileCardCanStartSpy && (
-                    <span className="absolute top-3 right-3 hidden items-center gap-0.5 text-[10px] font-medium text-primary sm:flex">
-                      Click to start
-                      <ArrowRight className="h-3 w-3 shrink-0" aria-hidden />
-                    </span>
-                  )}
-                  <div className="flex items-start gap-4">
-                    {/* Profile Picture */}
-                    <div className="shrink-0">
-                      {profile.profilePicUrl ? (
-                        <img
-                          src={profile.profilePicUrl}
-                          alt={profile.username}
-                          className="w-16 h-16 rounded-full object-cover border-2 border-border"
-                          onError={e => {
-                            (e.target as HTMLImageElement).style.display = "none";
-                          }}
-                        />
-                      ) : (
-                        <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center border-2 border-border">
-                          <ImageIcon className="h-6 w-6 text-muted-foreground" />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Profile Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <h3 className="text-sm font-bold text-foreground truncate">
-                          {profile.username}
-                        </h3>
-                        {profile.isVerified && (
-                          <BadgeCheck className="h-4 w-4 text-blue-500 shrink-0" />
-                        )}
-                        {profile.isPrivate && (
-                          <Badge
-                            variant="outline"
-                            className="text-[10px] h-4 border-orange-500/50 text-orange-400"
-                          >
-                            <Lock className="mr-0.5 h-2.5 w-2.5" />
-                            Private
-                          </Badge>
-                        )}
-                      </div>
-
-                      {profile.fullName && (
-                        <p className="text-xs text-muted-foreground mb-1">
-                          {profile.fullName}
-                        </p>
-                      )}
-
-                      {profile.category && (
-                        <Badge
-                          variant="secondary"
-                          className="text-[10px] h-4 mb-1.5"
-                        >
-                          {profile.category}
-                        </Badge>
-                      )}
-
-                      {profile.biography && (
-                        <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2 mb-2">
-                          {profile.biography}
-                        </p>
-                      )}
-
-                      {/* Stats */}
-                      <div className="flex items-center gap-4 text-xs">
-                        <div className="text-center">
-                          <p className="font-bold text-foreground">
-                            {formatCount(profile.postCount)}
-                          </p>
-                          <p className="text-muted-foreground text-[10px]">
-                            posts
-                          </p>
-                        </div>
-                        <div className="text-center">
-                          <p className="font-bold text-foreground">
-                            {formatCount(profile.followerCount)}
-                          </p>
-                          <p className="text-muted-foreground text-[10px]">
-                            followers
-                          </p>
-                        </div>
-                        <div className="hidden text-center sm:block">
-                          <p className="font-bold text-foreground">
-                            {formatCount(profile.followingCount)}
-                          </p>
-                          <p className="text-muted-foreground text-[10px]">
-                            following
-                          </p>
-                        </div>
-                        {profile.externalUrl && (
-                          <a
-                            href={profile.externalUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={e => e.stopPropagation()}
-                            className="ml-auto hidden items-center gap-1 text-primary hover:underline sm:flex"
-                          >
-                            <ExternalLink className="h-3 w-3" />
-                            <span className="text-[10px] truncate max-w-[120px]">
-                              {profile.externalUrl.replace(/^https?:\/\//, "")}
-                            </span>
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {profile.isPrivate && (
-                    <>
-                      <Separator className="my-3" />
-                      <p className="text-xs text-orange-400 flex items-center gap-1.5">
-                        <Lock className="h-3 w-3" />
-                        This account is private. Only public accounts can be
-                        analyzed.
-                      </p>
-                    </>
-                  )}
-                </div>
-              )}
-
-              {/* Profile Error */}
-              {profileError && (
-                <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 animate-in fade-in duration-200">
-                  <p className="text-xs text-destructive flex items-center gap-1.5">
-                    <XCircle className="h-3 w-3 shrink-0" />
-                    {profileError}
-                  </p>
-                  {isLikelyInstagramRateLimitMessage(profileError) ? (
-                    <div className="mt-3 flex flex-col gap-2 border-t border-destructive/15 pt-3 sm:flex-row sm:items-center sm:justify-between">
-                      <p className="text-xs text-muted-foreground">
-                        Skip the wait: open a hand-picked creator with reels already loaded.
-                      </p>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        size="sm"
-                        className="min-h-10 w-full shrink-0 sm:w-auto"
-                        onClick={() =>
-                          document
-                            .getElementById("featured-creators")
-                            ?.scrollIntoView({ behavior: "smooth", block: "start" })
-                        }
-                      >
-                        Browse featured creators
-                      </Button>
-                    </div>
-                  ) : null}
-                </div>
-              )}
+              {profilePreviewCard}
 
               <div className="space-y-2">
                 <Label
