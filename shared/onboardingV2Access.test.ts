@@ -96,7 +96,32 @@ describe("resolveExperienceAccess", () => {
     expect(resolveExperienceAccess(null, cfg({ ONBOARDING_V2_MODE: "internal" }))).toEqual({
       onboarding: "legacy",
       home: "research",
+      sidebar: "legacy",
       internal: false,
     });
+  });
+});
+
+describe("sidebar v2 (SIDEBAR_V2_MODE)", () => {
+  it("is off by default for everyone, admins included", () => {
+    for (const u of [customer, newSignup, admin, tester]) {
+      expect(resolveExperienceAccess(u, cfg({})).sidebar).toBe("legacy");
+    }
+  });
+
+  it("internal: admins and allowlisted testers only", () => {
+    const c = cfg({ SIDEBAR_V2_MODE: "internal", EXPERIENCE_V2_INTERNAL_EMAILS: "tester@spyreels.ai" });
+    expect(resolveExperienceAccess(admin, c).sidebar).toBe("v2");
+    expect(resolveExperienceAccess(tester, c).sidebar).toBe("v2");
+    expect(resolveExperienceAccess(customer, c).sidebar).toBe("legacy");
+  });
+
+  it("does not depend on onboarding or Home v2", () => {
+    const c = cfg({ SIDEBAR_V2_MODE: "all", ONBOARDING_V2_MODE: "off", HOME_V2_MODE: "off" });
+    expect(resolveExperienceAccess(customer, c)).toMatchObject({ onboarding: "legacy", home: "research", sidebar: "v2" });
+  });
+
+  it("unknown values fail closed", () => {
+    expect(resolveExperienceAccess(admin, cfg({ SIDEBAR_V2_MODE: "yes" })).sidebar).toBe("legacy");
   });
 });

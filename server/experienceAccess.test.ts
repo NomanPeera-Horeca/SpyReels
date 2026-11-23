@@ -18,6 +18,14 @@ describe("getExperienceAccess", () => {
     expect((await getExperienceAccess(admin, async () => true)).onboarding).toBe("v2");
   });
 
+  it("keeps the sidebar answer even before the personalization tables exist", async () => {
+    const savedSidebar = process.env.SIDEBAR_V2_MODE;
+    process.env.ONBOARDING_V2_MODE = "internal";
+    process.env.SIDEBAR_V2_MODE = "internal";
+    expect(await getExperienceAccess(admin, async () => false)).toMatchObject({ onboarding: "legacy", sidebar: "v2" });
+    process.env.SIDEBAR_V2_MODE = savedSidebar;
+  });
+
   it("does not even check the database when the mode is off", async () => {
     process.env.ONBOARDING_V2_MODE = "off";
     let called = false;

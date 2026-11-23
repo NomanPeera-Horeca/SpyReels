@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { SidebarV2PageLink } from "@/components/SidebarV2PageLink";
+import { CreditCard } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { usePostHog } from "@posthog/react";
 import { Button } from "@/components/ui/button";
@@ -120,6 +122,9 @@ export default function Settings() {
         <h1 className="text-xl font-semibold tracking-tight text-foreground">
           Settings
         </h1>
+        <div className="ml-auto">
+          <SidebarV2PageLink href="/billing" label="Billing" icon={CreditCard} testId="settings-billing-link" />
+        </div>
       </div>
 
       <FeatureRequestCard />

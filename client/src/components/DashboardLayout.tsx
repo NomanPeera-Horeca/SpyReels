@@ -88,6 +88,13 @@ import { resolvePrimaryNicheLabel } from "@shared/primaryNiche";
 import { trpc } from "@/lib/trpc";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
+import {
+  ASK_AGENT_PATH,
+  SETTINGS_PATH,
+  accountSubtitle,
+  buildSidebarV2Sections,
+  isSidebarV2Active,
+} from "./sidebarV2";
 
 const adminMenuItems = [{ icon: Shield, label: "Admin", path: "/admin" }];
 
@@ -322,6 +329,62 @@ function SidebarNavLink({
   );
 }
 
+/**
+ * Sidebar v2 (SIDEBAR_V2_MODE): the selected item uses the Figma Nav Item
+ * "Active" look (light brand tint, brand text), not a solid fill.
+ */
+const V2_ACTIVE =
+  "shadow-none! bg-[var(--sr-color-brand-surface-subtle)] text-[var(--sr-color-text-brand)] font-medium hover:bg-[var(--sr-color-brand-surface-subtle)] hover:text-[var(--sr-color-text-brand)] data-[active=true]:bg-[var(--sr-color-brand-surface-subtle)] data-[active=true]:text-[var(--sr-color-text-brand)] [&>svg]:text-[var(--sr-color-text-brand)]";
+
+function SidebarV2Link({
+  item,
+  isActive,
+}: {
+  item: { icon: LucideIcon; label: string; path: string; badge?: "new" };
+  isActive: boolean;
+}) {
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        asChild
+        isActive={isActive}
+        tooltip={item.label}
+        className={cn("h-10 font-normal transition-colors", isActive && V2_ACTIVE)}
+      >
+        <Link href={item.path} aria-current={isActive ? "page" : undefined}>
+          <item.icon className="h-4 w-4" />
+          <span>{item.label}</span>
+          {item.badge ? <NavBadge active={false} kind={item.badge} /> : null}
+        </Link>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+}
+
+/** The main action, first in the sidebar: a solid brand button with a "Beta" badge. Icon only when collapsed. */
+function AskAgentButton({ isActive }: { isActive: boolean }) {
+  return (
+    <SidebarMenu className="px-2 pb-1">
+      <SidebarMenuItem>
+        <SidebarMenuButton
+          asChild
+          isActive={isActive}
+          tooltip="Ask Agent (Beta)"
+          className="h-11 bg-primary font-semibold text-primary-foreground shadow-sm hover:bg-primary/90 hover:text-primary-foreground data-[active=true]:bg-primary data-[active=true]:text-primary-foreground group-data-[collapsible=icon]:justify-center [&>svg]:text-primary-foreground"
+        >
+          <Link href={ASK_AGENT_PATH} data-testid="sidebar-ask-agent">
+            <Sparkles className="h-4 w-4" />
+            <span className="group-data-[collapsible=icon]:hidden">Ask Agent</span>
+            <span className="ml-auto shrink-0 rounded-full bg-[var(--sr-color-brand-surface-subtle)] px-2 py-px text-[12px] font-normal leading-4 text-[var(--sr-color-text-brand)] group-data-[collapsible=icon]:hidden">
+              Beta
+            </span>
+          </Link>
+        </SidebarMenuButton>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  );
+}
+
 export default function DashboardLayout({
   children,
 }: {
@@ -376,18 +439,28 @@ function DashboardLayoutContent({
   useActivityHeartbeat(Boolean(user));
   const [location, setLocation] = useLocation();
   const searchString = useSearch();
-  const { state, toggleSidebar } = useSidebar();
+  const { state, toggleSidebar, setOpen } = useSidebar();
   const isCollapsed = state === "collapsed";
   const { activeJobs } = useActiveResearchJobs();
   useScrapeCompletionNotifier();
   const [isResizing, setIsResizing] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
-  const { themePreference, setThemePreference, switchable } = useTheme();
+  const { themePreference, setThemePreference, switchable, resolvedTheme } = useTheme();
   const { access: experienceAccess } = useExperienceAccess();
   const homeV2 = experienceAccess.home === "v2";
+  const sidebarV2 = experienceAccess.sidebar === "v2";
   const navSections = buildNavSections(isAdminPanelClient(user), homeV2);
-  const flatNavItems = navSections.flatMap((section) => section.items);
+  const v2Sections = buildSidebarV2Sections({ homeV2, showUnpolishedTools: isAdminPanelClient(user) });
+  const flatNavItems = sidebarV2
+    ? [
+        { icon: Sparkles, label: "Agent", path: ASK_AGENT_PATH },
+        ...v2Sections.flatMap((section) => section.items),
+        { icon: Settings, label: "Settings", path: SETTINGS_PATH },
+      ]
+    : navSections.flatMap((section) => section.items);
+  const isItemActive = (path: string) =>
+    sidebarV2 ? isSidebarV2Active(location, path, homeV2) : isSidebarPathActive(location, path, homeV2);
 
   const onboardingStateQuery = trpc.onboarding.getState.useQuery(undefined, {
     staleTime: 60_000,
@@ -415,12 +488,22 @@ function DashboardLayoutContent({
       : savedTargetAudience;
 
   const activeMenuItem =
-    flatNavItems.find((item) => isSidebarPathActive(location, item.path, homeV2)) ??
+    flatNavItems.find((item) => isItemActive(item.path)) ??
     adminMenuItems.find((item) => isSidebarPathActive(location, item.path));
 
   useEffect(() => {
     recordAppNavigation(getCurrentAppPath());
   }, [location, searchString]);
+
+  // Sidebar v2: tablets (768-1023px) start with the icons-only sidebar. Once per visit;
+  // the toggle still opens it.
+  const tabletCollapsedRef = useRef(false);
+  useEffect(() => {
+    if (!sidebarV2 || tabletCollapsedRef.current) return;
+    tabletCollapsedRef.current = true;
+    const w = window.innerWidth;
+    if (w >= 768 && w < 1024) setOpen(false);
+  }, [sidebarV2, setOpen]);
 
   useEffect(() => {
     if (isCollapsed) {
@@ -466,7 +549,11 @@ function DashboardLayoutContent({
       <div className="relative" ref={sidebarRef}>
         <Sidebar
           collapsible="icon"
-          className="border-r-0"
+          className={cn(
+            "border-r-0",
+            // Sidebar v2 uses the Figma --sr-* tokens; the scope gives them their light/dark values.
+            sidebarV2 && (resolvedTheme === "dark" ? "sr-scope-dark" : "sr-scope-light")
+          )}
           disableTransition={isResizing}
         >
           <WorkspaceSwitcher />
@@ -523,20 +610,36 @@ function DashboardLayoutContent({
                 )}
               </button>
               {!isCollapsed ? (
-                <Link href="/research" className="min-w-0 hover:opacity-90">
+                <Link href={sidebarV2 && homeV2 ? "/" : "/research"} className="min-w-0 hover:opacity-90">
                   <SpyReelsWordmark />
                 </Link>
               ) : null}
             </div>
           </SidebarHeader>
 
-          {!isCollapsed ? (
+          {sidebarV2 ? (
+            <AskAgentButton isActive={isItemActive(ASK_AGENT_PATH)} />
+          ) : !isCollapsed ? (
             <SidebarNicheCard nicheLabel={nicheLabel} targetAudience={targetAudience} />
           ) : null}
 
           <SidebarContent className="gap-0">
             <SidebarMenu className="px-2 py-1">
-              {navSections.map((section) => (
+              {sidebarV2
+                ? v2Sections.map((section) => (
+                    <Fragment key={section.id}>
+                      {section.label ? (
+                        <div className="px-3 pt-4 pb-1 text-xs font-normal text-muted-foreground group-data-[collapsible=icon]:hidden">
+                          {section.label}
+                        </div>
+                      ) : null}
+                      {section.items.map((item) => (
+                        <SidebarV2Link key={item.path} item={item} isActive={isItemActive(item.path)} />
+                      ))}
+                    </Fragment>
+                  ))
+                : null}
+              {!sidebarV2 && navSections.map((section) => (
                 <Fragment key={section.id}>
                   {section.label ? (
                     <div className="px-3 pt-4 pb-1 text-xs font-medium text-muted-foreground uppercase tracking-wider group-data-[collapsible=icon]:hidden">
@@ -586,6 +689,14 @@ function DashboardLayoutContent({
           </SidebarContent>
 
           <SidebarFooter className="p-3">
+            {sidebarV2 ? (
+              <SidebarMenu className="border-b border-sidebar-border pb-2">
+                <SidebarV2Link
+                  item={{ icon: Settings, label: "Settings", path: SETTINGS_PATH }}
+                  isActive={isItemActive(SETTINGS_PATH)}
+                />
+              </SidebarMenu>
+            ) : null}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-3 rounded-lg px-1 py-1 hover:bg-accent/50 transition-colors w-full text-left group-data-[collapsible=icon]:justify-center focus:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -599,7 +710,7 @@ function DashboardLayoutContent({
                       {user?.name || "-"}
                     </p>
                     <p className="text-xs text-muted-foreground truncate mt-1.5">
-                      {user?.email || "-"}
+                      {sidebarV2 ? accountSubtitle(nicheLabel) ?? user?.email ?? "-" : user?.email || "-"}
                     </p>
                   </div>
                 </button>
@@ -630,6 +741,17 @@ function DashboardLayoutContent({
                   </DropdownMenuSub>
                 ) : null}
                 {switchable ? <DropdownMenuSeparator /> : null}
+                {sidebarV2 ? (
+                  <>
+                    <DropdownMenuItem asChild className="cursor-pointer">
+                      <Link href="/billing">
+                        <CreditCard className="mr-2 h-4 w-4" />
+                        <span>Billing</span>
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                ) : null}
                 <DropdownMenuItem
                   onClick={() => {
                     void logout();

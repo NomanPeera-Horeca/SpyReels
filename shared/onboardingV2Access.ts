@@ -21,6 +21,11 @@
  * Home v2 is only ever on for a user who also gets onboarding v2, so Home
  * can never ship ahead of onboarding.
  *
+ *   SIDEBAR_V2_MODE      off | internal | new_signups | all   (default off)
+ *
+ * The simplified sidebar (Figma page 18, approved 2026-11-23) is independent
+ * of onboarding: it only changes navigation, never data.
+ *
  * Unknown values fail closed to off.
  */
 export const EXPERIENCE_MODES = ["off", "internal", "new_signups", "all"] as const;
@@ -28,6 +33,7 @@ export type ExperienceMode = (typeof EXPERIENCE_MODES)[number];
 
 export const ONBOARDING_V2_MODE_ENV = "ONBOARDING_V2_MODE";
 export const HOME_V2_MODE_ENV = "HOME_V2_MODE";
+export const SIDEBAR_V2_MODE_ENV = "SIDEBAR_V2_MODE";
 export const EXPERIENCE_V2_INTERNAL_EMAILS_ENV = "EXPERIENCE_V2_INTERNAL_EMAILS";
 export const EXPERIENCE_V2_NEW_SIGNUPS_FROM_ENV = "EXPERIENCE_V2_NEW_SIGNUPS_FROM";
 
@@ -57,6 +63,7 @@ export function parseCutoff(raw: string | undefined | null): Date | null {
 export type ExperienceConfig = {
   onboardingMode: ExperienceMode;
   homeMode: ExperienceMode;
+  sidebarMode: ExperienceMode;
   internalEmails: Set<string>;
   newSignupsFrom: Date | null;
 };
@@ -67,6 +74,7 @@ export function readExperienceConfig(
   return {
     onboardingMode: parseExperienceMode(env[ONBOARDING_V2_MODE_ENV]),
     homeMode: parseExperienceMode(env[HOME_V2_MODE_ENV]),
+    sidebarMode: parseExperienceMode(env[SIDEBAR_V2_MODE_ENV]),
     internalEmails: parseEmailAllowlist(env[EXPERIENCE_V2_INTERNAL_EMAILS_ENV]),
     newSignupsFrom: parseCutoff(env[EXPERIENCE_V2_NEW_SIGNUPS_FROM_ENV]),
   };
@@ -81,6 +89,8 @@ export type ExperienceUser = {
 export type ExperienceAccess = {
   onboarding: "legacy" | "v2";
   home: "research" | "v2";
+  /** Navigation: today's sidebar, or the simplified one (SIDEBAR_V2_MODE). */
+  sidebar: "legacy" | "v2";
   /** True for admins and allowlisted testers (used to exclude from analytics). */
   internal: boolean;
 };
@@ -115,13 +125,15 @@ export function resolveExperienceAccess(
   user: ExperienceUser | null,
   cfg: ExperienceConfig
 ): ExperienceAccess {
-  if (!user) return { onboarding: "legacy", home: "research", internal: false };
+  if (!user) return { onboarding: "legacy", home: "research", sidebar: "legacy", internal: false };
   const internal = isInternalUser(user, cfg);
   const onboardingV2 = qualifies(cfg.onboardingMode, user, cfg, internal);
   const homeV2 = onboardingV2 && qualifies(cfg.homeMode, user, cfg, internal);
+  const sidebarV2 = qualifies(cfg.sidebarMode, user, cfg, internal);
   return {
     onboarding: onboardingV2 ? "v2" : "legacy",
     home: homeV2 ? "v2" : "research",
+    sidebar: sidebarV2 ? "v2" : "legacy",
     internal,
   };
 }

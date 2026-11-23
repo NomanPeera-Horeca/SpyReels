@@ -56,7 +56,7 @@ export function resetTablesReadyCacheForTests(): void {
   readyCache = null;
 }
 
-const LEGACY: ExperienceAccess = { onboarding: "legacy", home: "research", internal: false };
+const LEGACY: ExperienceAccess = { onboarding: "legacy", home: "research", sidebar: "legacy", internal: false };
 
 export async function getExperienceAccess(
   user: ExperienceUser | null,
@@ -64,7 +64,8 @@ export async function getExperienceAccess(
 ): Promise<ExperienceAccess> {
   const access = resolveExperienceAccess(user, readExperienceConfig(process.env));
   if (access.onboarding === "legacy") return access;
-  return (await tablesReady()) ? access : { ...LEGACY, internal: access.internal };
+  // The sidebar does not depend on the personalization tables: keep its answer.
+  return (await tablesReady()) ? access : { ...LEGACY, sidebar: access.sidebar, internal: access.internal };
 }
 
 /**
