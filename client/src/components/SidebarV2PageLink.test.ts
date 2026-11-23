@@ -7,7 +7,7 @@ import { Router } from "wouter";
 
 let sidebar: "legacy" | "v2" = "legacy";
 vi.mock("@/lib/experienceAccess", () => ({
-  useExperienceAccess: () => ({ ready: true, access: { onboarding: "v2", home: "v2", sidebar, internal: false }, retry: () => {} }),
+  useExperienceAccess: () => ({ ready: true, access: { onboarding: "v2", home: "v2", sidebar, research: "legacy", internal: false }, retry: () => {} }),
 }));
 
 import { SidebarV2PageLink } from "./SidebarV2PageLink";

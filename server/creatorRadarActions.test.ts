@@ -10,7 +10,8 @@ function source(relativePath: string): string {
 }
 
 describe("Creator Radar platform actions", () => {
-  const history = source("../client/src/pages/History.tsx");
+  // Creator Radar's list actions live in the shared My creators hook (also used by Creator Research).
+  const history = source("../client/src/pages/History.tsx") + source("../client/src/lib/myCreators.ts");
   const instagramRouter = source("./routers/scrapeRouter.ts");
   const tiktokRouter = source("./routers/tiktokScrapeRouter.ts");
   const youtubeRouter = source("./routers/youtubeScrapeRouter.ts");

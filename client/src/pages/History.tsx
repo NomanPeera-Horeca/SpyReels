@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
+import { Redirect } from "wouter";
+import { useExperienceAccess } from "@/lib/experienceAccess";
 import type { inferRouterOutputs } from "@trpc/server";
-import { trpc } from "@/lib/trpc";
+import { useMyCreators } from "@/lib/myCreators";
 import type { AppRouter } from "../../../server/routers";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +17,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useLocation } from "wouter";
 import { AppLink } from "@/components/AppLink";
 import {
   Radar,
@@ -38,12 +39,10 @@ import {
   Music2,
   Youtube,
 } from "lucide-react";
-import { toast } from "sonner";
 import { formatNumber } from "@/components/InlineWorkflow";
 import Tooltip from "@/components/Tooltip";
 import { seeCreatorsViralReelsCta } from "@/lib/creatorCtaCopy";
 import { ScrapeJobProgressUI } from "@/components/ScrapeJobProgressUI";
-import { listHasRunningScrapeJob } from "@/lib/activeScrapeJob";
 import { runningJobProgressSnapshot } from "@/hooks/useScrapeCompletionNotifier";
 import { isScrapeJobInFlight } from "@shared/scrapeProgressUi";
 
@@ -130,73 +129,23 @@ function readableNiche(slug: string | null | undefined): string | null {
 type SortKey = "updated" | "reels" | "followers" | "engagement";
 type LayoutMode = "gallery" | "rows";
 
+/**
+ * Creator Radar. On the combined Creator Research page (RESEARCH_V2_MODE) it is
+ * the "My creators" tab, so the old address forwards there.
+ */
 export default function History() {
-  const [, setLocation] = useLocation();
-  const jobsQuery = trpc.scrape.list.useQuery(undefined, {
-    refetchInterval: (q) => (listHasRunningScrapeJob(q.state.data) ? 3000 : false),
-    refetchOnWindowFocus: true,
-  });
-  const tiktokJobsQuery = trpc.tiktokScrape.list.useQuery(undefined, {
-    refetchInterval: (q) =>
-      q.state.data?.some((job) => isScrapeJobInFlight(job.status)) ? 3000 : false,
-    refetchOnWindowFocus: true,
-  });
-  const youtubeJobsQuery = trpc.youtubeScrape.list.useQuery(undefined, {
-    refetchInterval: (q) =>
-      q.state.data?.some((job) => isScrapeJobInFlight(job.status)) ? 3000 : false,
-    refetchOnWindowFocus: true,
-  });
-  const utils = trpc.useUtils();
+  const { access } = useExperienceAccess();
+  if (access.research === "v2") return <Redirect to="/research?tab=my" />;
+  return <CreatorRadarPage />;
+}
 
+function CreatorRadarPage() {
   const [sortBy, setSortBy] = useState<SortKey>("updated");
   const [layout, setLayout] = useState<LayoutMode>("gallery");
-
-  const deduplicatedJobs = useMemo(() => {
-    const combined: HistoryJobRow[] = [
-      ...(jobsQuery.data ?? []).map((job) => ({
-        ...job,
-        platform: "instagram" as const,
-      })),
-      ...(tiktokJobsQuery.data ?? []).map((job) => ({
-        ...job,
-        platform: "tiktok" as const,
-      })),
-      ...(youtubeJobsQuery.data ?? []).map((job) => ({
-        ...job,
-        platform: "youtube" as const,
-        followerCount: job.subscriberCount,
-      })),
-    ];
-    const handleMap = new Map<string, HistoryJobRow>();
-    for (const job of combined) {
-      const key = `${job.platform}:${job.handle.toLowerCase()}`;
-      const existing = handleMap.get(key);
-      if (!existing) {
-        handleMap.set(key, job);
-      } else if (jobVideoCount(job) > jobVideoCount(existing)) {
-        handleMap.set(key, job);
-      }
-    }
-    return Array.from(handleMap.values());
-  }, [jobsQuery.data, tiktokJobsQuery.data, youtubeJobsQuery.data]);
-
-  const sortedJobs = useMemo(() => {
-    const list = [...deduplicatedJobs];
-    const engagement = (j: HistoryJobRow) => j.reelStats?.avgEngagementPct ?? 0;
-    switch (sortBy) {
-      case "reels":
-        return list.sort((a, b) => jobVideoCount(b) - jobVideoCount(a));
-      case "followers":
-        return list.sort((a, b) => (b.followerCount || 0) - (a.followerCount || 0));
-      case "engagement":
-        return list.sort((a, b) => engagement(b) - engagement(a));
-      case "updated":
-      default:
-        return list.sort(
-          (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-        );
-    }
-  }, [deduplicatedJobs, sortBy]);
+  // Data and actions are shared with the combined Creator Research page.
+  const mine = useMyCreators(sortBy);
+  const { jobsQuery, tiktokJobsQuery, youtubeJobsQuery } = mine.queries;
+  const sortedJobs = mine.jobs as HistoryJobRow[];
 
   const summary = useMemo(() => {
     let reels = 0;
@@ -210,94 +159,12 @@ export default function History() {
     return { accounts: sortedJobs.length, reels, followers, views };
   }, [sortedJobs]);
 
-  const resyncMutation = trpc.scrape.resync.useMutation({
-    onError: (error) => {
-      toast.error("Refresh failed", { description: error.message });
-    },
-  });
-  const resyncTikTokMutation = trpc.tiktokScrape.resync.useMutation({
-    onError: (error) => {
-      toast.error("Refresh failed", { description: error.message });
-    },
-  });
-  const resyncYouTubeMutation = trpc.youtubeScrape.resync.useMutation({
-    onError: (error) => {
-      toast.error("Refresh failed", { description: error.message });
-    },
-  });
-
-  const refreshPending =
-    resyncMutation.isPending ||
-    resyncTikTokMutation.isPending ||
-    resyncYouTubeMutation.isPending;
-
-  const isRefreshingJob = (job: HistoryJobRow) => {
-    if (job.platform === "instagram") {
-      return resyncMutation.isPending && resyncMutation.variables?.jobId === job.id;
-    }
-    if (job.platform === "tiktok") {
-      return resyncTikTokMutation.isPending && resyncTikTokMutation.variables?.jobId === job.id;
-    }
-    return resyncYouTubeMutation.isPending && resyncYouTubeMutation.variables?.jobId === job.id;
-  };
-
+  const refreshPending = mine.refreshPending;
+  const isRefreshingJob = (job: HistoryJobRow) => mine.isRefreshing(job);
   const handleRefresh = (e: React.MouseEvent, job: HistoryJobRow) => {
     e.stopPropagation();
-    const onSuccess = () => {
-      if (job.platform === "instagram") {
-        void utils.scrape.list.invalidate();
-        void utils.scrape.status.invalidate({ jobId: job.id });
-        void utils.reels.list.invalidate({ jobId: job.id });
-      } else if (job.platform === "tiktok") {
-        void utils.tiktokScrape.list.invalidate();
-        void utils.tiktokScrape.progress.invalidate({ jobId: job.id });
-        void utils.tiktokScrape.videos.invalidate({ jobId: job.id });
-      } else {
-        void utils.youtubeScrape.list.invalidate();
-        void utils.youtubeScrape.progress.invalidate({ jobId: job.id });
-        void utils.youtubeScrape.videos.invalidate({ jobId: job.id });
-      }
-      toast.success(job.status === "failed" ? "Retry started" : "Refreshing creator", {
-        description: "Your existing results stay available until fresh data is ready.",
-      });
-    };
-
-    if (job.platform === "instagram") {
-      resyncMutation.mutate({ jobId: job.id }, { onSuccess });
-    } else if (job.platform === "tiktok") {
-      resyncTikTokMutation.mutate({ jobId: job.id }, { onSuccess });
-    } else {
-      resyncYouTubeMutation.mutate({ jobId: job.id }, { onSuccess });
-    }
+    mine.refresh(job);
   };
-
-  const deleteMutation = trpc.scrape.delete.useMutation({
-    onSuccess: () => {
-      toast.success("Removed from Creator Radar");
-      utils.scrape.list.invalidate();
-    },
-    onError: (error) => {
-      toast.error("Couldn’t remove", { description: error.message });
-    },
-  });
-  const deleteTikTokMutation = trpc.tiktokScrape.delete.useMutation({
-    onSuccess: () => {
-      toast.success("Removed from Creator Radar");
-      utils.tiktokScrape.list.invalidate();
-    },
-    onError: (error) => {
-      toast.error("Couldn’t remove", { description: error.message });
-    },
-  });
-  const deleteYouTubeMutation = trpc.youtubeScrape.delete.useMutation({
-    onSuccess: () => {
-      toast.success("Removed from Creator Radar");
-      utils.youtubeScrape.list.invalidate();
-    },
-    onError: (error) => {
-      toast.error("Couldn’t remove", { description: error.message });
-    },
-  });
 
   const handleDelete = (
     e: React.MouseEvent,
@@ -306,36 +173,18 @@ export default function History() {
     platform: HistoryJobRow["platform"]
   ) => {
     e.stopPropagation();
+    const job = sortedJobs.find((j) => j.id === jobId && j.platform === platform);
     if (
+      job &&
       confirm(
         `Remove @${handle} from Creator Radar? This deletes the videos stored for that research session.`
       )
     ) {
-      if (platform === "instagram") {
-        deleteMutation.mutate({ jobId });
-      } else if (platform === "tiktok") {
-        deleteTikTokMutation.mutate({ jobId });
-      } else {
-        deleteYouTubeMutation.mutate({ jobId });
-      }
+      mine.remove(job);
     }
   };
 
-  const openJob = (job: HistoryJobRow) => {
-    if (job.status === "completed" || job.status === "running") {
-      if (job.platform === "instagram") {
-        setLocation(`/dashboard?jobId=${job.id}&from=history`);
-      } else if (job.platform === "tiktok") {
-        setLocation(
-          `/research?platform=tiktok&jobId=${job.id}&from=history`
-        );
-      } else {
-        setLocation(
-          `/research?platform=youtube&jobId=${job.id}&from=history`
-        );
-      }
-    }
-  };
+  const openJob = (job: HistoryJobRow) => mine.open(job, "history");
 
   return (
     <div className="mx-auto max-w-7xl px-2 pb-10 pt-2 sm:px-0">
@@ -733,7 +582,7 @@ export default function History() {
                         handleDelete(e, job.id, job.handle, job.platform)
                       }
                       disabled={
-                        deleteMutation.isPending || deleteTikTokMutation.isPending || deleteYouTubeMutation.isPending
+                        mine.removing
                       }
                       title="Remove from Creator Radar"
                     >
@@ -890,7 +739,7 @@ export default function History() {
                       handleDelete(e, job.id, job.handle, job.platform)
                     }
                     disabled={
-                      deleteMutation.isPending || deleteTikTokMutation.isPending || deleteYouTubeMutation.isPending
+                      mine.removing
                     }
                   >
                     <Trash2 className="h-4 w-4" />
