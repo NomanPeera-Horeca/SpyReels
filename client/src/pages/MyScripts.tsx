@@ -1,3 +1,5 @@
+import { SidebarV2PageLink } from "@/components/SidebarV2PageLink";
+import { ClipboardPaste } from "lucide-react";
 import {
   useState,
   useMemo,
@@ -400,6 +402,8 @@ export default function MyScripts() {
           </p>
         </div>
 
+        <div className="flex flex-wrap items-center gap-2">
+        <SidebarV2PageLink href="/paste" label="Paste a script" icon={ClipboardPaste} testId="scripts-paste-link" />
         {/* View Mode Toggle */}
         <div className="flex items-center gap-1 rounded-lg border border-border/50 p-0.5">
           <button
@@ -447,6 +451,7 @@ export default function MyScripts() {
               <Lock className="h-3 w-3 text-primary/80" />
             ) : null}
           </button>
+        </div>
         </div>
       </div>
 

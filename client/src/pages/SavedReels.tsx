@@ -1,4 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { SidebarV2PageLink } from "@/components/SidebarV2PageLink";
+import { Inbox } from "lucide-react";
 import { platformFromReelUrl } from "@/lib/reelUrlPlatform";
 import { usePostHog } from "@posthog/react";
 import type { inferRouterOutputs } from "@trpc/server";
@@ -638,6 +640,7 @@ export default function SavedReels() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          <SidebarV2PageLink href="/collected" label="Collected reels" icon={Inbox} testId="saved-collected-link" />
           <div className="flex items-center gap-0.5 rounded-md border border-border/50 bg-muted/30 p-0.5">
             <Button
               type="button"

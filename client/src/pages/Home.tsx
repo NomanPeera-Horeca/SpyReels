@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { SidebarV2PageLink } from "@/components/SidebarV2PageLink";
+import { Radar } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { usePostHog } from "@posthog/react";
 import { Button } from "@/components/ui/button";
@@ -642,9 +644,12 @@ export default function Home() {
   return (
     <div className="mx-auto w-full min-w-0 max-w-6xl px-2 pt-4 sm:px-0 sm:pt-8 md:pt-10">
       <div className="mx-auto max-w-3xl">
-        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          Spy Viral Reels
-        </p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Spy Viral Reels
+          </p>
+          <SidebarV2PageLink href="/history" label="My creators" icon={Radar} testId="research-my-creators-link" />
+        </div>
         <div className="mt-2 flex min-w-0 items-center gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
             <Film className="h-5 w-5 text-primary" />
