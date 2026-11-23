@@ -39,6 +39,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useMyCreators, type MyCreatorJob } from "@/lib/myCreators";
 import { compactCount, creatorRowStatus, initialResearchTab, type ResearchTab } from "./creatorResearchModel";
+import { UnderlineTabs } from "./ResearchBoxV2";
 
 export type ExploreCreator = {
   id: number;
@@ -83,28 +84,17 @@ function Avatar({ src, label, size }: { src?: string | null; label: string; size
 }
 
 function ResearchTabs({ tab, onChange, myCount }: { tab: ResearchTab; onChange: (t: ResearchTab) => void; myCount: number }) {
-  const item = (id: ResearchTab, label: string) => (
-    <button
-      type="button"
-      role="tab"
-      aria-selected={tab === id}
-      onClick={() => onChange(id)}
-      className={cn(
-        "-mb-px border-b-2 px-1 pb-2 text-sm transition-colors",
-        tab === id
-          ? "border-[var(--sr-color-brand-primary)] font-medium text-[var(--sr-color-text-brand)]"
-          : "border-transparent text-[var(--sr-color-text-secondary)] hover:text-[var(--sr-color-text-primary)]"
-      )}
-      data-testid={`research-tab-${id}`}
-    >
-      {label}
-    </button>
-  );
   return (
-    <div role="tablist" className="flex gap-6 border-b border-[var(--sr-color-border-subtle)]">
-      {item("my", myCount > 0 ? `My creators · ${myCount}` : "My creators")}
-      {item("explore", "Explore creators")}
-    </div>
+    <UnderlineTabs
+      items={[
+        { id: "my" as const, label: myCount > 0 ? `My creators · ${myCount}` : "My creators" },
+        { id: "explore" as const, label: "Explore creators" },
+      ]}
+      value={tab}
+      onChange={onChange}
+      ruled
+      testIdPrefix="research-tab"
+    />
   );
 }
 
@@ -124,6 +114,75 @@ function CreatorRow({
   onRemove: () => void;
 }) {
   const status = creatorRowStatus(job);
+  const menu = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          onClick={e => e.stopPropagation()}
+          onKeyDown={e => e.stopPropagation()}
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--sr-radius-8)] text-[var(--sr-color-text-secondary)] hover:bg-[var(--sr-color-surface-hover)]"
+          aria-label={`More options for @${job.handle}`}
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-64" onClick={e => e.stopPropagation()}>
+        <DropdownMenuItem onSelect={onRefresh} disabled={refreshing || status.kind === "researching"}>
+          <RefreshCw className={cn("mr-2 h-4 w-4", refreshing && "animate-spin")} />
+          {job.status === "failed" ? "Try again" : "Refresh videos"}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onRemove} className="text-destructive focus:text-destructive">
+          <Trash2 className="mr-2 h-4 w-4" />
+          Remove from My creators
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  // Figma "Edge · Researching a creator": a highlighted row with a progress bar.
+  if (status.kind === "researching") {
+    const pct = Math.max(4, Math.min(100, job.progressPercent ?? 0));
+    return (
+      <div
+        className="flex items-center gap-3 rounded-[var(--sr-radius-12)] bg-[var(--sr-color-brand-surface-subtle)] px-4 py-4"
+        data-testid="my-creator-row"
+        aria-live="polite"
+      >
+        <Loader2 className="h-5 w-5 shrink-0 animate-spin text-[var(--sr-color-text-brand)]" aria-hidden />
+        <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-[15px] font-semibold text-[var(--sr-color-text-primary)]">Researching @{job.handle}…</span>
+            <PlatformFullColorMark platform={job.platform} size={16} />
+          </div>
+          <p className="mt-0.5 text-xs text-[var(--sr-color-text-secondary)]">
+            {job.status === "pending" ? "Waiting to start." : "Finding their best videos."} Usually takes 1 to 3 minutes. You can leave this page.
+          </p>
+          <div
+            className="mt-2 h-2 w-full max-w-xs overflow-hidden rounded-full bg-[var(--sr-color-surface-default)]"
+            role="progressbar"
+            aria-valuenow={job.progressPercent ?? 0}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label={`Research progress for @${job.handle}`}
+          >
+            <div className="h-full rounded-full bg-[var(--sr-color-brand-primary)] transition-all" style={{ width: `${pct}%` }} />
+          </div>
+        </div>
+        {canOpen ? (
+          <button
+            type="button"
+            onClick={onOpen}
+            className="hidden shrink-0 items-center gap-1 text-sm font-medium text-[var(--sr-color-text-brand)] sm:flex"
+          >
+            See progress <ArrowRight className="h-4 w-4" aria-hidden />
+          </button>
+        ) : null}
+        {menu}
+      </div>
+    );
+  }
+
   return (
     <div
       role={canOpen ? "button" : undefined}
@@ -154,7 +213,6 @@ function CreatorRow({
             status.kind === "failed" ? "text-[var(--sr-color-status-error-foreground)]" : "text-[var(--sr-color-text-tertiary)]"
           )}
         >
-          {status.kind === "researching" ? <Loader2 className="h-3 w-3 shrink-0 animate-spin" aria-hidden /> : null}
           <span className="truncate">{status.text}</span>
         </p>
       </div>
@@ -163,29 +221,7 @@ function CreatorRow({
           Open videos <ArrowRight className="h-4 w-4" aria-hidden />
         </span>
       ) : null}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            onClick={e => e.stopPropagation()}
-            onKeyDown={e => e.stopPropagation()}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[var(--sr-radius-8)] text-[var(--sr-color-text-secondary)] hover:bg-[var(--sr-color-surface-hover)]"
-            aria-label={`More options for @${job.handle}`}
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-64" onClick={e => e.stopPropagation()}>
-          <DropdownMenuItem onSelect={onRefresh} disabled={refreshing || status.kind === "researching"}>
-            <RefreshCw className={cn("mr-2 h-4 w-4", refreshing && "animate-spin")} />
-            {job.status === "failed" ? "Try again" : "Refresh videos"}
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={onRemove} className="text-destructive focus:text-destructive">
-            <Trash2 className="mr-2 h-4 w-4" />
-            Remove from My creators
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {menu}
     </div>
   );
 }

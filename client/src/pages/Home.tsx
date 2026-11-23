@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useExperienceAccess } from "@/lib/experienceAccess";
 import { CreatorResearchV2 } from "@/components/creator-research/CreatorResearchV2";
+import { ResearchBoxV2 } from "@/components/creator-research/ResearchBoxV2";
 import { SidebarV2PageLink } from "@/components/SidebarV2PageLink";
 import { Radar } from "lucide-react";
 import { trpc } from "@/lib/trpc";
@@ -823,90 +824,50 @@ export default function Home() {
   }
 
   if (researchV2) {
-    const researchBoxV2 = (
-      <div className="space-y-4">
-        <Tabs value={platform} onValueChange={(value) => setPlatform(value as "instagram" | "tiktok" | "youtube")}>
-          <TabsList className="grid w-full max-w-sm grid-cols-3">
-            <TabsTrigger value="instagram">Instagram</TabsTrigger>
-            <TabsTrigger value="tiktok">TikTok</TabsTrigger>
-            <TabsTrigger value="youtube">YouTube</TabsTrigger>
-          </TabsList>
-        </Tabs>
-        {platform === "instagram" ? (
-          <form onSubmit={handleSubmit} className="space-y-3" data-testid="research-form-v2">
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <div className="relative min-w-0 flex-1">
-                <Input
-                  id="handle"
-                  placeholder="@username or profile link"
-                  value={handle}
-                  onChange={(e) => {
-                    setHandle(e.target.value);
-                    setHandleError(null);
-                  }}
-                  onBlur={() => {
-                    const n = normalizeInstagramHandle(handle);
-                    if (handle.trim() && !previewOk && !isValidInstagramHandleNormalized(n)) {
-                      setHandleError(INSTAGRAM_HANDLE_INVALID_MESSAGE);
-                    }
-                  }}
-                  className="h-11 pr-9"
-                  aria-label="Instagram username or profile link"
-                  aria-invalid={Boolean(handleError || profileError)}
-                  aria-describedby={handleError ? "handle-error" : undefined}
-                />
-                {isLoadingProfile ? (
-                  <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
-                ) : profileFound ? (
-                  <CheckCircle2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-500" />
-                ) : profileError ? (
-                  <XCircle className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-destructive" />
-                ) : null}
-              </div>
-              <Select value={timeframe} onValueChange={setTimeframe}>
-                <SelectTrigger className="h-11 sm:w-44" aria-label="Timeframe">
-                  <Clock className="mr-2 h-4 w-4 text-muted-foreground" />
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="30">Last 30 days</SelectItem>
-                  <SelectItem value="90">Last 90 days</SelectItem>
-                  <SelectItem value="180">Last 180 days</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button type="submit" className="h-11 px-6" disabled={startSpyingDisabled}>
-                {startScrape.isPending ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Starting…
-                  </>
-                ) : (
-                  "Research"
-                )}
-              </Button>
-            </div>
-            {handleError ? (
-              <p id="handle-error" className="text-sm text-destructive" role="alert">
-                {handleError}
-              </p>
-            ) : null}
-            {profilePreviewCard}
-            {!scrapeGate.isLoading && !scrapeGate.allowed ? (
-              <UpgradePrompt
-                action="scrapeCount"
-                used={scrapeGate.used}
-                limit={scrapeGate.limit}
-                planRequired={scrapeGate.planRequired}
-                variant="inline"
-              />
-            ) : null}
-          </form>
-        ) : platform === "tiktok" ? (
-          <TikTokResearch initialJobId={initialTikTokJobId} initialHandle={tiktokLandingHandle ?? undefined} />
-        ) : (
-          <YouTubeResearch initialJobId={initialYouTubeJobId} initialHandle={youtubeLandingHandle ?? undefined} />
-        )}
-      </div>
+    // A creator link from elsewhere (e.g. Home's "Creators going viral") starts
+    // TikTok / YouTube research automatically; the old flow handles that.
+    const landingAutostart =
+      (platform === "tiktok" && tiktokLandingHandle) || (platform === "youtube" && youtubeLandingHandle);
+    const researchBoxV2 = landingAutostart ? (
+      platform === "tiktok" ? (
+        <TikTokResearch initialJobId={initialTikTokJobId} initialHandle={tiktokLandingHandle ?? undefined} />
+      ) : (
+        <YouTubeResearch initialJobId={initialYouTubeJobId} initialHandle={youtubeLandingHandle ?? undefined} />
+      )
+    ) : (
+      <ResearchBoxV2
+        platform={platform}
+        onPlatformChange={setPlatform}
+        timeframe={timeframe}
+        onTimeframeChange={setTimeframe}
+        limit={{ loading: scrapeGate.isLoading, allowed: scrapeGate.allowed, limit: scrapeGate.limit }}
+        instagram={{
+          value: handle,
+          onChange: (value) => {
+            setHandle(value);
+            setHandleError(null);
+          },
+          onBlur: () => {
+            const n = normalizeInstagramHandle(handle);
+            if (handle.trim() && !previewOk && !isValidInstagramHandleNormalized(n)) {
+              setHandleError(INSTAGRAM_HANDLE_INVALID_MESSAGE);
+            }
+          },
+          statusIcon: isLoadingProfile ? (
+            <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-muted-foreground" />
+          ) : profileFound ? (
+            <CheckCircle2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-emerald-500" />
+          ) : profileError ? (
+            <XCircle className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-destructive" />
+          ) : null,
+          error: handleError,
+          invalid: Boolean(handleError || profileError),
+          submitting: startScrape.isPending,
+          submitDisabled: startSpyingDisabled,
+          onSubmit: requestStartSpy,
+          below: profilePreviewCard,
+        }}
+      />
     );
     return (
       <CreatorResearchV2
