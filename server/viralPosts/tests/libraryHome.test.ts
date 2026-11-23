@@ -70,3 +70,29 @@ describe("mergeHomeLists", () => {
     expect(mergeHomeLists([], ["x", "y"], 4, x => x)).toEqual(["x", "y"]);
   });
 });
+
+describe("starter fallback for a niche with no matches yet", () => {
+  it("is off unless HOME_STARTER_FALLBACK=on", async () => {
+    const { starterFallbackEnabled } = await import("../libraryHome");
+    const saved = process.env.HOME_STARTER_FALLBACK;
+    delete process.env.HOME_STARTER_FALLBACK;
+    expect(starterFallbackEnabled()).toBe(false);
+    process.env.HOME_STARTER_FALLBACK = "on";
+    expect(starterFallbackEnabled()).toBe(true);
+    process.env.HOME_STARTER_FALLBACK = saved;
+  });
+
+  it("calls the picks general only when none is matched to the niche", async () => {
+    const { onlyGeneralPicks } = await import("../libraryHome");
+    expect(onlyGeneralPicks([row({ handle: "a", tier: 3 }), row({ handle: "b", tier: 3 })])).toBe(true);
+    expect(onlyGeneralPicks([row({ handle: "a", tier: 3 }), row({ handle: "b", tier: 1 })])).toBe(false);
+    expect(onlyGeneralPicks([row({ handle: "a", tier: 2 })])).toBe(false);
+    // a ranker-labelled match is never "general"
+    expect(onlyGeneralPicks([row({ handle: "a", tier: 3, label: "Viral in your topics" })])).toBe(false);
+    expect(onlyGeneralPicks([])).toBe(false);
+  });
+
+  it("labels the general picks honestly on the card", () => {
+    expect(tierLabel(row({ handle: "a", tier: 3 }))).toBe("Viral format you can adapt");
+  });
+});

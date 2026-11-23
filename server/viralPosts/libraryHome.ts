@@ -33,6 +33,16 @@ import { relevanceArmFor, relevanceRankForProfile, relevanceTiersEnabled } from 
 import { relatedTips, relatedTipsEnabled } from "./relatedTips";
 import { RELEVANCE_VERSION, type ScoredVideo } from "./relevanceRanking";
 
+/**
+ * HOME_STARTER_FALLBACK=on: when nothing in the library matches a creator's
+ * niche yet (a new niche whose first search is still running), Home shows the
+ * strongest viral videos labelled "Viral format you can adapt" instead of an
+ * empty screen. Off by default.
+ */
+export function starterFallbackEnabled(): boolean {
+  return process.env.HOME_STARTER_FALLBACK === "on";
+}
+
 /** Card label for a relevance-ranked video. Pure; exported for tests. */
 export function relevanceLabel(s: Pick<ScoredVideo, "flags" | "parts">, opts: { related?: boolean; niche?: string } = {}): string {
   if (opts.related) return "Related inspiration · limited matches for your niche so far";
@@ -196,7 +206,14 @@ export type LibraryHome = {
   creators: IndexedHomeCreator[];
   /** The relevance ranker chose these (direct matches first, then related). Home shows them ahead of pool videos. */
   ranked?: boolean;
+  /** Only general viral formats (tier 3), nothing matched to the niche yet: Home says "General picks". */
+  starter?: boolean;
 };
+
+/** True when every picked row is a general viral format, none matched to the niche. Pure; exported for tests. */
+export function onlyGeneralPicks(rows: Pick<LibraryRow, "tier" | "label">[]): boolean {
+  return rows.length > 0 && rows.every(r => r.tier === 3 && !r.label);
+}
 
 /**
  * Library videos and creators for one creator profile. Null when the
@@ -246,6 +263,9 @@ export async function libraryHomeForProfile(args: {
       repo.getSavedCandidateIds(args.userId),
     ]);
     const arm = relevanceArmFor(args.userId);
+    // Set when the ranker found no match: then only general viral formats are shown (tier 3),
+    // never topic-tagged videos the ranker's relevance check already turned down.
+    let starterOnly = profileTopics.size === 0;
     if (arm === "new") {
       const ranked = await relevanceRankForProfile({ socialProfileId: args.socialProfileId, limit: Math.max(args.limit, args.creatorLimit) * 2, exclude: dismissed });
       if (ranked) {
@@ -320,13 +340,20 @@ export async function libraryHomeForProfile(args: {
           shown: rows.length,
           tiers,
         });
-        return { items: rows.slice(0, args.limit).map(toPostR), creators, ...(tiers && rows.length > 0 ? { ranked: true } : {}) };
+        // No match at all for this niche yet (new niche, library still filling): fall through to
+        // the starter fallback below instead of an empty Home (HOME_STARTER_FALLBACK).
+        if (!(rows.length === 0 && starterFallbackEnabled())) {
+          return { items: rows.slice(0, args.limit).map(toPostR), creators, ...(tiers && rows.length > 0 ? { ranked: true } : {}) };
+        }
+        console.info("[viralLibrary] home_starter_fallback", { userId: args.userId, reason: ranked.coverageReason ?? "no_match" });
+        starterOnly = true;
       }
     }
-    // The topic-based path below needs topics (ranking without them returned nothing usable).
-    if (profileTopics.size === 0) return null;
-    const tier1 = await loadRows({ topicSlugs: [...profileTopics], statuses: ["viral", "rising"], tier: 1, profileTopics, categoryOf });
-    const tier2 = await loadRows({ topicSlugs: siblingTopics, statuses: ["viral", "rising"], tier: 2, profileTopics, categoryOf });
+    // The topic-based path below needs topics, unless the starter fallback is on: then a
+    // creator with no topics yet still sees the strongest viral formats, labelled as such.
+    if (profileTopics.size === 0 && !starterFallbackEnabled()) return null;
+    const tier1 = starterOnly ? [] : await loadRows({ topicSlugs: [...profileTopics], statuses: ["viral", "rising"], tier: 1, profileTopics, categoryOf });
+    const tier2 = starterOnly ? [] : await loadRows({ topicSlugs: siblingTopics, statuses: ["viral", "rising"], tier: 2, profileTopics, categoryOf });
     const tier3 = await loadRows({ topicSlugs: null, statuses: ["viral"], tier: 3, profileTopics, categoryOf });
 
     const visible = [...tier1, ...tier2, ...tier3].filter(r => {
@@ -366,7 +393,7 @@ export async function libraryHomeForProfile(args: {
         bestPost: toPost(r),
       };
     });
-    return { items: videos.map(toPost), creators };
+    return { items: videos.map(toPost), creators, ...(onlyGeneralPicks(videos) ? { starter: true } : {}) };
   } catch (err) {
     console.warn("[viralLibrary] home_read_failed", { error: err instanceof Error ? err.message : String(err) });
     return null;
