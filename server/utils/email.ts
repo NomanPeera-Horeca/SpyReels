@@ -68,6 +68,39 @@ export async function sendPasswordResetEmail(toEmail: string, resetLink: string)
   });
 }
 
+const PROVIDER_NAMES: Record<string, { name: string; topUp: string }> = {
+  anthropic: { name: "Claude (Anthropic)", topUp: "https://console.anthropic.com/settings/billing" },
+  openai: { name: "OpenAI", topUp: "https://platform.openai.com/settings/organization/billing" },
+  deepgram: { name: "Deepgram", topUp: "https://console.deepgram.com" },
+  scrapecreators: { name: "ScrapeCreators", topUp: "https://app.scrapecreators.com" },
+};
+
+/** Owner alert: a provider ran out of credit or is low. `kind` is e.g. "openai_out_of_credit", "deepgram_low_balance". */
+export async function sendOwnerAlertEmail(toEmail: string, kind: string, message: string) {
+  const low = /_low_balance$/.test(kind);
+  const provider = kind.replace(/_(out_of_credits?|low_balance)$/, "");
+  const info = PROVIDER_NAMES[provider] ?? { name: provider, topUp: "" };
+  const headline = low ? `${info.name} balance is low` : `${info.name} is out of credit`;
+  await getResend().emails.send({
+    from: "SpyReels Alerts <noah.perry@mail.spyreels.ai>",
+    to: toEmail,
+    subject: `SpyReels: ${headline}`,
+    tags: [{ name: "template", value: "owner_billing_alert" }],
+    html: `
+      <div style="font-family: Inter, Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #111827;">
+        <h2 style="margin: 0 0 16px;">${escapeHtml(headline)}</h2>
+        <p style="margin: 0 0 12px; line-height: 1.6;">${escapeHtml(message)}</p>
+        ${
+          info.topUp
+            ? `<p style="margin: 0 0 12px; line-height: 1.6;">Top up here: <a href="${info.topUp}">${escapeHtml(info.topUp)}</a></p>`
+            : ""
+        }
+        <p style="margin: 0; line-height: 1.6; color: #6b7280;">You get this at most once every 6 hours per provider.</p>
+      </div>
+    `,
+  });
+}
+
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, "&amp;")

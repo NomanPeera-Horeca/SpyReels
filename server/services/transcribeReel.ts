@@ -82,6 +82,24 @@ const DEEPGRAM_MEDIA_OPTIONS = {
   detect_language: true,
 };
 
+/** Deepgram refused because the account has no credit left. Pure; exported for tests. */
+export function isDeepgramCreditError(status: number | undefined, message: string): boolean {
+  return status === 402 || /insufficient (funds|credit|balance)|out of credit|balance is too low/i.test(message);
+}
+
+/** Tell the owner (Telegram + email, throttled there). Never throws. */
+function alertDeepgramOutOfCredit(): void {
+  void import("../monitoring/alerts")
+    .then(m =>
+      m.alertOwnerThrottled({
+        kind: "deepgram_out_of_credit",
+        message:
+          "Deepgram is out of credit. Transcribing Instagram and TikTok videos fails (remakes from a link, video understanding) until credit is topped up.",
+      })
+    )
+    .catch(() => undefined);
+}
+
 function mapDeepgramCatch(
   err: unknown,
   shortcode: string
@@ -91,6 +109,7 @@ function mapDeepgramCatch(
   }
   if (err instanceof DeepgramError) {
     const code = err.statusCode;
+    if (isDeepgramCreditError(code, err.message)) alertDeepgramOutOfCredit();
     if (code === 429) {
       return fail("DEEPGRAM_RATE_LIMIT", shortcode, err.message);
     }

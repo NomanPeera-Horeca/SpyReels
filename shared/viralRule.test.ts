@@ -88,12 +88,16 @@ describe("classifyVirality: rising", () => {
 });
 
 describe("nextViralRecheckAt", () => {
-  it("re-checks rising videos on day 1, 3, 7 and 14, then stops", () => {
+  it("re-checks rising videos on day 3 and 7, then stops", () => {
     const published = new Date(NOW.getTime() - 30 * 3_600_000); // 30 hours old
     expect(nextViralRecheckAt({ status: "rising", publishedAt: published, now: NOW })?.getTime()).toBe(
       published.getTime() + 72 * 3_600_000
     );
-    expect(nextViralRecheckAt({ status: "rising", publishedAt: daysAgo(15), now: NOW })).toBeNull();
+    const fourDays = new Date(NOW.getTime() - 96 * 3_600_000);
+    expect(nextViralRecheckAt({ status: "rising", publishedAt: fourDays, now: NOW })?.getTime()).toBe(
+      fourDays.getTime() + 168 * 3_600_000
+    );
+    expect(nextViralRecheckAt({ status: "rising", publishedAt: daysAgo(8), now: NOW })).toBeNull();
     expect(nextViralRecheckAt({ status: "viral", publishedAt: published, now: NOW })).toBeNull();
   });
 });

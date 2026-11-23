@@ -8,7 +8,9 @@
  * This looks the channel up with one video-details call per Short, only for
  * Shorts that could ever be viral (at least VIRAL_RULE.minViews views):
  * - resolveShortChannels: new pool results, after the topic check;
- * - repairYouTubeLibraryCreators: Shorts already in the library (worker).
+ * - repairYouTubeLibraryCreators: Shorts already in the library (worker),
+ *   at most YOUTUBE_CHANNEL_REPAIRS_PER_DAY lookups a day (default 100),
+ *   counted in viral_processing_spend under "yr" + the UTC day.
  * - measureYouTubeBaselines: Shorts whose channel is known but whose usual
  *   views are not (worker).
  * All stop while ScrapeCreators is out of credits.
@@ -22,11 +24,16 @@ import { fetchYouTubeVideoDetails } from "../youtube";
 import type { AdaptedCandidate } from "./candidateAdapter";
 import { usualViewsFromRecent } from "@shared/viralRule";
 import { viralCreatorBaselines, viralProcessingSpend } from "../../drizzle/viralLibrarySchema";
+import { addToCount, countToday, dailyCapFromEnv, dailyCounterKey } from "./dailyCounter";
 import { classifyLibraryRows, isLibraryReady, libraryHandle, reclassifyCreatorUnknowns } from "./library";
 
 /** What the YouTube adapters store when the channel is unknown. */
 export const YOUTUBE_PLACEHOLDER_HANDLE = "youtube";
 const LOOKUP_CONCURRENCY = 4;
+
+export function youtubeChannelRepairsPerDay(): number {
+  return dailyCapFromEnv(process.env.YOUTUBE_CHANNEL_REPAIRS_PER_DAY, 100);
+}
 
 /** Channel fields of a candidate whose channel is unknown, null otherwise. Pure; exported for tests. */
 export function needsChannelLookup(c: { platform?: string | null; creatorHandle: string | null; views: number | null }): boolean {
@@ -89,7 +96,7 @@ export async function resolveShortChannels(
 export async function repairYouTubeLibraryCreators(args: { max?: number } = {}): Promise<{
   looked: number;
   fixed: number;
-  skipped?: "not_ready" | "out_of_credits" | "none";
+  skipped?: "not_ready" | "out_of_credits" | "none" | "daily_cap";
 }> {
   const out = { looked: 0, fixed: 0 };
   const db = await getDb();
@@ -107,12 +114,15 @@ export async function repairYouTubeLibraryCreators(args: { max?: number } = {}):
       .set({ creatorHandle: null, creatorId: null, creatorName: "YouTube creator" })
       .where(and(placeholder, sql`COALESCE(${viralPostCandidates.views}, 0) < ${VIRAL_RULE.minViews}`));
 
+    const dayKey = dailyCounterKey("yr");
+    const room = Math.min(Math.max(1, Math.min(200, args.max ?? 40)), youtubeChannelRepairsPerDay() - (await countToday(db, dayKey)));
+    if (room <= 0) return { ...out, skipped: "daily_cap" };
     const rows = await db
       .select()
       .from(viralPostCandidates)
       .where(and(placeholder, gte(viralPostCandidates.views, VIRAL_RULE.minViews)))
       .orderBy(desc(viralPostCandidates.views))
-      .limit(Math.max(1, Math.min(200, args.max ?? 40)));
+      .limit(room);
     if (rows.length === 0) return { ...out, skipped: "none" };
 
     const fixed: number[] = [];
@@ -131,6 +141,7 @@ export async function repairYouTubeLibraryCreators(args: { max?: number } = {}):
         .where(eq(viralPostCandidates.id, row.id));
       if (fields) fixed.push(row.id);
     });
+    await addToCount(db, dayKey, out.looked);
     out.fixed = fixed.length;
     if (fixed.length > 0) {
       const updated = await db.select().from(viralPostCandidates).where(inArray(viralPostCandidates.id, fixed));

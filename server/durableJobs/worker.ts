@@ -228,6 +228,30 @@ function startResearchPrefetch(): void {
 startResearchPrefetch();
 
 /**
+ * Low-balance warnings (server/monitoring/balanceWatch.ts): every hour, read
+ * the ScrapeCreators and Deepgram balances and email the owner when about a
+ * day is left. Off with BALANCE_WATCH=false.
+ */
+function startBalanceWatch(): void {
+  if (process.env.BALANCE_WATCH === "false") return;
+  let running = false;
+  const tick = () => {
+    if (running || draining) return;
+    running = true;
+    void import("../monitoring/balanceWatch")
+      .then(m => m.checkProviderBalances())
+      .catch(error => console.error("[balanceWatch] tick failed", error))
+      .finally(() => {
+        running = false;
+      });
+  };
+  setInterval(tick, 60 * 60_000);
+  setTimeout(tick, 2 * 60_000);
+}
+
+startBalanceWatch();
+
+/**
  * "Your viral videos" (OWN_WINNERS=on): every 6 hours, a database check that
  * queues creators' OWN accounts that are due: weekly if they posted in the
  * last 30 days, monthly if quiet. New accounts are queued when added.

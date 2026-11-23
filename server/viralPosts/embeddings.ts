@@ -18,6 +18,24 @@ export function resetEmbeddingPauseForTests(): void {
   pausedUntil = 0;
 }
 
+/** OpenAI's "no credit left" error codes. Pure; exported for tests. */
+export function isOpenAiCreditCode(code: string): boolean {
+  return /insufficient_quota|credit_balance_exhausted|billing/i.test(code);
+}
+
+/** Tell the owner (Telegram + email, throttled there). Never throws. */
+export function alertOpenAiOutOfCredit(): void {
+  void import("../monitoring/alerts")
+    .then(m =>
+      m.alertOwnerThrottled({
+        kind: "openai_out_of_credit",
+        message:
+          "OpenAI is out of credit. Matching videos to niches (embeddings) is paused, and the backup for Claude does not work until credit is topped up.",
+      })
+    )
+    .catch(() => undefined);
+}
+
 export async function embedTexts(texts: string[]): Promise<number[][] | null> {
   const key = process.env.OPENAI_API_KEY?.trim();
   const input = texts.map(t => t.replace(/\s+/g, " ").trim().slice(0, 2_000));
@@ -41,6 +59,7 @@ export async function embedTexts(texts: string[]): Promise<number[][] | null> {
       if (res.status === 429 || res.status === 401 || res.status === 403) {
         pausedUntil = Date.now() + PAUSE_AFTER_REFUSAL_MS;
       }
+      if (isOpenAiCreditCode(code)) alertOpenAiOutOfCredit();
       console.warn("[viralLibrary] embedding_failed", {
         status: res.status,
         code,

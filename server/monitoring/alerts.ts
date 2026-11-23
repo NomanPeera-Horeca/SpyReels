@@ -1,4 +1,5 @@
 import { notifyOwnerViaTelegram } from "../telegramBot";
+import { sendOwnerAlertEmail } from "../utils/email";
 
 /**
  * Owner alerting for production failures.
@@ -12,6 +13,11 @@ import { notifyOwnerViaTelegram } from "../telegramBot";
  *  - at most one alert per minute globally
  *  - suppressed occurrences are folded into the next send as a count
  *
+ * Billing alerts (kind ending in "_out_of_credit(s)" or "_low_balance", e.g.
+ * anthropic, openai, deepgram, scrapecreators) are also emailed to
+ * ALERT_EMAIL (or ADMIN_EMAIL), at most once per provider every 6 hours, so a
+ * provider running dry is noticed the same day even without Telegram.
+ *
  * Fire-and-forget: this never throws into the request/background path.
  */
 
@@ -23,6 +29,36 @@ const lastAlertByKey = new Map<string, number>();
 const suppressedByKey = new Map<string, number>();
 const sentByKind = new Map<string, number>();
 let lastGlobalAlertAt = 0;
+
+const BILLING_EMAIL_INTERVAL_MS = 6 * 60 * 60_000;
+const lastBillingEmailAt = new Map<string, number>();
+
+/** A provider ran out of credit, or is about to. Pure; exported for tests. */
+export function isBillingAlertKind(kind: string): boolean {
+  return /_(out_of_credits?|low_balance)$/.test(kind);
+}
+
+/** Where billing alerts are emailed (ALERT_EMAIL, else ADMIN_EMAIL), or null. Pure; exported for tests. */
+export function billingAlertEmail(env: Record<string, string | undefined> = process.env): string | null {
+  const to = (env.ALERT_EMAIL ?? "").trim() || (env.ADMIN_EMAIL ?? "").trim();
+  return to.includes("@") ? to : null;
+}
+
+/** Email a billing alert (out of credit / low balance), once per kind per 6 hours. Never throws. */
+function emailBillingAlert(kind: string, message: string, now: number): void {
+  if (!isBillingAlertKind(kind)) return;
+  const to = billingAlertEmail();
+  if (!to) return;
+  if ((lastBillingEmailAt.get(kind) ?? 0) + BILLING_EMAIL_INTERVAL_MS > now) return;
+  lastBillingEmailAt.set(kind, now);
+  void Promise.resolve()
+    .then(() => sendOwnerAlertEmail(to, kind, message))
+    .catch(err => console.warn("[monitoring] billing alert email failed:", err instanceof Error ? err.message : err));
+}
+
+export function resetBillingAlertEmailsForTests(): void {
+  lastBillingEmailAt.clear();
+}
 let totalSent = 0;
 let totalSuppressed = 0;
 
@@ -84,6 +120,8 @@ export function alertOwnerThrottled(input: AlertContext): void {
     const message = shortMessage(input);
     const key = `${input.kind}::${message.toLowerCase().slice(0, 140)}`;
     const now = Date.now();
+    // Billing emails have their own throttle, so a busy minute never drops one.
+    emailBillingAlert(input.kind, message, now);
 
     const sawRecently = (lastAlertByKey.get(key) ?? 0) + DEDUPE_WINDOW_MS > now;
     const globallyThrottled = lastGlobalAlertAt + GLOBAL_MIN_INTERVAL_MS > now;
