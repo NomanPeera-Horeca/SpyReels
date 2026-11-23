@@ -115,7 +115,9 @@ export const homeV2Router = router({
     const creators = await withResearchAvatars(merged);
     // Research these in the background so a click opens instantly. Never awaited.
     void requestPrefetch(creators);
-    return { personalized: c.nicheLabel !== null, nicheLabel: c.nicheLabel, creators };
+    // Only general viral formats so far (new niche still filling): say so instead of "for you".
+    const general = Boolean(library?.starter) && res.creators.length === 0;
+    return { personalized: c.nicheLabel !== null && !general, nicheLabel: c.nicheLabel, creators };
   }),
 
   videos: homeProcedure.query(async ({ ctx }) => {
@@ -126,7 +128,8 @@ export const homeV2Router = router({
     ]);
     const items = homeVideoItems(res.items, library, HOME_VIDEO_LIMIT, x => `${x.platform}:${x.sourceId}`);
     void requestPrefetchForPosts(items);
-    return { personalized: c.nicheLabel !== null, nicheLabel: c.nicheLabel, items };
+    const general = Boolean(library?.starter) && res.items.length === 0;
+    return { personalized: c.nicheLabel !== null && !general, nicheLabel: c.nicheLabel, items };
   }),
 
   /**
