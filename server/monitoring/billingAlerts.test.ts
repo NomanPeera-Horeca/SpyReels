@@ -30,12 +30,20 @@ describe("out-of-credit alerts by email", () => {
     vi.useRealTimers();
   });
 
-  it("recognises out-of-credit kinds only", async () => {
-    const { isOutOfCreditKind } = await fresh();
-    expect(isOutOfCreditKind("anthropic_out_of_credit")).toBe(true);
-    expect(isOutOfCreditKind("scrapecreators_out_of_credits")).toBe(true);
-    expect(isOutOfCreditKind("trpc")).toBe(false);
-    expect(isOutOfCreditKind("out_of_credit_report")).toBe(false);
+  it("recognises billing kinds only", async () => {
+    const { isBillingAlertKind } = await fresh();
+    expect(isBillingAlertKind("anthropic_out_of_credit")).toBe(true);
+    expect(isBillingAlertKind("scrapecreators_out_of_credits")).toBe(true);
+    expect(isBillingAlertKind("deepgram_low_balance")).toBe(true);
+    expect(isBillingAlertKind("trpc")).toBe(false);
+    expect(isBillingAlertKind("out_of_credit_report")).toBe(false);
+  });
+
+  it("emails a low-balance warning too", async () => {
+    const { alertOwnerThrottled } = await fresh();
+    alertOwnerThrottled({ kind: "scrapecreators_low_balance", message: "ScrapeCreators balance is low." });
+    await flush();
+    expect(email).toHaveBeenCalledWith("owner@example.com", "scrapecreators_low_balance", "ScrapeCreators balance is low.");
   });
 
   it("emails ALERT_EMAIL, else ADMIN_EMAIL, else nobody", async () => {

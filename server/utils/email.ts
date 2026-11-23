@@ -75,18 +75,20 @@ const PROVIDER_NAMES: Record<string, { name: string; topUp: string }> = {
   scrapecreators: { name: "ScrapeCreators", topUp: "https://app.scrapecreators.com" },
 };
 
-/** Owner alert: a provider ran out of credit. `kind` is e.g. "openai_out_of_credit". */
+/** Owner alert: a provider ran out of credit or is low. `kind` is e.g. "openai_out_of_credit", "deepgram_low_balance". */
 export async function sendOwnerAlertEmail(toEmail: string, kind: string, message: string) {
-  const provider = kind.replace(/_out_of_credits?$/, "");
+  const low = /_low_balance$/.test(kind);
+  const provider = kind.replace(/_(out_of_credits?|low_balance)$/, "");
   const info = PROVIDER_NAMES[provider] ?? { name: provider, topUp: "" };
+  const headline = low ? `${info.name} balance is low` : `${info.name} is out of credit`;
   await getResend().emails.send({
     from: "SpyReels Alerts <noah.perry@mail.spyreels.ai>",
     to: toEmail,
-    subject: `SpyReels: ${info.name} is out of credit`,
+    subject: `SpyReels: ${headline}`,
     tags: [{ name: "template", value: "owner_billing_alert" }],
     html: `
       <div style="font-family: Inter, Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #111827;">
-        <h2 style="margin: 0 0 16px;">${escapeHtml(info.name)} is out of credit</h2>
+        <h2 style="margin: 0 0 16px;">${escapeHtml(headline)}</h2>
         <p style="margin: 0 0 12px; line-height: 1.6;">${escapeHtml(message)}</p>
         ${
           info.topUp

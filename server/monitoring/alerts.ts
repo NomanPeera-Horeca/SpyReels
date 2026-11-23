@@ -13,8 +13,8 @@ import { sendOwnerAlertEmail } from "../utils/email";
  *  - at most one alert per minute globally
  *  - suppressed occurrences are folded into the next send as a count
  *
- * Out-of-credit alerts (kind ending in "_out_of_credit" or "_out_of_credits",
- * e.g. anthropic, openai, deepgram, scrapecreators) are also emailed to
+ * Billing alerts (kind ending in "_out_of_credit(s)" or "_low_balance", e.g.
+ * anthropic, openai, deepgram, scrapecreators) are also emailed to
  * ALERT_EMAIL (or ADMIN_EMAIL), at most once per provider every 6 hours, so a
  * provider running dry is noticed the same day even without Telegram.
  *
@@ -33,9 +33,9 @@ let lastGlobalAlertAt = 0;
 const BILLING_EMAIL_INTERVAL_MS = 6 * 60 * 60_000;
 const lastBillingEmailAt = new Map<string, number>();
 
-/** A provider ran out of credit. Pure; exported for tests. */
-export function isOutOfCreditKind(kind: string): boolean {
-  return /_out_of_credits?$/.test(kind);
+/** A provider ran out of credit, or is about to. Pure; exported for tests. */
+export function isBillingAlertKind(kind: string): boolean {
+  return /_(out_of_credits?|low_balance)$/.test(kind);
 }
 
 /** Where billing alerts are emailed (ALERT_EMAIL, else ADMIN_EMAIL), or null. Pure; exported for tests. */
@@ -44,9 +44,9 @@ export function billingAlertEmail(env: Record<string, string | undefined> = proc
   return to.includes("@") ? to : null;
 }
 
-/** Email an out-of-credit alert, once per kind per 6 hours. Never throws. */
+/** Email a billing alert (out of credit / low balance), once per kind per 6 hours. Never throws. */
 function emailBillingAlert(kind: string, message: string, now: number): void {
-  if (!isOutOfCreditKind(kind)) return;
+  if (!isBillingAlertKind(kind)) return;
   const to = billingAlertEmail();
   if (!to) return;
   if ((lastBillingEmailAt.get(kind) ?? 0) + BILLING_EMAIL_INTERVAL_MS > now) return;
