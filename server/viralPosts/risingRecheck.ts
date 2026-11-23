@@ -1,5 +1,5 @@
 /**
- * Rising videos are checked again 1, 3, 7 and 14 days after they were posted
+ * Rising videos are checked again 3 and 7 days after they were posted
  * (shared/viralRule.ts, nextViralRecheckAt). Each check fetches the video's
  * current views (one provider call), saves them on the library row, and runs
  * the one viral rule again: a rising video becomes viral, stays rising until
@@ -7,15 +7,31 @@
  *
  * Runs in the queue worker, a few per tick; pauses while ScrapeCreators is
  * out of credits. Never throws.
+ *
+ * Cost control (one provider call per check):
+ * - only videos tagged with a topic some creator profile has (a niche a real
+ *   user is in); videos in other niches wait until someone joins that niche;
+ * - at most RISING_RECHECK_DAILY_MAX checks a day (default 150), counted in
+ *   viral_processing_spend under "rc" + the UTC day.
  */
-import { and, asc, eq, inArray, isNotNull, lte } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, lte, sql } from "drizzle-orm";
 import { viralPostCandidates, type ViralPostCandidate } from "../../drizzle/schema";
 import { viralLibraryStatus } from "../../drizzle/viralLibrarySchema";
 import { getDb } from "../db";
 import { scrapeCreatorsOutOfCredits } from "../scrapeCreatorsMeter";
+import { addToCount, countToday, dailyCapFromEnv, dailyCounterKey } from "./dailyCounter";
 import { classifyLibraryRows, isLibraryReady } from "./library";
 
 const CONCURRENCY = 4;
+
+export function risingRecheckDailyMax(): number {
+  return dailyCapFromEnv(process.env.RISING_RECHECK_DAILY_MAX, 150);
+}
+
+/** How many to check this tick: the tick size, within what is left of the day. Pure; exported for tests. */
+export function recheckRoom(perTick: number, dailyMax: number, usedToday: number): number {
+  return Math.max(0, Math.min(perTick, dailyMax - usedToday));
+}
 
 /** Current views of one video, or null when it cannot be read (deleted, private, error). */
 async function currentViews(c: ViralPostCandidate): Promise<number | null> {
@@ -51,7 +67,7 @@ export async function runRisingRecheck(args: { max?: number; now?: Date } = {}):
   stillRising: number;
   dropped: number;
   unreadable: number;
-  skipped?: "not_ready" | "out_of_credits" | "none_due";
+  skipped?: "not_ready" | "out_of_credits" | "none_due" | "daily_cap";
 }> {
   const out = { checked: 0, becameViral: 0, stillRising: 0, dropped: 0, unreadable: 0 };
   const db = await getDb();
@@ -59,6 +75,15 @@ export async function runRisingRecheck(args: { max?: number; now?: Date } = {}):
   if (scrapeCreatorsOutOfCredits()) return { ...out, skipped: "out_of_credits" };
   const now = args.now ?? new Date();
   try {
+    const dayKey = dailyCounterKey("rc", now);
+    const room = recheckRoom(Math.max(1, Math.min(200, args.max ?? 30)), risingRecheckDailyMax(), await countToday(db, dayKey));
+    if (room <= 0) return { ...out, skipped: "daily_cap" };
+    // A niche a real user is in: the video has a topic that some creator profile has.
+    const inUserNiche = sql`EXISTS (
+      SELECT 1 FROM viral_video_topics vt
+      JOIN viral_profile_topics pt ON pt.topicSlug = vt.topicSlug
+      WHERE vt.candidateId = ${viralPostCandidates.id}
+    )`;
     const due = await db
       .select({ candidate: viralPostCandidates })
       .from(viralLibraryStatus)
@@ -67,11 +92,12 @@ export async function runRisingRecheck(args: { max?: number; now?: Date } = {}):
         and(
           eq(viralLibraryStatus.status, "rising"),
           isNotNull(viralLibraryStatus.nextCheckAt),
-          lte(viralLibraryStatus.nextCheckAt, now)
+          lte(viralLibraryStatus.nextCheckAt, now),
+          inUserNiche
         )
       )
       .orderBy(asc(viralLibraryStatus.nextCheckAt))
-      .limit(Math.max(1, Math.min(200, args.max ?? 30)));
+      .limit(room);
     if (due.length === 0) return { ...out, skipped: "none_due" };
 
     const fresh = new Map<string, { views: number | null; publishedAt: Date | null }>();
@@ -97,6 +123,7 @@ export async function runRisingRecheck(args: { max?: number; now?: Date } = {}):
     }
     // Only judge rows we actually tried (an out-of-credits stop leaves the rest due).
     const tried = rows.filter(c => fresh.has(`${c.platform}:${c.sourceId}`));
+    await addToCount(db, dayKey, tried.length);
     if (tried.length === 0) return { ...out, skipped: "out_of_credits" };
     const result = await classifyLibraryRows({ rows: tried, source: "recheck", fresh, now });
     out.checked = tried.length;

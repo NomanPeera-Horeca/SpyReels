@@ -31,8 +31,13 @@ export const VIRAL_RULE = {
   risingMaxAgeHours: 7 * 24,
   risingMinViews: 2_000,
   risingShareOfMultiple: 0.4,
-  /** Hours after publish when a rising video is measured again. */
-  recheckAtHours: [24, 72, 168, 336] as readonly number[],
+  /**
+   * Hours after publish when a rising video is measured again: day 3 and day
+   * 7. The day-7 check is final (a video is no longer "young" then). Days 1
+   * and 14 were dropped to halve provider calls; nearly every video that goes
+   * viral is already clear by day 3 or 7.
+   */
+  recheckAtHours: [72, 168] as readonly number[],
 } as const;
 
 export type ViralVerdict = {
@@ -122,7 +127,7 @@ export function classifyVirality(input: {
 }
 
 /**
- * When a rising video should be measured again: the next of day 1/3/7/14
+ * When a rising video should be measured again: the next of day 3/7
  * after publish that is still ahead. Null for every other status, or once
  * day 14 has passed (it did not take off).
  */

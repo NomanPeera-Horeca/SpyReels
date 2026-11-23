@@ -60,6 +60,11 @@ export function isCreditError(err: unknown): boolean {
   return /credit balance is too low|billing/i.test(errorText(err));
 }
 
+/** The OpenAI backup refused because OpenAI is out of credit. Pure; exported for tests. */
+export function isOpenAiBackupCreditError(err: unknown): boolean {
+  return /^OpenAI backup (429|402)\b[\s\S]*(insufficient_quota|credit_balance_exhausted|billing)/i.test(errorText(err));
+}
+
 /** Errors where the backup should answer: credit, rejected key, Anthropic down. Pure; exported for tests. */
 export function shouldUseBackup(err: unknown): boolean {
   if (isCreditError(err)) return true;
@@ -247,6 +252,13 @@ export function createClaudeClient(opts: ConstructorParameters<typeof Anthropic>
       } catch (backupErr) {
         if (!(backupErr instanceof NotTranslatable)) {
           console.warn("[claude] openai_backup_failed", { error: errorText(backupErr).slice(0, 200) });
+          if (isOpenAiBackupCreditError(backupErr)) {
+            alertOwnerThrottled({
+              kind: "openai_out_of_credit",
+              message:
+                "OpenAI is out of credit, so the backup for Claude is not working. Top up OpenAI so SpyReels keeps answering when Claude has a problem.",
+            });
+          }
         }
         throw err;
       }
