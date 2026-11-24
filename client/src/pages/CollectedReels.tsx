@@ -64,6 +64,7 @@ import { ReelGridThumbnail } from "@/components/ReelGridThumbnail";
 import { DashboardReelGridMedia } from "@/components/DashboardReelGridMedia";
 import { YouTubeInlineEmbed } from "@/components/YouTubeInlineEmbed";
 import { ResultCard, ResultCardSkeleton, resultCardGridClass } from "@/design-system/ResultCard";
+import { collectedLibrarySort, type LibraryEmbed } from "@/components/saved/savedLibrary";
 import { resolveYouTubeVideoId } from "@/lib/youtubeVideoId";
 import { safeHttpUrl } from "@/lib/viralPostPlayback";
 import { cn } from "@/lib/utils";
@@ -177,6 +178,11 @@ function collectedRowToLibraryRemakeSource(
 }
 
 export default function CollectedReels() {
+  return <CollectedLibrary />;
+}
+
+/** The Collected library. With `embed`, only its ready cards and dialogs (combined Saved page). */
+export function CollectedLibrary({ embed }: { embed?: LibraryEmbed }) {
   const { resolvedTheme } = useTheme();
   const posthog = usePostHog();
   const utils = trpc.useUtils();
@@ -223,7 +229,7 @@ export default function CollectedReels() {
   });
 
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    if (typeof window === "undefined") return "grid";
+    if (embed || typeof window === "undefined") return "grid";
     try {
       const stored = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY);
       if (stored === "list" || stored === "grid") return stored;
@@ -292,7 +298,8 @@ export default function CollectedReels() {
     []
   );
 
-  const [sortBy, setSortBy] = useState("added_newest");
+  const [sortByState, setSortBy] = useState("added_newest");
+  const sortBy = embed ? collectedLibrarySort(embed.sort) : sortByState;
   const [visibleLimit, setVisibleLimit] = useState(REEL_LIBRARY_INITIAL_VISIBLE);
   const [dateFilter, setDateFilter] = useState("all");
   const [urlInput, setUrlInput] = useState("");
@@ -523,8 +530,8 @@ export default function CollectedReels() {
   }, [filteredReels, sortBy]);
 
   const displayedReels = useMemo(
-    () => sortedReels.slice(0, visibleLimit),
-    [sortedReels, visibleLimit]
+    () => (embed ? sortedReels : sortedReels.slice(0, visibleLimit)),
+    [embed, sortedReels, visibleLimit]
   );
 
   const hasMoreReels = sortedReels.length > visibleLimit;
@@ -925,6 +932,268 @@ export default function CollectedReels() {
   }
 
   const engagementPctForPreview = (r: CollectedRow) => getEngagementRate(r) ?? 0;
+
+  const renderGridCard = (reel: CollectedRow, index: number) => {
+    const mappedReelId = reel.transcriptionReelId ?? null;
+    const isPending = reel.status === "pending";
+    const isFailed = reel.status === "failed";
+    const isReady = reel.status === "ready";
+
+    const hasTranscription =
+      reel.transcriptionStatus === "completed" && mappedReelId != null && mappedReelId > 0;
+    const isNoSpeech = !!(reel.transcriptionStatus === "completed" && reel.transcriptionIsNoSpeech);
+    const isProcessing =
+      reel.transcriptionStatus === "processing" || pendingCollectedTranscribe.has(reel.id);
+    const engagementRate = getEngagementRate(reel) ?? 0;
+    const effectiveViews = getEffectiveViews(reel);
+    const statusMessage = isPending
+      ? reel.errorMessage || "Fetching from Instagram..."
+      : isFailed
+        ? reel.errorMessage || "Could not load this reel. Retry or remove it."
+        : null;
+    const hasThumb = isReady && !!(reel.thumbnailUrl ?? "").trim();
+
+    const recreateSt =
+      mappedReelId != null
+        ? reelRecreateState(
+            recreateMap[mappedReelId as keyof typeof recreateMap] as
+              | RecreateBatchEntry
+              | undefined
+          )
+        : "none";
+    const transcriptionShape =
+      hasTranscription && !isNoSpeech
+        ? {
+            status: "completed" as const,
+            transcript: "word ".repeat(8).trimEnd(),
+            segments: [] as const,
+          }
+        : null;
+    const listRemakeHint = mergeRemakeability(
+      transcriptionShape,
+      reel as ReelClassificationLike
+    );
+    const idleNotRemakeable =
+      listRemakeHint.notRemakeable &&
+      hasTranscription &&
+      !isNoSpeech &&
+      recreateSt === "none";
+    const librarySource = collectedRowToLibraryRemakeSource(reel, mappedReelId);
+    const hookState = getRemakeState(libraryRemakeKey(librarySource));
+    const batchEntry =
+      mappedReelId != null
+        ? (recreateMap[mappedReelId as keyof typeof recreateMap] as
+            | RecreateBatchEntry
+            | undefined)
+        : undefined;
+    const oneClickRemakeForQuiet = isReady
+      ? buildLibraryOneClickRemake({
+          openScriptReelId: mappedReelId ?? hookState.reelId ?? null,
+          isNoSpeech,
+          alreadyTranscribed: mappedReelId != null && hasTranscription && !isNoSpeech,
+          idleNotRemakeable,
+          classificationReason: reel.classificationReason ?? undefined,
+          classification: reelClassificationFromRow(reel),
+          batchRecreateSt: recreateSt,
+          batchEntry,
+          hookState,
+          librarySource,
+          media: buildRemakeIntentMedia({
+            thumbnailUrl: reel.thumbnailUrl,
+            videoUrl: reel.videoUrl,
+            shortcode: reel.shortcode,
+            reelId: mappedReelId,
+            platform: collectedPlatform(reel),
+            reelUrl: reel.reelUrl,
+            duration: reel.duration,
+          }),
+          startRemake,
+          retryRemake,
+          startInspirationSave,
+          openRemakeWorkspace,
+        })
+      : null;
+    const remakeStatusLabel = isReady
+      ? quietRemakeStatusFromState({
+          hookStage: hookState.stage,
+          batchState: recreateSt,
+          hasSavedScript: Boolean(batchEntry?.latestScriptId || hookState.scriptId),
+        })
+      : null;
+
+    const platform = collectedPlatform(reel);
+    const openThisCreator = () =>
+      void openCreator({ handle: reel.ownerUsername, platform });
+    const youtubeId =
+      platform === "youtube"
+        ? resolveYouTubeVideoId({ shortcode: reel.shortcode, reelUrl: reel.reelUrl })
+        : null;
+    const stopInline = () =>
+      setInlinePlayingId((cur) => (cur === reel.id ? null : cur));
+    const inlineMedia =
+      inlinePlayingId !== reel.id || !isReady ? null : platform === "youtube" ? (
+        youtubeId ? (
+          <YouTubeInlineEmbed className="h-full w-full" videoId={youtubeId} onStop={stopInline} />
+        ) : null
+      ) : (
+        <DashboardReelGridMedia
+          className="h-full w-full"
+          thumbnailUrl={reel.thumbnailUrl}
+          videoUrl={reel.videoUrl}
+          shortcode={reel.shortcode}
+          reelId={mappedReelId ?? undefined}
+          platform={platform === "tiktok" ? "tiktok" : "instagram"}
+          videoPageUrl={reel.reelUrl}
+          size="compact"
+          autoStart
+          onPlayingChange={(playing) => {
+            if (!playing) stopInline();
+          }}
+        />
+      );
+    const originalUrl = safeHttpUrl(reel.reelUrl);
+    const removeItem = { label: "Remove", onSelect: () => deleteMutation.mutate({ id: reel.id }) };
+
+    return (
+      <ResultCard
+        key={reel.id}
+        testId="collected-result-card"
+        mediaFormat="portrait"
+        platform={platform}
+        platformLabel={COLLECTED_PLATFORM_BADGE[platform]}
+        thumbnailUrl={hasThumb ? reel.thumbnailUrl : null}
+        title={
+          !isReady
+            ? statusMessage ?? "Loading this video"
+            : reel.caption?.trim() || "No caption"
+        }
+        creator={isReady && reel.ownerUsername ? `@${reel.ownerUsername.replace(/^@/, "")}` : null}
+        onOpenCreator={isReady && reel.ownerUsername ? openThisCreator : undefined}
+        metrics={
+          isReady
+            ? quietReelMetricParts({
+                views: effectiveViews,
+                engagementPct: engagementRate,
+                reachViews: effectiveViews,
+                reachFollowers: reel.monitoredFollowerCount || reel.ownerFollowerCount,
+                postedAt:
+                  reel.postedAt instanceof Date ? reel.postedAt.toISOString() : reel.postedAt,
+              })
+            : []
+        }
+        signal={remakeStatusLabel ? { kind: "status", label: remakeStatusLabel } : null}
+        labels={{
+          play: "Play video",
+          expand: "View details",
+          remake: isPending
+            ? "Fetching…"
+            : isFailed
+              ? "Retry"
+              : oneClickRemakeForQuiet?.label ?? "Remake",
+          save: "Save",
+          saved: "Saved",
+          more: "More options",
+        }}
+        onPlay={() => {
+          if (!isReady) return;
+          if (platform === "youtube" && !youtubeId) {
+            if (originalUrl) window.open(originalUrl, "_blank", "noopener,noreferrer");
+            return;
+          }
+          setInlinePlayingId(reel.id);
+        }}
+        inlineMedia={inlineMedia}
+        playable={isReady}
+        onRemake={() => {
+          if (isFailed) retryMutation.mutate({ id: reel.id });
+          else oneClickRemakeForQuiet?.onClick();
+        }}
+        remakeBusy={isPending || (isFailed ? retryMutation.isPending : Boolean(oneClickRemakeForQuiet?.loading))}
+        remakeDisabled={isReady ? !oneClickRemakeForQuiet || oneClickRemakeForQuiet.disabled : false}
+        saved={isCollectedSaved(reel)}
+        onToggleSave={
+          isReady ? () => toggleCollectedSave.mutate({ collectedReelId: reel.id }) : undefined
+        }
+        share={isReady && originalUrl ? { url: originalUrl, title: reel.caption?.trim() || "A video for you" } : null}
+        menu={
+          isReady
+            ? [
+                { label: "View details", onSelect: () => setGridModalCollectedId(reel.id) },
+                ...(reel.ownerUsername ? [{ label: "Open creator", onSelect: openThisCreator }] : []),
+                ...(originalUrl ? [{ label: "Open source", href: originalUrl }] : []),
+                removeItem,
+              ]
+            : [removeItem]
+        }
+      />
+    );
+  };
+
+  const gridWorkflowDialog = (
+    <GridReelWorkflowDialog
+      open={gridModalRow != null && gridModalRow.status === "ready"}
+      onOpenChange={(open) => {
+        if (!open) setGridModalCollectedId(null);
+      }}
+      reel={
+        gridModalRow && gridModalRow.status === "ready"
+          ? {
+              id: gridModalRow.id,
+              caption: gridModalRow.caption,
+              thumbnailUrl: gridModalRow.thumbnailUrl,
+              videoUrl: gridModalRow.videoUrl ?? "",
+              viewCount: getEffectiveViews(gridModalRow),
+              likeCount: gridModalRow.likeCount,
+              commentCount: gridModalRow.commentCount,
+              engagementRate: engagementPctForPreview(gridModalRow),
+              postedAt: gridModalRow.postedAt || gridModalRow.createdAt,
+              duration: gridModalRow.duration,
+            }
+          : null
+      }
+      userTimezone={userTimezone}
+    >
+      {gridModalRow && gridModalRow.status === "ready" ? (
+        gridModalRow.transcriptionReelId != null ? (
+          <CollectedReelWorkflow
+            collectedReelId={gridModalRow.id}
+            reelId={gridModalRow.transcriptionReelId}
+            handle={gridModalRow.ownerUsername || "unknown"}
+            userTimezone={userTimezone}
+            postedAt={gridModalRow.postedAt || gridModalRow.createdAt}
+            reelClassification={gridModalRow}
+            recreateEntrySignal={
+              recreatePulse?.reelId === gridModalRow.transcriptionReelId
+                ? { nonce: recreatePulse.nonce, openScriptId: recreatePulse.openScriptId }
+                : undefined
+            }
+            onRemakeSaved={() => setGridModalCollectedId(null)}
+          />
+        ) : (
+          renderExpandedTranscribeOnly(gridModalRow)
+        )
+      ) : null}
+    </GridReelWorkflowDialog>
+  );
+
+  // Combined Saved page: only ready cards (the page shows adding/failed rows itself) and dialogs.
+  if (embed) {
+    return (
+      <>
+        {RemakeDialogs}
+        {embed.hidden
+          ? null
+          : sortedReels
+              .filter((reel) => reel.status === "ready" && !embed.exclude?.(`c:${reel.id}`))
+              .map((reel, index) => (
+                <div key={`c:${reel.id}`} className="min-w-0" style={{ order: embed.order(`c:${reel.id}`) }}>
+                  {renderGridCard(reel, index)}
+                </div>
+              ))}
+        {gridWorkflowDialog}
+      </>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-7xl px-2 sm:px-0">
@@ -1328,201 +1597,7 @@ export default function CollectedReels() {
           className={cn(resolvedTheme === "dark" ? "sr-scope-dark" : "sr-scope-light", "sr-mode-product", resultCardGridClass)}
           style={{ background: "transparent" }}
         >
-          {displayedReels.map((reel, index) => {
-            const mappedReelId = reel.transcriptionReelId ?? null;
-            const isPending = reel.status === "pending";
-            const isFailed = reel.status === "failed";
-            const isReady = reel.status === "ready";
-
-            const hasTranscription =
-              reel.transcriptionStatus === "completed" && mappedReelId != null && mappedReelId > 0;
-            const isNoSpeech = !!(reel.transcriptionStatus === "completed" && reel.transcriptionIsNoSpeech);
-            const isProcessing =
-              reel.transcriptionStatus === "processing" || pendingCollectedTranscribe.has(reel.id);
-            const engagementRate = getEngagementRate(reel) ?? 0;
-            const effectiveViews = getEffectiveViews(reel);
-            const statusMessage = isPending
-              ? reel.errorMessage || "Fetching from Instagram..."
-              : isFailed
-                ? reel.errorMessage || "Could not load this reel. Retry or remove it."
-                : null;
-            const hasThumb = isReady && !!(reel.thumbnailUrl ?? "").trim();
-
-            const recreateSt =
-              mappedReelId != null
-                ? reelRecreateState(
-                    recreateMap[mappedReelId as keyof typeof recreateMap] as
-                      | RecreateBatchEntry
-                      | undefined
-                  )
-                : "none";
-            const transcriptionShape =
-              hasTranscription && !isNoSpeech
-                ? {
-                    status: "completed" as const,
-                    transcript: "word ".repeat(8).trimEnd(),
-                    segments: [] as const,
-                  }
-                : null;
-            const listRemakeHint = mergeRemakeability(
-              transcriptionShape,
-              reel as ReelClassificationLike
-            );
-            const idleNotRemakeable =
-              listRemakeHint.notRemakeable &&
-              hasTranscription &&
-              !isNoSpeech &&
-              recreateSt === "none";
-            const librarySource = collectedRowToLibraryRemakeSource(reel, mappedReelId);
-            const hookState = getRemakeState(libraryRemakeKey(librarySource));
-            const batchEntry =
-              mappedReelId != null
-                ? (recreateMap[mappedReelId as keyof typeof recreateMap] as
-                    | RecreateBatchEntry
-                    | undefined)
-                : undefined;
-            const oneClickRemakeForQuiet = isReady
-              ? buildLibraryOneClickRemake({
-                  openScriptReelId: mappedReelId ?? hookState.reelId ?? null,
-                  isNoSpeech,
-                  alreadyTranscribed: mappedReelId != null && hasTranscription && !isNoSpeech,
-                  idleNotRemakeable,
-                  classificationReason: reel.classificationReason ?? undefined,
-                  classification: reelClassificationFromRow(reel),
-                  batchRecreateSt: recreateSt,
-                  batchEntry,
-                  hookState,
-                  librarySource,
-                  media: buildRemakeIntentMedia({
-                    thumbnailUrl: reel.thumbnailUrl,
-                    videoUrl: reel.videoUrl,
-                    shortcode: reel.shortcode,
-                    reelId: mappedReelId,
-                    platform: collectedPlatform(reel),
-                    reelUrl: reel.reelUrl,
-                    duration: reel.duration,
-                  }),
-                  startRemake,
-                  retryRemake,
-                  startInspirationSave,
-                  openRemakeWorkspace,
-                })
-              : null;
-            const remakeStatusLabel = isReady
-              ? quietRemakeStatusFromState({
-                  hookStage: hookState.stage,
-                  batchState: recreateSt,
-                  hasSavedScript: Boolean(batchEntry?.latestScriptId || hookState.scriptId),
-                })
-              : null;
-
-            const platform = collectedPlatform(reel);
-            const openThisCreator = () =>
-              void openCreator({ handle: reel.ownerUsername, platform });
-            const youtubeId =
-              platform === "youtube"
-                ? resolveYouTubeVideoId({ shortcode: reel.shortcode, reelUrl: reel.reelUrl })
-                : null;
-            const stopInline = () =>
-              setInlinePlayingId((cur) => (cur === reel.id ? null : cur));
-            const inlineMedia =
-              inlinePlayingId !== reel.id || !isReady ? null : platform === "youtube" ? (
-                youtubeId ? (
-                  <YouTubeInlineEmbed className="h-full w-full" videoId={youtubeId} onStop={stopInline} />
-                ) : null
-              ) : (
-                <DashboardReelGridMedia
-                  className="h-full w-full"
-                  thumbnailUrl={reel.thumbnailUrl}
-                  videoUrl={reel.videoUrl}
-                  shortcode={reel.shortcode}
-                  reelId={mappedReelId ?? undefined}
-                  platform={platform === "tiktok" ? "tiktok" : "instagram"}
-                  videoPageUrl={reel.reelUrl}
-                  size="compact"
-                  autoStart
-                  onPlayingChange={(playing) => {
-                    if (!playing) stopInline();
-                  }}
-                />
-              );
-            const originalUrl = safeHttpUrl(reel.reelUrl);
-            const removeItem = { label: "Remove", onSelect: () => deleteMutation.mutate({ id: reel.id }) };
-
-            return (
-              <ResultCard
-                key={reel.id}
-                testId="collected-result-card"
-                mediaFormat="portrait"
-                platform={platform}
-                platformLabel={COLLECTED_PLATFORM_BADGE[platform]}
-                thumbnailUrl={hasThumb ? reel.thumbnailUrl : null}
-                title={
-                  !isReady
-                    ? statusMessage ?? "Loading this video"
-                    : reel.caption?.trim() || "No caption"
-                }
-                creator={isReady && reel.ownerUsername ? `@${reel.ownerUsername.replace(/^@/, "")}` : null}
-                onOpenCreator={isReady && reel.ownerUsername ? openThisCreator : undefined}
-                metrics={
-                  isReady
-                    ? quietReelMetricParts({
-                        views: effectiveViews,
-                        engagementPct: engagementRate,
-                        reachViews: effectiveViews,
-                        reachFollowers: reel.monitoredFollowerCount || reel.ownerFollowerCount,
-                        postedAt:
-                          reel.postedAt instanceof Date ? reel.postedAt.toISOString() : reel.postedAt,
-                      })
-                    : []
-                }
-                signal={remakeStatusLabel ? { kind: "status", label: remakeStatusLabel } : null}
-                labels={{
-                  play: "Play video",
-                  expand: "View details",
-                  remake: isPending
-                    ? "Fetching…"
-                    : isFailed
-                      ? "Retry"
-                      : oneClickRemakeForQuiet?.label ?? "Remake",
-                  save: "Save",
-                  saved: "Saved",
-                  more: "More options",
-                }}
-                onPlay={() => {
-                  if (!isReady) return;
-                  if (platform === "youtube" && !youtubeId) {
-                    if (originalUrl) window.open(originalUrl, "_blank", "noopener,noreferrer");
-                    return;
-                  }
-                  setInlinePlayingId(reel.id);
-                }}
-                inlineMedia={inlineMedia}
-                playable={isReady}
-                onRemake={() => {
-                  if (isFailed) retryMutation.mutate({ id: reel.id });
-                  else oneClickRemakeForQuiet?.onClick();
-                }}
-                remakeBusy={isPending || (isFailed ? retryMutation.isPending : Boolean(oneClickRemakeForQuiet?.loading))}
-                remakeDisabled={isReady ? !oneClickRemakeForQuiet || oneClickRemakeForQuiet.disabled : false}
-                saved={isCollectedSaved(reel)}
-                onToggleSave={
-                  isReady ? () => toggleCollectedSave.mutate({ collectedReelId: reel.id }) : undefined
-                }
-                share={isReady && originalUrl ? { url: originalUrl, title: reel.caption?.trim() || "A video for you" } : null}
-                menu={
-                  isReady
-                    ? [
-                        { label: "View details", onSelect: () => setGridModalCollectedId(reel.id) },
-                        ...(reel.ownerUsername ? [{ label: "Open creator", onSelect: openThisCreator }] : []),
-                        ...(originalUrl ? [{ label: "Open source", href: originalUrl }] : []),
-                        removeItem,
-                      ]
-                    : [removeItem]
-                }
-              />
-            );
-          })}
+          {displayedReels.map((reel, index) => renderGridCard(reel, index))}
 
         </div>
       )}
@@ -1539,50 +1614,7 @@ export default function CollectedReels() {
         </div>
       )}
 
-      <GridReelWorkflowDialog
-        open={gridModalRow != null && gridModalRow.status === "ready"}
-        onOpenChange={(open) => {
-          if (!open) setGridModalCollectedId(null);
-        }}
-        reel={
-          gridModalRow && gridModalRow.status === "ready"
-            ? {
-                id: gridModalRow.id,
-                caption: gridModalRow.caption,
-                thumbnailUrl: gridModalRow.thumbnailUrl,
-                videoUrl: gridModalRow.videoUrl ?? "",
-                viewCount: getEffectiveViews(gridModalRow),
-                likeCount: gridModalRow.likeCount,
-                commentCount: gridModalRow.commentCount,
-                engagementRate: engagementPctForPreview(gridModalRow),
-                postedAt: gridModalRow.postedAt || gridModalRow.createdAt,
-                duration: gridModalRow.duration,
-              }
-            : null
-        }
-        userTimezone={userTimezone}
-      >
-        {gridModalRow && gridModalRow.status === "ready" ? (
-          gridModalRow.transcriptionReelId != null ? (
-            <CollectedReelWorkflow
-              collectedReelId={gridModalRow.id}
-              reelId={gridModalRow.transcriptionReelId}
-              handle={gridModalRow.ownerUsername || "unknown"}
-              userTimezone={userTimezone}
-              postedAt={gridModalRow.postedAt || gridModalRow.createdAt}
-              reelClassification={gridModalRow}
-              recreateEntrySignal={
-                recreatePulse?.reelId === gridModalRow.transcriptionReelId
-                  ? { nonce: recreatePulse.nonce, openScriptId: recreatePulse.openScriptId }
-                  : undefined
-              }
-              onRemakeSaved={() => setGridModalCollectedId(null)}
-            />
-          ) : (
-            renderExpandedTranscribeOnly(gridModalRow)
-          )
-        ) : null}
-      </GridReelWorkflowDialog>
+      {gridWorkflowDialog}
     </div>
   );
 }
