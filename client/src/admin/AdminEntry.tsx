@@ -14,6 +14,7 @@ import UserDetailPage from "./pages/UserDetailPage";
 import UsersPage from "./pages/UsersPage";
 import AdminOutreach from "@/pages/AdminOutreach";
 import CarouselLabPage from "./carouselLab/CarouselLabPage";
+import SearchLabPage from "./searchLab/SearchLabPage";
 
 const SEO_SUBS: SeoHubSub[] = ["health", "gsc", "bing", "ai-mentions", "bots", "sitemap"];
 
@@ -30,6 +31,7 @@ function adminTabFromPath(loc: string): string | null {
   if (loc.startsWith("/admin/traffic")) return "traffic";
   if (loc.startsWith("/admin/script-quality")) return "script-quality";
   if (loc.startsWith("/admin/carousel-lab")) return "carousel-lab";
+  if (loc.startsWith("/admin/search-lab")) return "search-lab";
   if (loc.startsWith("/admin/blogs")) return "blogs";
   if (loc.startsWith("/admin/creators")) return "creators";
   if (loc.startsWith("/admin/emails")) return "emails";
@@ -115,6 +117,8 @@ export default function AdminEntry() {
       ) : (
         <UsersPage />
       )
+    ) : tab === "search-lab" ? (
+      <SearchLabPage />
     ) : tab === "outreach" ? (
       <AdminOutreach />
     ) : tab === "seo" && seoParse != null && seoParse !== "redirect" && seoParse !== "invalid" ? (

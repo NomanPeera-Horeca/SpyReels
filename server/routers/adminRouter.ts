@@ -27,6 +27,8 @@ import {
   buildPanelUserReport,
 } from "../adminUserMetrics";
 import { getDb } from "../db";
+import { searchLibrary } from "../viralPosts/search/librarySearch";
+import { FIELD_LABELS, queryTerms, words, stem } from "../viralPosts/search/scoring";
 import {
   and,
   desc,
@@ -80,6 +82,56 @@ function inferPanelTestAccount(u: typeof users.$inferSelect): boolean {
 
 export const adminRouter = router({
   ping: adminPanelProcedure.query(() => ({ ok: true as const })),
+
+  /** Search Lab: try the library video search on real data and see why each video matched. */
+  searchLab: adminPanelProcedure
+    .input(
+      z.object({
+        query: z.string().min(1).max(200),
+        platform: z.enum(["instagram", "tiktok", "youtube"]).nullable(),
+        sort: z.enum(["best", "viral", "views", "newest"]),
+        cursor: z.number().int().min(0).optional(),
+      })
+    )
+    .query(async ({ input }) => {
+      const started = Date.now();
+      const result = await searchLibrary({ ...input, limit: 30 });
+      const terms = queryTerms(input.query);
+      const snippet = (text: string | undefined) => {
+        if (!text) return null;
+        const w = text.split(/\s+/);
+        const hit = w.findIndex(x => terms.includes(stem(words(x)[0] ?? "")));
+        if (hit < 0) return text.slice(0, 160);
+        return `${hit > 12 ? "… " : ""}${w.slice(Math.max(0, hit - 12), hit + 18).join(" ")}…`;
+      };
+      return {
+        terms,
+        total: result.total,
+        nextCursor: result.nextCursor,
+        indexSize: result.indexSize,
+        usedMeaning: result.usedMeaning,
+        ms: Date.now() - started,
+        items: result.matches.map(m => ({
+          id: m.doc.id,
+          platform: m.doc.platform,
+          url: m.doc.url ?? "",
+          creator: m.doc.creatorHandle,
+          caption: (m.doc.fields.caption ?? "").slice(0, 200),
+          summary: m.doc.fields.summary ?? null,
+          spokenSnippet: m.matchedIn.includes("spoken") ? snippet(m.doc.fields.spoken) : null,
+          hasTranscript: Boolean(m.doc.fields.spoken?.trim()),
+          tier: m.tier,
+          relevance: Math.round(m.relevance * 100),
+          wordScore: Math.round(m.wordScore * 100),
+          meaningScore: Math.round(m.meaningScore * 100),
+          phrase: m.phrase,
+          matchedIn: m.matchedIn.map(f => FIELD_LABELS[f]),
+          views: m.doc.views,
+          multiple: m.doc.multiple,
+          status: m.doc.status,
+        })),
+      };
+    }),
 
   monitoringStatus: adminPanelProcedure.query(() => getAlertTelemetry()),
 
