@@ -40,6 +40,16 @@ import { cn } from "@/lib/utils";
 import { useMyCreators, type MyCreatorJob } from "@/lib/myCreators";
 import { compactCount, creatorRowStatus, initialResearchTab, type ResearchTab } from "./creatorResearchModel";
 import { UnderlineTabs } from "./ResearchBoxV2";
+import { trpc } from "@/lib/trpc";
+import { useExperienceAccess } from "@/lib/experienceAccess";
+import {
+  LibraryCreatorVideos,
+  PlatformLogoTabs,
+  effectiveExplorePlatform,
+  visibleExplorePlatforms,
+  type ExplorePlatform,
+  type LibraryCreator,
+} from "./ExploreLibrary";
 
 export type ExploreCreator = {
   id: number;
@@ -226,7 +236,15 @@ function CreatorRow({
   );
 }
 
-function ExploreCard({ creator, onOpen }: { creator: ExploreCreator; onOpen: () => void }) {
+function ExploreCard({
+  creator,
+  onOpen,
+  audience = "followers",
+}: {
+  creator: ExploreCreator;
+  onOpen: () => void;
+  audience?: "followers" | "subscribers";
+}) {
   return (
     <button
       type="button"
@@ -241,7 +259,8 @@ function ExploreCard({ creator, onOpen }: { creator: ExploreCreator; onOpen: () 
             {creator.displayName || `@${creator.handle}`}
           </span>
           <span className="block truncate text-xs text-[var(--sr-color-text-secondary)]">
-            @{creator.handle} · {compactCount(creator.followerCount)} followers
+            @{creator.handle}
+            {creator.followerCount > 0 ? ` · ${compactCount(creator.followerCount)} ${audience}` : ""}
           </span>
         </span>
       </span>
@@ -316,6 +335,30 @@ export function CreatorResearchV2({ researchBox, explore }: { researchBox: React
   const selectedNicheName =
     explore.niches.find(n => n.slug === explore.selectedNicheSlug)?.name ?? (explore.selectedNicheSlug === "all" ? "All niches" : "");
 
+  // TikTok + YouTube creators from the library (EXPLORE_LIBRARY_MODE). Free: no research used.
+  const { access } = useExperienceAccess();
+  const libraryOn = access.exploreLibrary && activeTab === "explore";
+  const libraryNiche = explore.selectedNicheSlug === "all" ? null : selectedNicheName || null;
+  const tiktokQ = trpc.viralPosts.exploreCreators.useQuery({ platform: "tiktok", nicheName: libraryNiche }, { enabled: libraryOn, staleTime: 5 * 60_000 });
+  const youtubeQ = trpc.viralPosts.exploreCreators.useQuery({ platform: "youtube", nicheName: libraryNiche }, { enabled: libraryOn, staleTime: 5 * 60_000 });
+  const tiktokCreators: LibraryCreator[] = libraryOn ? tiktokQ.data ?? [] : [];
+  const youtubeCreators: LibraryCreator[] = libraryOn ? youtubeQ.data ?? [] : [];
+  const libraryLoading = libraryOn && (tiktokQ.isLoading || youtubeQ.isLoading);
+  const visiblePlatforms: ExplorePlatform[] = libraryOn
+    ? visibleExplorePlatforms({
+        instagram: { count: explore.creators.length, loading: explore.loading },
+        tiktok: tiktokCreators.length,
+        youtube: youtubeCreators.length,
+      })
+    : ["instagram"];
+  const [platformChoice, setPlatformChoice] = useState<ExplorePlatform>("instagram");
+  const explorePlatform = effectiveExplorePlatform(platformChoice, visiblePlatforms);
+  const [openLibraryCreator, setOpenLibraryCreator] = useState<LibraryCreator | null>(null);
+  // "Still finding creators" only when Instagram, TikTok and YouTube are all empty.
+  const nothingAnywhere =
+    !explore.loading && !explore.error && explore.creators.length === 0 && !libraryLoading && tiktokCreators.length === 0 && youtubeCreators.length === 0;
+  const libraryList = explorePlatform === "tiktok" ? tiktokCreators : youtubeCreators;
+
   return (
     <div
       className={cn(resolvedTheme === "dark" ? "sr-scope-dark" : "sr-scope-light", "sr-mode-product", "mx-auto w-full max-w-[880px] px-2 pb-12 pt-4 sm:px-0 sm:pt-8")}
@@ -363,6 +406,12 @@ export function CreatorResearchV2({ researchBox, explore }: { researchBox: React
               ))}
             </div>
           )
+        ) : openLibraryCreator ? (
+          <LibraryCreatorVideos
+            creator={openLibraryCreator}
+            onBack={() => setOpenLibraryCreator(null)}
+            avatar={<Avatar src={openLibraryCreator.profilePicUrl} label={openLibraryCreator.displayName || openLibraryCreator.handle} size={44} />}
+          />
         ) : (
           <div className="space-y-5">
             {firstVisit ? (
@@ -372,8 +421,17 @@ export function CreatorResearchV2({ researchBox, explore }: { researchBox: React
               </div>
             ) : null}
             <div className="flex flex-wrap items-center gap-3">
+              {visiblePlatforms.length > 1 || explorePlatform !== "instagram" ? (
+                <PlatformLogoTabs platforms={visiblePlatforms} value={explorePlatform} onChange={setPlatformChoice} />
+              ) : null}
               <h2 className="text-lg font-semibold text-[var(--sr-color-text-primary)]">Popular in</h2>
-              <Select value={explore.selectedNicheSlug} onValueChange={explore.onSelectNiche}>
+              <Select
+                value={explore.selectedNicheSlug}
+                onValueChange={slug => {
+                  setOpenLibraryCreator(null);
+                  explore.onSelectNiche(slug);
+                }}
+              >
                 <SelectTrigger className="h-9 w-auto min-w-[12rem]" aria-label="Niche">
                   <SelectValue placeholder={selectedNicheName || "Pick a niche"} />
                 </SelectTrigger>
@@ -387,13 +445,32 @@ export function CreatorResearchV2({ researchBox, explore }: { researchBox: React
                 </SelectContent>
               </Select>
             </div>
-            {!explore.loading && !explore.error && explore.creators.length === 0 ? (
+            {nothingAnywhere ? (
               <EmptyBlock
                 title="We're still finding creators in this niche"
                 body="New niches fill up within a few hours. Meanwhile, research any creator above or pick another niche."
               />
-            ) : (
+            ) : explorePlatform === "instagram" ? (
               <ExploreGrid explore={explore} />
+            ) : (
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3" data-testid="explore-library-grid">
+                {libraryList.map((c, i) => (
+                  <ExploreCard
+                    key={c.key}
+                    audience={c.platform === "youtube" ? "subscribers" : "followers"}
+                    creator={{
+                      id: i,
+                      handle: c.handle,
+                      displayName: c.displayName ?? "",
+                      followerCount: c.followerCount,
+                      avgEngagementRate: 0,
+                      profilePicUrl: c.profilePicUrl ?? "",
+                      reelsAvailable: c.videoCount,
+                    }}
+                    onOpen={() => setOpenLibraryCreator(c)}
+                  />
+                ))}
+              </div>
             )}
           </div>
         )}
