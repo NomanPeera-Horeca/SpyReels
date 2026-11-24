@@ -11,6 +11,7 @@ const TABS: { id: string; label: string; href: string }[] = [
   { id: "outreach", label: "Outreach", href: "/admin/outreach" },
   { id: "seo", label: "SEO Hub", href: "/admin/seo/health" },
   { id: "carousel-lab", label: "Carousel Lab", href: "/admin/carousel-lab" },
+  { id: "search-lab", label: "Search Lab", href: "/admin/search-lab" },
 ];
 
 export function AdminLayout({
