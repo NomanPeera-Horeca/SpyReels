@@ -99,6 +99,7 @@ describe("resolveExperienceAccess", () => {
       sidebar: "legacy",
       research: "legacy",
       saved: "legacy",
+      exploreLibrary: false,
       internal: false,
     });
   });
@@ -159,5 +160,16 @@ describe("combined Saved page (SAVED_V2_MODE)", () => {
     const c = cfg({ SAVED_V2_MODE: "internal", SIDEBAR_V2_MODE: "all" });
     expect(resolveExperienceAccess(admin, c).saved).toBe("v2");
     expect(resolveExperienceAccess(customer, c).saved).toBe("legacy");
+  });
+});
+
+describe("TikTok + YouTube on Explore creators (EXPLORE_LIBRARY_MODE)", () => {
+  const on = { SIDEBAR_V2_MODE: "all", RESEARCH_V2_MODE: "all" };
+  it("is off by default", () => {
+    expect(resolveExperienceAccess(customer, cfg(on)).exploreLibrary).toBe(false);
+  });
+  it("needs the combined Creator Research page", () => {
+    expect(resolveExperienceAccess(customer, cfg({ EXPLORE_LIBRARY_MODE: "all", SIDEBAR_V2_MODE: "all" })).exploreLibrary).toBe(false);
+    expect(resolveExperienceAccess(customer, cfg({ ...on, EXPLORE_LIBRARY_MODE: "all" })).exploreLibrary).toBe(true);
   });
 });

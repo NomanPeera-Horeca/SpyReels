@@ -27,6 +27,7 @@ import {
 } from "./canonicalSaved";
 import { preservesEmptyTaxonomyFeed } from "../personalization/home/inventoryMatch";
 import { browseViralPosts } from "./browseService";
+import { LIBRARY_PLATFORMS, exploreLibraryCreators, libraryCreatorVideos } from "./exploreCreators";
 import { requestPrefetchForPosts } from "../research/prefetch";
 import * as repo from "./repository";
 import {
@@ -334,6 +335,18 @@ export const viralPostsRouter = router({
         limit: input.limit,
       });
     }),
+
+  /** Creator Research → Explore creators: TikTok/YouTube creators already in the library (no provider calls). */
+  exploreCreators: protectedProcedure
+    .input(z.object({ platform: z.enum(LIBRARY_PLATFORMS), nicheName: z.string().max(128).nullable() }))
+    .query(({ input }) => exploreLibraryCreators({ platform: input.platform, nicheName: input.nicheName })),
+
+  /** One library creator's stored videos (free; does not use a research). */
+  exploreCreatorVideos: protectedProcedure
+    .input(z.object({ platform: z.enum(LIBRARY_PLATFORMS), handle: z.string().min(1).max(128) }))
+    .query(async ({ ctx, input }) => ({
+      items: await libraryCreatorVideos({ userId: ctx.user.id, platform: input.platform, handle: input.handle }),
+    })),
 
   browse: viralPostsProcedure.query(async ({ ctx }) => {
     const browse = await browseViralPosts(ctx.user.id);
