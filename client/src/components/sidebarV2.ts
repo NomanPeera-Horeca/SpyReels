@@ -18,7 +18,7 @@
  */
 import type { LucideIcon } from "lucide-react";
 import {
-  Bookmark,
+  Star,
   CalendarDays,
   Clapperboard,
   FileText,
@@ -45,7 +45,7 @@ export function buildSidebarV2Sections(opts: { homeV2: boolean; showUnpolishedTo
     items: [
       { icon: Flame, label: "Viral Videos", path: "/viral-posts" },
       { icon: Search, label: "Creator Research", path: "/research" },
-      { icon: Bookmark, label: "Saved", path: "/saved" },
+      { icon: Star, label: "Saved", path: "/saved" },
       ...(opts.showUnpolishedTools
         ? [{ icon: TrendingUp, label: "My Virality Report", path: "/my-virality-report" }]
         : []),

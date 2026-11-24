@@ -98,6 +98,7 @@ describe("resolveExperienceAccess", () => {
       home: "research",
       sidebar: "legacy",
       research: "legacy",
+      saved: "legacy",
       internal: false,
     });
   });
@@ -141,5 +142,22 @@ describe("combined Creator Research (RESEARCH_V2_MODE)", () => {
     const c = cfg({ RESEARCH_V2_MODE: "internal", SIDEBAR_V2_MODE: "all" });
     expect(resolveExperienceAccess(admin, c).research).toBe("v2");
     expect(resolveExperienceAccess(customer, c).research).toBe("legacy");
+  });
+});
+
+describe("combined Saved page (SAVED_V2_MODE)", () => {
+  it("is off by default", () => {
+    expect(resolveExperienceAccess(admin, cfg({ SIDEBAR_V2_MODE: "all" })).saved).toBe("legacy");
+  });
+
+  it("needs the new sidebar too", () => {
+    expect(resolveExperienceAccess(customer, cfg({ SAVED_V2_MODE: "all" })).saved).toBe("legacy");
+    expect(resolveExperienceAccess(customer, cfg({ SAVED_V2_MODE: "all", SIDEBAR_V2_MODE: "all" })).saved).toBe("v2");
+  });
+
+  it("internal: admins only while customers keep today's pages", () => {
+    const c = cfg({ SAVED_V2_MODE: "internal", SIDEBAR_V2_MODE: "all" });
+    expect(resolveExperienceAccess(admin, c).saved).toBe("v2");
+    expect(resolveExperienceAccess(customer, c).saved).toBe("legacy");
   });
 });

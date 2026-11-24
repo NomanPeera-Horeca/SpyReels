@@ -71,7 +71,7 @@ const YouTubeTranscriptGeneratorPage = lazyWithRetry(() =>
   }))
 );
 const FreeTools = lazyWithRetry(() => import("./pages/FreeTools"));
-const SavedReels = lazyWithRetry(() => import("./pages/SavedReels"));
+const SavedReels = lazyWithRetry(() => import("./pages/SavedPage"));
 const ViralPosts = lazyWithRetry(() => import("./pages/ViralPosts"));
 const MyScripts = lazyWithRetry(() => import("./pages/MyScripts"));
 const ScriptEditor = lazyWithRetry(() => import("./pages/ScriptEditor"));
@@ -94,7 +94,7 @@ const BlogList = lazyWithRetry(() => import("./pages/BlogList"));
 const BlogPost = lazyWithRetry(() => import("./pages/BlogPost"));
 const BlogEditor = lazyWithRetry(() => import("./pages/BlogEditor"));
 const Extension = lazyWithRetry(() => import("./pages/Extension"));
-const CollectedReels = lazyWithRetry(() => import("./pages/CollectedReels"));
+const CollectedReels = lazyWithRetry(() => import("./pages/SavedPage").then((m) => ({ default: m.CollectedPage })));
 const Discovery = lazyWithRetry(() => import("./pages/Discovery"));
 const CreatorDiscovery = lazyWithRetry(() => import("./pages/CreatorDiscovery"));
 const ViralityDiagnostic = lazyWithRetry(() => import("./pages/ViralityDiagnostic"));

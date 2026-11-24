@@ -58,6 +58,7 @@ import {
   REEL_LIBRARY_VISIBLE_STEP,
 } from "@/lib/reelLibraryPagination";
 import { LibraryCardGrid, LibraryCardGridSkeleton, LibraryVideoCard } from "@/components/LibraryVideoCard";
+import { savedLibrarySort, type LibraryEmbed } from "@/components/saved/savedLibrary";
 import { GridReelWorkflowDialog } from "@/components/GridReelWorkflowDialog";
 import {
   quietReelMetricParts,
@@ -153,6 +154,11 @@ const RECREATE_BATCH_POLL_MS = 5_000;
 const VIEW_MODE_STORAGE_KEY = "reels-dashboard:viewMode";
 
 export default function SavedReels() {
+  return <SavedLibrary />;
+}
+
+/** The Saved library. With `embed`, only its cards and dialogs (combined Saved page). */
+export function SavedLibrary({ embed }: { embed?: LibraryEmbed }) {
   const posthog = usePostHog();
   const [, setLocation] = useLocation();
   const utils = trpc.useUtils();
@@ -171,7 +177,7 @@ export default function SavedReels() {
   savedReelsRef.current = savedReels;
 
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    if (typeof window === "undefined") return "grid";
+    if (embed || typeof window === "undefined") return "grid";
     try {
       const stored = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY);
       if (stored === "list" || stored === "grid") return stored;
@@ -243,7 +249,8 @@ export default function SavedReels() {
     []
   );
 
-  const [sortBy, setSortBy] = useState("date");
+  const [sortByState, setSortBy] = useState("date");
+  const sortBy = embed ? savedLibrarySort(embed.sort) : sortByState;
   const [visibleLimit, setVisibleLimit] = useState(REEL_LIBRARY_INITIAL_VISIBLE);
   const [batchTranscribing, setBatchTranscribing] = useState(false);
   const [pendingTranscriptions, setPendingTranscriptions] = useState<Set<string>>(() => new Set());
@@ -459,8 +466,8 @@ export default function SavedReels() {
   }, [savedReels, sortBy]);
 
   const displayedReels = useMemo(
-    () => sortedReels.slice(0, visibleLimit),
-    [sortedReels, visibleLimit]
+    () => (embed ? sortedReels : sortedReels.slice(0, visibleLimit)),
+    [embed, sortedReels, visibleLimit]
   );
 
   const groupedByHandle = useMemo(() => {
@@ -617,6 +624,227 @@ export default function SavedReels() {
       toggleSave.mutate({ reelId: item.reelId, jobId: 0 });
     }
   };
+
+  const renderGridCard = (item: SavedItem, index: number) => {
+    const reel = item.reel;
+    const engagementRate = engagementPercent(item);
+    const hasTranscription = !!item.transcription && item.transcription.status === "completed";
+    const isNoSpeech = transcriptionIsNoSpeech(item.transcription);
+    const recreateSt = reelRecreateState(
+      recreateEntryForItem(item, scrapedRecreateMap, featuredRecreateMap)
+    );
+    const idleNotRemakeable =
+      mergeRemakeability(item.transcription, item.reel).notRemakeable &&
+      hasTranscription &&
+      !isNoSpeech &&
+      recreateSt === "none";
+
+    const librarySource = savedItemToLibraryRemakeSource(item);
+    const hookState =
+      librarySource != null
+        ? getRemakeState(libraryRemakeKey(librarySource))
+        : null;
+    const batchEntry = recreateEntryForItem(
+      item,
+      scrapedRecreateMap,
+      featuredRecreateMap
+    );
+    const alreadyTranscribed = hasTranscription && !isNoSpeech;
+    const oneClickRemake =
+      librarySource != null && hookState != null
+        ? buildLibraryOneClickRemake({
+            openScriptReelId: reel.id,
+            jobId: librarySource.source === "user" ? (item.jobId ?? 0) : undefined,
+            isNoSpeech,
+            alreadyTranscribed,
+            idleNotRemakeable,
+            classificationReason: reel.classificationReason ?? undefined,
+            classification: reelClassificationFromRow(reel),
+            batchRecreateSt: recreateSt,
+            batchEntry,
+            hookState,
+            librarySource,
+            media: buildRemakeIntentMedia({
+              thumbnailUrl: reel.thumbnailUrl,
+              videoUrl: reel.videoUrl,
+              shortcode: reel.shortcode,
+              reelId: reel.id,
+              platform: "instagram",
+              reelUrl: reel.reelUrl,
+              duration: reel.duration,
+            }),
+            startRemake,
+            retryRemake,
+            startInspirationSave,
+            openRemakeWorkspace,
+          })
+        : undefined;
+    const remakeStatusLabel = quietRemakeStatusFromState({
+      hookStage: hookState?.stage,
+      batchState: recreateSt,
+      hasSavedScript: Boolean(batchEntry?.latestScriptId || hookState?.scriptId),
+    });
+
+    const savedPlatform = platformFromReelUrl(reel.reelUrl);
+    const savedHandle = reel.ownerUsername || item.job.handle;
+    return (
+      <LibraryVideoCard
+        key={item.id}
+        testId="saved-result-card"
+        platform={savedPlatform}
+        thumbnailUrl={reel.thumbnailUrl}
+        videoUrl={reel.videoUrl}
+        shortcode={reel.shortcode}
+        reelId={item.source === "scraped" ? reel.id : null}
+        reelUrl={reel.reelUrl}
+        caption={reel.caption}
+        creatorHandle={savedHandle}
+        onOpenCreator={() =>
+          void openCreator({ handle: savedHandle, platform: savedPlatform })
+        }
+        metrics={quietReelMetricParts({
+          views: reel.viewCount,
+          engagementPct: engagementRate,
+          reachViews: reel.viewCount,
+          reachFollowers:
+            item.job.followerCount && item.job.followerCount > 0
+              ? item.job.followerCount
+              : null,
+          postedAt:
+            reel.postedAt instanceof Date
+              ? reel.postedAt.toISOString()
+              : reel.postedAt,
+        })}
+        statusLabel={remakeStatusLabel}
+        remake={oneClickRemake}
+        saved
+        onToggleSave={() => onToggleSave(item)}
+        onViewDetails={() => setGridModalSavedId(item.id)}
+        extraMenu={[{ label: "Remove from saved", onSelect: () => onToggleSave(item) }]}
+        inlinePlaying={inlinePlayingId === item.id}
+        onInlinePlayRequest={() => setInlinePlayingId(item.id)}
+        onInlinePlayStop={() =>
+          setInlinePlayingId((cur) => (cur === item.id ? null : cur))
+        }
+      />
+    );
+  };
+
+  const gridWorkflowDialog = (
+    <GridReelWorkflowDialog
+      open={gridModalItem != null}
+      onOpenChange={(open) => {
+        if (!open) setGridModalSavedId(null);
+      }}
+      reel={
+        gridModalItem
+          ? {
+              id: gridModalItem.reel.id,
+              caption: gridModalItem.reel.caption,
+              thumbnailUrl: gridModalItem.reel.thumbnailUrl,
+              videoUrl: gridModalItem.reel.videoUrl ?? "",
+              viewCount: gridModalItem.reel.viewCount,
+              likeCount: gridModalItem.reel.likeCount,
+              commentCount: gridModalItem.reel.commentCount,
+              engagementRate: engagementPercent(gridModalItem),
+              postedAt: gridModalItem.reel.postedAt,
+              duration: gridModalItem.reel.duration,
+            }
+          : null
+      }
+      userTimezone={userTimezone}
+    >
+      {gridModalItem
+        ? (() => {
+            const item = gridModalItem;
+            const reel = item.reel;
+            const handle = item.job.handle;
+            const hasTranscription = !!item.transcription && item.transcription.status === "completed";
+            const isNoSpeech = transcriptionIsNoSpeech(item.transcription);
+            const pKey = txPendingKey(item);
+            const isProcessing =
+              item.transcription?.status === "processing" || !!(pKey && pendingTranscriptions.has(pKey));
+            const isTxQueued =
+              isProcessing &&
+              (item.source === "scraped" || item.source === "discover") &&
+              (item.transcription?.status !== "processing" || !item.transcription?.startedAt);
+
+            return item.source === "featured" && item.featuredReelId != null ? (
+              <InlineWorkflow
+                reelSource="featured"
+                featuredReelId={item.featuredReelId}
+                handle={handle}
+                hasTranscription={hasTranscription}
+                isProcessing={isProcessing}
+                isTranscriptionQueued={isTxQueued}
+                isNoSpeech={isNoSpeech}
+                inspirationPanelVariant="saved-collected"
+                listRemakeHint={mergeRemakeability(item.transcription, item.reel)}
+                reelClassification={item.reel}
+                onSaveForInspiration={() => onToggleSave(item)}
+                saveForInspirationBusy={toggleSave.isPending}
+                inspirationReelIsSaved
+                onTranscribe={() => runTranscribeClick(item, { expand: false })}
+                userTimezone={userTimezone}
+                postedAt={reel.postedAt}
+                recreateEntrySignal={
+                  recreatePulse?.reelId === reel.id
+                    ? { nonce: recreatePulse.nonce, openScriptId: recreatePulse.openScriptId }
+                    : undefined
+                }
+                onRemakeSaved={() => setGridModalSavedId(null)}
+              />
+            ) : item.reelId != null ? (
+              <InlineWorkflow
+                reelSource="user_job"
+                reelId={item.reelId}
+                handle={handle}
+                hasTranscription={hasTranscription}
+                isProcessing={isProcessing}
+                isTranscriptionQueued={isTxQueued}
+                isNoSpeech={isNoSpeech}
+                inspirationPanelVariant="saved-collected"
+                listRemakeHint={mergeRemakeability(item.transcription, item.reel)}
+                reelClassification={item.reel}
+                onSaveForInspiration={() => onToggleSave(item)}
+                saveForInspirationBusy={toggleSave.isPending}
+                inspirationReelIsSaved
+                onTranscribe={() => runTranscribeClick(item, { expand: false })}
+                userTimezone={userTimezone}
+                postedAt={reel.postedAt}
+                recreateEntrySignal={
+                  recreatePulse?.reelId === reel.id
+                    ? { nonce: recreatePulse.nonce, openScriptId: recreatePulse.openScriptId }
+                    : undefined
+                }
+                onRemakeSaved={() => setGridModalSavedId(null)}
+              />
+            ) : null;
+          })()
+        : null}
+    </GridReelWorkflowDialog>
+  );
+
+  if (embed?.actionsRef) embed.actionsRef.current = { transcribeAll: handleTranscribeAll };
+
+  // Combined Saved page: only the cards (placed into the page's grid) and dialogs.
+  if (embed) {
+    return (
+      <>
+        {RemakeDialogs}
+        {embed.hidden
+          ? null
+          : sortedReels
+              .filter((item) => !embed.exclude?.(`s:${item.id}`))
+              .map((item, index) => (
+                <div key={`s:${item.id}`} className="min-w-0" style={{ order: embed.order(`s:${item.id}`) }}>
+                  {renderGridCard(item, index)}
+                </div>
+              ))}
+        {gridWorkflowDialog}
+      </>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-7xl px-2 sm:px-0">
@@ -1036,110 +1264,7 @@ export default function SavedReels() {
 
               {viewMode === "grid" && (
                 <LibraryCardGrid>
-                  {items.map((item, index) => {
-                    const reel = item.reel;
-                    const engagementRate = engagementPercent(item);
-                    const hasTranscription = !!item.transcription && item.transcription.status === "completed";
-                    const isNoSpeech = transcriptionIsNoSpeech(item.transcription);
-                    const recreateSt = reelRecreateState(
-                      recreateEntryForItem(item, scrapedRecreateMap, featuredRecreateMap)
-                    );
-                    const idleNotRemakeable =
-                      mergeRemakeability(item.transcription, item.reel).notRemakeable &&
-                      hasTranscription &&
-                      !isNoSpeech &&
-                      recreateSt === "none";
-
-                    const librarySource = savedItemToLibraryRemakeSource(item);
-                    const hookState =
-                      librarySource != null
-                        ? getRemakeState(libraryRemakeKey(librarySource))
-                        : null;
-                    const batchEntry = recreateEntryForItem(
-                      item,
-                      scrapedRecreateMap,
-                      featuredRecreateMap
-                    );
-                    const alreadyTranscribed = hasTranscription && !isNoSpeech;
-                    const oneClickRemake =
-                      librarySource != null && hookState != null
-                        ? buildLibraryOneClickRemake({
-                            openScriptReelId: reel.id,
-                            jobId: librarySource.source === "user" ? (item.jobId ?? 0) : undefined,
-                            isNoSpeech,
-                            alreadyTranscribed,
-                            idleNotRemakeable,
-                            classificationReason: reel.classificationReason ?? undefined,
-                            classification: reelClassificationFromRow(reel),
-                            batchRecreateSt: recreateSt,
-                            batchEntry,
-                            hookState,
-                            librarySource,
-                            media: buildRemakeIntentMedia({
-                              thumbnailUrl: reel.thumbnailUrl,
-                              videoUrl: reel.videoUrl,
-                              shortcode: reel.shortcode,
-                              reelId: reel.id,
-                              platform: "instagram",
-                              reelUrl: reel.reelUrl,
-                              duration: reel.duration,
-                            }),
-                            startRemake,
-                            retryRemake,
-                            startInspirationSave,
-                            openRemakeWorkspace,
-                          })
-                        : undefined;
-                    const remakeStatusLabel = quietRemakeStatusFromState({
-                      hookStage: hookState?.stage,
-                      batchState: recreateSt,
-                      hasSavedScript: Boolean(batchEntry?.latestScriptId || hookState?.scriptId),
-                    });
-
-                    const savedPlatform = platformFromReelUrl(reel.reelUrl);
-                    const savedHandle = reel.ownerUsername || item.job.handle;
-                    return (
-                      <LibraryVideoCard
-                        key={item.id}
-                        testId="saved-result-card"
-                        platform={savedPlatform}
-                        thumbnailUrl={reel.thumbnailUrl}
-                        videoUrl={reel.videoUrl}
-                        shortcode={reel.shortcode}
-                        reelId={item.source === "scraped" ? reel.id : null}
-                        reelUrl={reel.reelUrl}
-                        caption={reel.caption}
-                        creatorHandle={savedHandle}
-                        onOpenCreator={() =>
-                          void openCreator({ handle: savedHandle, platform: savedPlatform })
-                        }
-                        metrics={quietReelMetricParts({
-                          views: reel.viewCount,
-                          engagementPct: engagementRate,
-                          reachViews: reel.viewCount,
-                          reachFollowers:
-                            item.job.followerCount && item.job.followerCount > 0
-                              ? item.job.followerCount
-                              : null,
-                          postedAt:
-                            reel.postedAt instanceof Date
-                              ? reel.postedAt.toISOString()
-                              : reel.postedAt,
-                        })}
-                        statusLabel={remakeStatusLabel}
-                        remake={oneClickRemake}
-                        saved
-                        onToggleSave={() => onToggleSave(item)}
-                        onViewDetails={() => setGridModalSavedId(item.id)}
-                        extraMenu={[{ label: "Remove from saved", onSelect: () => onToggleSave(item) }]}
-                        inlinePlaying={inlinePlayingId === item.id}
-                        onInlinePlayRequest={() => setInlinePlayingId(item.id)}
-                        onInlinePlayStop={() =>
-                          setInlinePlayingId((cur) => (cur === item.id ? null : cur))
-                        }
-                      />
-                    );
-                  })}
+                  {items.map((item, index) => renderGridCard(item, index))}
                 </LibraryCardGrid>
               )}
             </div>
@@ -1158,98 +1283,7 @@ export default function SavedReels() {
         </div>
       )}
 
-      <GridReelWorkflowDialog
-        open={gridModalItem != null}
-        onOpenChange={(open) => {
-          if (!open) setGridModalSavedId(null);
-        }}
-        reel={
-          gridModalItem
-            ? {
-                id: gridModalItem.reel.id,
-                caption: gridModalItem.reel.caption,
-                thumbnailUrl: gridModalItem.reel.thumbnailUrl,
-                videoUrl: gridModalItem.reel.videoUrl ?? "",
-                viewCount: gridModalItem.reel.viewCount,
-                likeCount: gridModalItem.reel.likeCount,
-                commentCount: gridModalItem.reel.commentCount,
-                engagementRate: engagementPercent(gridModalItem),
-                postedAt: gridModalItem.reel.postedAt,
-                duration: gridModalItem.reel.duration,
-              }
-            : null
-        }
-        userTimezone={userTimezone}
-      >
-        {gridModalItem
-          ? (() => {
-              const item = gridModalItem;
-              const reel = item.reel;
-              const handle = item.job.handle;
-              const hasTranscription = !!item.transcription && item.transcription.status === "completed";
-              const isNoSpeech = transcriptionIsNoSpeech(item.transcription);
-              const pKey = txPendingKey(item);
-              const isProcessing =
-                item.transcription?.status === "processing" || !!(pKey && pendingTranscriptions.has(pKey));
-              const isTxQueued =
-                isProcessing &&
-                (item.source === "scraped" || item.source === "discover") &&
-                (item.transcription?.status !== "processing" || !item.transcription?.startedAt);
-
-              return item.source === "featured" && item.featuredReelId != null ? (
-                <InlineWorkflow
-                  reelSource="featured"
-                  featuredReelId={item.featuredReelId}
-                  handle={handle}
-                  hasTranscription={hasTranscription}
-                  isProcessing={isProcessing}
-                  isTranscriptionQueued={isTxQueued}
-                  isNoSpeech={isNoSpeech}
-                  inspirationPanelVariant="saved-collected"
-                  listRemakeHint={mergeRemakeability(item.transcription, item.reel)}
-                  reelClassification={item.reel}
-                  onSaveForInspiration={() => onToggleSave(item)}
-                  saveForInspirationBusy={toggleSave.isPending}
-                  inspirationReelIsSaved
-                  onTranscribe={() => runTranscribeClick(item, { expand: false })}
-                  userTimezone={userTimezone}
-                  postedAt={reel.postedAt}
-                  recreateEntrySignal={
-                    recreatePulse?.reelId === reel.id
-                      ? { nonce: recreatePulse.nonce, openScriptId: recreatePulse.openScriptId }
-                      : undefined
-                  }
-                  onRemakeSaved={() => setGridModalSavedId(null)}
-                />
-              ) : item.reelId != null ? (
-                <InlineWorkflow
-                  reelSource="user_job"
-                  reelId={item.reelId}
-                  handle={handle}
-                  hasTranscription={hasTranscription}
-                  isProcessing={isProcessing}
-                  isTranscriptionQueued={isTxQueued}
-                  isNoSpeech={isNoSpeech}
-                  inspirationPanelVariant="saved-collected"
-                  listRemakeHint={mergeRemakeability(item.transcription, item.reel)}
-                  reelClassification={item.reel}
-                  onSaveForInspiration={() => onToggleSave(item)}
-                  saveForInspirationBusy={toggleSave.isPending}
-                  inspirationReelIsSaved
-                  onTranscribe={() => runTranscribeClick(item, { expand: false })}
-                  userTimezone={userTimezone}
-                  postedAt={reel.postedAt}
-                  recreateEntrySignal={
-                    recreatePulse?.reelId === reel.id
-                      ? { nonce: recreatePulse.nonce, openScriptId: recreatePulse.openScriptId }
-                      : undefined
-                  }
-                  onRemakeSaved={() => setGridModalSavedId(null)}
-                />
-              ) : null;
-            })()
-          : null}
-      </GridReelWorkflowDialog>
+      {gridWorkflowDialog}
     </div>
   );
 }

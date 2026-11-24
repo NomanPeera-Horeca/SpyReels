@@ -72,7 +72,7 @@ export function UnderlineTabs<T extends string>({
           aria-selected={value === item.id}
           onClick={() => onChange(item.id)}
           className={cn(
-            "-mb-px border-b-2 px-1 pb-2 text-sm transition-colors",
+            "-mb-px shrink-0 whitespace-nowrap border-b-2 px-1 pb-2 text-sm transition-colors",
             value === item.id
               ? "border-[var(--sr-color-brand-primary)] font-medium text-[var(--sr-color-text-brand)]"
               : "border-transparent text-[var(--sr-color-text-secondary)] hover:text-[var(--sr-color-text-primary)]"

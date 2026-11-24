@@ -269,7 +269,7 @@ export function IconLink(props: IconProps) {
   );
 }
 
-/** Icon / Star (275:163). `filled` = saved. */
+/** Icon / Save (275:162); `filled` = saved = Icon / Save Filled (1884:514). */
 export function IconStar({ filled = false, ...props }: IconProps & { filled?: boolean }) {
   return (
     <svg {...base(props)}>
